@@ -1,9 +1,9 @@
 #include "genrebadge.h"
-#include "theme.h"
+#include "rgb565.h"
 
 namespace genrebadge {
 
-using theme::rgb;
+using rgb565::rgb;
 struct IdBadge { uint32_t id; uint8_t badge; };
 #include "genre_data.inc"
 

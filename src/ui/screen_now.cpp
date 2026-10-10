@@ -4,7 +4,7 @@
 #include "icons.h"
 #include "pokeball.h"
 #include "typebadge.h"
-#include "genrebadge.h"
+#include "../util/genrebadge.h"
 #include "../util/genre.h"
 #include "status_sprite.h"
 #include "labels.h"

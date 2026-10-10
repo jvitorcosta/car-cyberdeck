@@ -273,7 +273,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
     from Apple's iTunes Search API (artist search, no key, ~300 B): one request per new artist
     alongside the lyrics (~1.5 s on the network task; it also fills a lyrics-retry wait),
     32 artists cached. Apple's 478 genre ids map
-    to 31 Gen-3 style badges (`tools/gen_genres.py` → `src/ui/genre_data.inc`: subgenres take
+    to 31 Gen-3 style badges (`tools/gen_genres.py` → `src/util/genre_data.inc`: subgenres take
     the parent's badge, with overrides such as Baile Funk → FUNK BR); unknown ids show a grey
     `???`, a nod to Gen 3's mystery type.
 

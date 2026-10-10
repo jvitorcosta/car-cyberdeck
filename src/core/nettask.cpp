@@ -13,7 +13,7 @@
 #include "../pokemon/dex.h"
 #include "../util/netplan.h"
 #include "../util/genre.h"
-#include "../ui/genrebadge.h"
+#include "../util/genrebadge.h"
 #include "../genre/apple.h"
 #include "../ui/bootscene.h"
 
