@@ -1,11 +1,12 @@
 #include "bios.h"
 #include <cstring>
+#include "version.h"
 
 namespace bios {
 
 // Types into the sky terminal (TERM_COLS wide) while the car drives in; no blank lines.
 static const Line LINES[] = {
-    {0, "SUPER BAIANO BIOS v1.5", nullptr, HEADER, false},
+    {0, "SUPER BAIANO BIOS v" FW_VERSION_SHORT, nullptr, HEADER, false},
     {0, "HONDA CITY TOURING (C) 2022", nullptr, HEADER, false},
     {300, "CPU: 1.5L i-VTEC @ 6600 RPM", nullptr, PLAIN, false},
     {600, "MEMORY TEST: 4 SEATS", "OK", OK, false},

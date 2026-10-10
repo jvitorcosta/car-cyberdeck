@@ -98,6 +98,23 @@ montage ends on an end card: the logo on white with a thin red frame, fading in 
 - CI (`.github/workflows/ci.yml`): both boards' firmware + hardware checks with the flash check,
   and the host suites with ASan/UBSan and again as 32-bit (`-m32`, like the ESP32's `size_t`).
 
+### Versioning
+
+[Semantic versioning](https://semver.org), released as git tags `vMAJOR.MINOR.PATCH`; the
+changes are in [CHANGELOG.md](CHANGELOG.md). Every build reads the version from git
+(`tools/version.py` → `include/fw_version.h`, git-ignored): it shows on the boot screen's BIOS
+header and in the first serial line, `[boot] spotify-deck v1.2.0 (cyd)`. A build past the tag
+or with local edits says so: `1.2.0+3.gabc1234.dirty` (boot screen: `1.2.0+`).
+
+Which number goes up follows the commit types since the last tag:
+- **major** — a change that needs action from someone updating: board wiring, the partition
+  table (re-flash everything), the `config.h` format, a new required file
+- **minor** — `feat`: something new on the screen or the speaker
+- **patch** — `fix`, `perf`, and anything else that changes the firmware's behaviour
+
+To release: add the version's section to `CHANGELOG.md`, commit, then
+`git tag -a v1.2.0 -m "v1.2.0"` and `git push origin main v1.2.0`.
+
 ### What a test must earn
 
 - A test earns its place when a plausible change would make it fail **and** the failure points

@@ -27,6 +27,8 @@ jobs:
             part: "0x800000"   # partitions_s3.csv
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags, for the firmware version (tools/version.py)
       - uses: actions/cache@v4
         with:
           path: |

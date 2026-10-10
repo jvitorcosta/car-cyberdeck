@@ -20,6 +20,7 @@
 #include "ui/theme.h"
 #include "util/daynight.h"
 #include "util/genre.h"
+#include "util/version.h"
 #include "util/interp.h"
 #include "util/netplan.h"
 #include "images/art.h"
@@ -98,6 +99,11 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
 void setup() {
     Serial.begin(115200);
     delay(200);
+#ifdef BOARD_S3
+    Serial.printf("[boot] spotify-deck v%s (s3)\n", FW_VERSION);
+#else
+    Serial.printf("[boot] spotify-deck v%s (cyd)\n", FW_VERSION);
+#endif
     Serial.printf("[boot] reset reason: %s\n", resetReason());
     board::begin();
     esp_task_wdt_init(TASK_WDT_S, true);   // reconfigures the already-running watchdog

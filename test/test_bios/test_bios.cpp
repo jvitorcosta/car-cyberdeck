@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include "../../src/util/bios.h"
+#include "../../src/util/version.h"
 
 using namespace bios;
 
@@ -13,6 +14,9 @@ static int find(const char* label) {
     return -1;
 }
 
+void test_header_shows_the_firmware_version() {
+    TEST_ASSERT_EQUAL_STRING("SUPER BAIANO BIOS v" FW_VERSION_SHORT, line(0).label);
+}
 void test_script_is_in_time_order_and_ends_after_the_last_line() {
     for (int i = 1; i < count(); ++i) TEST_ASSERT_TRUE(line(i).at >= line(i - 1).at);
     TEST_ASSERT_TRUE(TOTAL_MS > (uint32_t)line(count() - 1).at + DOTS_MS);
@@ -173,6 +177,7 @@ void test_typed_reveals_label_then_dots() {
 
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_header_shows_the_firmware_version);
     RUN_TEST(test_script_is_in_time_order_and_ends_after_the_last_line);
     RUN_TEST(test_format_right_aligns_the_value_with_a_dot_leader);
     RUN_TEST(test_format_without_value_is_the_label);
