@@ -1,5 +1,5 @@
 #pragma once
-#include <Arduino.h>
+#include <cstdint>
 
 enum class PlaybackStatus { Unknown, Playing, Paused, Stopped, Offline };
 

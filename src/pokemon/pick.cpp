@@ -1,4 +1,5 @@
 #include "pick.h"
+#include <Arduino.h>
 #include "../util/text.h"
 #include <string.h>
 #include "dex.h"
