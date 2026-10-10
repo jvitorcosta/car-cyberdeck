@@ -61,6 +61,17 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Ideas
 
+- **Phone remote: "Howl" button** (researched 2026-10-10, PoC planned, not started). Safari on
+  the phone opens `http://<deck-ip>/?k=<token>`, a one-button page; POST `/play?clip=howl`
+  plays a wolf howl while the deck keeps polling. Plan: Arduino `WebServer` (already linked for
+  the Spotify setup portal, ~1-3 KB RAM) polled from `loop()` after the boot scene; howl
+  synthesised at run time in a pure `util/howl` (glide ~350->700 Hz, vibrato, fall; ~2.3 s;
+  ~1-2 KB flash; a stored 16-bit clip is ~80 KB and the CYD has ~64 KB left under the 97 %
+  limit); token in `config.h`, one play per 3 s, `409` while any clip plays (today a queued
+  clip holds a 3 KB task stack each, so button spam could drain the CYD heap), refuse below
+  ~32 KB largest block. IP on the idle/offline screens; no mDNS (unreliable from an iPhone
+  hotspot, ~20 KB flash). S3 first, CYD behind a build flag. First check on device that the
+  iPhone reaches a client of its own hotspot (172.20.10.x).
 - **Musixmatch as a second lyrics source** (parked 2026-10-07). Official API free plan: API
   key, ~2k calls/day, only a ~30% untimed preview (full/synced lyrics are paid, licensed).
   Unofficial desktop endpoint (`apic-desktop.musixmatch.com`, `macro.subtitles.get` +
