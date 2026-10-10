@@ -32,6 +32,9 @@ $ccargs = @("-std=gnu++17", "-Wall", "-Wextra", "-Wshadow", "-Werror", "-I", $un
 if ($IsLinux -and $env:NTEST_SAN -ne "0") {
     $ccargs += @("-g", "-fsanitize=address,undefined,float-cast-overflow", "-fno-sanitize-recover=all")
 }
+# Windows: link the C++ runtime in, so a suite can't load another toolchain's libstdc++-6.dll
+# that sits earlier on PATH (Git Bash puts its own first; the suite then dies silently).
+if ($env:OS -eq "Windows_NT") { $ccargs += @("-static-libstdc++", "-static-libgcc") }
 if ($env:NTEST_FLAGS) { $ccargs += ($env:NTEST_FLAGS -split '\s+' | Where-Object { $_ }) }
 & g++ @ccargs
 if ($LASTEXITCODE -ne 0) { Write-Host "COMPILE FAILED"; exit 1 }
