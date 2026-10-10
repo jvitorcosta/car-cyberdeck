@@ -61,13 +61,13 @@ uint16_t hue565(uint32_t t) {
         if (x < 2.0f / 3) return p + (q - p) * (2.0f / 3 - x) * 6;
         return p;
     };
-    return rgb565((uint8_t)lroundf(f(h + 1.0f / 3) * 255), (uint8_t)lroundf(f(h) * 255),
+    return rgb565::rgb((uint8_t)lroundf(f(h + 1.0f / 3) * 255), (uint8_t)lroundf(f(h) * 255),
                   (uint8_t)lroundf(f(h - 1.0f / 3) * 255));
 }
 
 uint16_t headColor(uint8_t e) {
     const uint8_t l = (uint8_t)(160 + 95 * e / 255);
-    return rgb565(l, l, (uint8_t)(l * 4 / 5));
+    return rgb565::rgb(l, l, (uint8_t)(l * 4 / 5));
 }
 uint8_t tailLevel(uint8_t e) { return (uint8_t)(140 + 115 * e / 255); }
 uint8_t tailGlowAlpha(uint8_t e) { return e > 12 ? (uint8_t)(128 * e / 255) : 0; }

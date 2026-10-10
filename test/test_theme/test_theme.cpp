@@ -25,12 +25,6 @@ void test_type_lookup_ignores_case_and_falls_back_to_navy() {
     TEST_ASSERT_EQUAL_UINT16(theme::GBA_NAVY, theme::typeColor("nonsense"));
     TEST_ASSERT_EQUAL_UINT16(theme::GBA_NAVY, theme::typeColor(nullptr));
 }
-void test_rgb565_primaries() {
-    TEST_ASSERT_EQUAL_HEX16(0xF800, theme::rgb(0xFF, 0x00, 0x00));
-    TEST_ASSERT_EQUAL_HEX16(0x07E0, theme::rgb(0x00, 0xFF, 0x00));
-    TEST_ASSERT_EQUAL_HEX16(0x001F, theme::rgb(0x00, 0x00, 0xFF));
-    TEST_ASSERT_EQUAL_HEX16(0xFFDB, theme::rgb(0xF8, 0xF8, 0xD8));   // battle box cream
-}
 void test_hp_color_thresholds() {   // the shine follows the bar colour
     const struct { float frac; uint16_t color, shine; } cases[] = {
         {0.51f, theme::HP_GREEN, theme::HP_GREEN_SHINE},
@@ -93,11 +87,6 @@ void test_set_night_switches_the_active_palette() {
     theme::setNight(false);
     TEST_ASSERT_EQUAL_PTR(&theme::DAY, &theme::pal());
 }
-void test_be_swaps_bytes_for_push_image() {
-    static_assert(theme::be(0x1234) == 0x3412, "constexpr");
-    TEST_ASSERT_EQUAL_HEX16(0x3412, theme::be(0x1234));
-    TEST_ASSERT_EQUAL_HEX16(theme::rgb(0xF8, 0xF8, 0xD8), theme::be(theme::be(theme::rgb(0xF8, 0xF8, 0xD8))));
-}
 void test_type_names_are_the_18_types() {
     TEST_ASSERT_EQUAL_INT(18, theme::typeCount());
     TEST_ASSERT_EQUAL_STRING("normal", theme::typeName(0));
@@ -110,10 +99,8 @@ int main(int, char**) {
     RUN_TEST(test_text_is_high_contrast_in_both_palettes);
     RUN_TEST(test_off_icons_visible_but_distinct_from_on_in_both_palettes);
     RUN_TEST(test_note_icons_visible_in_both_palettes);
-    RUN_TEST(test_be_swaps_bytes_for_push_image);
     RUN_TEST(test_type_names_are_the_18_types);
     RUN_TEST(test_hp_and_volume_bars_stand_out_from_the_empty_track);
-    RUN_TEST(test_rgb565_primaries);
     RUN_TEST(test_hp_color_thresholds);
     RUN_TEST(test_all_18_types_have_distinct_colors);
     RUN_TEST(test_darken_halves_each_channel);

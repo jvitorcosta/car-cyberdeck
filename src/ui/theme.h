@@ -1,14 +1,13 @@
 #pragma once
 #include <cstdint>
+#include "../util/rgb565.h"
 
 namespace theme {
 // RGB565 GBA Ruby/Sapphire palette
 constexpr uint16_t GBA_NAVY  = 0x218A;
 constexpr uint16_t POKE_RED  = 0xE006;
-// 8-bit-per-channel colour -> RGB565 (what TFT_eSPI fill/draw calls take).
-constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
-    return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
-}
+using rgb565::rgb;
+using rgb565::be;
 
 // Gen-3 (FRLG/Emerald) battle palette: colours that are the same day and night. The
 // mode-dependent ones are in Palette below. Approximations of the GBA games; tune on the real
@@ -57,9 +56,6 @@ constexpr uint16_t hpShine(float frac) {
 constexpr uint16_t darken(uint16_t c) {
     return (uint16_t)(((c >> 1) & 0x7800) | ((c >> 1) & 0x03E0) | ((c >> 1) & 0x000F));
 }
-
-// RGB565 with the bytes swapped: TFT_eSPI pushImage() buffers are big-endian.
-constexpr uint16_t be(uint16_t c) { return (uint16_t)((c >> 8) | (c << 8)); }
 
 // The 18 Pokemon types (lowercase PokéAPI names), index 0..typeCount()-1; "" out of range.
 int typeCount();

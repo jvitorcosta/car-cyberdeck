@@ -44,9 +44,7 @@ void test_scroll_wraps_at_its_period() {
     TEST_ASSERT_EQUAL_INT(20, scroll(2000, 90, 160));
     TEST_ASSERT_EQUAL_INT(0, scroll(0, 14, 720));
 }
-void test_rgb565_helpers() {
-    TEST_ASSERT_EQUAL_HEX16(0xFFFF, rgb565(255, 255, 255));
-    TEST_ASSERT_EQUAL_HEX16(0xBE19, hex565(0xBCC3CB));
+void test_blend565() {
     TEST_ASSERT_EQUAL_HEX16(0xFFFF, blend565(0xFFFF, 0x0000, 255));
     TEST_ASSERT_EQUAL_HEX16(0x0000, blend565(0xFFFF, 0x0000, 0));
     TEST_ASSERT_EQUAL_HEX16(0x8410, blend565(0xFFFF, 0x0000, 128));
@@ -159,7 +157,7 @@ int main(int, char**) {
     RUN_TEST(test_exit_accelerates_off_screen_from_the_cruise_x);
     RUN_TEST(test_exit_gating);
     RUN_TEST(test_scroll_wraps_at_its_period);
-    RUN_TEST(test_rgb565_helpers);
+    RUN_TEST(test_blend565);
     RUN_TEST(test_underglow_hue_cycles);
     RUN_TEST(test_lights_follow_loudness_and_reflection_falls_off);
     RUN_TEST(test_clip);

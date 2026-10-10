@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include "car_sprite.h"
 #include "montage.h"
-#include "theme.h"
+#include "../util/rgb565.h"
 #include "../audio/greeting.h"
 #include "../core/mem.h"
 #include "../util/bootanim.h"
@@ -18,7 +18,7 @@ extern const uint8_t _binary_data_montage_bin_end[] asm("_binary_data_montage_bi
 namespace bootscene {
 namespace {
 
-using bootanim::hex565;
+using rgb565::hex;
 
 constexpr int W = 320, H = 240;
 constexpr int SKY_H = 72;                        // static sky while cruising, drawn once
@@ -33,7 +33,7 @@ constexpr uint32_t TERM_TTL = 3000;              // a terminal line disappears t
 constexpr int ROAD_SPEED = 90, FENCE_SPEED = 30;
 constexpr int LAMP_PERIOD = 170, DASH_PERIOD = 48, BAY_PERIOD = 60, CARS_PERIOD = 450;
 constexpr float TAU = 6.28318530718f;            // Arduino.h #defines TWO_PI
-constexpr uint16_t UNDERGLOW = hex565(0x8C46FF), GLOW_CORE = hex565(0xBE8CFF);
+constexpr uint16_t UNDERGLOW = hex(0x8C46FF), GLOW_CORE = hex(0xBE8CFF);
 constexpr uint16_t WHITE = 0xFFFF;
 // The montage sound (data/finale.pcm) starts with the first montage frame, so something plays over
 // the photos; false = end it with the fade to black (bootanim::finaleStartFrame).
@@ -54,8 +54,8 @@ uint8_t* s_wheelRing = nullptr;  // per wheel pixel: 0 out, 1 tyre, 2 lip, 3 hub
 constexpr int WHEEL_D = 29;
 
 // ---- strip drawing (everything clipped to the current strip) ----
-inline void put(int x, int y, uint16_t c) { s_buf[(y - s_y0) * W + x] = theme::be(c); }
-inline uint16_t get(int x, int y) { return theme::be(s_buf[(y - s_y0) * W + x]); }
+inline void put(int x, int y, uint16_t c) { s_buf[(y - s_y0) * W + x] = rgb565::be(c); }
+inline uint16_t get(int x, int y) { return rgb565::be(s_buf[(y - s_y0) * W + x]); }
 
 void rect(int x, int y, int w, int h, uint16_t c) {
     int x0 = x, x1 = x + w, y0 = y, y1 = y + h;
@@ -78,7 +78,7 @@ inline void blendPx(int x, int y, uint16_t c, uint8_t a) {
 
 void dimStrip(uint8_t level) {
     if (level == 255) return;
-    for (int i = 0; i < W * STRIP_H; ++i) s_buf[i] = theme::be(bootanim::scale565(theme::be(s_buf[i]), level));
+    for (int i = 0; i < W * STRIP_H; ++i) s_buf[i] = rgb565::be(bootanim::scale565(rgb565::be(s_buf[i]), level));
 }
 
 // Linear blend between two colours over a range of rows.
@@ -88,13 +88,13 @@ uint16_t lerp565(uint16_t a, uint16_t b, int num, int den) {
 
 // ---- sky ----
 uint16_t skyAt(int y) {                          // #05070C at the top -> #0B1222 at 71 -> #0E1628 at 129
-    if (y < SKY_H) return lerp565(hex565(0x05070C), hex565(0x0B1222), y, SKY_H - 1);
-    return lerp565(hex565(0x0B1222), hex565(0x0E1628), y - SKY_H, 129 - SKY_H);
+    if (y < SKY_H) return lerp565(hex(0x05070C), hex(0x0B1222), y, SKY_H - 1);
+    return lerp565(hex(0x0B1222), hex(0x0E1628), y - SKY_H, 129 - SKY_H);
 }
 struct Star { int x, y; };
 Star star(int i) { return {(i * 73) % W, (i * 37) % (SKY_H - 6)}; }
 constexpr int STARS = 18;
-constexpr uint16_t STAR = hex565(0x96A0BE);
+constexpr uint16_t STAR = hex(0x96A0BE);
 constexpr int TERM_X = 4, TERM_Y = 4, TERM_ROW = 10;     // the on-board terminal, top left of the sky
 constexpr int TERM_W = (bios::TERM_COLS + 2) * 6 + 2;
 bool starSkipped(const Star& s) { return s.y < TERM_Y + bios::TERM_ROWS * TERM_ROW && s.x < TERM_X + TERM_W; }
@@ -145,50 +145,50 @@ void initTrees() {
 // ---- the car park ----
 void drawBackground(uint32_t t) {
     for (int y = SKY_H; y < 130; ++y) rect(0, y, W, 1, skyAt(y));         // sky continued
-    const uint16_t tree = hex565(0x0A120E);                                // tree line (static)
+    const uint16_t tree = hex(0x0A120E);                                // tree line (static)
     for (int y = s_y0 < 86 ? 86 : s_y0; y < s_y0 + STRIP_H && y < 126; ++y)
         for (int x = 0; x < W; ++x)
             if (y >= s_treeTop[x]) put(x, y, tree);
-    rect(0, 126, W, 10, hex565(0x09100C));
+    rect(0, 126, W, 10, hex(0x09100C));
     const int fo = bootanim::scroll(t, FENCE_SPEED, 1000);                // chain-link fence
-    rect(0, 123, W, 1, hex565(0x32643F));
+    rect(0, 123, W, 1, hex(0x32643F));
     for (int y = s_y0 < 124 ? 124 : s_y0; y < s_y0 + STRIP_H && y < 140; ++y)
         for (int x = 0; x < W; ++x)
-            if ((x + fo + y) % 5 == 0 || (x + fo - y + 1000) % 5 == 0) put(x, y, bootanim::blend565(hex565(0x285A37), get(x, y), 90));
+            if ((x + fo + y) % 5 == 0 || (x + fo - y + 1000) % 5 == 0) put(x, y, bootanim::blend565(hex(0x285A37), get(x, y), 90));
     const int co = bootanim::scroll(t, FENCE_SPEED, CARS_PERIOD);         // distant parked cars
     for (int k = 0; k < 3; ++k) {
         const int px = ((k * 150 + 60 - co) % CARS_PERIOD + CARS_PERIOD) % CARS_PERIOD - 40;
-        rect(px, 132, 34, 8, hex565(0x1E2128));
-        rect(px + 6, 127, 20, 6, hex565(0x1A1D24));
-        rect(px + 1, 135, 1, 1, hex565(0xC81E1E));
-        rect(px + 32, 135, 1, 1, hex565(0xC81E1E));
+        rect(px, 132, 34, 8, hex(0x1E2128));
+        rect(px + 6, 127, 20, 6, hex(0x1A1D24));
+        rect(px + 1, 135, 1, 1, hex(0xC81E1E));
+        rect(px + 32, 135, 1, 1, hex(0xC81E1E));
     }
     for (int y = s_y0 < 140 ? 140 : s_y0; y < s_y0 + STRIP_H; ++y) {      // near-black asphalt
-        const uint16_t base = lerp565(hex565(0x0E0F13), hex565(0x12131A), y - 140, 99);
+        const uint16_t base = lerp565(hex(0x0E0F13), hex(0x12131A), y - 140, 99);
         const uint16_t grain[4] = {bootanim::scale565(base, 225), base,
                                    bootanim::blend565(WHITE, base, 5), bootanim::blend565(WHITE, base, 10)};
         for (int x = 0; x < W; ++x) put(x, y, grain[((uint32_t)(x * 73856093u) ^ (uint32_t)(y * 19349663u)) >> 13 & 3]);
     }
     const int bo = bootanim::scroll(t, ROAD_SPEED, BAY_PERIOD);           // parking-bay lines
     for (int bx = -BAY_PERIOD; bx < W + BAY_PERIOD; bx += BAY_PERIOD)
-        for (int y = 150; y < 168; ++y) blendRect(bx - bo + (y - 150) / 3, y, 2, 1, hex565(0x46484E), 140);
+        for (int y = 150; y < 168; ++y) blendRect(bx - bo + (y - 150) / 3, y, 2, 1, hex(0x46484E), 140);
     const int d = bootanim::scroll(t, ROAD_SPEED, DASH_PERIOD);           // lane dashes
-    for (int x = -DASH_PERIOD; x < W; x += DASH_PERIOD) rect(x - d, 226, 22, 2, hex565(0x3C3E42));
+    for (int x = -DASH_PERIOD; x < W; x += DASH_PERIOD) rect(x - d, 226, 22, 2, hex(0x3C3E42));
     const int lo = bootanim::scroll(t, ROAD_SPEED, LAMP_PERIOD);          // white LED street lamps
     for (int lx = 40 - lo; lx < W + LAMP_PERIOD; lx += LAMP_PERIOD) {
-        rect(lx, 74, 2, 76, hex565(0x242830));
-        rect(lx, 72, 14, 2, hex565(0x242830));
-        rect(lx + 10, 74, 6, 2, hex565(0xF5FAFF));
+        rect(lx, 74, 2, 76, hex(0x242830));
+        rect(lx, 72, 14, 2, hex(0x242830));
+        rect(lx + 10, 74, 6, 2, hex(0xF5FAFF));
         for (int y = 76; y < 154; ++y) {
             const int hw = (y - 76) * 45 / 100;
-            blendRect(lx + 13 - hw, y, 2 * hw + 1, 1, hex565(0xE1EBFF), 13);
+            blendRect(lx + 13 - hw, y, 2 * hw + 1, 1, hex(0xE1EBFF), 13);
         }
         for (int y = 150; y < 170; ++y) {
             if (y < s_y0 || y >= s_y0 + STRIP_H) continue;         // only this strip's rows
             const float dy = (float)(y - 160) / 9.0f, dy2 = dy * dy;
             for (int x = lx - 30; x < lx + 56; ++x) {
                 const float dx = (float)(x - lx - 13) / 45.0f, dd = dx * dx + dy2;
-                if (dd < 1.0f) blendPx(x, y, hex565(0xC8D2E6), (uint8_t)(26.0f * (1.0f - dd)));
+                if (dd < 1.0f) blendPx(x, y, hex(0xC8D2E6), (uint8_t)(26.0f * (1.0f - dd)));
             }
         }
     }
@@ -236,9 +236,9 @@ void spokeTable(float base, uint8_t* out) {
 }
 
 void wheel(int cx, int cy, const uint8_t* spokes, float glow) {
-    static const uint16_t RING[7] = {0, hex565(0x141416), hex565(0xC9CED4), hex565(0x3A3E46), hex565(0xC8CCD2),
-                                     hex565(0x2B2F36), hex565(0x2B2F36)};
-    static const uint16_t SPOKE[3] = {hex565(0x2B2F36), hex565(0xDFE3E8), hex565(0x6A7078)};
+    static const uint16_t RING[7] = {0, hex(0x141416), hex(0xC9CED4), hex(0x3A3E46), hex(0xC8CCD2),
+                                     hex(0x2B2F36), hex(0x2B2F36)};
+    static const uint16_t SPOKE[3] = {hex(0x2B2F36), hex(0xDFE3E8), hex(0x6A7078)};
     for (int dy = -14; dy <= 14; ++dy) {
         const int y = cy + dy;
         if (y < s_y0 || y >= s_y0 + STRIP_H) continue;
@@ -283,7 +283,7 @@ Car makeCar(uint32_t world, int x, int bob, uint8_t e) {
 
 void drawCar(const Car& c) {
     const float glow = bootanim::glowAlpha(c.e) / 217.0f;            // 0.53 at rest .. 1.0 loud
-    rect(c.x + 24, GROUND_Y, 154, 2, hex565(0x08090C));              // shadow
+    rect(c.x + 24, GROUND_Y, 154, 2, hex(0x08090C));              // shadow
     const int cx = c.x + 100;                                         // underglow halo + core on the asphalt
     for (int y = 199; y < 228; ++y) {
         if (y < s_y0 || y >= s_y0 + STRIP_H) continue;
@@ -303,13 +303,13 @@ void drawCar(const Car& c) {
     const uint8_t ba = bootanim::beamAlpha(c.e);                      // headlight beam, cool white
     for (int i = 0; i < 90; ++i) {
         const int h = 3 + i * 35 / 100;
-        blendRect(c.x + 200 + i, c.top + 31 - h / 3, 1, h, hex565(0xF0F5FF), (uint8_t)(ba * (90 - i) / 90));
+        blendRect(c.x + 200 + i, c.top + 31 - h / 3, 1, h, hex(0xF0F5FF), (uint8_t)(ba * (90 - i) / 90));
     }
-    blendRect(c.x - 4, c.top + 21, 6, 9, hex565(0xFF3030), bootanim::tailGlowAlpha(c.e));
+    blendRect(c.x - 4, c.top + 21, 6, 9, hex(0xFF3030), bootanim::tailGlowAlpha(c.e));
 
     int x0 = c.x, x1 = c.x + car_sprite::width(), y0 = c.top, y1 = c.top + car_sprite::height();
     if (bootanim::clip(x0, x1, 0, W) && bootanim::clip(y0, y1, s_y0, s_y0 + STRIP_H)) {
-        const uint16_t head = bootanim::headColor(c.e), refl = hex565(0xE6EEFF);
+        const uint16_t head = bootanim::headColor(c.e), refl = hex(0xE6EEFF);
         const uint8_t tail = bootanim::tailLevel(c.e);
         for (int y = y0; y < y1; ++y) {
             const int row = y - c.top;
@@ -365,7 +365,7 @@ void drawJpg(uint8_t* work, const uint8_t* jpg, size_t len) {
 }
 
 // ---- BIOS colours (util/bios) ----
-constexpr uint16_t BIOS_GREY = hex565(0xAAAAAA), BIOS_GREEN = hex565(0x55FF55), BIOS_YELLOW = hex565(0xFFFF55);
+constexpr uint16_t BIOS_GREY = hex(0xAAAAAA), BIOS_GREEN = hex(0x55FF55), BIOS_YELLOW = hex(0xFFFF55);
 
 uint16_t biosTone(uint8_t tone) {
     switch (tone) {
@@ -378,7 +378,7 @@ uint16_t biosTone(uint8_t tone) {
 }
 
 // ---- on-board terminal: the BIOS log carried on in the sky during the drive ----
-constexpr uint16_t TERM_TEXT = hex565(0x6FBF7F);
+constexpr uint16_t TERM_TEXT = hex(0x6FBF7F);
 bios::Term s_term;                    // static: keeps ~210 B off the scene task's small stack
 int s_termDrawn[bios::TERM_ROWS];     // characters drawn per row; -1 = redraw
 uint32_t s_termGen = 0;

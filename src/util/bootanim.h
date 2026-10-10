@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include "rgb565.h"
 // Boot scene motion, light and colour maths (docs/superpowers/specs/2026-10-09-boot-scene-design.md).
 // PURE, host-tested. `t` is ms since the scene started; colours are native RGB565.
 namespace bootanim {
@@ -8,12 +9,6 @@ constexpr uint32_t ENTER_MS = 900, EXIT_MS = 900, MIN_SHOW_MS = 5000, SWAY_MS = 
 constexpr int START_X = -202, CRUISE_X = 60, END_X = 330, SWAY_PX = 6;
 constexpr uint32_t NO_EXIT = 0xFFFFFFFFu;   // tExit while the car hasn't started leaving
 
-constexpr uint16_t rgb565(uint8_t r, uint8_t g, uint8_t b) {
-    return (uint16_t)(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
-}
-constexpr uint16_t hex565(uint32_t rgb) {
-    return rgb565((uint8_t)(rgb >> 16), (uint8_t)(rgb >> 8), (uint8_t)rgb);
-}
 
 int cruiseX(uint32_t t);                      // sway around CRUISE_X, phase 0 at ENTER_MS
 int carX(uint32_t t, uint32_t tExit);         // car's left edge on screen

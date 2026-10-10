@@ -5,7 +5,7 @@
 #include "../net/http_config.h"
 #include "tjpgd.h"
 #include "../util/artmap.h"
-#include "../ui/theme.h"
+#include "../util/rgb565.h"
 
 namespace art {
 
@@ -58,7 +58,7 @@ static int jdOut(JDEC*, void* block, JRECT* r) {
             int sx = artmap::srcX(s_map, ox);
             if (sx < r->left || sx > r->right) continue;
             uint16_t c = px[(sy - r->top) * bw + (sx - r->left)];
-            s_bmp[oy * W + ox] = theme::be(c);   // store big-endian
+            s_bmp[oy * W + ox] = rgb565::be(c);   // store big-endian
         }
     }
     return 1;
