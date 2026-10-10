@@ -138,7 +138,7 @@ void setup() {
         // The scene keeps running; the network task retries and the car leaves once WiFi is up.
         bootscene::setCaption("WiFi not found - retrying...");
     }
-    nettask::start(spotifyReady);   // always: it keeps retrying WiFi if the hotspot is late
+    nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
 }
 
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the Manaus time. True

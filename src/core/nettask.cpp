@@ -15,7 +15,6 @@
 #include "../util/genre.h"
 #include "../util/genrebadge.h"
 #include "../genre/apple.h"
-#include "../ui/bootscene.h"
 
 // History (README "Design & performance history"): these calls used to run inline in
 // loop(). Each is a fresh TLS handshake (poll ~1.5 s, player ~1.4 s, PokeAPI 4.2 s, art
@@ -33,6 +32,7 @@ static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB 
 static genre::Cache s_genres;   // last 32 artists' badges: repeats cost no request
 static uint32_t s_failsAtOk = 0;   // mem::failTotal() at the last good poll
 static bool s_spotifyReady = false;   // WiFi + spclient::begin() done
+static bool (*s_holdTls)() = nullptr;   // true while TLS must wait for heap (see start())
 static int s_prefetchDex = 0;      // dex whose walker sits in the staged slot
 static uint32_t s_t0 = 0;
 
@@ -159,7 +159,7 @@ static void run(void*) {
         if (!s_spotifyReady) {                 // WiFi wasn't up at boot: keep trying
             if (net::isOnline() || net::connectAny()) {
                 // The boot scene leaves once WiFi is up; let it free its strip before TLS needs heap.
-                while (bootscene::active()) vTaskDelay(pdMS_TO_TICKS(100));
+                while (s_holdTls && s_holdTls()) vTaskDelay(pdMS_TO_TICKS(100));
                 spclient::begin();
                 netclock::begin();
                 s_spotifyReady = true;
@@ -224,8 +224,9 @@ static void run(void*) {
 // Stack: 10 KB (was 16 KB; the 6 KB went back to the heap, which album-art and TLS buffers
 // were short of). Lowest free seen ~3.7 KB, i.e. ~6.3 KB used by TLS + JSON + the lyrics
 // reader ([mem] stackfree=, README "Design & performance history" item 12).
-void start(bool spotifyReady) {
+void start(bool spotifyReady, bool (*holdTls)()) {
     s_spotifyReady = spotifyReady;
+    s_holdTls = holdTls;
     xTaskCreatePinnedToCore(run, "net", 10240, nullptr, 1, nullptr, 0);
 }
 
