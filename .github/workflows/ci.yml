@@ -3,7 +3,12 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]   # releases are built too
   pull_request:
+
+# Read-only token: CI only builds and tests.
+permissions:
+  contents: read
 
 # A newer push to the same branch/PR cancels the run still going.
 concurrency:
