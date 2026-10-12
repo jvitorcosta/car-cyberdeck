@@ -5,6 +5,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Changed
+- The project is now called CarDeck; the boot log line reads `[boot] cardeck v…`.
+- Documentation reorganised: shorter README, new ARCHITECTURE, HISTORY, CONTRIBUTING and
+  SECURITY docs, issue and pull request templates, and a list of third-party files in CREDITS.
+- CI runs with a read-only token and also builds release tags.
+
 ## [1.0.0] - 2026-10-10
 
 First tagged release: everything the deck does today, on both supported boards.
@@ -21,5 +27,5 @@ First tagged release: everything the deck does today, on both supported boards.
   (ES8311 codec).
 - Firmware version from the git tag on the boot screen and in the serial log.
 
-[Unreleased]: https://github.com/jvitorcosta/spotify-car-deck/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/jvitorcosta/spotify-car-deck/releases/tag/v1.0.0
+[Unreleased]: https://github.com/jvitorcosta/car-deck/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jvitorcosta/car-deck/releases/tag/v1.0.0

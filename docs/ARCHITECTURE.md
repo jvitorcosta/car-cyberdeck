@@ -1,0 +1,54 @@
+# Architecture
+
+Two FreeRTOS tasks share one mutex-protected state. The UI loop only draws; the network task
+does every download and decode. See [HISTORY.md](HISTORY.md) for why it is built this way.
+
+```
+core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main.cpp)
+  Spotify poll 4 s / player 12 s                          snapshot AppState every frame
+  per track, one step at a time (util/netplan):           redraw deck on new track generation
+    art -> lyrics -> genre -> walker -> prefetch          take art / lyrics / genre / walker
+  results tagged with trackGen                            animate: walker 8 fps, CD 6 fps, HP 4 fps
+                 \                                        /
+                  +---- src/core/shared.cpp (one mutex) -+
+                        AppState + per-track mailbox
+```
+
+- **UI loop** draws only: battle layout (`ui/screen_now`, `ui/battle`, `ui/icons`), album
+  art JPEG decode, walker, CD, lyric.
+- **Network task** does every HTTPS request and PNG decode. It never touches the display.
+- **Shared state** — one FreeRTOS mutex; `AppState` snapshots plus a mailbox whose results
+  carry the track generation they were fetched for, so a quickly skipped song's art or
+  lyrics are dropped instead of shown on the next one.
+- **Walker** (`images/walksprite`) — PMD SpriteCollab walk cycle (Right-facing row) cropped
+  to a shared bounding box and fitted to a 32 px band. Two slots: the UI reads the active
+  one while the network task loads the next song's walker into the staged one. Fallback:
+  the PokeAPI sprite with a bob/flip fake walk.
+- **Pokémon** — random #1–1025 from a bundled Pokédex (`pokemon/dex`, generated).
+- **Lyrics** (`lyrics/lrclib`, `util/lrcstream`, `util/lyricbuf`) — LRCLIB `/api/get`, then
+  `/api/search`; synced beats plain; retries on server errors; the dialogue box shows
+  Pokémon-style status messages (`ui/lyricmsg`) when there is no line to show.
+- **Genre badge** (`genre/apple`, `util/genre`, `util/genrebadge`) — Apple artist genre, cached
+  per artist, mapped to Gen-3 style badges.
+- **Night mode** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
+  (SNTP; the offset is UTC-4, set in `src/main.cpp`): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
+- **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
+  16 kHz, played at 32 kHz: IDF 4.4 DAC mode mis-clocks below ~20 kHz) streamed by I2S0 to
+  the built-in DAC on GPIO 26 at 30 % volume, noise-shaped down to the DAC's 8 bits, in a
+  one-shot task that frees the driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
+- **Boot scene** (`ui/bootscene`, `ui/car_sprite`, `ui/montage`, `util/bootanim`,
+  `util/loudness`) — own task at boot; cruising: sky drawn once, y 72–239 re-rendered through one
+  320×24 strip (15 KB, freed before the montage); brake: whole-screen fade; montage: JPEG frames
+  from the embedded `data/montage.bin` decoded straight to the display (~10 fps); drive ~15 fps (67 ms/frame). `setup()`
+  waits for it; `loop()` and the late-WiFi path wait while active.
+- **Pure, host-tested modules** (one suite each under `test/`) — `ui/{theme,icon_map,accents,
+  cjkfont,status_sprite,typebadge,lyricmsg,pokeball,labels,car_sprite,montage}`, `pokemon/dex`,
+  `util/{animdata,walkanim,walkrect,netplan,lyricstatus,interp,text,glyphrun,lrcstream,
+  lyricbuf,artmap,ctxcache,dexset,genre,genrebadge,rgb565,daynight,bootanim,loudness,bios}`.
+
+## Layers
+
+- `src/board/cyd/`, `src/board/s3/` — everything board-specific (display bus, audio path,
+  backlight); pins in `include/pins.h`. The rest of the code is shared.
+- `src/util/`, `src/core/`, `src/images/` never include `src/ui/`; `src/util/` has no Arduino
+  dependency, so it builds and tests on a PC.
