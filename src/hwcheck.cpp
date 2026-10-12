@@ -31,7 +31,7 @@ void setup() {
     s_tft.fillRect(0, 80, 320, 80, TFT_GREEN);
     s_tft.fillRect(0, 160, 320, 80, TFT_BLUE);
     s_tft.setTextColor(TFT_WHITE, TFT_BLACK);
-    s_tft.drawString("PokeDeck hello", 10, 110, 4);
+    s_tft.drawString("CarDeck hello", 10, 110, 4);
 
     touchSPI.begin(TOUCH_SCLK, TOUCH_MISO, TOUCH_MOSI, TOUCH_CS);
     ts.begin(touchSPI);

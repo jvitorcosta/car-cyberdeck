@@ -47,9 +47,9 @@ void test_format_truncates_a_long_value_keeping_one_dot() {
 
 void test_format_to_a_narrower_width() {
     char out[TERM_COLS + 1];
-    const int v = format("WI-FI", "Cecilia [OK]", out, sizeof out, TERM_COLS);
+    const int v = format("WI-FI", "HomeNet [OK]", out, sizeof out, TERM_COLS);
     TEST_ASSERT_EQUAL_INT(TERM_COLS, (int)strlen(out));
-    TEST_ASSERT_EQUAL_STRING("Cecilia [OK]", out + v);
+    TEST_ASSERT_EQUAL_STRING("HomeNet [OK]", out + v);
 }
 
 void test_term_appends_new_labels() {
@@ -67,9 +67,9 @@ void test_term_updates_a_label_in_place() {
     const uint32_t gen = term.gen;
     TEST_ASSERT_FALSE(termSet(term, "WI-FI", "CONNECTING...", WARN, 200));   // nothing new
     TEST_ASSERT_EQUAL_UINT32(gen, term.gen);
-    TEST_ASSERT_TRUE(termSet(term, "WI-FI", "Cecilia [OK]", OK, 900));
+    TEST_ASSERT_TRUE(termSet(term, "WI-FI", "HomeNet [OK]", OK, 900));
     TEST_ASSERT_EQUAL_INT(1, term.n);
-    TEST_ASSERT_EQUAL_STRING("Cecilia [OK]", term.rows[0].value);
+    TEST_ASSERT_EQUAL_STRING("HomeNet [OK]", term.rows[0].value);
     TEST_ASSERT_EQUAL_UINT8(OK, term.rows[0].tone);
     TEST_ASSERT_EQUAL_UINT32(100, term.rows[0].at);                    // not typed again
     TEST_ASSERT_TRUE(term.gen != gen);
@@ -142,7 +142,7 @@ void test_term_expire_keeps_fresh_and_pending_lines() {
     TEST_ASSERT_EQUAL_STRING("NEW", term.rows[1].label);
     TEST_ASSERT_TRUE(term.gen != gen);
     termExpire(term, 3000, 3000);                             // nothing more to drop
-    termSet(term, "WAIT", "Cecilia [OK]", OK, 4000);         // resolved: no longer pending
+    termSet(term, "WAIT", "HomeNet [OK]", OK, 4000);         // resolved: no longer pending
     termExpire(term, 7000, 3000);
     TEST_ASSERT_EQUAL_INT(0, term.n);
 }

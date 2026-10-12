@@ -64,7 +64,7 @@ bool runSetupPortalIfNeeded() {
     WebServer server(80);
     bool done = false;
     server.on("/", [&]() {
-        String html = "<h2>PokeDeck setup</h2><p>Register this redirect URI in your "
+        String html = "<h2>CarDeck setup</h2><p>Register this redirect URI in your "
             "Spotify app dashboard first:</p><code>http://" + net::deviceIp() +
             "/callback</code><p><a href='" + authorizeUrl() +
             "'>Log in with Spotify</a></p>";

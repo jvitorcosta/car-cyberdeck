@@ -48,7 +48,7 @@ index = {label: i for i, (label, _) in enumerate(BADGES)}
 assert BADGES[-1][0] == "???"
 assert all(b in index for b in list(TOP.values()) + list(OVERRIDES.values()))
 
-req = urllib.request.Request(TREE_URL, headers={"User-Agent": "PokeDeck/1.0 (gen_genres.py)"})
+req = urllib.request.Request(TREE_URL, headers={"User-Agent": "CarDeck/1.0 (gen_genres.py)"})
 tree = json.loads(urllib.request.urlopen(req, timeout=30).read())["34"]["subgenres"]
 
 ids = {}

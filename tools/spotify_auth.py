@@ -62,7 +62,7 @@ def main():
             self.end_headers()
             if "code" in params:
                 holder["code"] = params["code"][0]
-                self.wfile.write("<h2>PokeDeck: authorized! You can close this tab.</h2>".encode())
+                self.wfile.write("<h2>CarDeck: authorized! You can close this tab.</h2>".encode())
             else:
                 self.wfile.write(("<h2>No code received.</h2><pre>" + q.query + "</pre>").encode())
 

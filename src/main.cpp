@@ -100,9 +100,9 @@ void setup() {
     Serial.begin(115200);
     delay(200);
 #ifdef BOARD_S3
-    Serial.printf("[boot] spotify-deck v%s (s3)\n", FW_VERSION);
+    Serial.printf("[boot] cardeck v%s (s3)\n", FW_VERSION);
 #else
-    Serial.printf("[boot] spotify-deck v%s (cyd)\n", FW_VERSION);
+    Serial.printf("[boot] cardeck v%s (cyd)\n", FW_VERSION);
 #endif
     Serial.printf("[boot] reset reason: %s\n", resetReason());
     board::begin();

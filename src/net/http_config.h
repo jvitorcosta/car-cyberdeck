@@ -10,7 +10,7 @@ constexpr unsigned long TLS_HANDSHAKE_S = 8;
 constexpr uint16_t HTTP_TIMEOUT_MS = 8000;
 // Our own body-reading loops give up when no byte has arrived for this long (ms).
 constexpr uint32_t STALL_MS = 8000;
-constexpr const char* USER_AGENT = "PokeDeck/1.0 (ESP32)";
+constexpr const char* USER_AGENT = "CarDeck/1.0 (ESP32)";
 
 // No certificate validation (public data; see docs/review), bounded handshake.
 inline void secure(WiFiClientSecure& c) {
