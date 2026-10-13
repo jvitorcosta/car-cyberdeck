@@ -37,6 +37,13 @@ struct LyricView {
     char line[160];         // current line for posMs; the first line during the intro
 };
 void lyricView(uint32_t gen, uint32_t posMs, LyricView& out);
+// Current and next lyric lines with their start times, for GET /state (net/remote).
+struct LyricPair {
+    lyricstatus::Status status;
+    char line[160], next[160];
+    uint32_t lineStartMs, nextStartMs;
+};
+void lyricPair(uint32_t gen, uint32_t posMs, LyricPair& out);
 
 // Walker: posted once the new walker is promoted for the track generation.
 void postWalker(uint32_t gen);

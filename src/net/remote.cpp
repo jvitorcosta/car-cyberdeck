@@ -10,6 +10,8 @@
 #include "../core/mem.h"
 #include "../core/shared.h"
 #include "../util/statejson.h"
+#include "../util/tripclock.h"
+#include "../util/interp.h"
 #include <WiFi.h>
 
 #ifndef REMOTE_TOKEN
@@ -77,6 +79,7 @@ poll();setInterval(poll,5000);
 
 // Status screen text, set by the UI loop (main.cpp), read by this task for /state.
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
+static tripclock::Clock s_trip(0);   // power-on = the car started; reset by POST /trip/reset (this task only)
 static char s_title[24] = "", s_detail[48] = "";
 static const char* const CLIPS[] = {"howl"};
 
@@ -96,7 +99,8 @@ bool link(char* out, size_t n) {
 static void handleState() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)
-    static char out[640];
+    static char out[768];
+    static shared::LyricPair lp;   // static: two 160-byte lines, off this task's stack
     shared::snapshot(st);
     char title[sizeof s_title], detail[sizeof s_detail];
     portENTER_CRITICAL(&s_mux);
@@ -104,8 +108,18 @@ static void handleState() {
     memcpy(detail, s_detail, sizeof detail);
     portEXIT_CRITICAL(&s_mux);
     const String ssid = net::ssid();
-    const statejson::State s{st.trackName, st.artist, title, detail, ssid.c_str(), (int)WiFi.RSSI(),
-                             millis() / 1000, CLIPS, (int)(sizeof CLIPS / sizeof CLIPS[0])};
+    const uint32_t now = millis();
+    const uint32_t pos = interp::currentProgressMs(st.progressMs, st.durationMs, st.isPlaying,
+                                                   now - st.lastPollMs);
+    shared::lyricPair(st.trackGen, pos, lp);
+    statejson::State s{};
+    s.track = st.trackName; s.artist = st.artist; s.title = title; s.detail = detail;
+    s.ssid = ssid.c_str(); s.rssi = (int)WiFi.RSSI(); s.uptimeS = now / 1000;
+    s.clips = CLIPS; s.clipCount = (int)(sizeof CLIPS / sizeof CLIPS[0]);
+    s.trackGen = st.trackGen; s.progressMs = pos; s.durationMs = st.durationMs;
+    s.playing = st.isPlaying; s.tripS = s_trip.seconds(now);
+    s.lyricKind = statejson::lyricKindName(lp.status);
+    s.line = lp.line; s.next = lp.next; s.lineStartMs = lp.lineStartMs; s.nextStartMs = lp.nextStartMs;
     if (!statejson::write(s, out, sizeof out)) { s_server->send(500, "text/plain", "state too big"); return; }
     s_server->sendHeader("Cache-Control", "no-store");
     s_server->send(200, "application/json", out);
@@ -159,6 +173,12 @@ void begin(bool (*hold)()) {
     });
     s_server->on("/play", HTTP_POST, handlePlay);
     s_server->on("/state", HTTP_GET, handleState);
+    s_server->on("/trip/reset", HTTP_POST, [] {
+        if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+        s_trip.reset(millis());
+        Serial.println("[remote] trip reset");
+        s_server->send(204);
+    });
     s_server->on("/icon.png", HTTP_GET, [] {   // Home Screen icon: public, like any favicon
         s_server->sendHeader("Cache-Control", "max-age=86400");
         s_server->send_P(200, "image/png", (const char*)ICON_PNG, sizeof ICON_PNG);

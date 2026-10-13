@@ -125,9 +125,27 @@ void test_spread_plain_without_duration_is_4s_apart() {
     TEST_ASSERT_EQUAL_UINT32(4000, L.lines[1].tMs);
     TEST_ASSERT_EQUAL_UINT32(8000, L.lines[2].tMs);
 }
+void test_pair_gives_current_and_next() {
+    lyricbuf::parse("[00:05.00]first made-up line\n[00:09.00]second made-up line\n[00:14.00]third made-up line\n", L);
+    lyricbuf::Pair p = lyricbuf::pairAt(L, 1000);           // intro
+    TEST_ASSERT_EQUAL_INT(-1, p.cur);
+    TEST_ASSERT_EQUAL_INT(0, p.next);
+    p = lyricbuf::pairAt(L, 9500);
+    TEST_ASSERT_EQUAL_INT(1, p.cur);
+    TEST_ASSERT_EQUAL_INT(2, p.next);
+    p = lyricbuf::pairAt(L, 20000);                         // last line: nothing next
+    TEST_ASSERT_EQUAL_INT(2, p.cur);
+    TEST_ASSERT_EQUAL_INT(-1, p.next);
+    lyricbuf::reset(L);
+    p = lyricbuf::pairAt(L, 0);                             // no lyrics
+    TEST_ASSERT_EQUAL_INT(-1, p.cur);
+    TEST_ASSERT_EQUAL_INT(-1, p.next);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_parses_timestamped_lines);
+    RUN_TEST(test_pair_gives_current_and_next);
     RUN_TEST(test_skips_malformed);
     RUN_TEST(test_rejects_huge_minutes);
     RUN_TEST(test_fraction_digits_set_the_unit);

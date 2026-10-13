@@ -59,10 +59,32 @@ size_t write(const State& s, char* out, size_t n) {
         o.str(s.clips[i]);
     }
     o.put(']');
+    o.key("trackGen");    o.num((long)s.trackGen);
+    o.key("progressMs");  o.num((long)s.progressMs);
+    o.key("durationMs");  o.num((long)s.durationMs);
+    o.key("playing");     o.raw(s.playing ? "true" : "false");
+    o.key("tripS");       o.num((long)s.tripS);
+    o.key("lyricKind");   o.str(s.lyricKind);
+    o.key("line");        o.str(s.line);
+    o.key("next");        o.str(s.next);
+    o.key("lineStartMs"); o.num((long)s.lineStartMs);
+    o.key("nextStartMs"); o.num((long)s.nextStartMs);
     o.put('}');
     if (o.full) { out[0] = '\0'; return 0; }
     out[o.len] = '\0';
     return o.len;
+}
+
+const char* lyricKindName(lyricstatus::Status s) {
+    switch (s) {
+    case lyricstatus::Status::Synced:       return "synced";
+    case lyricstatus::Status::Plain:        return "plain";
+    case lyricstatus::Status::Instrumental: return "instrumental";
+    case lyricstatus::Status::None:         return "none";
+    case lyricstatus::Status::Searching:
+    case lyricstatus::Status::Retrying:     break;
+    }
+    return "searching";
 }
 
 }
