@@ -18,3 +18,9 @@ static const int WIFI_NETWORK_COUNT = 2;
 // One-time refresh token, obtained on the PC via `python tools/spotify_auth.py`.
 #define SPOTIFY_REFRESH_TOKEN ""
 #define SPOTIFY_MARKET        "BR"
+
+// Your time zone as a POSIX TZ string (night mode runs 18:00-06:00 local time). Examples:
+//   "<-04>4" Manaus, "<-03>3" Sao Paulo, "WET0WEST,M3.5.0/1,M10.5.0" Lisbon,
+//   "CET-1CEST,M3.5.0,M10.5.0/3" Berlin, "EST5EDT,M3.2.0,M11.1.0" New York, "UTC0" UTC.
+// More: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
+#define TIMEZONE              "UTC0"

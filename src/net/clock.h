@@ -3,6 +3,6 @@
 // (UDP, no TLS). Named netclock: `clock` would collide with the C library's clock().
 namespace netclock {
 void begin();
-// Manaus minute of the day (0..1439); false until the first SNTP answer.
+// Local minute of the day (0..1439, TIMEZONE in config.h); false until the first SNTP answer.
 bool minuteOfDay(int* m);
 }

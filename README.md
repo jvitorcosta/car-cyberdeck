@@ -26,7 +26,7 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Synced lyrics** in the battle dialogue box, from LRCLIB, including accented Latin and
   Japanese/Chinese text.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
-- **Night palette** with a dimmer backlight from 18:00 to 06:00.
+- **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, optionally
   followed by a montage of your own photos.
 - **Built for a car:** never freezes on a slow link, retries a late hotspot in the background,
@@ -56,8 +56,8 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
 1. **Create a Spotify app** in the [developer dashboard](https://developer.spotify.com/dashboard)
    with the redirect URI `http://127.0.0.1:8888/callback`.
 2. **Configure:** copy `include/config.example.h` to `src/config.h` (git-ignored) and fill in
-   your WiFi networks and the app's client ID and secret. Networks are tried in order, so put
-   the phone hotspot where you want it.
+   your WiFi networks, the app's client ID and secret, and your time zone. Networks are tried
+   in order, so put the phone hotspot where you want it.
 3. **Authorize:** run `python tools/spotify_auth.py`. It opens the browser and writes a refresh
    token into `src/config.h`.
 4. **Flash:** `pio run -e cyd -t upload` (or `-e s3`). Add `--upload-port <port>` if needed;

@@ -57,7 +57,7 @@ constexpr uint32_t CD_FRAME_MS = 160;     // spinning CD + Poke Ball, ~6 fps
 constexpr uint32_t PROGRESS_MS = 250;     // time, HP/EXP bars, dialogue box
 constexpr uint32_t NOTES_MS = 330;        // note icons bob ~3 steps/s
 constexpr uint32_t WALK_FRAME_MS = 120;   // walker ~8 fps
-constexpr uint32_t MODE_CHECK_MS = 10000; // day/night check (18:00-06:00 Manaus)
+constexpr uint32_t MODE_CHECK_MS = 10000; // day/night check (18:00-06:00 local time)
 
 // The art box and the decoded bitmap are the same 92x92 area (pushArtIfValid pushes it whole).
 static_assert(ui::ART_W == art::W && ui::ART_H == art::H, "art box and bitmap sizes differ");
@@ -152,7 +152,7 @@ void setup() {
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
 }
 
-// Night mode: every MODE_CHECK_MS, picks the palette and backlight for the Manaus time. True
+// Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
 // when the mode changed (the caller redraws the current screen). No clock yet -> day.
 static bool updateDayNight() {
     static uint32_t lastCheck = 0;
@@ -165,7 +165,7 @@ static bool updateDayNight() {
     bool synced = netclock::minuteOfDay(&m);
     if (synced && !loggedSync) {
         loggedSync = true;
-        Serial.printf("[clock] synced, Manaus %02d:%02d\n", m / 60, m % 60);
+        Serial.printf("[clock] synced, local %02d:%02d\n", m / 60, m % 60);
     }
     bool night = synced && daynight::isNight(m);
     if (night == theme::isNightActive()) return false;

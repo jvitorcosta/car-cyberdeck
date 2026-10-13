@@ -10,6 +10,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - Documentation reorganised: shorter README, new ARCHITECTURE, HISTORY, CONTRIBUTING and
   SECURITY docs, issue and pull request templates, and a list of third-party files in CREDITS.
 - CI runs with a read-only token and also builds release tags.
+- Night mode follows `TIMEZONE` in `src/config.h` (POSIX TZ string, daylight saving included)
+  instead of a fixed UTC-4. **Add the line to your `config.h`**; without it the deck uses UTC.
+- Without a refresh token the deck shows how to get one, instead of a setup page that Spotify
+  could not redirect to.
+
+### Security
+- Spotify requests verify the server's certificate against bundled roots.
 
 ## [1.0.0] - 2026-10-10
 

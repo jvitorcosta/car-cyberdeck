@@ -31,7 +31,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Genre badge** (`genre/apple`, `util/genre`, `util/genrebadge`) — Apple artist genre, cached
   per artist, mapped to Gen-3 style badges.
 - **Night mode** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
-  (SNTP; the offset is UTC-4, set in `src/main.cpp`): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
+  (SNTP; `TIMEZONE` in `src/config.h`, daylight saving included): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
 - **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
   16 kHz, played at 32 kHz: IDF 4.4 DAC mode mis-clocks below ~20 kHz) streamed by I2S0 to
   the built-in DAC on GPIO 26 at 30 % volume, noise-shaped down to the DAC's 8 bits, in a
