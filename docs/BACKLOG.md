@@ -4,11 +4,10 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
-- **Phone remote from the iPhone hotspot**: the Howl page has only been tested against a PC
-  stand-in (the home router keeps the PC's 5 GHz apart from the deck's 2.4 GHz). Check that
-  Safari on the iPhone reaches `cardeck.local` (mDNS) or the deck's 172.20.10.x address, and
-  that the howl plays over music on both boards. The planned refusal below ~32 KB largest
-  heap block was not built: watch `[mem]` on the CYD while howling during a track change.
+- **Phone remote on the CYD**: Howl from Safari on the iPhone hotspot works on the S3
+  (2026-10-13: page from 172.20.10.1, howl played in 2.4 s). Not yet tried on the CYD. The
+  planned refusal below ~32 KB largest heap block is the 503 guard in `net/remote`; watch
+  `[mem]` on the CYD while howling during a track change.
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); not yet on the CYD,
   and the no-WiFi / no-internet / certificate screens only from host renders.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this

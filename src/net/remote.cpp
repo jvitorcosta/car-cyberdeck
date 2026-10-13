@@ -85,7 +85,10 @@ void begin(bool (*hold)()) {
     if (!s_gate.enabled()) { Serial.println("[remote] off (REMOTE_TOKEN empty)"); return; }
     s_hold = hold;
     s_server = new WebServer(80);
-    s_server->on("/", HTTP_GET, [] { s_server->send_P(200, "text/html", PAGE); });
+    s_server->on("/", HTTP_GET, [] {
+        Serial.printf("[remote] page for %s\n", s_server->client().remoteIP().toString().c_str());
+        s_server->send_P(200, "text/html", PAGE);
+    });
     s_server->on("/play", HTTP_POST, handlePlay);
     s_server->onNotFound([] { s_server->send(404, "text/plain", "not found"); });
     xTaskCreatePinnedToCore(task, "remote", 4096, nullptr, 0, nullptr, 1);
