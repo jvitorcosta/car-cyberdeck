@@ -30,3 +30,7 @@ static const int WIFI_NETWORK_COUNT = 2;
 // Any long random string; empty turns the remote off. The deck logs its address at boot.
 #define REMOTE_TOKEN          ""
 // #define REMOTE_NAME        "cardeck"
+
+// Companion screen (env cyd_companion): the new deck it reads. 172.20.10.10 is the S3's fixed
+// address on the iPhone hotspot. Both decks need the same REMOTE_TOKEN.
+#define COMPANION_DECK        "172.20.10.10"
