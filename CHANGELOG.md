@@ -5,6 +5,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Changed
+- The CYD no longer probes the microSD slot at boot (~0.6 s faster, no `Card Failed` errors);
+  the parked SD cache is built only with `-DSD_CACHE`.
+
 ## [1.1.0] - 2026-10-13
 
 ### Added

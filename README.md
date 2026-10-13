@@ -45,7 +45,7 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 
 Both are 320×240 ILI9341 boards and run the same code. You also need a USB car charger
 (5 V, 2 A recommended) and a phone with a 2.4 GHz hotspot (on iPhone, turn on
-**Maximize Compatibility**). Leave the microSD slot empty: the SD cache is parked because it
+**Maximize Compatibility**). The microSD slot isn't used: the SD cache is parked because it
 competes with TLS for RAM.
 
 ## Quick start

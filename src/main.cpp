@@ -117,7 +117,9 @@ void setup() {
         Serial.printf("[cjk] ranges=%d glyph(U+3042)=%s w=%d\n", ui::cjk().rangeCount(),
                       ok ? "ok" : "missing", w);
     }
+#ifdef SD_CACHE   // parked: a mounted card costs the RAM TLS needs (docs/BACKLOG.md)
     cache::begin();
+#endif
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1); s_tft.fillScreen(TFT_BLACK);
     backlight::begin();
     if (!spclient::hasToken()) {

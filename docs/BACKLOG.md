@@ -49,7 +49,8 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   lyrics are never cached.
 - Never verified: SD (VSPI) alongside the display (moved to HSPI in `2b75c40`), cache hits,
   and corrupt-file eviction.
-- To test: FAT32 card in, power-cycle, look for `[cache] SD ready`, replay songs and compare
+- To test: build with `PLATFORMIO_BUILD_FLAGS=-DSD_CACHE` (without it the card is never
+  mounted), FAT32 card in, power-cycle, look for `[cache] SD ready`, replay songs and compare
   `[net] walk` times; check `/pmd` and `/sprites` on a PC.
 
 ## Accepted as is
