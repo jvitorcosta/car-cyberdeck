@@ -4,10 +4,12 @@
 #include <HTTPClient.h>
 #include "../net/http_config.h"
 #include "../util/text.h"
+#include "../util/readguard.h"
 
 namespace lyricsvc {
 
 static lyricbuf::Lyrics s_arena;   // ~5.6 KB, static: allocated once
+static constexpr uint32_t LYRICS_DEADLINE_MS = 15000;   // whole body, per request
 lyricbuf::Lyrics& arena() { return s_arena; }
 
 // Query value via the shared, bounded encoder (one String instead of one per byte). AppState
@@ -37,20 +39,24 @@ static lrcstream::Kind request(const String& url, lrcstream::Mode mode, uint32_t
     lrcstream::Extractor ex(out, mode, durationMs);
     WiFiClient* s = https.getStreamPtr();
     uint8_t chunk[128];
-    uint32_t last = millis();
+    // Stall: the body stopped. Deadline: a trickling server would otherwise hold the network
+    // task (and the Spotify polls) for as long as it keeps sending a byte every few seconds.
+    readguard::Guard guard(millis(), netcfg::STALL_MS, LYRICS_DEADLINE_MS);
     while (!ex.done() && (https.connected() || s->available())) {
         int a = s->available();
         if (a <= 0) {
-            if (millis() - last > netcfg::STALL_MS) { *stalled = true; break; }
+            if (guard.check(millis()) != readguard::State::Ok) { *stalled = true; break; }
             delay(1);
             continue;
         }
         int r = s->read(chunk, a < (int)sizeof(chunk) ? a : (int)sizeof(chunk));
         for (int i = 0; i < r && !ex.done(); ++i) ex.feed((char)chunk[i]);
-        last = millis();
+        guard.onData(millis());
+        if (guard.check(millis()) == readguard::State::Deadline) { *stalled = true; break; }
     }
     https.end();
     ex.finish();
+    if (!ex.sawJson()) *stalled = true;   // 200 with an HTML page (captive portal): retry later
     return ex.kind();
 }
 
