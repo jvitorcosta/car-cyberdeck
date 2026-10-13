@@ -24,3 +24,7 @@ static const int WIFI_NETWORK_COUNT = 2;
 //   "CET-1CEST,M3.5.0,M10.5.0/3" Berlin, "EST5EDT,M3.2.0,M11.1.0" New York, "UTC0" UTC.
 // More: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 #define TIMEZONE              "UTC0"
+
+// Phone remote: open http://<deck-ip>/?k=<this token> on a phone on the same network.
+// Any long random string; empty turns the remote off. The deck logs its address at boot.
+#define REMOTE_TOKEN          ""

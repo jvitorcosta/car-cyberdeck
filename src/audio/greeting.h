@@ -15,5 +15,7 @@ uint32_t finaleMs();                // 0 when there's no finale clip
 // scene skips it when it would still be playing as the finale starts (one I2S port).
 void playOpener();
 uint32_t openerMs();                // 0 when there's no opener clip
+// Wolf howl synthesised on the fly (util/howl), for the phone remote (net/remote).
+void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
 }

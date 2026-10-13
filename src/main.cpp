@@ -19,6 +19,7 @@
 #include "ui/theme.h"
 #include "util/daynight.h"
 #include "util/linkstatus.h"
+#include "net/remote.h"
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
@@ -153,6 +154,7 @@ void setup() {
         bootscene::setCaption("WiFi not found - retrying...");
     }
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
+    remote::begin();
 }
 
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
@@ -198,6 +200,7 @@ void loop() {
         lastStackLog = millis();
         Serial.printf("[mem] loop stackfree=%u\n", (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     }
+    remote::loop();                         // phone remote: answers at most one request per frame
     AppState st;
     shared::snapshot(st);
     AppState view = st;   // interpolate progress for a smooth bar between polls

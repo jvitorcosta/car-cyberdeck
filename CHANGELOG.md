@@ -5,6 +5,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Added
+- Phone remote (proof of concept): `http://<deck-ip>/?k=<REMOTE_TOKEN>` shows a Howl button
+  that plays a synthesised wolf howl on the deck while it keeps playing. Off unless
+  `REMOTE_TOKEN` is set in `config.h`.
+
 ### Changed
 - "No signal..." now says why: **No WiFi...** (lists the saved networks), **No internet...**
   (connected, but the network or hotspot passes no traffic) or **Spotify error** (HTTP code or

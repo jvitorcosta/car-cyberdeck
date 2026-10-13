@@ -60,7 +60,8 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Ideas
 
-- **Phone remote: "Howl" button** (researched 2026-10-10, PoC planned, not started). Safari on
+- **Phone remote: "Howl" button** (researched 2026-10-10; PoC built 2026-10-13 in `net/remote`,
+  `util/howl`, `util/remotegate`; not yet heard from a phone on the hotspot). Safari on
   the phone opens `http://<deck-ip>/?k=<token>`, a one-button page; POST `/play?clip=howl`
   plays a wolf howl while the deck keeps polling. Plan: Arduino `WebServer` (in the Arduino core,
   ~1-3 KB RAM) polled from `loop()` after the boot scene; howl
