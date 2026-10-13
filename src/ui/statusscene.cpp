@@ -77,6 +77,11 @@ Rect bubbleRect(const Look& look, const Pose& pose) {
     return r;
 }
 
+int pushWidth(int y) {
+    const bool beside = y < INFO_Y + INFO_H + PAD && y + 4 > INFO_Y - PAD;
+    return beside ? INFO_X - PAD - X0 : W;
+}
+
 int hpPermille(linkstatus::Kind k, int lastCode, int retryS, int intervalS) {
     switch (k) {
     case linkstatus::Kind::Ok:           return 1000;
