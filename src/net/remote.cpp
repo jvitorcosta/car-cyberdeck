@@ -1,6 +1,7 @@
 #include "remote.h"
 #include <Arduino.h>
 #include <WebServer.h>
+#include <ESPmDNS.h>
 #include "../config.h"
 #include "wifi.h"
 #include "../audio/greeting.h"
@@ -8,6 +9,15 @@
 
 #ifndef REMOTE_TOKEN
 #define REMOTE_TOKEN ""   // older config.h: remote off
+#endif
+// Name on the local network: http://<REMOTE_NAME>.local/ (mDNS / Bonjour). Different per
+// board so both decks can be on at once.
+#ifndef REMOTE_NAME
+#ifdef BOARD_S3
+#define REMOTE_NAME "cardeck"
+#else
+#define REMOTE_NAME "cardeck-cyd"
+#endif
 #endif
 
 namespace remote {
@@ -52,7 +62,12 @@ void begin() {
     s_server->on("/play", HTTP_POST, handlePlay);
     s_server->onNotFound([] { s_server->send(404, "text/plain", "not found"); });
     s_server->begin();
-    Serial.printf("[remote] on: http://%s/?k=<REMOTE_TOKEN>\n", net::deviceIp().c_str());
+    // mDNS follows the WiFi events itself, so the name keeps working after a reconnect or a
+    // new hotspot address.
+    const bool named = MDNS.begin(REMOTE_NAME);
+    if (named) MDNS.addService("http", "tcp", 80);
+    Serial.printf("[remote] on: http://%s.local/?k=<REMOTE_TOKEN> (or http://%s/)\n",
+                  named ? REMOTE_NAME : "(mDNS failed)", net::deviceIp().c_str());
 }
 
 void loop() {

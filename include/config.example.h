@@ -25,6 +25,8 @@ static const int WIFI_NETWORK_COUNT = 2;
 // More: https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv
 #define TIMEZONE              "UTC0"
 
-// Phone remote: open http://<deck-ip>/?k=<this token> on a phone on the same network.
+// Phone remote: open http://cardeck.local/?k=<this token> on a phone on the same network
+// (cardeck-cyd.local on the CYD; uncomment REMOTE_NAME below to rename).
 // Any long random string; empty turns the remote off. The deck logs its address at boot.
 #define REMOTE_TOKEN          ""
+// #define REMOTE_NAME        "cardeck"

@@ -6,7 +6,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
-- Phone remote (proof of concept): `http://<deck-ip>/?k=<REMOTE_TOKEN>` shows a Howl button
+- Phone remote (proof of concept): `http://cardeck.local/?k=<REMOTE_TOKEN>` (`cardeck-cyd.local`
+  on the CYD, or the deck's IP) shows a Howl button
   that plays a synthesised wolf howl on the deck while it keeps playing. Off unless
   `REMOTE_TOKEN` is set in `config.h`.
 
