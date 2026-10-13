@@ -112,18 +112,28 @@ chat) drives these choices:
   tiles, with 4-neighbour autotiling for shorelines and road edges. The companion can show the
   same window: `/state` carries the 600 cell codes plus the car's offset, and the CYD has its
   own copy of the tileset (a few KB).
-- **Location.** Neither board has GPS. Recommended: a NEO-6M/M8N GPS module on a free S3 UART
-  (TinyGPS++), patch antenna under the windshield. Fallback ruled weak: Safari's Geolocation
-  needs HTTPS (a trusted self-signed certificate profile on the iPhone) and only updates while
-  the page is in front.
+- **Location: the iPhone (chosen 2026-10-13).** Neither board has GPS. The phone page reads
+  Safari's Geolocation (`watchPosition`) and POSTs the fix to the S3 every few seconds. Safari
+  only allows Geolocation on a secure context, so:
+  - The S3 also serves **HTTPS on port 443** (`esp_https_server`, already in the core; TLS
+    buffers in PSRAM). HTTP on port 80 stays for the companion's `/state` polls.
+  - `tools/gen_cert.py` (PC) makes a small private CA and a server certificate for
+    `172.20.10.10` and `cardeck.local`. The CA carries **name constraints** (only those names),
+    so even if its key leaked it couldn't vouch for any other site. Keys and certificates are
+    git-ignored personal data, embedded at build time like `config.h`.
+  - One-time iPhone setup: install the CA profile (AirDrop or e-mail it to yourself), then
+    Settings → General → About → Certificate Trust Settings → turn it on.
+  - The map follows the car only **while the page is open on screen** (phone in a holder).
+    When it stops sending, the map keeps the last position and shows how old it is.
+  - Rejected for now: a GPS module (live without the phone, but extra hardware), iOS Shortcuts
+    (event triggers only, no live tracking).
 - **Attribution.** "© OpenStreetMap contributors" on the map screen (ODbL).
 - **Off the map:** outside the pre-built region, a neutral "unknown area" pattern and the
   coordinates.
 - Where it shows: a toggle on the companion (tap the lyric area to swap lyrics ↔ map), and
   optionally on the S3's "Nothing playing" screen.
 
-Needs a decision before planning it: whether to buy a GPS module. Until then, nothing in the
-core companion depends on the map.
+Nothing in the core companion depends on the map; it is planned and built last.
 
 ## Out of scope
 
