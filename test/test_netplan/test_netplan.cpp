@@ -238,9 +238,9 @@ void test_backoff_doubles_on_429_up_to_a_minute() {
     }
 }
 
-void test_backoff_any_other_answer_returns_to_base() {
-    const int others[] = {200, 204, 401, 500, -1};
-    for (int code : others) {
+void test_backoff_only_success_returns_to_base() {
+    const int ok[] = {200, 204};
+    for (int code : ok) {
         netplan::PollBackoff b;
         b.onPoll(429);
         b.onPoll(429);
@@ -248,6 +248,23 @@ void test_backoff_any_other_answer_returns_to_base() {
         TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::BASE_MS, b.interval());
         TEST_ASSERT_FALSE(b.active());
     }
+}
+
+void test_backoff_other_failures_neither_reset_nor_keep_a_long_wait() {
+    const int others[] = {401, 500, -1};
+    for (int code : others) {
+        netplan::PollBackoff b;
+        b.onPoll(429);
+        b.onPoll(429);                                  // 16 s
+        b.onPoll(code);                                 // a timeout mid-episode: keep backing off
+        TEST_ASSERT_EQUAL_UINT32(16000, b.interval());
+        b.onPoll(429, 6537);                            // 1h 49m
+        b.onPoll(code);                                 // first poll after the wait times out
+        TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::MAX_MS, b.interval());   // not 4 s, not 1h 49m
+    }
+    netplan::PollBackoff fresh;                         // outside an episode a failure changes nothing
+    fresh.onPoll(-1);
+    TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::BASE_MS, fresh.interval());
 }
 
 void test_backoff_honours_spotifys_retry_after() {
@@ -269,14 +286,15 @@ void test_retry_after_parses_seconds_only() {
     TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter(nullptr));
     TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT"));   // HTTP date
     TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter("12abc"));
-    TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter("99999999999"));                   // overflow
+    TEST_ASSERT_EQUAL_INT(7 * 24 * 3600, netplan::parseRetryAfter("99999999999"));        // clamped to a week
 }
 
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_track_changes_bump_generation);
     RUN_TEST(test_backoff_doubles_on_429_up_to_a_minute);
-    RUN_TEST(test_backoff_any_other_answer_returns_to_base);
+    RUN_TEST(test_backoff_only_success_returns_to_base);
+    RUN_TEST(test_backoff_other_failures_neither_reset_nor_keep_a_long_wait);
     RUN_TEST(test_backoff_honours_spotifys_retry_after);
     RUN_TEST(test_retry_after_parses_seconds_only);
     RUN_TEST(test_empty_name_is_ignored_and_keeps_last);
