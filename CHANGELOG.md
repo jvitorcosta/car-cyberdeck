@@ -21,8 +21,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Pikachu for "Nothing playing". All bundled in flash: they show when nothing can download.
 - The CYD no longer probes the microSD slot at boot (~0.6 s faster, no `Card Failed` errors);
   the parked SD cache is built only with `-DSD_CACHE`.
-- When Spotify answers 429 (too many requests), the deck polls less often: 8, 16, 32, then
-  60 s, and skips the player-details call until a normal answer comes back.
+- When Spotify answers 429 (too many requests), the deck waits as long as Spotify's
+  `Retry-After` asks (falling back to 8, 16, 32, then 60 s), skips the player-details call,
+  and shows **Spotify busy...** with the time left right away.
 
 ## [1.1.0] - 2026-10-13
 

@@ -66,16 +66,21 @@ void test_small_buffers_are_never_overrun() {
 
 void test_rate_limit_counts_down_to_the_next_try() {
     char title[32], detail[64];
-    linkstatus::describe(Kind::SpotifyError, 429, 23, "iPhone", title, sizeof title, detail, sizeof detail);
-    TEST_ASSERT_EQUAL_STRING("Spotify busy...", title);
-    TEST_ASSERT_EQUAL_STRING("Too many requests, retry in 23s", detail);
-    linkstatus::describe(Kind::SpotifyError, 429, 0, "iPhone", title, sizeof title, detail, sizeof detail);
-    TEST_ASSERT_EQUAL_STRING("Too many requests, retrying...", detail);
-    linkstatus::describe(Kind::SpotifyError, 429, -1, "iPhone", title, sizeof title, detail, sizeof detail);
-    TEST_ASSERT_EQUAL_STRING("Too many requests, retrying...", detail);
-    linkstatus::describe(Kind::SpotifyError, 429, 60, "iPhone", title, sizeof title, detail, sizeof detail);
-    TEST_ASSERT_TRUE(strlen(detail) <= linkstatus::DETAIL_MAX);
-    TEST_ASSERT_NOT_NULL(strstr(detail, "60s"));
+    struct { int s; const char* want; } rows[] = {
+        {23,   "Too many requests, wait 23s"},
+        {125,  "Too many requests, wait 2m 05s"},
+        {6537, "Too many requests, wait 1h 48m"},
+        {0,    "Too many requests, retrying..."},
+        {-1,   "Too many requests, retrying..."},
+    };
+    for (auto& r : rows) {
+        linkstatus::describe(Kind::SpotifyError, 429, r.s, "iPhone", title, sizeof title, detail, sizeof detail);
+        TEST_ASSERT_EQUAL_STRING("Spotify busy...", title);
+        TEST_ASSERT_EQUAL_STRING(r.want, detail);
+        TEST_ASSERT_TRUE(strlen(detail) <= linkstatus::DETAIL_MAX);
+    }
+    linkstatus::describe(Kind::SpotifyError, 429, 86400, "iPhone", title, sizeof title, detail, sizeof detail);
+    TEST_ASSERT_EQUAL_STRING("Too many requests, wait 24h 00m", detail);
 }
 
 void test_retry_seconds_round_up_and_survive_millis_wrap() {

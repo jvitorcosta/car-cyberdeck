@@ -69,6 +69,15 @@ void test_link_down_after_three_consecutive_failures() {
     TEST_ASSERT_TRUE(g.update(false));
     TEST_ASSERT_FALSE(g.update(true));    // first good poll clears it
 }
+
+void test_link_down_at_once_on_a_definite_failure() {
+    // A 429 is Spotify's answer, not a blip, and the next poll may be an hour away.
+    netplan::LinkGate g;
+    TEST_ASSERT_TRUE(g.update(false, true));
+    TEST_ASSERT_TRUE(g.update(false));      // still down
+    TEST_ASSERT_FALSE(g.update(true));
+    TEST_ASSERT_FALSE(g.update(false));     // an ordinary failure is debounced again
+}
 void test_can_run_gates_on_largest_block() {
     using netplan::canRun;
     TEST_ASSERT_TRUE(canRun(Step::Art, 6000));          // plain HTTP: small
@@ -241,16 +250,41 @@ void test_backoff_any_other_answer_returns_to_base() {
     }
 }
 
+void test_backoff_honours_spotifys_retry_after() {
+    netplan::PollBackoff b;
+    b.onPoll(429, 6537);                                   // "come back in 1h 49m"
+    TEST_ASSERT_EQUAL_UINT32(6538000, b.interval());       // + 1 s margin
+    b.onPoll(429, 2);                                      // tiny wait: never below the doubling
+    TEST_ASSERT_EQUAL_UINT32(60000, b.interval());
+    b.onPoll(429, 999999);                                 // absurd: capped at a day
+    TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::RETRY_AFTER_MAX_MS, b.interval());
+    b.onPoll(200, 0);
+    TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::BASE_MS, b.interval());
+}
+
+void test_retry_after_parses_seconds_only() {
+    TEST_ASSERT_EQUAL_INT(6537, netplan::parseRetryAfter("6537"));
+    TEST_ASSERT_EQUAL_INT(30, netplan::parseRetryAfter(" 30 "));
+    TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter(""));
+    TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter(nullptr));
+    TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter("Wed, 21 Oct 2026 07:28:00 GMT"));   // HTTP date
+    TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter("12abc"));
+    TEST_ASSERT_EQUAL_INT(-1, netplan::parseRetryAfter("99999999999"));                   // overflow
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_track_changes_bump_generation);
     RUN_TEST(test_backoff_doubles_on_429_up_to_a_minute);
     RUN_TEST(test_backoff_any_other_answer_returns_to_base);
+    RUN_TEST(test_backoff_honours_spotifys_retry_after);
+    RUN_TEST(test_retry_after_parses_seconds_only);
     RUN_TEST(test_empty_name_is_ignored_and_keeps_last);
     RUN_TEST(test_order_without_prefetched_walker);
     RUN_TEST(test_prefetched_walker_skips_walk_step);
     RUN_TEST(test_link_stays_up_through_isolated_failures);
     RUN_TEST(test_link_down_after_three_consecutive_failures);
+    RUN_TEST(test_link_down_at_once_on_a_definite_failure);
     RUN_TEST(test_can_run_gates_on_largest_block);
     RUN_TEST(test_health_two_failures_pause_optional_until_success);
     RUN_TEST(test_health_restart_after_180s_when_memory_starved);

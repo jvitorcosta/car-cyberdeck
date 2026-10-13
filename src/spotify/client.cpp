@@ -7,6 +7,7 @@
 #include "../config.h"
 #include "../util/ctxcache.h"
 #include "../util/text.h"
+#include "../util/netplan.h"
 
 namespace spclient {
 static WiFiClientSecure s_client;
@@ -142,12 +143,33 @@ static bool resolveContext(const char* uri, char* out, size_t n) {
     return ok;
 }
 
+// After a 429: how long Spotify asks us to wait (Retry-After, seconds), or -1. SpotifyArduino
+// discards the response headers, so this asks once more with our own token and keeps only
+// that header. One extra request per rate-limit episode: the deck then stays quiet that long.
+static int fetchRetryAfter() {
+    if (!ensureAccessToken()) return -1;
+    WiFiClientSecure c;
+    netcfg::spotify(c);
+    HTTPClient https;
+    https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
+    if (!https.begin(c, "https://api.spotify.com/v1/me/player/currently-playing")) return -1;
+    https.addHeader("Authorization", s_accessToken);
+    const char* keys[] = {"Retry-After"};
+    https.collectHeaders(keys, 1);
+    int rc = https.GET();
+    int s = rc == 429 ? netplan::parseRetryAfter(https.header("Retry-After").c_str()) : -1;
+    https.end();
+    Serial.printf("[spotify] Retry-After: %d s (HTTP %d)\n", s, rc);
+    return s;
+}
+
 void poll(AppState& st) {
     if (!s_sp) return;
     s_target = &st;
     int code = s_sp->getCurrentlyPlaying(onPlaying, SPOTIFY_MARKET);
     st.lastPollCode = code;
     st.certRejected = false;
+    st.retryAfterS = code == 429 ? fetchRetryAfter() : -1;
     if (code == 200) {
         // st.context holds the raw context URI (set in onPlaying). Resolve it to
         // a human name once per context change (cached), done here — never inside

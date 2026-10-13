@@ -37,7 +37,9 @@ void describe(Kind k, int lastCode, int retryS, const char* network, char* title
     case Kind::SpotifyError:
         if (lastCode == 429) {   // rate limited: nettask backs off, say when it asks again
             t = "Spotify busy...";
-            if (retryS > 0) snprintf(d, sizeof d, "Too many requests, retry in %ds", retryS);
+            if (retryS >= 3600) snprintf(d, sizeof d, "Too many requests, wait %dh %02dm", retryS / 3600, retryS % 3600 / 60);
+            else if (retryS >= 60) snprintf(d, sizeof d, "Too many requests, wait %dm %02ds", retryS / 60, retryS % 60);
+            else if (retryS > 0) snprintf(d, sizeof d, "Too many requests, wait %ds", retryS);
             else snprintf(d, sizeof d, "Too many requests, retrying...");
         } else {
             t = "Spotify error";

@@ -179,7 +179,7 @@ static void run(void*) {
             spclient::poll(s_st);
             tock("poll");
             const uint32_t was = s_backoff.interval();
-            s_backoff.onPoll(s_st.lastPollCode);
+            s_backoff.onPoll(s_st.lastPollCode, s_st.retryAfterS);
             s_st.nextPollMs = (now + s_backoff.interval()) | 1;   // the status screen's countdown; never 0
             if (s_backoff.interval() != was)
                 Serial.printf("[net] poll every %lus (HTTP %d)\n",
@@ -198,7 +198,8 @@ static void run(void*) {
                 delay(200);
                 ESP.restart();
             }
-            if (!s_link.update(ok) && !ok) s_st.status = before;   // isolated failure: keep last state
+            // isolated failure: keep last state; a 429 is an answer, shown at once (next poll may be hours away)
+            if (!s_link.update(ok, s_st.lastPollCode == 429) && !ok) s_st.status = before;
             const char* id = s_st.trackUri[0] ? s_st.trackUri : s_st.trackName;   // URI: same-title songs differ
             if (s_gen.update(id)) onTrackChange();
             else shared::publish(s_st);

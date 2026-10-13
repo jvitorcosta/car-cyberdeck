@@ -25,9 +25,10 @@ private:
 class LinkGate {
 public:
     static constexpr int FAILS_FOR_DOWN = 3;
-    // Feed each poll result; returns true while the link should be shown as down.
-    bool update(bool ok) {
-        fails_ = ok ? 0 : fails_ + 1;
+    // Feed each poll result; returns true while the link should be shown as down. definite: a
+    // failure that is an answer, not a blip (Spotify's 429), shows as down at once.
+    bool update(bool ok, bool definite = false) {
+        fails_ = ok ? 0 : definite && fails_ < FAILS_FOR_DOWN ? FAILS_FOR_DOWN : fails_ + 1;
         return fails_ >= FAILS_FOR_DOWN;
     }
 private:
@@ -36,20 +37,33 @@ private:
 
 // Poll interval for the now-playing request. Spotify answers 429 when the app (shared by
 // every deck using it) asks too often; polling on at 4 s keeps the limit running. Each 429
-// doubles the wait up to a minute; any other answer returns to the base interval.
+// doubles the wait up to a minute; when the 429 says how long to wait (Retry-After, seconds)
+// the deck stays quiet that long instead (capped at a day). Any other answer returns to the
+// base interval.
 class PollBackoff {
 public:
     static constexpr uint32_t BASE_MS = 4000;
     static constexpr uint32_t MAX_MS = 60000;
-    void onPoll(int httpCode) {
+    static constexpr uint32_t RETRY_AFTER_MAX_MS = 24UL * 3600 * 1000;
+    void onPoll(int httpCode, int retryAfterS = -1) {
         if (httpCode != 429) { interval_ = BASE_MS; return; }
         interval_ = interval_ >= MAX_MS / 2 ? MAX_MS : interval_ * 2;
+        if (retryAfterS > 0) {
+            uint32_t ms = (uint32_t)retryAfterS >= RETRY_AFTER_MAX_MS / 1000 - 1
+                              ? RETRY_AFTER_MAX_MS
+                              : (uint32_t)retryAfterS * 1000 + 1000;   // + 1 s margin
+            if (ms > interval_) interval_ = ms;
+        }
     }
     uint32_t interval() const { return interval_; }
     bool active() const { return interval_ != BASE_MS; }   // backing off: skip other Spotify calls
 private:
     uint32_t interval_ = BASE_MS;
 };
+
+// Retry-After header value in seconds; -1 when missing, not plain digits (the HTTP-date
+// form) or absurdly large.
+int parseRetryAfter(const char* v);
 
 // Self-healing ladder. A heap so fragmented that TLS can't allocate never recovered by itself
 // (README "Design & performance history"), so:

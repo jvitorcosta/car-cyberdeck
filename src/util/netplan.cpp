@@ -64,4 +64,17 @@ bool WalkRetry::onResult(bool ok, bool outOfMemory) {
     tries_ = 0;
     return true;
 }
+int parseRetryAfter(const char* v) {
+    if (!v) return -1;
+    while (*v == ' ') ++v;
+    long n = 0;
+    int digits = 0;
+    for (; *v >= '0' && *v <= '9'; ++v, ++digits) {
+        n = n * 10 + (*v - '0');
+        if (n > 7L * 24 * 3600) return -1;   // over a week: not a value to trust
+    }
+    while (*v == ' ') ++v;
+    return digits > 0 && *v == '\0' ? (int)n : -1;
+}
+
 }
