@@ -15,12 +15,11 @@ Look lookFor(linkstatus::Kind k) {
     return {status_sprite::PIKACHU, Bubble::None, false};
 }
 
-static constexpr int CX = 160;                    // sprite and platform centre
 static constexpr int PLAT_Y = 136, PLAT_RX = 60, PLAT_RY = 12;
 static constexpr int BALL_TOP = FEET_Y - 1;
 static constexpr int BALL_RANGE = 48, BALL_STEP = 6, BALL_STEPS = 2 * BALL_RANGE / BALL_STEP;
 static constexpr int GLYPH_ADV = 12;              // 5x7 font at 2x, 1 px gap (2x)
-static constexpr int BUBBLE_W = 46, BUBBLE_H = 22;
+static constexpr int BUBBLE_W = 56, BUBBLE_H = 28;
 
 Pose poseAt(uint32_t ms, const Look& look) {
     static const int BOB[] = {0, 1, 2, 1};
@@ -78,6 +77,19 @@ Rect bubbleRect(const Look& look, const Pose& pose) {
     return r;
 }
 
+int hpPermille(linkstatus::Kind k, int lastCode, int retryS, int intervalS) {
+    switch (k) {
+    case linkstatus::Kind::Ok:           return 1000;
+    case linkstatus::Kind::NoWifi:       return 200;
+    case linkstatus::Kind::CertRejected: return 100;
+    case linkstatus::Kind::NoInternet:   return 450;
+    case linkstatus::Kind::SpotifyError: break;
+    }
+    if (lastCode != 429 || retryS < 0 || intervalS <= 0) return 500;
+    if (retryS >= intervalS) return 0;
+    return 1000 - retryS * 1000 / intervalS;
+}
+
 // Bubble box (rounded white, ink border, text) and its tail pointing down-left at the sprite.
 static bool bubblePixel(int x, int y, const Look& look, const Pose& pose, const Colors& c,
                         uint16_t* out) {
@@ -90,7 +102,11 @@ static bool bubblePixel(int x, int y, const Look& look, const Pose& pose, const 
         return false;
     }
     const int bx = x - r.x, by = y - r.y;
-    if (bx < 0 || by < 0 || bx >= r.w || by >= r.h) return false;
+    if (bx < 0 || by < 0 || bx >= r.w || by >= r.h) {
+        const bool shadow = bx >= 2 && by >= 2 && bx < r.w + 2 && by < r.h + 2;
+        if (shadow) { *out = c.edge; return true; }
+        return false;
+    }
     const bool edgeX = bx == 0 || bx == r.w - 1, edgeY = by == 0 || by == r.h - 1;
     if (edgeX && edgeY) return false;                                // rounded corner
     if (edgeX || edgeY) { *out = c.ink; return true; }

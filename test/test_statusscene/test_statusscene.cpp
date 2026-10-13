@@ -55,12 +55,13 @@ void test_ball_rolls_back_and_forth_on_the_platform() {
 void test_background_bands_and_platform() {
     statusscene::Look l = statusscene::lookFor(Kind::Ok);
     statusscene::Pose p = statusscene::poseAt(0, l);
-    TEST_ASSERT_EQUAL_HEX16(C.sky, statusscene::pixel(45, 30, l, p, C));
-    TEST_ASSERT_EQUAL_HEX16(C.horizon, statusscene::pixel(45, 119, l, p, C));
-    TEST_ASSERT_EQUAL_HEX16(C.grass, statusscene::pixel(45, 150, l, p, C));
-    TEST_ASSERT_EQUAL_HEX16(C.platform, statusscene::pixel(160, 140, l, p, C));   // below the feet
-    TEST_ASSERT_EQUAL_HEX16(C.edge, statusscene::pixel(100, 136, l, p, C));       // left tip
-    TEST_ASSERT_EQUAL_HEX16(C.grass, statusscene::pixel(98, 136, l, p, C));       // just outside
+    const int x = statusscene::X0 + 1;
+    TEST_ASSERT_EQUAL_HEX16(C.sky, statusscene::pixel(x, 30, l, p, C));
+    TEST_ASSERT_EQUAL_HEX16(C.horizon, statusscene::pixel(x, 119, l, p, C));
+    TEST_ASSERT_EQUAL_HEX16(C.grass, statusscene::pixel(x, 160, l, p, C));
+    TEST_ASSERT_EQUAL_HEX16(C.platform, statusscene::pixel(statusscene::CX, 140, l, p, C));   // below the feet
+    TEST_ASSERT_EQUAL_HEX16(C.edge, statusscene::pixel(statusscene::CX - 60, 136, l, p, C));   // left tip
+    TEST_ASSERT_EQUAL_HEX16(C.grass, statusscene::pixel(statusscene::CX - 62, 136, l, p, C));   // just outside
 }
 
 void test_sprite_drawn_2x_standing_on_the_platform_and_bobs_up() {
@@ -71,7 +72,7 @@ void test_sprite_drawn_2x_standing_on_the_platform_and_bobs_up() {
     for (int y = h - 1; y >= 0 && sx < 0; --y)          // lowest opaque pixel: a foot
         for (int x = 0; x < w; ++x)
             if (status_sprite::pixel(id, x, y, &c)) { sx = x; sy = y; break; }
-    const int left = 160 - w, top = statusscene::FEET_Y - 2 * h;
+    const int left = statusscene::CX - w, top = statusscene::FEET_Y - 2 * h;
     statusscene::Pose rest = statusscene::poseAt(0, l);
     TEST_ASSERT_EQUAL_HEX16(c, statusscene::pixel(left + 2 * sx + 1, top + 2 * sy + 1, l, rest, C));
     statusscene::Pose up = statusscene::poseAt(2 * statusscene::FRAME_MS, l);   // bob = 2
@@ -103,15 +104,45 @@ void test_everything_stays_inside_the_redrawn_region() {
         for (uint32_t ms = 0; ms < 8000; ms += statusscene::FRAME_MS) {
             statusscene::Pose p = statusscene::poseAt(ms, l);
             const int w = status_sprite::width(l.sprite), h = status_sprite::height(l.sprite);
-            TEST_ASSERT_TRUE(160 - w >= statusscene::X0 && 160 + w <= statusscene::X0 + statusscene::W);
+            TEST_ASSERT_TRUE(statusscene::CX - w >= statusscene::X0);
+            TEST_ASSERT_TRUE(statusscene::CX + w <= statusscene::X0 + statusscene::W);
+            TEST_ASSERT_TRUE(statusscene::CX + p.ballX - 7 >= statusscene::X0);
             TEST_ASSERT_TRUE(statusscene::FEET_Y - 2 * h - p.bob >= statusscene::Y0);
             if (l.bubble != Bubble::None) {
                 statusscene::Rect r = statusscene::bubbleRect(l, p);
                 TEST_ASSERT_TRUE(r.x >= statusscene::X0 && r.y >= statusscene::Y0);
-                TEST_ASSERT_TRUE(r.x + r.w <= statusscene::X0 + statusscene::W);
+                TEST_ASSERT_TRUE(r.x + r.w + 2 <= statusscene::X0 + statusscene::W);   // + shadow
             }
         }
     }
+}
+
+void test_region_leaves_room_for_the_info_box_and_dialogue() {
+    TEST_ASSERT_TRUE(statusscene::X0 >= statusscene::INFO_X + statusscene::INFO_W + 2);
+    TEST_ASSERT_TRUE(statusscene::Y0 + statusscene::H <= statusscene::DLG_Y);
+    TEST_ASSERT_EQUAL_INT(0, statusscene::H % 4);   // pushed in 4-row strips
+}
+
+void test_bubble_has_room_around_the_text() {
+    statusscene::Look l = statusscene::lookFor(Kind::SpotifyError);
+    statusscene::Rect r = statusscene::bubbleRect(l, statusscene::poseAt(0, l));
+    TEST_ASSERT_TRUE(r.w >= 3 * 12 - 2 + 2 * 8);   // "zZz" + 8 px each side
+    TEST_ASSERT_TRUE(r.h >= 14 + 2 * 6);
+}
+
+void test_hp_bar_per_cause_and_charging_while_rate_limited() {
+    using statusscene::hpPermille;
+    TEST_ASSERT_EQUAL_INT(1000, hpPermille(Kind::Ok, 200, -1, 0));            // nothing playing: healthy
+    TEST_ASSERT_TRUE(hpPermille(Kind::NoWifi, 0, -1, 0) <= 250);              // red
+    TEST_ASSERT_TRUE(hpPermille(Kind::CertRejected, -1, -1, 0) <= 250);
+    int ni = hpPermille(Kind::NoInternet, -1, -1, 0);
+    TEST_ASSERT_TRUE(ni > 250 && ni <= 500);                                  // yellow
+    TEST_ASSERT_EQUAL_INT(0, hpPermille(Kind::SpotifyError, 429, 60, 60));    // just backed off
+    TEST_ASSERT_EQUAL_INT(500, hpPermille(Kind::SpotifyError, 429, 30, 60));
+    TEST_ASSERT_EQUAL_INT(1000, hpPermille(Kind::SpotifyError, 429, 0, 60));  // about to retry
+    TEST_ASSERT_EQUAL_INT(0, hpPermille(Kind::SpotifyError, 429, 90, 60));    // clamped
+    TEST_ASSERT_EQUAL_INT(500, hpPermille(Kind::SpotifyError, 429, -1, 0));   // unknown: middle
+    TEST_ASSERT_EQUAL_INT(500, hpPermille(Kind::SpotifyError, 503, 10, 60));
 }
 
 int main(int, char**) {
@@ -123,5 +154,8 @@ int main(int, char**) {
     RUN_TEST(test_sprite_drawn_2x_standing_on_the_platform_and_bobs_up);
     RUN_TEST(test_bubble_only_when_the_look_has_one);
     RUN_TEST(test_everything_stays_inside_the_redrawn_region);
+    RUN_TEST(test_region_leaves_room_for_the_info_box_and_dialogue);
+    RUN_TEST(test_bubble_has_room_around_the_text);
+    RUN_TEST(test_hp_bar_per_cause_and_charging_while_rate_limited);
     return UNITY_END();
 }

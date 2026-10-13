@@ -7,6 +7,7 @@
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
 #include "statusscene.h"
+#include "status_sprite.h"
 #include "labels.h"
 #include "textdraw.h"
 #include "theme.h"
@@ -197,6 +198,8 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
     }
 }
 
+static void drawMoreArrow(TFT_eSPI& t, bool on);
+
 void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs) {
     const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
                                    theme::pal().horizon, theme::pal().boxShadow,
@@ -204,7 +207,7 @@ void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animM
                                    theme::POKE_RED, TFT_WHITE, theme::BALL_DARK};
     const statusscene::Pose pose = statusscene::poseAt(animMs, look);
     constexpr int ROWS = 4;
-    static uint16_t buf[statusscene::W * ROWS];   // 1.9 KB, static: the CYD has no heap to spare
+    static uint16_t buf[statusscene::W * ROWS];   // 1.5 KB, static: the CYD has no heap to spare
     for (int y0 = statusscene::Y0; y0 < statusscene::Y0 + statusscene::H; y0 += ROWS) {
         for (int r = 0; r < ROWS; ++r)
             for (int x = 0; x < statusscene::W; ++x)
@@ -212,24 +215,44 @@ void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animM
                     theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
         t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
     }
+    drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
 }
 
-void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail) {
-    dialogueBox(t, 20, 160, 280, 48);
-    if (detail && detail[0]) {
-        shadowText(t, msg, 160, 176, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
-        shadowText(t, detail, 160, 198, 2, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
-    } else {
-        shadowText(t, msg, 160, 184, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
-    }
+// Gen-3 "more text" arrow at the dialogue box's bottom right; blinks with the scene.
+static void drawMoreArrow(TFT_eSPI& t, bool on) {
+    const int x = 296, y = statusscene::DLG_Y + statusscene::DLG_H - 16;
+    t.fillTriangle(x, y, x + 8, y, x + 4, y + 5, on ? theme::POKE_RED : theme::pal().dlgFill);
+}
+
+// Opponent-style info box: NAME  Lv<dex>, and the HP bar (statusscene::hpPermille).
+static void drawInfoBox(TFT_eSPI& t, const statusscene::Look& look, int hpPermille) {
+    using namespace statusscene;
+    battleBox(t, INFO_X, INFO_Y, INFO_W, INFO_H, Tab::Right);
+    shadowText(t, status_sprite::name(look.sprite), INFO_X + 8, INFO_Y + 7, 2, theme::pal().text,
+               theme::pal().textShadow, TL_DATUM);
+    char lv[8];
+    snprintf(lv, sizeof lv, "Lv%d", status_sprite::dex(look.sprite));
+    shadowText(t, lv, INFO_X + INFO_W - 16, INFO_Y + 7, 2, theme::pal().text, theme::pal().textShadow,
+               TR_DATUM);
+    hpBarBattle(t, INFO_X + 8, INFO_Y + 27, INFO_W - 24, 8, hpPermille / 1000.0f);
+}
+
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
+                     int hpPermille) {
+    drawInfoBox(t, look, hpPermille);
+    const int y = statusscene::DLG_Y;
+    dialogueBox(t, 4, y, 312, statusscene::DLG_H);
+    const bool two = detail && detail[0];
+    shadowText(t, msg, 18, two ? y + 12 : y + 22, 4, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+    if (two) shadowText(t, detail, 18, y + 42, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
 }
 
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs) {
+                 int hpPermille, uint32_t animMs) {
     background(t);
     topStrip(t);
+    drawOfflineText(t, msg, detail, look, hpPermille);
     drawOfflineScene(t, look, animMs);
-    drawOfflineText(t, msg, detail);
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.

@@ -100,8 +100,8 @@ with open(OUT, "w", encoding="ascii", newline="\n") as f:
             f.write("    " + ", ".join("0x%02X" % v for v in mask[i:i + 16]) + ",\n")
         f.write("};\n")
     f.write("static const Sprite SPRITES[] = {\n")
-    for name, cw, ch in sizes:
-        f.write("    {%d, %d, %s_PX, %s_MASK},\n" % (cw, ch, name, name))
+    for (name, cw, ch), (_, dex) in zip(sizes, SPRITES):
+        f.write("    {%d, %d, %s_PX, %s_MASK, \"%s\", %d},\n" % (cw, ch, name, name, name, dex))
     f.write("};\n")
 for name, cw, ch in sizes:
     print("%-8s %dx%d" % (name, cw, ch))

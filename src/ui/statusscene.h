@@ -11,8 +11,12 @@ struct Look { int sprite; Bubble bubble; bool ball; };
 // Ok = "Nothing playing" (Pikachu, no bubble).
 Look lookFor(linkstatus::Kind k);
 
-// Region redrawn every frame: between the top strip and the dialogue box.
-constexpr int X0 = 40, Y0 = 20, W = 240, H = 140;
+// Battle layout: info box top-left (name, Lv, HP), the Pokemon on its platform to the right,
+// the dialogue box across the bottom. Only the scene region is redrawn every frame.
+constexpr int INFO_X = 8, INFO_Y = 28, INFO_W = 120, INFO_H = 44;
+constexpr int DLG_Y = 168, DLG_H = 68;
+constexpr int X0 = 132, Y0 = 20, W = 184, H = 148;
+constexpr int CX = 196;              // sprite and platform centre
 constexpr int FEET_Y = 132;          // sprite's bottom edge at rest
 constexpr uint32_t FRAME_MS = 250;   // 4 fps: gentle, and cheap on the UI loop
 
@@ -26,5 +30,9 @@ struct Colors {
 uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c);
 
 struct Rect { int x, y, w, h; };
-Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without its tail
+Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail and shadow
+
+// Info-box HP bar, 0..1000: full for "Nothing playing", low for no WiFi / certificate, half
+// for no internet. While Spotify rate-limits (429) it charges up as the retry nears.
+int hpPermille(linkstatus::Kind k, int lastCode, int retryS, int intervalS);
 }

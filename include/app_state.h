@@ -20,4 +20,5 @@ struct AppState {
     int lastPollCode;      // last poll's HTTP status (< 0: no answer); picks the status screen
     bool certRejected;     // the last failed poll was a rejected certificate
     uint32_t nextPollMs;   // millis() of the next now-playing poll (0 = not planned yet)
+    uint32_t pollEveryMs;  // current poll interval (grows while Spotify answers 429)
 };
