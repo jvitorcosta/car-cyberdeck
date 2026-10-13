@@ -154,7 +154,7 @@ void setup() {
         bootscene::setCaption("WiFi not found - retrying...");
     }
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
-    remote::begin();
+    remote::begin(bootscene::active);
 }
 
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
@@ -202,7 +202,6 @@ void loop() {
         lastStackLog = millis();
         Serial.printf("[mem] loop stackfree=%u\n", (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     }
-    remote::loop();                         // phone remote: answers at most one request per frame
     AppState st;
     shared::snapshot(st);
     AppState view = st;   // interpolate progress for a smooth bar between polls
@@ -240,7 +239,10 @@ void loop() {
             ui::drawOffline(s_tft, title, detail, look, millis());
             frameAt = millis();
         } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown)
-            ui::drawOfflineText(s_tft, title, detail);
+            const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
+            if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
+                ui::drawOfflineDetail(s_tft, detail);
+            else ui::drawOfflineText(s_tft, title, detail);
         } else if (millis() - frameAt >= statusscene::FRAME_MS) {   // Pokemon bob, bubble, ball
             frameAt = millis();
             ui::drawOfflineScene(s_tft, look, frameAt);

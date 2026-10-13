@@ -6,6 +6,8 @@
 #include "wifi.h"
 #include "../audio/greeting.h"
 #include "../util/remotegate.h"
+#include "../util/netplan.h"
+#include "../core/mem.h"
 
 #ifndef REMOTE_TOKEN
 #define REMOTE_TOKEN ""   // older config.h: remote off
@@ -22,6 +24,7 @@
 
 namespace remote {
 static WebServer* s_server = nullptr;   // created only when the remote is on
+static bool (*s_hold)() = nullptr;      // true while the boot scene runs (its clips own the audio)
 static remotegate::Gate s_gate(REMOTE_TOKEN);
 
 // The whole phone page: one button; the key comes from the page's own ?k= and goes back in
@@ -34,7 +37,7 @@ button{font-size:28px;padding:28px 44px;border:0;border-radius:18px;background:#
 color:#101820;font-weight:700}button:active{transform:scale(.96)}p{min-height:1.5em}</style>
 </head><body><button id="b">&#x1F43A; Howl</button><p id="s"></p><script>
 const k=new URLSearchParams(location.search).get('k')||'',s=document.getElementById('s');
-const say={202:'Howling!',403:'Wrong key',409:'Busy: a sound is playing',429:'Wait a moment'};
+const say={202:'Howling!',403:'Wrong key',409:'Busy: a sound is playing',429:'Wait a moment',503:'Deck is low on memory, try again'};
 document.getElementById('b').onclick=async()=>{s.textContent='...';try{
 const r=await fetch('/play?clip=howl&k='+encodeURIComponent(k),{method:'POST'});
 s.textContent=say[r.status]||('Error '+r.status)}catch(e){s.textContent='Deck not reachable'}};
@@ -43,6 +46,11 @@ s.textContent=say[r.status]||('Error '+r.status)}catch(e){s.textContent='Deck no
 static void handlePlay() {
     if (s_server->arg("clip") != "howl") { s_server->send(404, "text/plain", "unknown clip"); return; }
     const String key = s_server->arg("k");
+    // A howl starts the audio driver and a 3 KB task: never at the cost of Spotify's TLS.
+    if (mem::byteLargest() < netplan::TLS_NEED + 12000) {
+        s_server->send(503, "text/plain", "low memory");
+        return;
+    }
     switch (s_gate.request(key.c_str(), greeting::playing(), millis())) {
     case remotegate::Result::Play:
         greeting::playHowl();
@@ -55,12 +63,11 @@ static void handlePlay() {
     }
 }
 
-void begin() {
-    if (!s_gate.enabled()) { Serial.println("[remote] off (REMOTE_TOKEN empty)"); return; }
-    s_server = new WebServer(80);
-    s_server->on("/", HTTP_GET, [] { s_server->send_P(200, "text/html", PAGE); });
-    s_server->on("/play", HTTP_POST, handlePlay);
-    s_server->onNotFound([] { s_server->send(404, "text/plain", "not found"); });
+// Own task at idle priority on the UI core: WebServer reads a request with blocking reads (a
+// slow or half-sent request holds it for seconds), so it must never run on the UI loop. At
+// priority 0 it only gets the CPU the display leaves free.
+static void task(void*) {
+    while ((s_hold && s_hold()) || !net::isOnline()) vTaskDelay(pdMS_TO_TICKS(200));
     s_server->begin();
     // mDNS follows the WiFi events itself, so the name keeps working after a reconnect or a
     // new hotspot address.
@@ -68,9 +75,19 @@ void begin() {
     if (named) MDNS.addService("http", "tcp", 80);
     Serial.printf("[remote] on: http://%s.local/?k=<REMOTE_TOKEN> (or http://%s/)\n",
                   named ? REMOTE_NAME : "(mDNS failed)", net::deviceIp().c_str());
+    for (;;) {
+        s_server->handleClient();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }
 
-void loop() {
-    if (s_server) s_server->handleClient();
+void begin(bool (*hold)()) {
+    if (!s_gate.enabled()) { Serial.println("[remote] off (REMOTE_TOKEN empty)"); return; }
+    s_hold = hold;
+    s_server = new WebServer(80);
+    s_server->on("/", HTTP_GET, [] { s_server->send_P(200, "text/html", PAGE); });
+    s_server->on("/play", HTTP_POST, handlePlay);
+    s_server->onNotFound([] { s_server->send(404, "text/plain", "not found"); });
+    xTaskCreatePinnedToCore(task, "remote", 4096, nullptr, 0, nullptr, 1);
 }
 }

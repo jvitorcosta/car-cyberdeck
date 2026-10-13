@@ -38,6 +38,8 @@ void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statuss
                  uint32_t animMs);
 // Repaints only the dialogue box (the text changed, e.g. the retry countdown).
 void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail);
+// Repaints only the detail line (same title, new detail: the countdown ticking).
+void drawOfflineDetail(TFT_eSPI& t, const char* detail);
 // Next animation frame of the scene (and the dialogue box's blinking arrow), pushed in small
 // strips: no flicker, ~1.9 KB buffer.
 void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs);

@@ -34,7 +34,8 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Status screens that say why:** no WiFi, no internet or Spotify trouble, each with its own
   animated Pokémon; when Spotify asks the deck to slow down it shows how long to wait.
 - **Phone remote (proof of concept):** set `REMOTE_TOKEN` in `src/config.h` and open
-  `http://cardeck.local/?k=<token>` on a phone on the same network for a Howl button.
+  `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD) on a phone on the same
+  network for a Howl button.
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>

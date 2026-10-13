@@ -171,7 +171,10 @@ static void run(void*) {
         }
         net::loop();
         uint32_t now = millis();
-        if (first || now - lastPoll >= s_backoff.interval()) {
+        // WiFi down: keep the normal pace (polls fail fast) so Health's 15-minute backstop runs
+        // even during an hours-long Retry-After wait.
+        const uint32_t every = net::isOnline() ? s_backoff.interval() : netplan::PollBackoff::BASE_MS;
+        if (first || now - lastPoll >= every) {
             first = false;
             lastPoll = now;
             PlaybackStatus before = s_st.status;
@@ -188,7 +191,8 @@ static void run(void*) {
             if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::failTotal(); }
             // Restart only helps a starved heap: allocations failed since the last good poll,
             // or no block big enough for TLS. A dead zone or a 401/429 is not that.
-            bool starved = mem::failTotal() != s_failsAtOk || mem::byteLargest() < netplan::TLS_NEED;
+            bool starved = s_st.lastPollCode != 429 &&   // rate limited: a reboot only asks again
+                           (mem::failTotal() != s_failsAtOk || mem::byteLargest() < netplan::TLS_NEED);
             if (!ok) mem::log("poll failed");
             const bool wifiUp = net::isOnline();   // one reading for the decision and the log
             if (s_health.onPoll(ok, wifiUp, starved, now) == netplan::Health::Action::Restart) {

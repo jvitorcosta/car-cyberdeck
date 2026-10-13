@@ -46,7 +46,11 @@ public:
     static constexpr uint32_t MAX_MS = 60000;
     static constexpr uint32_t RETRY_AFTER_MAX_MS = 24UL * 3600 * 1000;
     void onPoll(int httpCode, int retryAfterS = -1) {
-        if (httpCode != 429) { interval_ = BASE_MS; return; }
+        if (httpCode == 200 || httpCode == 204) { interval_ = BASE_MS; return; }   // episode over
+        if (httpCode != 429) {   // timeout / 5xx: not proof the limit is gone, nor a reason to wait hours
+            if (interval_ > MAX_MS) interval_ = MAX_MS;
+            return;
+        }
         interval_ = interval_ >= MAX_MS / 2 ? MAX_MS : interval_ * 2;
         if (retryAfterS > 0) {
             uint32_t ms = (uint32_t)retryAfterS >= RETRY_AFTER_MAX_MS / 1000 - 1
@@ -61,8 +65,8 @@ private:
     uint32_t interval_ = BASE_MS;
 };
 
-// Retry-After header value in seconds; -1 when missing, not plain digits (the HTTP-date
-// form) or absurdly large.
+// Retry-After header value in seconds (at most a week); -1 when missing or not plain digits
+// (the HTTP-date form).
 int parseRetryAfter(const char* v);
 
 // Self-healing ladder. A heap so fragmented that TLS can't allocate never recovered by itself

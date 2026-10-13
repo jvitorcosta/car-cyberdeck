@@ -231,6 +231,12 @@ void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail) {
     if (two) shadowText(t, detail, 18, y + 42, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
 }
 
+void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
+    const int y = statusscene::DLG_Y + 40;
+    t.fillRect(16, y, 276, 20, theme::pal().dlgFill);   // the line only: the countdown doesn't flicker
+    shadowText(t, detail, 18, y + 2, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+}
+
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
                  uint32_t animMs) {
     background(t);
