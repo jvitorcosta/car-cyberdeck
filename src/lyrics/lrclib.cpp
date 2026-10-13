@@ -26,6 +26,7 @@ static lrcstream::Kind request(const String& url, lrcstream::Mode mode, uint32_t
                                lyricbuf::Lyrics& out, int* rc, bool* stalled) {
     *stalled = false;
     lyricbuf::reset(out);
+    if (!netcfg::linkUp()) { *rc = -1; return lrcstream::Kind::None; }
     WiFiClientSecure client;
     netcfg::secure(client);
     HTTPClient https;

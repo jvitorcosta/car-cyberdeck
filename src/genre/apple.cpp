@@ -19,6 +19,7 @@ static constexpr uint32_t GENRE_STALL_MS = 3000, GENRE_DEADLINE_MS = 6000;
 Result lookup(const char* artist, uint32_t* genreId, int* rc) {
     *rc = 0;
     if (!artist || !artist[0]) return Result::None;
+    if (!netcfg::linkUp()) { *rc = -1; return Result::Error; }
     char* term = s_term;
     char* url = s_url;
     txt::urlEncode(artist, term, sizeof(s_term));
