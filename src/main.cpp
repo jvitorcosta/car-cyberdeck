@@ -20,6 +20,10 @@
 #include "util/daynight.h"
 #include "util/linkstatus.h"
 #include "net/remote.h"
+#include "util/qrfit.h"
+#ifdef BOARD_S3
+#include <qrcode.h>
+#endif
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
@@ -169,6 +173,54 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
     return k;
 }
 
+#ifdef BOARD_S3
+// The phone-remote link as a QR code for the "Nothing playing" screen (esp_qrcode, built into
+// the core). Rebuilt when the link changes (another network, another address), checked at most
+// every 5 s: net::deviceIp() allocates a String.
+static uint8_t s_qrBits[(29 * 29 + 7) / 8];   // qrfit::MAX_VERSION 3: 29 x 29 modules
+static statusscene::Qr s_qr{s_qrBits, 0};
+
+static void copyQr(esp_qrcode_handle_t h) {
+    const int n = esp_qrcode_get_size(h);
+    s_qr.size = 0;
+    if (n > 29) return;
+    memset(s_qrBits, 0, sizeof s_qrBits);
+    for (int y = 0; y < n; ++y)
+        for (int x = 0; x < n; ++x)
+            if (esp_qrcode_get_module(h, x, y)) {
+                const int i = y * n + x;
+                s_qrBits[i >> 3] |= (uint8_t)(0x80 >> (i & 7));
+            }
+    s_qr.size = n;
+}
+
+static const statusscene::Qr* phoneQr() {
+    static char built[96] = "";
+    static uint32_t checkedAt = 0;
+    static bool first = true;
+    if (first || millis() - checkedAt >= 5000) {
+        first = false;
+        checkedAt = millis();
+        char url[96];
+        if (!remote::link(url, sizeof url) || !qrfit::version(strlen(url))) {
+            built[0] = '\0';
+            s_qr.size = 0;
+        } else if (strcmp(url, built) != 0) {
+            strlcpy(built, url, sizeof built);
+            esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
+            cfg.display_func = copyQr;
+            cfg.max_qrcode_version = qrfit::MAX_VERSION;
+            cfg.qrcode_ecc_level = ESP_QRCODE_ECC_LOW;
+            s_qr.size = 0;
+            esp_qrcode_generate(&cfg, url);
+        }
+    }
+    return s_qr.size ? &s_qr : nullptr;
+}
+#else
+static const statusscene::Qr* phoneQr() { return nullptr; }   // CYD: no flash to spare
+#endif
+
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
 // when the mode changed (the caller redraws the current screen). No clock yet -> day.
 static bool updateDayNight() {
@@ -236,7 +288,7 @@ void loop() {
         const statusscene::Look look = statusscene::lookFor(kind);
         snprintf(text, sizeof text, "%s|%s", title, detail);
         if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
-            ui::drawOffline(s_tft, title, detail, look, millis());
+            ui::drawOffline(s_tft, title, detail, look, millis(), mode == 2 ? phoneQr() : nullptr);
             frameAt = millis();
         } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown)
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
@@ -245,10 +297,11 @@ void loop() {
             else ui::drawOfflineText(s_tft, title, detail);
         } else if (millis() - frameAt >= statusscene::FRAME_MS) {   // Pokemon bob, bubble, ball
             frameAt = millis();
-            ui::drawOfflineScene(s_tft, look, frameAt);
+            ui::drawOfflineScene(s_tft, look, frameAt, mode == 2 ? phoneQr() : nullptr);
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
             Serial.printf("[screen] %s / %s\n", title, detail);
+        if (lastMode != mode || strcmp(text, shownText) != 0) remote::setStatus(title, detail);
         strlcpy(shownText, text, sizeof shownText);
         strlcpy(shownTitle, title, sizeof shownTitle);
         shownKind = kind;
@@ -257,6 +310,7 @@ void loop() {
         // Full deck redraw: immediately on track change (text + Pokemon name; art, lyric
         // and walker fill in as the network task delivers them), or back from a status screen.
         bool newTrack = st.trackGen != shownGen;
+        if (lastMode != 0) remote::setStatus("", "");   // the phone page: no status, the song
         lastMode = 0;
         if (newTrack) {
             shownGenre = genre::NONE;

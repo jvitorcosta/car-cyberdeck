@@ -11,8 +11,10 @@ static bool sameKey(const char* a, const char* b) {
     return diff == 0;
 }
 
+bool Gate::keyOk(const char* key) const { return enabled() && key && sameKey(key, key_); }
+
 Result Gate::request(const char* key, bool clipPlaying, uint32_t nowMs) {
-    if (!enabled() || !key || !sameKey(key, key_)) return Result::BadKey;
+    if (!keyOk(key)) return Result::BadKey;
     if (clipPlaying) return Result::Busy;
     if (played_ && nowMs - lastPlayMs_ < MIN_GAP_MS) return Result::TooSoon;   // unsigned: wrap-safe
     played_ = true;

@@ -26,7 +26,13 @@ struct Colors {
     uint16_t sky, horizon, grass, platform, edge;
     uint16_t bubble, ink, ballRed, ballWhite, ballDark;
 };
-uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c);
+// QR code of the phone-remote link (util/qrfit): modules row-major, MSB first, 1 = dark. Drawn
+// at QR_X/QR_Y, 2 px per module inside a white 4-module quiet zone, in the sky left of the
+// Pokemon (only the "Nothing playing" screen passes one).
+struct Qr { const uint8_t* bits; int size; };
+constexpr int QR_X = X0 + 4, QR_Y = Y0 + 4;
+uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c,
+               const Qr* qr = nullptr);
 
 struct Rect { int x, y, w, h; };
 Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail and shadow

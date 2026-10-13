@@ -56,10 +56,23 @@ void test_the_first_request_after_boot_plays() {
     TEST_ASSERT_EQUAL_INT((int)Result::Play, (int)g.request("k", false, 5));   // millis() near 0
 }
 
+void test_key_check_alone_never_uses_up_a_play() {
+    // GET /state checks the key every 5 s while the page is open; it must not count as a play.
+    remotegate::Gate g("secret");
+    TEST_ASSERT_TRUE(g.keyOk("secret"));
+    TEST_ASSERT_FALSE(g.keyOk("secreT"));
+    TEST_ASSERT_FALSE(g.keyOk(""));
+    TEST_ASSERT_FALSE(g.keyOk(nullptr));
+    TEST_ASSERT_EQUAL_INT((int)remotegate::Result::Play, (int)g.request("secret", false, 100));
+    remotegate::Gate off("");
+    TEST_ASSERT_FALSE(off.keyOk(""));               // remote off: nothing is accepted
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_request_is_judged_key_then_busy_then_rate);
     RUN_TEST(test_no_token_configured_turns_the_remote_off);
+    RUN_TEST(test_key_check_alone_never_uses_up_a_play);
     RUN_TEST(test_one_play_per_three_seconds);
     RUN_TEST(test_rejected_requests_dont_restart_the_wait);
     RUN_TEST(test_rate_limit_survives_the_millis_wrap);

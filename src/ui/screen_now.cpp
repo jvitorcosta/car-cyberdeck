@@ -199,7 +199,8 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
 
 static void drawMoreArrow(TFT_eSPI& t, bool on);
 
-void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs) {
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs,
+                      const statusscene::Qr* qr) {
     const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
                                    theme::pal().horizon, theme::pal().boxShadow,
                                    TFT_WHITE, theme::BALL_DARK,
@@ -211,7 +212,7 @@ void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animM
         for (int r = 0; r < ROWS; ++r)
             for (int x = 0; x < statusscene::W; ++x)
                 buf[r * statusscene::W + x] =
-                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
+                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c, qr));
         t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
     }
     drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
@@ -238,11 +239,11 @@ void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
 }
 
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs) {
+                 uint32_t animMs, const statusscene::Qr* qr) {
     background(t);
     topStrip(t);
     drawOfflineText(t, msg, detail);
-    drawOfflineScene(t, look, animMs);
+    drawOfflineScene(t, look, animMs, qr);
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.

@@ -130,8 +130,24 @@ static bool insideEllipse(int dx, int dy, int rx, int ry) {
     return (long)dx * dx * ry * ry + (long)dy * dy * rx * rx <= (long)rx * rx * ry * ry;
 }
 
-uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c) {
+static bool qrPixel(int x, int y, const Qr* qr, const Colors& c, uint16_t* out) {
+    if (!qr || !qr->bits || qr->size <= 0) return false;
+    constexpr int PX = 2, QUIET = 4;
+    const int span = (qr->size + 2 * QUIET) * PX;
+    const int dx = x - QR_X, dy = y - QR_Y;
+    if (dx < 0 || dy < 0 || dx >= span || dy >= span) return false;
+    const int mx = dx / PX - QUIET, my = dy / PX - QUIET;
+    *out = c.bubble;                                     // white: quiet zone and light modules
+    if (mx >= 0 && my >= 0 && mx < qr->size && my < qr->size) {
+        const int i = my * qr->size + mx;
+        if ((qr->bits[i >> 3] >> (7 - (i & 7))) & 1) *out = c.ink;
+    }
+    return true;
+}
+
+uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c, const Qr* qr) {
     uint16_t v;
+    if (qrPixel(x, y, qr, c, &v)) return v;
     if (bubblePixel(x, y, look, pose, c, &v)) return v;
     if (ballPixel(x, y, look, pose, c, &v)) return v;
     const int w = status_sprite::width(look.sprite);

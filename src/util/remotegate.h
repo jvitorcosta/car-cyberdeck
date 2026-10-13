@@ -13,6 +13,8 @@ class Gate {
 public:
     explicit Gate(const char* key) : key_(key) {}
     bool enabled() const { return key_ && key_[0]; }
+    // Key check only (GET /state): never counts as a play. Same constant-time compare.
+    bool keyOk(const char* key) const;
     Result request(const char* key, bool clipPlaying, uint32_t nowMs);
 private:
     const char* key_;
