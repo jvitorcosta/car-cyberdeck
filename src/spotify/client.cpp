@@ -49,7 +49,7 @@ static void onPlaying(CurrentlyPlaying cp) {
 }
 
 void begin() {
-    netcfg::secure(s_client);
+    netcfg::spotify(s_client);
     s_client.setTimeout(8);            // seconds: TCP connect/read (default 30 s)
     String rt = spauth::loadRefreshToken();
     if (rt.isEmpty()) rt = SPOTIFY_REFRESH_TOKEN;   // PC-obtained token from config.h
@@ -60,7 +60,8 @@ void begin() {
     static SpotifyArduino instance(s_client, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, rt.c_str());
     s_sp = &instance;
     if (s_sp->refreshAccessToken()) Serial.println("[spotify] access token OK");
-    else Serial.println("[spotify] refreshAccessToken FAILED");
+    else if (!netcfg::certRejected(s_client, "accounts.spotify.com"))
+        Serial.println("[spotify] refreshAccessToken FAILED");
 }
 
 // --- Context (playlist/album/artist) name resolution ------------------------
@@ -79,7 +80,7 @@ static bool ensureAccessToken() {
     if (rt.isEmpty()) rt = SPOTIFY_REFRESH_TOKEN;
     if (rt.isEmpty()) return false;
     WiFiClientSecure c;
-    netcfg::secure(c);
+    netcfg::spotify(c);
     HTTPClient https;
     https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
     if (!https.begin(c, "https://accounts.spotify.com/api/token")) return false;
@@ -88,7 +89,7 @@ static bool ensureAccessToken() {
                   "&client_id=" + SPOTIFY_CLIENT_ID +
                   "&client_secret=" + SPOTIFY_CLIENT_SECRET;
     int rc = https.POST(body);
-    if (rc != 200) { https.end(); return false; }
+    if (rc != 200) { netcfg::certRejected(c, "accounts.spotify.com"); https.end(); return false; }
     JsonDocument doc;
     DeserializationError e = deserializeJson(doc, https.getString());
     https.end();
@@ -120,13 +121,14 @@ static bool resolveContext(const char* uri, char* out, size_t n) {
     if (!endpoint) return true;                            // e.g. "collection": nothing to look up
     if (!ensureAccessToken()) return false;
     WiFiClientSecure c;
-    netcfg::secure(c);
+    netcfg::spotify(c);
     HTTPClient https;
     https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
     String url = "https://api.spotify.com/v1/" + String(endpoint) + "/" + id + "?fields=name";
     if (!https.begin(c, url)) return false;
     https.addHeader("Authorization", s_accessToken);
     int rc = https.GET();
+    if (rc < 0) netcfg::certRejected(c, "api.spotify.com");
     // 401: the cached access token was revoked or expired early. Expire it now so the next
     // lookup refreshes it, instead of failing until the 50-minute expiry.
     if (rc == 401) s_tokenExpiry = millis();
@@ -163,7 +165,8 @@ void poll(AppState& st) {
     } else if (code == 204) {
         st.status = PlaybackStatus::Stopped;
     } else {
-        Serial.printf("[spotify] poll HTTP %d\n", code);
+        if (!netcfg::certRejected(s_client, "api.spotify.com"))
+            Serial.printf("[spotify] poll HTTP %d\n", code);
         st.status = PlaybackStatus::Offline;
     }
 }

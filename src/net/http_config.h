@@ -2,7 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 // Shared HTTP(S) settings for every request the deck makes (Spotify, LRCLIB, Apple, art,
-// walk sheets). Header-only and inline: no extra RAM or stack at the call sites.
+// walk sheets). Inline where possible: no extra RAM or stack at the call sites.
 namespace netcfg {
 // TLS handshake limit. The 120 s default froze polls on a half-dead hotspot.
 constexpr unsigned long TLS_HANDSHAKE_S = 8;
@@ -12,11 +12,18 @@ constexpr uint16_t HTTP_TIMEOUT_MS = 8000;
 constexpr uint32_t STALL_MS = 8000;
 constexpr const char* USER_AGENT = "CarDeck/1.0 (ESP32)";
 
-// No certificate validation (public data; see docs/review), bounded handshake.
+// No certificate validation, bounded handshake: for public data only (lyrics, genres,
+// sprites), where a full chain check isn't worth the RAM. See SECURITY.md.
 inline void secure(WiFiClientSecure& c) {
     c.setInsecure();
     c.setHandshakeTimeout(TLS_HANDSHAKE_S);
 }
+// Spotify requests carry the client secret and tokens: the server must chain to one of the
+// bundled roots (src/net/ca_bundle.inc, tools/gen_ca_bundle.py). Bounded handshake.
+void spotify(WiFiClientSecure& c);
+// True, and logged once per call, when c's last connect failed because the server's
+// certificate didn't chain to a bundled root (Spotify changed CA: regenerate the bundle).
+bool certRejected(WiFiClientSecure& c, const char* host);
 // Plain (non-chunked, HTTP/1.0) body read straight from the stream, bounded waits.
 inline void streamed(HTTPClient& h) {
     h.useHTTP10(true);
