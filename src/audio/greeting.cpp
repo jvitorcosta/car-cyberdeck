@@ -4,6 +4,7 @@
 #include <cstring>
 #include "sink.h"
 #include "../util/loudness.h"
+#include "../util/howl.h"
 
 extern const uint8_t _binary_data_greeting_pcm_start[] asm("_binary_data_greeting_pcm_start");
 extern const uint8_t _binary_data_greeting_pcm_end[] asm("_binary_data_greeting_pcm_end");
@@ -18,6 +19,7 @@ constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (1
 constexpr int CHUNK = 128;               // samples per audiosink::write
 
 // Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
+// data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; };
 static const Clip GREETING = {_binary_data_greeting_pcm_start,
                               (size_t)(_binary_data_greeting_pcm_end - _binary_data_greeting_pcm_start) / 2,
@@ -28,6 +30,7 @@ static const Clip FINALE = {_binary_data_finale_pcm_start,
 static const Clip OPENER = {_binary_data_opener_pcm_start,
                             (size_t)(_binary_data_opener_pcm_end - _binary_data_opener_pcm_start) / 2,
                             "opener", &audiosink::GREETING_VOLUME};
+static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME};
 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
 static std::atomic<int> s_playing{0};
@@ -47,9 +50,17 @@ static void task(void* arg) {
         vTaskDelete(nullptr);
     }
     int16_t buf[CHUNK];
+    static howl::Synth synth;                            // one howl at a time (net/remote's gate)
+    if (!c->data) synth = howl::Synth();
     for (size_t i = 0; i < c->samples;) {
         size_t n = 0;
-        for (; n < CHUNK && i < c->samples; ++n, ++i) {
+        if (!c->data) {
+            n = synth.fill(buf, CHUNK);
+            if (n == 0) break;
+            i += n;
+            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 100);
+        }
+        for (; c->data && n < CHUNK && i < c->samples; ++n, ++i) {
             int16_t s;
             memcpy(&s, c->data + 2 * i, 2);              // embedded data has no alignment guarantee
             buf[n] = (int16_t)((int32_t)s * volume / 100);
@@ -75,6 +86,8 @@ static void start(const Clip* c, const char* name) {
 }
 
 void play() { start(&GREETING, "greeting"); }
+
+void playHowl() { start(&HOWL, "howl"); }
 
 void playFinale() {
     if (FINALE.samples <= 1) return;                 // 1 sample = the build's placeholder

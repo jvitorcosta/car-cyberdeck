@@ -7,6 +7,8 @@
 #include "../config.h"
 #include "../util/ctxcache.h"
 #include "../util/text.h"
+#include "../util/netplan.h"
+#include "../core/mem.h"
 
 namespace spclient {
 static WiFiClientSecure s_client;
@@ -142,10 +144,39 @@ static bool resolveContext(const char* uri, char* out, size_t n) {
     return ok;
 }
 
+// After a 429: how long Spotify asks us to wait (Retry-After, seconds), or -1. SpotifyArduino
+// discards the response headers, so this asks once more with our own token and keeps only
+// that header. Skipped when the heap can't hold another TLS session (the back-off then just
+// doubles), and called once per episode by poll().
+static int fetchRetryAfter() {
+    if (mem::byteLargest() < netplan::TLS_NEED) return -1;
+    if (!ensureAccessToken()) return -1;
+    WiFiClientSecure c;
+    netcfg::spotify(c);
+    HTTPClient https;
+    https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
+    if (!https.begin(c, "https://api.spotify.com/v1/me/player/currently-playing")) return -1;
+    https.addHeader("Authorization", s_accessToken);
+    const char* keys[] = {"Retry-After"};
+    https.collectHeaders(keys, 1);
+    int rc = https.GET();
+    int s = rc == 429 ? netplan::parseRetryAfter(https.header("Retry-After").c_str()) : -1;
+    https.end();
+    Serial.printf("[spotify] Retry-After: %d s (HTTP %d)\n", s, rc);
+    return s;
+}
+
 void poll(AppState& st) {
     if (!s_sp) return;
     s_target = &st;
+    const int lastCode = st.lastPollCode;
     int code = s_sp->getCurrentlyPlaying(onPlaying, SPOTIFY_MARKET);
+    st.lastPollCode = code;
+    st.certRejected = false;
+    // Ask how long once per episode: on the first 429, and again only after waiting a time
+    // Spotify gave. A missing or failed answer is not retried on every 60 s poll.
+    const bool askWait = code == 429 && (lastCode != 429 || st.retryAfterS > 0);
+    st.retryAfterS = askWait ? fetchRetryAfter() : -1;
     if (code == 200) {
         // st.context holds the raw context URI (set in onPlaying). Resolve it to
         // a human name once per context change (cached), done here — never inside
@@ -163,8 +194,8 @@ void poll(AppState& st) {
     } else if (code == 204) {
         st.status = PlaybackStatus::Stopped;
     } else {
-        if (!netcfg::certRejected(s_client, "api.spotify.com"))
-            Serial.printf("[spotify] poll HTTP %d\n", code);
+        st.certRejected = netcfg::certRejected(s_client, "api.spotify.com");
+        if (!st.certRejected) Serial.printf("[spotify] poll HTTP %d\n", code);
         st.status = PlaybackStatus::Offline;
     }
 }

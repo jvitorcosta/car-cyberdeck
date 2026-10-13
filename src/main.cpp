@@ -18,6 +18,8 @@
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
+#include "util/linkstatus.h"
+#include "net/remote.h"
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
@@ -152,6 +154,19 @@ void setup() {
         bootscene::setCaption("WiFi not found - retrying...");
     }
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
+    remote::begin(bootscene::active);
+}
+
+// Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
+static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, char* detail, size_t dn) {
+    const bool wifiUp = net::isOnline();
+    linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected});
+    char names[96];
+    if (wifiUp) strlcpy(names, net::ssid().c_str(), sizeof names);
+    else net::savedNetworks(names, sizeof names);
+    linkstatus::describe(k, st.lastPollCode, linkstatus::retryInS(millis(), st.nextPollMs), names,
+                         title, tn, detail, dn);
+    return k;
 }
 
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
@@ -205,10 +220,39 @@ void loop() {
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen
     if (updateDayNight()) lastMode = -1;   // redraw the deck or the status screen in the new palette
     if (mode != 0) {
-        if (lastMode != mode) {   // draw the status screen once (no flicker)
-            ui::drawOffline(s_tft, mode == 1 ? "No signal..." : "Nothing playing");
-            lastMode = mode;
+        static char shownText[80] = "", shownTitle[24] = "";
+        static char title[24], detail[48];
+        static uint32_t textAt = 0, frameAt = 0;
+        static linkstatus::Kind kind = linkstatus::Kind::Ok, shownKind = linkstatus::Kind::Ok;
+        char text[80];   // title|detail: 24 + 1 + 48
+        // Re-read the cause at most once a second: net::ssid() allocates a String.
+        if (lastMode != mode || millis() - textAt >= 1000) {
+            textAt = millis();
+            strlcpy(title, "Nothing playing", sizeof title);
+            detail[0] = '\0';
+            kind = mode == 1 ? offlineText(st, title, sizeof title, detail, sizeof detail)
+                             : linkstatus::Kind::Ok;
         }
+        const statusscene::Look look = statusscene::lookFor(kind);
+        snprintf(text, sizeof text, "%s|%s", title, detail);
+        if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
+            ui::drawOffline(s_tft, title, detail, look, millis());
+            frameAt = millis();
+        } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown)
+            const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
+            if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
+                ui::drawOfflineDetail(s_tft, detail);
+            else ui::drawOfflineText(s_tft, title, detail);
+        } else if (millis() - frameAt >= statusscene::FRAME_MS) {   // Pokemon bob, bubble, ball
+            frameAt = millis();
+            ui::drawOfflineScene(s_tft, look, frameAt);
+        }
+        if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
+            Serial.printf("[screen] %s / %s\n", title, detail);
+        strlcpy(shownText, text, sizeof shownText);
+        strlcpy(shownTitle, title, sizeof shownTitle);
+        shownKind = kind;
+        lastMode = mode;
     } else if (lastMode != 0 || st.trackGen != shownGen) {
         // Full deck redraw: immediately on track change (text + Pokemon name; art, lyric
         // and walker fill in as the network task delivers them), or back from a status screen.

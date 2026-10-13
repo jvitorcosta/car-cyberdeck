@@ -6,7 +6,7 @@
 #include "typebadge.h"
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
-#include "status_sprite.h"
+#include "statusscene.h"
 #include "labels.h"
 #include "textdraw.h"
 #include "theme.h"
@@ -197,23 +197,52 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
     }
 }
 
-void drawOffline(TFT_eSPI& t, const char* msg) {
+static void drawMoreArrow(TFT_eSPI& t, bool on);
+
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs) {
+    const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
+                                   theme::pal().horizon, theme::pal().boxShadow,
+                                   TFT_WHITE, theme::BALL_DARK,
+                                   theme::POKE_RED, TFT_WHITE, theme::BALL_DARK};
+    const statusscene::Pose pose = statusscene::poseAt(animMs, look);
+    constexpr int ROWS = 4;
+    static uint16_t buf[statusscene::W * ROWS];   // 1.9 KB, static: the CYD has no heap to spare
+    for (int y0 = statusscene::Y0; y0 < statusscene::Y0 + statusscene::H; y0 += ROWS) {
+        for (int r = 0; r < ROWS; ++r)
+            for (int x = 0; x < statusscene::W; ++x)
+                buf[r * statusscene::W + x] =
+                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
+        t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
+    }
+    drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
+}
+
+// Gen-3 "more text" arrow at the dialogue box's bottom right; blinks with the scene.
+static void drawMoreArrow(TFT_eSPI& t, bool on) {
+    const int x = 296, y = statusscene::DLG_Y + statusscene::DLG_H - 16;
+    t.fillTriangle(x, y, x + 8, y, x + 4, y + 5, on ? theme::POKE_RED : theme::pal().dlgFill);
+}
+
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail) {
+    const int y = statusscene::DLG_Y;
+    dialogueBox(t, 4, y, 312, statusscene::DLG_H);
+    const bool two = detail && detail[0];
+    shadowText(t, msg, 18, two ? y + 12 : y + 22, 4, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+    if (two) shadowText(t, detail, 18, y + 42, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+}
+
+void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
+    const int y = statusscene::DLG_Y + 40;
+    t.fillRect(16, y, 276, 20, theme::pal().dlgFill);   // the line only: the countdown doesn't flicker
+    shadowText(t, detail, 18, y + 2, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+}
+
+void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
+                 uint32_t animMs) {
     background(t);
     topStrip(t);
-    // Battle platform + the bundled Pokemon (no network needed), 2x nearest-neighbour.
-    const int cx = 160, feetY = 136;
-    t.fillEllipse(cx, feetY, 60, 12, theme::pal().horizon);
-    t.drawEllipse(cx, feetY, 60, 12, theme::pal().boxShadow);
-    int w = status_sprite::width(), h = status_sprite::height();
-    int s = (h * 2 <= 110 && w * 2 <= 200) ? 2 : 1;
-    int x0 = cx - w * s / 2, y0 = feetY - 4 - h * s;
-    for (int y = 0; y < h; ++y)
-        for (int x = 0; x < w; ++x) {
-            uint16_t c;
-            if (status_sprite::pixel(x, y, &c)) t.fillRect(x0 + x * s, y0 + y * s, s, s, c);
-        }
-    dialogueBox(t, 20, 160, 280, 48);
-    shadowText(t, msg, 160, 184, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
+    drawOfflineText(t, msg, detail);
+    drawOfflineScene(t, look, animMs);
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.
