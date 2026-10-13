@@ -146,6 +146,8 @@ void poll(AppState& st) {
     if (!s_sp) return;
     s_target = &st;
     int code = s_sp->getCurrentlyPlaying(onPlaying, SPOTIFY_MARKET);
+    st.lastPollCode = code;
+    st.certRejected = false;
     if (code == 200) {
         // st.context holds the raw context URI (set in onPlaying). Resolve it to
         // a human name once per context change (cached), done here — never inside
@@ -163,8 +165,8 @@ void poll(AppState& st) {
     } else if (code == 204) {
         st.status = PlaybackStatus::Stopped;
     } else {
-        if (!netcfg::certRejected(s_client, "api.spotify.com"))
-            Serial.printf("[spotify] poll HTTP %d\n", code);
+        st.certRejected = netcfg::certRejected(s_client, "api.spotify.com");
+        if (!st.certRejected) Serial.printf("[spotify] poll HTTP %d\n", code);
         st.status = PlaybackStatus::Offline;
     }
 }

@@ -29,6 +29,16 @@ bool connectAny() {
 
 bool isOnline() { return WiFi.status() == WL_CONNECTED; }
 String deviceIp() { return WiFi.localIP().toString(); }
+String ssid() { return isOnline() ? WiFi.SSID() : String(); }
+
+void savedNetworks(char* out, size_t n) {
+    if (n == 0) return;
+    out[0] = '\0';
+    for (int i = 0; i < WIFI_NETWORK_COUNT; ++i) {
+        if (i) strlcat(out, ", ", n);
+        strlcat(out, WIFI_NETWORKS[i].ssid, n);
+    }
+}
 
 void loop() {
     if (millis() - s_lastCheck < CHECK_MS) return;

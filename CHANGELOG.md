@@ -6,6 +6,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Changed
+- "No signal..." now says why: **No WiFi...** (lists the saved networks), **No internet...**
+  (connected, but the network or hotspot passes no traffic) or **Spotify error** (HTTP code or
+  rejected certificate).
 - The CYD no longer probes the microSD slot at boot (~0.6 s faster, no `Card Failed` errors);
   the parked SD cache is built only with `-DSD_CACHE`.
 

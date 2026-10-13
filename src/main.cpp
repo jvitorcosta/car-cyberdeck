@@ -18,6 +18,7 @@
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
+#include "util/linkstatus.h"
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
@@ -154,6 +155,16 @@ void setup() {
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
 }
 
+// Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
+static void offlineText(const AppState& st, char* title, size_t tn, char* detail, size_t dn) {
+    const bool wifiUp = net::isOnline();
+    linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected});
+    char names[96];
+    if (wifiUp) strlcpy(names, net::ssid().c_str(), sizeof names);
+    else net::savedNetworks(names, sizeof names);
+    linkstatus::describe(k, st.lastPollCode, names, title, tn, detail, dn);
+}
+
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
 // when the mode changed (the caller redraws the current screen). No clock yet -> day.
 static bool updateDayNight() {
@@ -205,8 +216,22 @@ void loop() {
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen
     if (updateDayNight()) lastMode = -1;   // redraw the deck or the status screen in the new palette
     if (mode != 0) {
-        if (lastMode != mode) {   // draw the status screen once (no flicker)
-            ui::drawOffline(s_tft, mode == 1 ? "No signal..." : "Nothing playing");
+        static char shownText[80] = "";
+        static char title[24], detail[48];
+        static uint32_t textAt = 0;
+        char text[80];   // title|detail: 24 + 1 + 48
+        // Re-read the cause at most once a second: net::ssid() allocates a String.
+        if (lastMode != mode || millis() - textAt >= 1000) {
+            textAt = millis();
+            strlcpy(title, "Nothing playing", sizeof title);
+            detail[0] = '\0';
+            if (mode == 1) offlineText(st, title, sizeof title, detail, sizeof detail);
+        }
+        snprintf(text, sizeof text, "%s|%s", title, detail);
+        if (lastMode != mode || strcmp(text, shownText) != 0) {   // draw once per change (no flicker)
+            ui::drawOffline(s_tft, title, detail);
+            Serial.printf("[screen] %s / %s\n", title, detail);
+            strlcpy(shownText, text, sizeof shownText);
             lastMode = mode;
         }
     } else if (lastMode != 0 || st.trackGen != shownGen) {

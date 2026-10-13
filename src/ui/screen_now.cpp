@@ -197,7 +197,7 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
     }
 }
 
-void drawOffline(TFT_eSPI& t, const char* msg) {
+void drawOffline(TFT_eSPI& t, const char* msg, const char* detail) {
     background(t);
     topStrip(t);
     // Battle platform + the bundled Pokemon (no network needed), 2x nearest-neighbour.
@@ -213,7 +213,12 @@ void drawOffline(TFT_eSPI& t, const char* msg) {
             if (status_sprite::pixel(x, y, &c)) t.fillRect(x0 + x * s, y0 + y * s, s, s, c);
         }
     dialogueBox(t, 20, 160, 280, 48);
-    shadowText(t, msg, 160, 184, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
+    if (detail && detail[0]) {
+        shadowText(t, msg, 160, 176, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
+        shadowText(t, detail, 160, 198, 2, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
+    } else {
+        shadowText(t, msg, 160, 184, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
+    }
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.

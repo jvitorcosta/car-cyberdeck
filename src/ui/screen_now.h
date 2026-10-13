@@ -31,5 +31,6 @@ void drawNoteFrame(TFT_eSPI& t, int frame);
 // Forget the last drawn lyric so the next drawLyricArea() repaints (after drawNow).
 void resetLyricArea();
 // Full-screen status message in a dialogue box ("No signal...", "Nothing playing").
-void drawOffline(TFT_eSPI& t, const char* msg);
+// `detail` (optional) is a smaller line under the message.
+void drawOffline(TFT_eSPI& t, const char* msg, const char* detail = nullptr);
 }
