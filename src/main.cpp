@@ -235,15 +235,12 @@ void loop() {
                              : linkstatus::Kind::Ok;
         }
         const statusscene::Look look = statusscene::lookFor(kind);
-        const int hp = statusscene::hpPermille(kind, st.lastPollCode,
-                                               linkstatus::retryInS(millis(), st.nextPollMs),
-                                               (int)(st.pollEveryMs / 1000));
         snprintf(text, sizeof text, "%s|%s", title, detail);
         if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
-            ui::drawOffline(s_tft, title, detail, look, hp, millis());
+            ui::drawOffline(s_tft, title, detail, look, millis());
             frameAt = millis();
-        } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown, HP)
-            ui::drawOfflineText(s_tft, title, detail, look, hp);
+        } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown)
+            ui::drawOfflineText(s_tft, title, detail);
         } else if (millis() - frameAt >= statusscene::FRAME_MS) {   // Pokemon bob, bubble, ball
             frameAt = millis();
             ui::drawOfflineScene(s_tft, look, frameAt);

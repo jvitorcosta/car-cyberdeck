@@ -7,7 +7,6 @@
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
 #include "statusscene.h"
-#include "status_sprite.h"
 #include "labels.h"
 #include "textdraw.h"
 #include "theme.h"
@@ -207,13 +206,13 @@ void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animM
                                    theme::POKE_RED, TFT_WHITE, theme::BALL_DARK};
     const statusscene::Pose pose = statusscene::poseAt(animMs, look);
     constexpr int ROWS = 4;
-    static uint16_t buf[statusscene::W * ROWS];   // 2.5 KB, static: the CYD has no heap to spare
+    static uint16_t buf[statusscene::W * ROWS];   // 1.9 KB, static: the CYD has no heap to spare
     for (int y0 = statusscene::Y0; y0 < statusscene::Y0 + statusscene::H; y0 += ROWS) {
-        const int w = statusscene::pushWidth(y0);   // stops short of the info box
         for (int r = 0; r < ROWS; ++r)
-            for (int x = 0; x < w; ++x)
-                buf[r * w + x] = theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
-        t.pushImage(statusscene::X0, y0, w, ROWS, buf);   // pushImage is big-endian
+            for (int x = 0; x < statusscene::W; ++x)
+                buf[r * statusscene::W + x] =
+                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
+        t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
     }
     drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
 }
@@ -224,22 +223,7 @@ static void drawMoreArrow(TFT_eSPI& t, bool on) {
     t.fillTriangle(x, y, x + 8, y, x + 4, y + 5, on ? theme::POKE_RED : theme::pal().dlgFill);
 }
 
-// Opponent-style info box: NAME  Lv<dex>, and the HP bar (statusscene::hpPermille).
-static void drawInfoBox(TFT_eSPI& t, const statusscene::Look& look, int hpPermille) {
-    using namespace statusscene;
-    battleBox(t, INFO_X, INFO_Y, INFO_W, INFO_H, Tab::Left);   // player's box: slant on the left
-    shadowText(t, status_sprite::name(look.sprite), INFO_X + 16, INFO_Y + 8, 2, theme::pal().text,
-               theme::pal().textShadow, TL_DATUM);
-    char lv[8];
-    snprintf(lv, sizeof lv, "Lv%d", status_sprite::dex(look.sprite));
-    shadowText(t, lv, INFO_X + INFO_W - 8, INFO_Y + 8, 2, theme::pal().text, theme::pal().textShadow,
-               TR_DATUM);
-    hpBarBattle(t, INFO_X + 16, INFO_Y + 30, INFO_W - 24, 8, hpPermille / 1000.0f);
-}
-
-void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                     int hpPermille) {
-    drawInfoBox(t, look, hpPermille);
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail) {
     const int y = statusscene::DLG_Y;
     dialogueBox(t, 4, y, 312, statusscene::DLG_H);
     const bool two = detail && detail[0];
@@ -248,10 +232,10 @@ void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, const sta
 }
 
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 int hpPermille, uint32_t animMs) {
+                 uint32_t animMs) {
     background(t);
     topStrip(t);
-    drawOfflineText(t, msg, detail, look, hpPermille);
+    drawOfflineText(t, msg, detail);
     drawOfflineScene(t, look, animMs);
 }
 

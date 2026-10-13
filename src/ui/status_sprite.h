@@ -9,6 +9,4 @@ int width(int id);    // 0 for an unknown id
 int height(int id);
 // True when (x, y) of sprite `id` is opaque; then *rgb565 (if given) is its RGB565 colour.
 bool pixel(int id, int x, int y, uint16_t* rgb565);
-const char* name(int id);   // "SLOWPOKE" (info box); "" for an unknown id
-int dex(int id);            // National Dex number (the box's "Lv"); 0 for an unknown id
 }

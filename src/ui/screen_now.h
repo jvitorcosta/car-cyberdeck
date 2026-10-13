@@ -31,15 +31,14 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes);
 void drawNoteFrame(TFT_eSPI& t, int frame);
 // Forget the last drawn lyric so the next drawLyricArea() repaints (after drawNow).
 void resetLyricArea();
-// Full status screen ("No WiFi...", "Spotify busy...", "Nothing playing") in the battle layout
-// (ui/statusscene): info box (the cause's Pokemon, Lv, HP bar 0..1000), the Pokemon on its
-// platform, and a dialogue box with `msg` and an optional smaller `detail` line.
+// Full status screen ("No WiFi...", "Spotify busy...", "Nothing playing"): the cause's Pokemon
+// on its platform (ui/statusscene) and a dialogue box with `msg` and an optional smaller
+// `detail` line.
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 int hpPermille, uint32_t animMs);
-// Repaints the info box and dialogue box (the text changed, e.g. the retry countdown).
-void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                     int hpPermille);
+                 uint32_t animMs);
+// Repaints only the dialogue box (the text changed, e.g. the retry countdown).
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail);
 // Next animation frame of the scene (and the dialogue box's blinking arrow), pushed in small
-// strips: no flicker, ~1.5 KB buffer.
+// strips: no flicker, ~1.9 KB buffer.
 void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs);
 }

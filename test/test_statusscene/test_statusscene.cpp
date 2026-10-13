@@ -117,42 +117,9 @@ void test_everything_stays_inside_the_redrawn_region() {
     }
 }
 
-static bool overlaps(int ax, int ay, int aw, int ah, int bx, int by, int bw, int bh) {
-    return ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
-}
-
 void test_region_leaves_room_for_the_info_box_and_dialogue() {
     TEST_ASSERT_TRUE(statusscene::Y0 + statusscene::H <= statusscene::DLG_Y);
     TEST_ASSERT_EQUAL_INT(0, statusscene::H % 4);   // pushed in 4-row strips
-    TEST_ASSERT_TRUE(statusscene::INFO_Y + statusscene::INFO_H + 2 <= statusscene::DLG_Y);
-}
-
-void test_nothing_animated_ever_touches_the_info_box() {
-    using namespace statusscene;
-    const int bx = INFO_X - PAD, by = INFO_Y - PAD, bw = INFO_W + 2 * PAD, bh = INFO_H + 2 * PAD;
-    const Kind kinds[] = {Kind::Ok, Kind::NoWifi, Kind::NoInternet, Kind::SpotifyError, Kind::CertRejected};
-    for (Kind k : kinds) {
-        Look l = lookFor(k);
-        const int w = status_sprite::width(l.sprite), h = status_sprite::height(l.sprite);
-        for (uint32_t ms = 0; ms < 20000; ms += FRAME_MS) {
-            Pose p = poseAt(ms, l);
-            TEST_ASSERT_FALSE(overlaps(CX - w, FEET_Y - 2 * h - p.bob, 2 * w, 2 * h + p.bob, bx, by, bw, bh));
-            TEST_ASSERT_FALSE(overlaps(CX - 60, 124, 121, 25, bx, by, bw, bh));          // platform
-            if (l.ball) TEST_ASSERT_FALSE(overlaps(CX + p.ballX - 7, FEET_Y - 1, 13, 13, bx, by, bw, bh));
-            if (l.bubble != Bubble::None) {
-                Rect r = bubbleRect(l, p);
-                TEST_ASSERT_FALSE(overlaps(r.x, r.y, r.w + 2, r.h + 6, bx, by, bw, bh));  // + shadow, tail
-            }
-        }
-    }
-}
-
-void test_strips_beside_the_info_box_stop_short_of_it() {
-    using namespace statusscene;
-    TEST_ASSERT_EQUAL_INT(W, pushWidth(Y0));                          // sky above the box: full width
-    TEST_ASSERT_EQUAL_INT(INFO_X - PAD - X0, pushWidth(INFO_Y));      // rows beside the box
-    TEST_ASSERT_EQUAL_INT(INFO_X - PAD - X0, pushWidth(INFO_Y - 4));  // strip touching its shadow margin
-    TEST_ASSERT_EQUAL_INT(INFO_X - PAD - X0, pushWidth(INFO_Y + INFO_H));
 }
 
 void test_bubble_has_room_around_the_text() {
@@ -160,21 +127,6 @@ void test_bubble_has_room_around_the_text() {
     statusscene::Rect r = statusscene::bubbleRect(l, statusscene::poseAt(0, l));
     TEST_ASSERT_TRUE(r.w >= 3 * 12 - 2 + 2 * 8);   // "zZz" + 8 px each side
     TEST_ASSERT_TRUE(r.h >= 14 + 2 * 6);
-}
-
-void test_hp_bar_per_cause_and_charging_while_rate_limited() {
-    using statusscene::hpPermille;
-    TEST_ASSERT_EQUAL_INT(1000, hpPermille(Kind::Ok, 200, -1, 0));            // nothing playing: healthy
-    TEST_ASSERT_TRUE(hpPermille(Kind::NoWifi, 0, -1, 0) <= 250);              // red
-    TEST_ASSERT_TRUE(hpPermille(Kind::CertRejected, -1, -1, 0) <= 250);
-    int ni = hpPermille(Kind::NoInternet, -1, -1, 0);
-    TEST_ASSERT_TRUE(ni > 250 && ni <= 500);                                  // yellow
-    TEST_ASSERT_EQUAL_INT(0, hpPermille(Kind::SpotifyError, 429, 60, 60));    // just backed off
-    TEST_ASSERT_EQUAL_INT(500, hpPermille(Kind::SpotifyError, 429, 30, 60));
-    TEST_ASSERT_EQUAL_INT(1000, hpPermille(Kind::SpotifyError, 429, 0, 60));  // about to retry
-    TEST_ASSERT_EQUAL_INT(0, hpPermille(Kind::SpotifyError, 429, 90, 60));    // clamped
-    TEST_ASSERT_EQUAL_INT(500, hpPermille(Kind::SpotifyError, 429, -1, 0));   // unknown: middle
-    TEST_ASSERT_EQUAL_INT(500, hpPermille(Kind::SpotifyError, 503, 10, 60));
 }
 
 int main(int, char**) {
@@ -187,9 +139,6 @@ int main(int, char**) {
     RUN_TEST(test_bubble_only_when_the_look_has_one);
     RUN_TEST(test_everything_stays_inside_the_redrawn_region);
     RUN_TEST(test_region_leaves_room_for_the_info_box_and_dialogue);
-    RUN_TEST(test_nothing_animated_ever_touches_the_info_box);
-    RUN_TEST(test_strips_beside_the_info_box_stop_short_of_it);
     RUN_TEST(test_bubble_has_room_around_the_text);
-    RUN_TEST(test_hp_bar_per_cause_and_charging_while_rate_limited);
     return UNITY_END();
 }
