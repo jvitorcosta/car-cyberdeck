@@ -26,7 +26,7 @@ static void fit(char* dst, size_t n, const char* src, size_t max) {
     dst[keep] = '\0';
 }
 
-void describe(Kind k, int lastCode, const char* network, char* title, size_t titleN,
+void describe(Kind k, int lastCode, int retryS, const char* network, char* title, size_t titleN,
               char* detail, size_t detailN) {
     char d[160];
     const char* t = "";
@@ -34,12 +34,27 @@ void describe(Kind k, int lastCode, const char* network, char* title, size_t tit
     switch (k) {
     case Kind::NoWifi:       t = "No WiFi...";     snprintf(d, sizeof d, "Looking for %s", net); break;
     case Kind::NoInternet:   t = "No internet..."; snprintf(d, sizeof d, "%s has no internet", net); break;
-    case Kind::SpotifyError: t = "Spotify error";  snprintf(d, sizeof d, "HTTP %d, retrying...", lastCode); break;
+    case Kind::SpotifyError:
+        if (lastCode == 429) {   // rate limited: nettask backs off, say when it asks again
+            t = "Spotify busy...";
+            if (retryS > 0) snprintf(d, sizeof d, "Too many requests, retry in %ds", retryS);
+            else snprintf(d, sizeof d, "Too many requests, retrying...");
+        } else {
+            t = "Spotify error";
+            snprintf(d, sizeof d, "HTTP %d, retrying...", lastCode);
+        }
+        break;
     case Kind::CertRejected: t = "Spotify error";  snprintf(d, sizeof d, "Certificate rejected"); break;
     case Kind::Ok:           t = "";               d[0] = '\0'; break;
     }
     fit(title, titleN, t, TITLE_MAX);
     fit(detail, detailN, d, DETAIL_MAX);
+}
+
+int retryInS(uint32_t nowMs, uint32_t nextPollMs) {
+    if (nextPollMs == 0) return -1;
+    int32_t left = (int32_t)(nextPollMs - nowMs);
+    return left <= 0 ? 0 : (int)((left + 999) / 1000);
 }
 
 }

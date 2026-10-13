@@ -6,7 +6,7 @@
 #include "typebadge.h"
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
-#include "status_sprite.h"
+#include "statusscene.h"
 #include "labels.h"
 #include "textdraw.h"
 #include "theme.h"
@@ -197,21 +197,24 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
     }
 }
 
-void drawOffline(TFT_eSPI& t, const char* msg, const char* detail) {
-    background(t);
-    topStrip(t);
-    // Battle platform + the bundled Pokemon (no network needed), 2x nearest-neighbour.
-    const int cx = 160, feetY = 136;
-    t.fillEllipse(cx, feetY, 60, 12, theme::pal().horizon);
-    t.drawEllipse(cx, feetY, 60, 12, theme::pal().boxShadow);
-    int w = status_sprite::width(), h = status_sprite::height();
-    int s = (h * 2 <= 110 && w * 2 <= 200) ? 2 : 1;
-    int x0 = cx - w * s / 2, y0 = feetY - 4 - h * s;
-    for (int y = 0; y < h; ++y)
-        for (int x = 0; x < w; ++x) {
-            uint16_t c;
-            if (status_sprite::pixel(x, y, &c)) t.fillRect(x0 + x * s, y0 + y * s, s, s, c);
-        }
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs) {
+    const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
+                                   theme::pal().horizon, theme::pal().boxShadow,
+                                   TFT_WHITE, theme::BALL_DARK,
+                                   theme::POKE_RED, TFT_WHITE, theme::BALL_DARK};
+    const statusscene::Pose pose = statusscene::poseAt(animMs, look);
+    constexpr int ROWS = 4;
+    static uint16_t buf[statusscene::W * ROWS];   // 1.9 KB, static: the CYD has no heap to spare
+    for (int y0 = statusscene::Y0; y0 < statusscene::Y0 + statusscene::H; y0 += ROWS) {
+        for (int r = 0; r < ROWS; ++r)
+            for (int x = 0; x < statusscene::W; ++x)
+                buf[r * statusscene::W + x] =
+                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
+        t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
+    }
+}
+
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail) {
     dialogueBox(t, 20, 160, 280, 48);
     if (detail && detail[0]) {
         shadowText(t, msg, 160, 176, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
@@ -219,6 +222,14 @@ void drawOffline(TFT_eSPI& t, const char* msg, const char* detail) {
     } else {
         shadowText(t, msg, 160, 184, 4, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
     }
+}
+
+void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
+                 uint32_t animMs) {
+    background(t);
+    topStrip(t);
+    drawOfflineScene(t, look, animMs);
+    drawOfflineText(t, msg, detail);
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.

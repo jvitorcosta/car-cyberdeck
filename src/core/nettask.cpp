@@ -180,6 +180,7 @@ static void run(void*) {
             tock("poll");
             const uint32_t was = s_backoff.interval();
             s_backoff.onPoll(s_st.lastPollCode);
+            s_st.nextPollMs = (now + s_backoff.interval()) | 1;   // the status screen's countdown; never 0
             if (s_backoff.interval() != was)
                 Serial.printf("[net] poll every %lus (HTTP %d)\n",
                               (unsigned long)(s_backoff.interval() / 1000), s_st.lastPollCode);

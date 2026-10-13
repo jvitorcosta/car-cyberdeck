@@ -1,6 +1,7 @@
 #pragma once
 #include <TFT_eSPI.h>
 #include "app_state.h"
+#include "statusscene.h"
 namespace ui {
 // Album art target rect inside the art battle box (main pushes the cover here).
 constexpr int ART_X = 11, ART_Y = 27, ART_W = 92, ART_H = 92;
@@ -30,7 +31,13 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes);
 void drawNoteFrame(TFT_eSPI& t, int frame);
 // Forget the last drawn lyric so the next drawLyricArea() repaints (after drawNow).
 void resetLyricArea();
-// Full-screen status message in a dialogue box ("No signal...", "Nothing playing").
-// `detail` (optional) is a smaller line under the message.
-void drawOffline(TFT_eSPI& t, const char* msg, const char* detail = nullptr);
+// Full status screen ("No WiFi...", "Spotify busy...", "Nothing playing"): scene (the cause's
+// Pokemon on the platform, ui/statusscene) and a dialogue box with `msg` and an optional
+// smaller `detail` line.
+void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
+                 uint32_t animMs);
+// Repaints only the dialogue box (the text changed, e.g. the retry countdown).
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail);
+// Next animation frame of the scene, pushed in small strips (no flicker, ~2 KB buffer).
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs);
 }

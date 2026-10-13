@@ -1,10 +1,12 @@
 #pragma once
 #include <cstdint>
 // The Pokemon shown on the status screens, bundled in flash (tools/gen_status_sprite.py):
-// those screens appear exactly when nothing can be downloaded. PURE, host-tested.
+// those screens appear exactly when nothing can be downloaded. ui/statusscene picks which
+// one shows when. PURE, host-tested.
 namespace status_sprite {
-int width();
-int height();
-// True when (x, y) is opaque; then *rgb565 (if given) is its native RGB565 colour.
-bool pixel(int x, int y, uint16_t* rgb565);
+enum Id : int { PIKACHU, ZUBAT, PSYDUCK, SLOWPOKE, PORYGON, COUNT };   // generator's order
+int width(int id);    // 0 for an unknown id
+int height(int id);
+// True when (x, y) of sprite `id` is opaque; then *rgb565 (if given) is its RGB565 colour.
+bool pixel(int id, int x, int y, uint16_t* rgb565);
 }

@@ -15,6 +15,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - "No signal..." now says why: **No WiFi...** (lists the saved networks), **No internet...**
   (connected, but the network or hotspot passes no traffic) or **Spotify error** (HTTP code or
   rejected certificate).
+- The status screens are animated, with a Pokemon per cause: Zubat searching for WiFi (with a
+  rolling Poke Ball), Psyduck when there's no internet, Slowpoke while Spotify rate-limits
+  (**Spotify busy...** counts down to the next try), Porygon for a rejected certificate,
+  Pikachu for "Nothing playing". All bundled in flash: they show when nothing can download.
 - The CYD no longer probes the microSD slot at boot (~0.6 s faster, no `Card Failed` errors);
   the parked SD cache is built only with `-DSD_CACHE`.
 - When Spotify answers 429 (too many requests), the deck polls less often: 8, 16, 32, then
