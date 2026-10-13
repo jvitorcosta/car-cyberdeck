@@ -26,6 +26,7 @@ static AppState s_st{};            // this task's private copy; published after 
 static netplan::TrackGen s_gen;
 static netplan::Work s_work{};
 static netplan::LinkGate s_link;   // "No signal" only after several failed polls in a row
+static netplan::PollBackoff s_backoff;   // Spotify 429: poll less often until it passes
 static netplan::Health s_health;   // pause optional work / restart when polls keep failing
 static netplan::WalkRetry s_walkRetry;       // PNG decoder didn't fit: retry after the polls
 static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB hiccups
@@ -36,7 +37,6 @@ static bool (*s_holdTls)() = nullptr;   // true while TLS must wait for heap (se
 static int s_prefetchDex = 0;      // dex whose walker sits in the staged slot
 static uint32_t s_t0 = 0;
 
-constexpr uint32_t POLL_MS = 4000;          // now-playing poll
 constexpr uint32_t PLAYER_MS = 12000;       // device / volume / shuffle / repeat
 constexpr uint32_t WIFI_RETRY_MS = 5000;    // WiFi not up at boot: retry period
 constexpr uint32_t LOOP_DELAY_MS = 20;      // yield between work items
@@ -171,13 +171,18 @@ static void run(void*) {
         }
         net::loop();
         uint32_t now = millis();
-        if (first || now - lastPoll >= POLL_MS) {
+        if (first || now - lastPoll >= s_backoff.interval()) {
             first = false;
             lastPoll = now;
             PlaybackStatus before = s_st.status;
             tick();
             spclient::poll(s_st);
             tock("poll");
+            const uint32_t was = s_backoff.interval();
+            s_backoff.onPoll(s_st.lastPollCode);
+            if (s_backoff.interval() != was)
+                Serial.printf("[net] poll every %lus (HTTP %d)\n",
+                              (unsigned long)(s_backoff.interval() / 1000), s_st.lastPollCode);
             bool ok = s_st.status != PlaybackStatus::Offline;
             if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::failTotal(); }
             // Restart only helps a starved heap: allocations failed since the last good poll,
@@ -196,7 +201,7 @@ static void run(void*) {
             const char* id = s_st.trackUri[0] ? s_st.trackUri : s_st.trackName;   // URI: same-title songs differ
             if (s_gen.update(id)) onTrackChange();
             else shared::publish(s_st);
-        } else if (now - lastPlayer >= PLAYER_MS) {
+        } else if (now - lastPlayer >= PLAYER_MS && !s_backoff.active()) {
             lastPlayer = now;
             tick();
             spclient::pollPlayerDetails(s_st);

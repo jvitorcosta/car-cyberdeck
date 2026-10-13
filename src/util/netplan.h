@@ -34,6 +34,23 @@ private:
     int fails_ = 0;
 };
 
+// Poll interval for the now-playing request. Spotify answers 429 when the app (shared by
+// every deck using it) asks too often; polling on at 4 s keeps the limit running. Each 429
+// doubles the wait up to a minute; any other answer returns to the base interval.
+class PollBackoff {
+public:
+    static constexpr uint32_t BASE_MS = 4000;
+    static constexpr uint32_t MAX_MS = 60000;
+    void onPoll(int httpCode) {
+        if (httpCode != 429) { interval_ = BASE_MS; return; }
+        interval_ = interval_ >= MAX_MS / 2 ? MAX_MS : interval_ * 2;
+    }
+    uint32_t interval() const { return interval_; }
+    bool active() const { return interval_ != BASE_MS; }   // backing off: skip other Spotify calls
+private:
+    uint32_t interval_ = BASE_MS;
+};
+
 // Self-healing ladder. A heap so fragmented that TLS can't allocate never recovered by itself
 // (README "Design & performance history"), so:
 //  - 2 failed polls in a row with WiFi up -> pause the optional downloads;

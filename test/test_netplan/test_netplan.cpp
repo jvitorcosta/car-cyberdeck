@@ -217,9 +217,35 @@ void test_walk_retry_other_results_are_final() {
     TEST_ASSERT_FALSE(r.onResult(false, true));    // and starts the count over
 }
 
+void test_backoff_doubles_on_429_up_to_a_minute() {
+    netplan::PollBackoff b;
+    TEST_ASSERT_EQUAL_UINT32(4000, b.interval());
+    TEST_ASSERT_FALSE(b.active());
+    const uint32_t want[] = {8000, 16000, 32000, 60000, 60000};
+    for (uint32_t w : want) {
+        b.onPoll(429);
+        TEST_ASSERT_EQUAL_UINT32(w, b.interval());
+        TEST_ASSERT_TRUE(b.active());
+    }
+}
+
+void test_backoff_any_other_answer_returns_to_base() {
+    const int others[] = {200, 204, 401, 500, -1};
+    for (int code : others) {
+        netplan::PollBackoff b;
+        b.onPoll(429);
+        b.onPoll(429);
+        b.onPoll(code);
+        TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::BASE_MS, b.interval());
+        TEST_ASSERT_FALSE(b.active());
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_track_changes_bump_generation);
+    RUN_TEST(test_backoff_doubles_on_429_up_to_a_minute);
+    RUN_TEST(test_backoff_any_other_answer_returns_to_base);
     RUN_TEST(test_empty_name_is_ignored_and_keeps_last);
     RUN_TEST(test_order_without_prefetched_walker);
     RUN_TEST(test_prefetched_walker_skips_walk_step);
