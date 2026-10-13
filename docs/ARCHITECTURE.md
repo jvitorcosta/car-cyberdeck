@@ -5,7 +5,7 @@ does every download and decode. See [HISTORY.md](HISTORY.md) for why it is built
 
 ```
 core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main.cpp)
-  Spotify poll 4 s / player 12 s                          snapshot AppState every frame
+  Spotify poll 4 s / player 12 s (429: Retry-After)      snapshot AppState every frame
   per track, one step at a time (util/netplan):           redraw deck on new track generation
     art -> lyrics -> genre -> walker -> prefetch          take art / lyrics / genre / walker
   results tagged with trackGen                            animate: walker 8 fps, CD 6 fps, HP 4 fps
@@ -41,10 +41,20 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   320×24 strip (15 KB, freed before the montage); brake: whole-screen fade; montage: JPEG frames
   from the embedded `data/montage.bin` decoded straight to the display (~10 fps); drive ~15 fps (67 ms/frame). `setup()`
   waits for it; `loop()` and the late-WiFi path wait while active.
+- **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
+  Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
+  certificate) plus a bundled Pokémon per cause on the battle platform with a speech bubble,
+  4 fps, pushed in 4-row strips. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
+  countdown; the network task stays quiet that long (`netplan::PollBackoff`).
+- **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`) — off unless `REMOTE_TOKEN`
+  is set. A one-button page on port 80 (`http://cardeck.local/`, mDNS) served from the UI
+  loop; `POST /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays,
+  and the howl is synthesised while it plays (`audio/greeting`).
 - **Pure, host-tested modules** (one suite each under `test/`) — `ui/{theme,icon_map,accents,
-  cjkfont,status_sprite,typebadge,lyricmsg,pokeball,labels,car_sprite,montage}`, `pokemon/dex`,
-  `util/{animdata,walkanim,walkrect,netplan,lyricstatus,interp,text,glyphrun,lrcstream,
-  lyricbuf,artmap,ctxcache,dexset,genre,genrebadge,rgb565,daynight,bootanim,loudness,bios}`.
+  cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,labels,car_sprite,montage}`,
+  `pokemon/dex`, `util/{animdata,walkanim,walkrect,netplan,lyricstatus,interp,text,glyphrun,
+  lrcstream,lyricbuf,artmap,ctxcache,dexset,genre,genrebadge,rgb565,daynight,bootanim,loudness,
+  bios,linkstatus,howl,remotegate}`.
 
 ## Layers
 

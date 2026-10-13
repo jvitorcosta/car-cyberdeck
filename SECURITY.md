@@ -21,6 +21,10 @@ instead, with steps to reproduce and the board and version (first serial line,
 
 ## Known limitations
 
+- **The phone remote is plain HTTP on the local network.** Its token travels in the URL and
+  the request, readable by anyone on the same WiFi or hotspot; it only gates a sound effect.
+  It is off unless `REMOTE_TOKEN` is set; use a long random token and don't reuse it.
+
 - Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
   7 bundled root certificates (`src/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).
   If Spotify moves to a CA outside the bundle, the log shows

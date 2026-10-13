@@ -4,6 +4,13 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **Phone remote from the iPhone hotspot**: the Howl page has only been tested against a PC
+  stand-in (the home router keeps the PC's 5 GHz apart from the deck's 2.4 GHz). Check that
+  Safari on the iPhone reaches `cardeck.local` (mDNS) or the deck's 172.20.10.x address, and
+  that the howl plays over music on both boards. The planned refusal below ~32 KB largest
+  heap block was not built: watch `[mem]` on the CYD while howling during a track change.
+- **Animated status screens**: seen on the S3 (Spotify busy + countdown); not yet on the CYD,
+  and the no-WiFi / no-internet / certificate screens only from host renders.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
@@ -18,6 +25,13 @@ Open items, not scheduled. Newest decisions first within each section.
   momentarily empty while a TLS session (~40 KB) is open on ~65 KB free. The levers left are
   build-time settings fixed in the precompiled Arduino core (mbedTLS 16 KB input buffer, lwIP
   TCP window, WiFi RX buffer count): they need the arduino-as-ESP-IDF-component build.
+
+## Spotify rate limit
+
+- Both decks share one Spotify app, so they share its rate limit (both were blocked for
+  ~2 h on 2026-10-13). A second app for the CYD would split it.
+- Retry-After costs one extra request per 429 (`spclient::fetchRetryAfter`) because
+  SpotifyArduino skips the headers; `tools/patch_spotify_lib.py` could capture it instead.
 
 ## Lyrics polish (deferred minors, final review 2026-10-08)
 
@@ -60,18 +74,8 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Ideas
 
-- **Phone remote: "Howl" button** (researched 2026-10-10; PoC built 2026-10-13 in `net/remote`,
-  `util/howl`, `util/remotegate`; not yet heard from a phone on the hotspot). Safari on
-  the phone opens `http://<deck-ip>/?k=<token>`, a one-button page; POST `/play?clip=howl`
-  plays a wolf howl while the deck keeps polling. Plan: Arduino `WebServer` (in the Arduino core,
-  ~1-3 KB RAM) polled from `loop()` after the boot scene; howl
-  synthesised at run time in a pure `util/howl` (glide ~350->700 Hz, vibrato, fall; ~2.3 s;
-  ~1-2 KB flash; a stored 16-bit clip is ~80 KB and the CYD has ~64 KB left under the 97 %
-  limit); token in `config.h`, one play per 3 s, `409` while any clip plays (today a queued
-  clip holds a 3 KB task stack each, so button spam could drain the CYD heap), refuse below
-  ~32 KB largest block. IP on the idle/offline screens; no mDNS (unreliable from an iPhone
-  hotspot, ~20 KB flash). S3 first, CYD behind a build flag. First check on device that the
-  iPhone reaches a client of its own hotspot (172.20.10.x).
+- **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
+  skip/pause through the deck, a screen flash. After the hotspot check above.
 - **Musixmatch as a second lyrics source** (parked 2026-10-07). Official API free plan: API
   key, ~2k calls/day, only a ~30% untimed preview (full/synced lyrics are paid, licensed).
   Unofficial desktop endpoint (`apic-desktop.musixmatch.com`, `macro.subtitles.get` +
