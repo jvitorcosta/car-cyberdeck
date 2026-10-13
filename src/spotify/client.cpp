@@ -5,7 +5,6 @@
 #include <ArduinoJson.h>
 #include <SpotifyArduino.h>
 #include "../config.h"
-#include "../spotify/auth.h"
 #include "../util/ctxcache.h"
 #include "../util/text.h"
 
@@ -48,16 +47,16 @@ static void onPlaying(CurrentlyPlaying cp) {
     st.status = cp.isPlaying ? PlaybackStatus::Playing : PlaybackStatus::Paused;
 }
 
+bool hasToken() { return SPOTIFY_REFRESH_TOKEN[0] != '\0'; }
+
 void begin() {
     netcfg::spotify(s_client);
     s_client.setTimeout(8);            // seconds: TCP connect/read (default 30 s)
-    String rt = spauth::loadRefreshToken();
-    if (rt.isEmpty()) rt = SPOTIFY_REFRESH_TOKEN;   // PC-obtained token from config.h
     // NOTE: SpotifyArduino's ctor calls setRefreshToken(), which reads its _refreshToken
     // member before initializing it. Heap `new` leaves that member as garbage (not NULL),
     // so its `strlen(_refreshToken)` dereferences garbage and crashes. A function-local
     // static has zero-initialized storage, so _refreshToken starts as NULL -> safe.
-    static SpotifyArduino instance(s_client, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, rt.c_str());
+    static SpotifyArduino instance(s_client, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN);
     s_sp = &instance;
     if (s_sp->refreshAccessToken()) Serial.println("[spotify] access token OK");
     else if (!netcfg::certRejected(s_client, "accounts.spotify.com"))
@@ -76,16 +75,15 @@ static uint32_t s_tokenExpiry = 0;
 
 static bool ensureAccessToken() {
     if (s_accessToken[0] && (int32_t)(s_tokenExpiry - millis()) > 0) return true;
-    String rt = spauth::loadRefreshToken();
-    if (rt.isEmpty()) rt = SPOTIFY_REFRESH_TOKEN;
-    if (rt.isEmpty()) return false;
+    const char* rt = SPOTIFY_REFRESH_TOKEN;   // PC-obtained (tools/spotify_auth.py)
+    if (!rt[0]) return false;
     WiFiClientSecure c;
     netcfg::spotify(c);
     HTTPClient https;
     https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
     if (!https.begin(c, "https://accounts.spotify.com/api/token")) return false;
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    String body = "grant_type=refresh_token&refresh_token=" + rt +
+    String body = "grant_type=refresh_token&refresh_token=" + String(rt) +
                   "&client_id=" + SPOTIFY_CLIENT_ID +
                   "&client_secret=" + SPOTIFY_CLIENT_SECRET;
     int rc = https.POST(body);

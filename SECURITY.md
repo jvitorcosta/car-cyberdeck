@@ -21,10 +21,12 @@ instead, with steps to reproduce and the board and version (first serial line,
 
 ## Known limitations
 
-- **TLS certificates are not verified** (`setInsecure()`), including for the Spotify token
-  endpoint. Someone who controls the network between the deck and Spotify could read the
-  client secret and refresh token. Checking the Spotify certificates is planned.
-- The on-device setup portal (`src/spotify/auth.cpp`), used only when no refresh token is
-  configured, serves plain HTTP on the local network and is planned for removal.
+- Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
+  7 bundled root certificates (`src/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).
+  If Spotify moves to a CA outside the bundle, the log shows
+  `[tls] certificate rejected: <host>`: regenerate the bundle and flash again. Certificate
+  expiry is not checked (the board has no trusted clock during the handshake).
+- **Lyrics, genres and sprites are fetched without certificate checks** (`setInsecure()`):
+  they are public data and carry no credentials, and a full check costs RAM on the CYD.
 - Album art is downloaded over plain HTTP from Spotify's image CDN (public images, chosen to
   save RAM).

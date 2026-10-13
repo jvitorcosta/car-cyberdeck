@@ -4,7 +4,6 @@
 #include "pins.h"
 #include "net/wifi.h"
 #include "net/clock.h"
-#include "spotify/auth.h"
 #include "spotify/client.h"
 #include "app_state.h"
 #include "core/shared.h"
@@ -121,6 +120,16 @@ void setup() {
     cache::begin();
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1); s_tft.fillScreen(TFT_BLACK);
     backlight::begin();
+    if (!spclient::hasToken()) {
+        // The token comes from a PC (Spotify only redirects to loopback addresses), so the
+        // deck can't do anything without one.
+        s_tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        s_tft.drawString("No Spotify token.", 10, 10, 2);
+        s_tft.drawString("Run tools/spotify_auth.py on a PC,", 10, 40, 2);
+        s_tft.drawString("then flash again.", 10, 60, 2);
+        Serial.println("[spotify] no refresh token in src/config.h: run tools/spotify_auth.py");
+        for (;;) delay(1000);
+    }
     greeting::play();          // boot sound plays while WiFi connects
     // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
     bootscene::start(s_tft, net::isOnline);
@@ -134,10 +143,6 @@ void setup() {
         s_tft.setTextColor(TFT_WHITE, TFT_BLACK);
         s_tft.fillScreen(TFT_BLACK);
         s_tft.drawString("Spotify auth...", 10, 10, 2);
-        if (spauth::loadRefreshToken().isEmpty()) {
-            s_tft.drawString("Open http://" + net::deviceIp() + "/", 10, 40, 2);
-        }
-        spauth::runSetupPortalIfNeeded();
         spclient::begin();
         spotifyReady = true;
     } else {

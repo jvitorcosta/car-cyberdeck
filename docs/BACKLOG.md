@@ -54,8 +54,6 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Accepted as is
 
-- If WiFi only comes up after boot, the Spotify setup portal is skipped. Only matters for a
-  first-ever setup with no saved login; a reboot with WiFi up fixes it.
 - Backlight stays at full brightness (decided 2026-10-07): no auto-dim from the CYD light
   sensor (GPIO 34), even though it was suggested for night glare.
 
@@ -63,8 +61,8 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 - **Phone remote: "Howl" button** (researched 2026-10-10, PoC planned, not started). Safari on
   the phone opens `http://<deck-ip>/?k=<token>`, a one-button page; POST `/play?clip=howl`
-  plays a wolf howl while the deck keeps polling. Plan: Arduino `WebServer` (already linked for
-  the Spotify setup portal, ~1-3 KB RAM) polled from `loop()` after the boot scene; howl
+  plays a wolf howl while the deck keeps polling. Plan: Arduino `WebServer` (in the Arduino core,
+  ~1-3 KB RAM) polled from `loop()` after the boot scene; howl
   synthesised at run time in a pure `util/howl` (glide ~350->700 Hz, vibrato, fall; ~2.3 s;
   ~1-2 KB flash; a stored 16-bit clip is ~80 KB and the CYD has ~64 KB left under the 97 %
   limit); token in `config.h`, one play per 3 s, `409` while any clip plays (today a queued
