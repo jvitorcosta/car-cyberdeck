@@ -83,6 +83,15 @@ void test_every_line_fits_with_long_values() {
     for (int i = 0; i < avatarlines::BOOT_N; ++i) TEST_ASSERT_TRUE(avatarlines::BOOT[i].mood <= 2);
 }
 
+// The old deck has no Pokemon name: lines with {P} are skipped, never "A wild POKéMON!".
+void test_no_pokemon_lines_without_a_pokemon() {
+    for (uint32_t k = 0; k < (uint32_t)avatarlines::TRACK_N; ++k) {
+        avatarlines::In in{Event::Track, false, 0, k * avatarlines::ODDS, "Song", "Band", ""};
+        TEST_ASSERT_TRUE(avatarlines::pick(in, out));
+        TEST_ASSERT_NULL(strstr(out.text, "POK\xC3\xA9MON"));
+    }
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_fill_replaces_placeholders);
@@ -95,5 +104,6 @@ int main() {
     RUN_TEST(test_track_odds);
     RUN_TEST(test_track_line_is_filled);
     RUN_TEST(test_every_line_fits_with_long_values);
+    RUN_TEST(test_no_pokemon_lines_without_a_pokemon);
     return UNITY_END();
 }

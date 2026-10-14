@@ -72,7 +72,13 @@ bool pick(const In& in, Out& out) {
     } else {
         if (in.spokeBefore && in.sinceLastMs < GAP_MS) return false;
         if (in.rnd % ODDS != 0) return false;
-        l = &TRACK[(in.rnd / ODDS) % TRACK_N];
+        const bool noPoke = !in.poke || !in.poke[0];
+        const uint32_t first = (in.rnd / ODDS) % TRACK_N;
+        l = &TRACK[first];
+        for (uint32_t k = 0; k < (uint32_t)TRACK_N; ++k) {   // no Pokemon: skip the {P} lines
+            l = &TRACK[(first + k) % TRACK_N];
+            if (!noPoke || !strstr(l->text, "{P}")) break;
+        }
     }
     out.mood = l->mood;
     fill(l->text, in.title, in.artist, in.poke, out.text, sizeof out.text);
