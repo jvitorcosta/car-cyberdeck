@@ -15,8 +15,6 @@
 #include "ui/lyricmsg.h"
 #include "ui/backlight.h"
 #include "ui/bootscene.h"
-#include "ui/avatar.h"
-#include "util/avatarlines.h"
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
@@ -72,13 +70,12 @@ static_assert(ui::ART_W == art::W && ui::ART_H == art::H, "art box and bitmap si
 
 static char s_topSig[96] = "";                 // last drawn top-strip state
 
-// Pushes the album-art bitmap if it is valid for the track on screen; true if it did. Check and
-// push happen under one lock so the network task cannot start overwriting the bitmap in between.
-static bool pushArtIfValid(uint32_t gen) {
+// Pushes the album-art bitmap if it is valid for the track on screen. Check and push happen
+// under one lock so the network task cannot start overwriting the bitmap in between.
+static void pushArtIfValid(uint32_t gen) {
     shared::Guard g;
-    if (!shared::artValidLocked(gen)) return false;
-    s_tft.pushImage(ui::ART_X, ui::ART_Y, art::W, art::H, art::bitmap());
-    return true;
+    if (shared::artValidLocked(gen))
+        s_tft.pushImage(ui::ART_X, ui::ART_Y, art::W, art::H, art::bitmap());
 }
 
 static bool s_notesDance = false;   // a timed lyric line is on screen (set by drawDialogue)
@@ -102,23 +99,6 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
     lyricmsg::compose(in, out);
     ui::drawLyricArea(s_tft, out.text, out.notes);
     s_notesDance = out.dance;
-}
-
-// The deck avatar (S3 with data/avatar.bin): she greets on the first deck draw and now and then
-// remarks on a new track (util/avatarlines decides; ui/avatar draws).
-static void avatarMaybe(avatarlines::Event ev, const AppState& st) {
-    static bool spoke = false;
-    static uint32_t lastAt = 0;
-    static avatarlines::Out out;   // static: keep the loop stack small
-    if (!ui::avatarOn()) return;
-    const uint32_t now = millis();
-    const avatarlines::In in{ev, spoke, now - lastAt, esp_random(), st.trackName, st.artist,
-                             st.pokeName};
-    if (!avatarlines::pick(in, out)) return;
-    spoke = true;
-    lastAt = now;
-    ui::avatarStart(out.mood, out.text, now);
-    Serial.printf("[avatar] says: %s\n", out.text);
 }
 
 void setup() {
@@ -148,7 +128,6 @@ void setup() {
 #endif
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1); s_tft.fillScreen(TFT_BLACK);
     backlight::begin();
-    ui::avatarBegin();        // logs "[avatar] <name>: n moods" or "[avatar] off: <why>"
     if (!spclient::hasToken()) {
         // The token comes from a PC (Spotify only redirects to loopback addresses), so the
         // deck can't do anything without one.
@@ -293,7 +272,6 @@ void loop() {
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen
     if (updateDayNight()) lastMode = -1;   // redraw the deck or the status screen in the new palette
     if (mode != 0) {
-        ui::avatarCancel();   // never over a status screen (it repaints everything)
         static char shownText[80] = "", shownTitle[24] = "";
         static char title[24], detail[48];
         static uint32_t textAt = 0, frameAt = 0;
@@ -329,7 +307,6 @@ void loop() {
         shownKind = kind;
         lastMode = mode;
     } else if (lastMode != 0 || st.trackGen != shownGen) {
-        ui::avatarCancel();   // a new song (or a return from a status screen) is never hidden behind her
         // Full deck redraw: immediately on track change (text + Pokemon name; art, lyric
         // and walker fill in as the network task delivers them), or back from a status screen.
         bool newTrack = st.trackGen != shownGen;
@@ -347,17 +324,9 @@ void loop() {
         pushArtIfValid(shownGen);   // back from a status screen: same track's art is still valid
         drawDialogue(view, shownGen);
         mem::log("track");
-        static bool greeted = false;
-        if (!greeted) {
-            greeted = true;
-            avatarMaybe(avatarlines::Event::Boot, st);
-        } else if (newTrack) {
-            avatarMaybe(avatarlines::Event::Track, st);
-        }
     } else {
         // Media arriving from the network task for the track on screen.
-        // Art arriving while she is on screen waits: it is pushed when her scene ends.
-        if (shared::takeArt(shownGen) && !ui::avatarActive()) pushArtIfValid(shownGen);
+        if (shared::takeArt(shownGen)) pushArtIfValid(shownGen);
         if (shared::takeWalker(shownGen)) walkerOn = true;
         uint8_t g;
         if (shared::takeGenre(shownGen, &g)) {   // genre arrived (or was cached): artist row only
@@ -370,14 +339,6 @@ void loop() {
         uint32_t now = millis();
         uint32_t dt = now - lastTick;
         lastTick = now;
-        const ui::AvatarTick av = ui::avatarTick(s_tft, now);
-        if (av == ui::AvatarTick::Ended) {      // put the deck back: art (or plain sky), lyric
-            if (!pushArtIfValid(shownGen))
-                s_tft.fillRect(ui::ART_X, ui::ART_Y, ui::ART_W, ui::ART_H, theme::pal().sky);
-            ui::clearNameTag(s_tft);
-            drawDialogue(view, shownGen);
-        }
-        const bool talking = av == ui::AvatarTick::Running;
         if (st.isPlaying) animMs += dt;   // walk cycle runs only while playing
 
         // top strip: redraw only when device / shuffle / repeat change
@@ -396,13 +357,13 @@ void loop() {
         if (now - lastDraw >= PROGRESS_MS) {
             lastDraw = now;
             ui::drawProgressRegion(s_tft, view);
-            if (!talking) drawDialogue(view, shownGen);   // her line owns the box while she talks
+            drawDialogue(view, shownGen);
         }
         // Note icons bob while timed lyrics are shown and the music plays; at rest otherwise.
         static uint32_t lastNotes = 0;
         static int noteFrame = 0;
         static bool notesMoved = false;
-        if (s_notesDance && st.isPlaying && !talking) {
+        if (s_notesDance && st.isPlaying) {
             if (now - lastNotes >= NOTES_MS) {            // ~3 steps/s: alive, not distracting
                 lastNotes = now;
                 ui::drawNoteFrame(s_tft, ++noteFrame & 0x7FFF);
