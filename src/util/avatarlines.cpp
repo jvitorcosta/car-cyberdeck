@@ -26,6 +26,13 @@ const Line TRACK[TRACK_N] = {
     {Happy, "Faster, darling! ...Kidding. Drive safe."},
     {Talk, "Just us, the road and {T}."},
 };
+const Line REACT[REACT_N] = {
+    {Happy, "Awoo~! The whole street heard that."},
+    {Happy, "Vroom vroom~ Faster, darling!"},
+    {Talk, "New trip! Where to, darling?"},
+    {Smug, "One at a time, darling!"},
+    {Smug, "I can't reach the deck, darling."},
+};
 
 // Appends len bytes of s at out[o], whole UTF-8 characters only; false once one doesn't fit.
 static bool append(char* out, size_t n, size_t& o, const char* s, size_t len, bool upper) {
@@ -66,6 +73,12 @@ void fill(const char* tmpl, const char* title, const char* artist, const char* p
 }
 
 bool pick(const In& in, Out& out) {
+    if (in.event >= Event::Howl) {                         // reactions: always, fixed line
+        const Line& r = REACT[(int)in.event - (int)Event::Howl];
+        out.mood = r.mood;
+        fill(r.text, in.title, in.artist, in.poke, out.text, sizeof out.text);
+        return true;
+    }
     const Line* l;
     if (in.event == Event::Boot) {
         l = &BOOT[in.rnd % BOOT_N];

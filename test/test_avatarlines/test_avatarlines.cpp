@@ -92,6 +92,19 @@ void test_no_pokemon_lines_without_a_pokemon() {
     }
 }
 
+// Reactions always speak: no gap, no odds.
+void test_reactions_always_speak() {
+    const Event evs[] = {Event::Howl, Event::Vroom, Event::TripReset, Event::Busy, Event::Unreachable};
+    for (int i = 0; i < 5; ++i) {
+        avatarlines::In in{evs[i], true, 0, 1, "", "", ""};   // just spoke; rnd fails the odds
+        TEST_ASSERT_TRUE(avatarlines::pick(in, out));
+        TEST_ASSERT_EQUAL_STRING(avatarlines::REACT[i].text, out.text);
+        TEST_ASSERT_EQUAL_UINT8(avatarlines::REACT[i].mood, out.mood);
+    }
+    TEST_ASSERT_EQUAL_STRING("I can't reach the deck, darling.", avatarlines::REACT[4].text);
+    TEST_ASSERT_EQUAL_STRING("One at a time, darling!", avatarlines::REACT[3].text);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_fill_replaces_placeholders);
@@ -105,5 +118,6 @@ int main() {
     RUN_TEST(test_track_line_is_filled);
     RUN_TEST(test_every_line_fits_with_long_values);
     RUN_TEST(test_no_pokemon_lines_without_a_pokemon);
+    RUN_TEST(test_reactions_always_speak);
     return UNITY_END();
 }
