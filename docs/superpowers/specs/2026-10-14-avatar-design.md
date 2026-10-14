@@ -23,10 +23,10 @@ Step 2 can only drive what step 1 builds, so step 1 has to stand on its own.
   | Mood id | Name | Frames | Source used today | Used for |
   |---|---|---|---|---|
   | 0 | `smug` | 1 | the lollipop pixel art (`zero-two.png`), converted by the tool | default |
-  | 1 | `talk` | 5 | PixelLab mouth positions made from the sly-smile portrait: rest, open, round, teeth, smile | most lines; she "talks" while the text types |
+  | 1 | `talk` | 2 | PixelLab mouth positions made from the sly-smile portrait: closed smile (rest) and open | most lines; she "talks" while the text types |
   | 2 | `happy` | 1 | the big grin (`zero-two-smile.jpeg`), via PixelLab's image-to-pixel-art | greetings, good news |
 
-  - **Talking frames.** PixelLab (`create_vocal_animation`) redraws the whole head for each mouth position. Its head pose differs from the original sly-smile portrait, so the five generated frames form the `talk` mood together, and its rest frame is the still image. The original portrait isn't used.
+  - **Talking frames.** PixelLab (`create_vocal_animation`) redraws the whole head for each mouth position. Its head pose differs from the original sly-smile portrait, so the generated frames form the `talk` mood on their own, and the closed-smile frame is its still image. The original portrait isn't used. The other generated mouth shapes also shift the head pose, so v1 keeps just the closed and open frames, which line up: a classic two-frame mouth flap.
   - **Lip-sync.** The deck doesn't replay PixelLab's exact timing. While text types out, it alternates mouth frames, which is the usual retro-game talking effect.
 
 - **No avatar file, no feature.** Without `data/avatar.bin`, the deck behaves exactly as today. There is no committed placeholder character, which keeps the repo free of anyone's art and keeps the feature opt-in.
@@ -41,7 +41,7 @@ Step 2 can only drive what step 1 builds, so step 1 has to stand on its own.
   "name": "ZERO TWO",
   "moods": {
     "smug":  {"file": "zero-two.png",        "crop": [800, 14, 0], "colors": 0,  "boost": false},
-    "talk":  {"frames": ["talk-rest.png", "talk-open.png", "talk-round.png", "talk-teeth.png", "talk-smile.png"]},
+    "talk":  {"frames": ["talk-rest.png", "talk-open.png"]},
     "happy": {"file": "happy-92.png"}
   }
 }
@@ -89,7 +89,7 @@ Header fields are single bytes; frames are big-endian RGB565.
 | 18 | n × 2 | per mood: id (0 smug, 1 talk, 2 happy; others reserved), frame count (1–8) |
 | 18 + 2n | sum of frames × 16 928 | 92×92 RGB565 frames, **high byte first** (the byte order `pushImage` sends as is, like `theme::be`), mood by mood in entry order |
 
-The size today: 7 frames, about 118 KB.
+The size today: 4 frames, about 68 KB.
 
 **Build integration:**
 - A pre-build script, `tools/avatar_clip.py` (like `montage_clip.py`), writes an empty file (`AVT1`, count 0) when there's no `data/avatar.bin`. Fresh clones and CI then still build.
