@@ -2,9 +2,11 @@
 
 namespace press {
 int Press::update(bool down, int under, bool hold, uint32_t nowMs) {
+    if (down && down_) lifting_ = false;     // back down within RELEASE_MS: a bounce, same press
     if (down && !down_) {                    // touch-down: this press belongs to `under`
         down_ = true;
         fired_ = false;
+        lifting_ = false;
         btn_ = under;
         hold_ = hold;
         last_ = under;
@@ -21,7 +23,14 @@ int Press::update(bool down, int under, bool hold, uint32_t nowMs) {
         return 0;
     }
     if (!down_) return 0;
-    down_ = false;                           // release
+    if (!lifting_) {                         // first sample up: wait to see if it's a bounce
+        lifting_ = true;
+        upAt_ = nowMs;
+        return 0;
+    }
+    if (nowMs - upAt_ < RELEASE_MS) return 0;
+    down_ = false;                           // released
+    lifting_ = false;
     const int b = btn_;
     btn_ = 0;
     return (b && !hold_ && last_ == b) ? b : 0;
