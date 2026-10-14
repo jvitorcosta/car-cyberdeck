@@ -3,11 +3,13 @@
 // Getting back to the preferred network (config.h order: the iPhone hotspot first). On a
 // fallback network the deck scans in the background every SCAN_MS and moves back once the
 // preferred network was seen strong enough in SEEN_NEEDED scans in a row (no flapping at the
-// edge of range). Scans back off to 2, then 5 minutes while the preferred network stays unseen
-// (each scan pauses the radio ~2 s) or after a move that doesn't stick; a sighting brings them
-// back to every minute. On the preferred network it never scans. PURE, host-tested.
+// edge of range); the second look comes CONFIRM_MS after the first sighting, so a move takes
+// ~15 s once the hotspot is back. Scans back off to 2, then 3 minutes while the preferred network
+// stays unseen (each scan pauses the radio ~2 s) or after a move that doesn't stick. On the
+// preferred network it never scans. PURE, host-tested.
 namespace roam {
 constexpr uint32_t SCAN_MS = 60000;
+constexpr uint32_t CONFIRM_MS = 15000;   // after one sighting: look again this soon
 constexpr int MIN_RSSI = -75;     // dBm: weaker sightings don't count
 constexpr int SEEN_NEEDED = 2;
 
@@ -44,8 +46,9 @@ public:
         seen_ = 0;
     }
     uint32_t waitMs() const {
+        if (seen_ > 0) return CONFIRM_MS;                  // confirm a sighting quickly
         const int k = fails_ > misses_ ? fails_ : misses_;
-        return k == 0 ? SCAN_MS : k == 1 ? 2 * 60000u : 5 * 60000u;
+        return k == 0 ? SCAN_MS : k == 1 ? 2 * 60000u : 3 * 60000u;
     }
 
 private:

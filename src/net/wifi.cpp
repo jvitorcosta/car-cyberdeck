@@ -143,6 +143,8 @@ static void roamStep(uint32_t now) {
             rssi = WiFi.RSSI(k);
         }
     WiFi.scanDelete();
+    if (seen) Serial.printf("[wifi] scan: %s seen at %d dBm\n", WIFI_NETWORKS[0].ssid, rssi);
+    else Serial.printf("[wifi] scan: %s not seen (%d networks)\n", WIFI_NETWORKS[0].ssid, n);
     if (!s_roam.onScan(seen, rssi, now)) return;
     Serial.printf("[wifi] %s is back (%d dBm), moving to it\n", WIFI_NETWORKS[0].ssid, rssi);
     WiFi.disconnect();

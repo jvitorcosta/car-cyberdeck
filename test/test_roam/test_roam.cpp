@@ -33,9 +33,9 @@ void test_weak_or_missing_hotspot_resets_the_count() {
 void test_a_scan_restarts_the_wait() {
     roam::Roam r;
     r.onConnected(1, 0);
-    r.onScan(true, -60, 60000);                             // a sighting keeps the 1-minute pace
-    TEST_ASSERT_FALSE(r.wantScan(60000 + roam::SCAN_MS - 1));
-    TEST_ASSERT_TRUE(r.wantScan(60000 + roam::SCAN_MS));
+    r.onScan(false, 0, 60000);                              // a miss: the wait restarts (2 min)
+    TEST_ASSERT_FALSE(r.wantScan(60000 + 2 * 60000 - 1));
+    TEST_ASSERT_TRUE(r.wantScan(60000 + 2 * 60000));
 }
 void test_failed_moves_back_off() {
     roam::Roam r;
@@ -44,10 +44,10 @@ void test_failed_moves_back_off() {
     TEST_ASSERT_FALSE(r.wantScan(2 * 60000 - 1));
     TEST_ASSERT_TRUE(r.wantScan(2 * 60000));
     r.onMoveFailed(0);
-    TEST_ASSERT_FALSE(r.wantScan(5 * 60000 - 1));
-    TEST_ASSERT_TRUE(r.wantScan(5 * 60000));
+    TEST_ASSERT_FALSE(r.wantScan(3 * 60000 - 1));
+    TEST_ASSERT_TRUE(r.wantScan(3 * 60000));
     r.onMoveFailed(0);
-    TEST_ASSERT_TRUE(r.wantScan(5 * 60000));                         // capped at 5 min
+    TEST_ASSERT_TRUE(r.wantScan(3 * 60000));                         // capped at 3 min
 }
 void test_reaching_the_preferred_network_clears_the_back_off() {
     roam::Roam r;
@@ -74,10 +74,21 @@ void test_scans_back_off_while_the_hotspot_stays_away() {
     TEST_ASSERT_FALSE(r.wantScan(60000 + 2 * 60000 - 1));
     TEST_ASSERT_TRUE(r.wantScan(60000 + 2 * 60000));
     r.onScan(false, 0, 180000);                             // miss 2
-    TEST_ASSERT_FALSE(r.wantScan(180000 + 5 * 60000 - 1));
-    TEST_ASSERT_TRUE(r.wantScan(180000 + 5 * 60000));
-    r.onScan(true, -60, 480000);                            // seen (once): every minute again
-    TEST_ASSERT_TRUE(r.wantScan(480000 + roam::SCAN_MS));
+    TEST_ASSERT_FALSE(r.wantScan(180000 + 3 * 60000 - 1));
+    TEST_ASSERT_TRUE(r.wantScan(180000 + 3 * 60000));
+}
+
+// One sighting: confirm it CONFIRM_MS later instead of a whole interval (a move takes ~15 s
+// once the hotspot is back), even after the waits had backed off.
+void test_a_sighting_is_confirmed_quickly() {
+    roam::Roam r;
+    r.onConnected(1, 0);
+    r.onScan(false, 0, 60000);
+    r.onScan(false, 0, 180000);                             // backed off to 3 min
+    TEST_ASSERT_FALSE(r.onScan(true, -60, 360000));         // seen once
+    TEST_ASSERT_FALSE(r.wantScan(360000 + roam::CONFIRM_MS - 1));
+    TEST_ASSERT_TRUE(r.wantScan(360000 + roam::CONFIRM_MS));
+    TEST_ASSERT_TRUE(r.onScan(true, -60, 360000 + roam::CONFIRM_MS));   // move
 }
 
 int main() {
@@ -91,5 +102,6 @@ int main() {
     RUN_TEST(test_reaching_the_preferred_network_clears_the_back_off);
     RUN_TEST(test_tries_per_network_after_a_drop);
     RUN_TEST(test_scans_back_off_while_the_hotspot_stays_away);
+    RUN_TEST(test_a_sighting_is_confirmed_quickly);
     return UNITY_END();
 }
