@@ -18,13 +18,16 @@ Step 2 can only drive what step 1 builds, so step 1 has to stand on its own.
 
 - **Placement:** a Gen-3-style "trainer slide-in" over the 92×92 album-art box. A pink name tag sits on the dialogue box. Her line replaces the lyric for a few seconds, then the art and the lyrics come back. Chosen over a visual-novel bust beside the dialogue box and over an always-on chibi in the top strip.
 - **Art source:** the owner's own images, converted. Hand-drawn drafts (chibi and anime styles) were tried, and converting the owner's pictures gave the most faithful result. The repo is public and the art is copyrighted, so the images and the converted file are git-ignored and never committed. This follows the same pattern as `montage-photos/` and `data/greeting.pcm`.
-- **Moods (v1):** one portrait per mood, from three of the owner's images:
+- **Moods (v1).** Each mood is one or more 92×92 frames:
 
-  | Mood id | Name | Source used today | Used for |
-  |---|---|---|---|
-  | 0 | `smug` | lollipop pixel art (`zero-two.png`) | default |
-  | 1 | `tease` | sly smile (`zero-two-stare.jpeg`) | teasing remarks |
-  | 2 | `happy` | big grin (`zero-two-smile.jpeg`) | greetings, good news |
+  | Mood id | Name | Frames | Source used today | Used for |
+  |---|---|---|---|---|
+  | 0 | `smug` | 1 | the lollipop pixel art (`zero-two.png`), converted by the tool | default |
+  | 1 | `talk` | 5 | PixelLab mouth positions made from the sly-smile portrait: rest, open, round, teeth, smile | most lines; she "talks" while the text types |
+  | 2 | `happy` | 1 | the big grin (`zero-two-smile.jpeg`), via PixelLab's image-to-pixel-art | greetings, good news |
+
+  - **Talking frames.** PixelLab (`create_vocal_animation`) redraws the whole head for each mouth position. Its head pose differs from the original sly-smile portrait, so the five generated frames form the `talk` mood together, and its rest frame is the still image. The original portrait isn't used.
+  - **Lip-sync.** The deck doesn't replay PixelLab's exact timing. While text types out, it alternates mouth frames, which is the usual retro-game talking effect.
 
 - **No avatar file, no feature.** Without `data/avatar.bin`, the deck behaves exactly as today. There is no committed placeholder character, which keeps the repo free of anyone's art and keeps the feature opt-in.
 - **S3 only.** The CYD sits at 96.5 % flash. Each mood costs 16.9 KB, and the S3 has room for many.
@@ -38,13 +41,15 @@ Step 2 can only drive what step 1 builds, so step 1 has to stand on its own.
   "name": "ZERO TWO",
   "moods": {
     "smug":  {"file": "zero-two.png",        "crop": [800, 14, 0], "colors": 0,  "boost": false},
-    "tease": {"file": "zero-two-stare.jpeg", "crop": [260, 80, 6], "colors": 32, "boost": true},
-    "happy": {"file": "zero-two-smile.jpeg", "crop": [660, 320, 0], "colors": 32, "boost": true}
+    "talk":  {"frames": ["talk-rest.png", "talk-open.png", "talk-round.png", "talk-teeth.png", "talk-smile.png"]},
+    "happy": {"file": "happy-92.png"}
   }
 }
 ```
 
 **Fields:**
+- A mood has either `file` (one frame) or `frames` (a list, frame 0 = the closed-mouth rest frame, 1–8 frames).
+- An image that is already exactly 92×92 is used **as is**: no crop, no filters. This is how portraits made elsewhere get in. During brainstorming, PixelLab's image-to-pixel-art (`image_to_pixelart`, faithful mode, strength 200) gave the cleanest result for the two anime screenshots. Its free plan runs one job at a time and charges per image, so it's a manual step, not part of the build.
 - `crop` is `[size, x, y]`: a square crop in source pixels.
 - `colors`:
   - `0` keeps the downscaled colours as they are. Use it for sources that are already pixel art.
@@ -67,6 +72,7 @@ These settings were tuned on the three images during brainstorming.
 - a missing file;
 - a crop outside the image;
 - an unknown mood name;
+- a mood with both or neither of `file` and `frames`, or more than 8 frames;
 - no moods at all;
 - a name longer than 12 characters.
 
@@ -80,8 +86,10 @@ Little-endian.
 | 4 | 1 | mood count `n` (1–8) |
 | 5 | 1 | reserved, 0 |
 | 6 | 12 | name, NUL-padded ASCII (e.g. `ZERO TWO`) |
-| 18 | n × 1 | mood id per entry (0 smug, 1 tease, 2 happy; others reserved) |
-| 18 + n, padded to even | n × 16 928 | 92×92 RGB565 portraits, in entry order, ready for `pushImage` |
+| 18 | n × 2 | per mood: id (0 smug, 1 talk, 2 happy; others reserved), frame count (1–8) |
+| 18 + 2n | sum of frames × 16 928 | 92×92 RGB565 frames, mood by mood in entry order, ready for `pushImage` |
+
+The size today: 7 frames, about 118 KB.
 
 **Build integration:**
 - A pre-build script, `tools/avatar_clip.py` (like `montage_clip.py`), writes an empty file (`AVT1`, count 0) when there's no `data/avatar.bin`. Fresh clones and CI then still build.
@@ -94,13 +102,14 @@ Little-endian.
 2. **Track change.** After a new track's deck redraw, at most once every **5 minutes**, with a 1-in-3 chance per eligible change. Lines come from a small template table that can use `{T}` (title), `{A}` (artist) and `{P}` (the walking Pokémon). The table has around 12 lines, each tagged with a mood. Examples:
    - `smug`: "Darling, {A} again?"
    - `happy`: "Ooh, I like this one~"
-   - `tease`: "A wild {P}! Bet it can't keep up with us."
+   - `talk`: "A wild {P}! Bet it can't keep up with us."
 
 She never appears on a status screen (offline or nothing playing). If one comes up during her scene, the scene is cancelled.
 
 **Her scene (about 5.5 s on the UI loop; no new task):**
 1. **Slide-in (~240 ms, 6 steps).** The portrait enters the art box from the left. It's drawn through a TFT_eSPI viewport clipped to the box, so the part still outside stays hidden. Pixels are read straight from the embedded flash data, with no RAM copy.
 2. **Name tag and line.** The pink name tag (`name` from the file) goes on the dialogue box's top-left corner. Her line types out in the dialogue box at ~40 characters per second, replacing the lyric. It wraps over the existing two lines, and anything too long ends in "...".
+   - **Talking.** If the mood has more than one frame, its frames alternate while the line types. A new frame is pushed every ~100 ms: an open shape after each letter, the rest frame on spaces and punctuation. At the end it settles on the rest frame.
 3. **Hold.** The full line stays up for at least 3 s.
 4. **Exit.** The album art goes back into the box (`pushArtIfValid`, or the box background if no art has arrived yet). The name tag is erased and the dialogue box goes back to lyrics (`ui::drawNow` already forces a lyric repaint).
 
@@ -113,10 +122,14 @@ While she's on screen:
 Pure modules, each host-tested:
 - **`util/avatarbin`:** parses and validates the blob (magic, count, size, mood lookup, name). Returns "off" for an empty or bad blob.
 - **`util/avatarlines`:** picks a line. The inputs are the event (boot or track), the time since her last appearance, a random value, and the title, artist and Pokémon name. The output is "no scene" or a mood plus the filled text, using the same fill and truncation rules as `ui/lyricmsg`.
-- **`util/avatarscene`:** the timeline. Given ms since the scene started, it returns the slide offset, the number of characters typed and the phase (`Slide`, `Type`, `Hold`, `Done`).
+- **`util/avatarscene`:** the timeline. Given ms since the scene started, the line and the mood's frame count, it returns:
+  - the slide offset;
+  - the number of characters typed;
+  - the frame to show;
+  - the phase (`Slide`, `Type`, `Hold`, `Done`).
 
 Device-only modules:
-- **`ui/avatar`:** draws the portrait at an offset inside the art box (via a viewport), plus the name tag.
+- **`ui/avatar`:** draws a frame at an offset inside the art box (via a viewport), plus the name tag. Mouth changes repush the whole 92×92 frame (17 KB at 40 MHz SPI, about 7 ms).
 - **`main.cpp`:**
   - the boot and track hooks;
   - the scene state while she's on screen;
@@ -147,7 +160,8 @@ Device-only modules:
 
 ## Out of scope (later)
 
-- Blink and talking-mouth overlays painted on the portraits.
+- Blinking.
+- Exact PixelLab lip-sync timing.
 - More moods and more lines.
 - `POST /say` and the Claude/Shortcut assistant (step 2).
 - The CYD companion showing her.
