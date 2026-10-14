@@ -14,7 +14,8 @@ struct Btn {
 };
 constexpr int MAX_BTNS = 4;
 constexpr Rect BAR{4, 206, 312, 34};   // the message bar (dialogue box) on every screen
-// The buttons on screen s; vroom: the new deck offers that clip. Returns how many.
+// The buttons on screen s; vroom: the new deck offers that clip. Returns how many (Home: none,
+// it is just her; the phone page opens the other screens).
 int buttons(Screen s, bool vroom, Btn out[MAX_BTNS]);
 // The button at (x, y) on screen s, or None.
 Button hit(Screen s, bool vroom, int x, int y);

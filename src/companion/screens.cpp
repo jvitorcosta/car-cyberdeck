@@ -27,7 +27,6 @@ void button(TFT_eSPI& t, const menunav::Btn& b, bool pressed, float fill, bool c
 
 void draw(TFT_eSPI& t, menunav::Screen s, bool vroom, menunav::Button cursor) {
     t.fillScreen(theme::pal().top);
-    if (s == menunav::Screen::Home) ui::battleBox(t, 200, 8, 112, 162, ui::Tab::None);   // command box
     menunav::Btn b[menunav::MAX_BTNS];
     const int n = menunav::buttons(s, vroom, b);
     for (int i = 0; i < n; ++i)

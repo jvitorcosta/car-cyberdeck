@@ -32,7 +32,7 @@ static press::Press s_press;
 static void enter(menunav::Screen s) {
     s_screen = s;
     screens::draw(s_tft, s, s_vroom, s_cursor);
-    if (s == menunav::Screen::Home) avatarview::place(8, 8, 2);
+    if (s == menunav::Screen::Home) avatarview::place(68, 8, 2);      // centred, 184x184
     else if (s == menunav::Screen::Lyrics) avatarview::place(4, 4, 1);
     else avatarview::place(0, 0, 0);
     avatarview::invalidate();

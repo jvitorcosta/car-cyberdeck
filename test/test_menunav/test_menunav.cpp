@@ -13,7 +13,7 @@ void test_buttons_fit_above_the_bar_and_do_not_overlap() {
         for (int v = 0; v < 2; ++v) {
             Btn b[MAX_BTNS];
             const int n = buttons(s, v, b);
-            TEST_ASSERT_TRUE(n >= 1 && n <= MAX_BTNS);
+            TEST_ASSERT_TRUE(n >= 0 && n <= MAX_BTNS);
             for (int i = 0; i < n; ++i) {
                 TEST_ASSERT_TRUE(b[i].r.x >= 0 && b[i].r.y >= 0);
                 TEST_ASSERT_TRUE(b[i].r.x + b[i].r.w <= 320);
@@ -27,22 +27,19 @@ void test_buttons_fit_above_the_bar_and_do_not_overlap() {
         }
     }
 }
-void test_home_has_the_three_menu_buttons() {
+// Home is just her (owner, 2026-10-14: "just keep the avatar there"); the phone opens screens.
+void test_home_has_no_buttons() {
     Btn b[MAX_BTNS];
-    TEST_ASSERT_EQUAL_INT(3, buttons(Screen::Home, false, b));
-    TEST_ASSERT_EQUAL_INT(Lyrics, b[0].id);
-    TEST_ASSERT_EQUAL_INT(Sounds, b[1].id);
-    TEST_ASSERT_EQUAL_INT(Trip, b[2].id);
-    TEST_ASSERT_EQUAL_STRING("LYRICS", b[0].label);
+    TEST_ASSERT_EQUAL_INT(0, buttons(Screen::Home, false, b));
+    TEST_ASSERT_EQUAL_INT(None, hit(Screen::Home, false, 250, 40));   // where the menu was
 }
 void test_hit_edges() {
     Btn b[MAX_BTNS];
-    buttons(Screen::Home, false, b);
-    const Rect r = b[1].r;                                 // SOUNDS
-    TEST_ASSERT_EQUAL_INT(Sounds, hit(Screen::Home, false, r.x, r.y));
-    TEST_ASSERT_EQUAL_INT(Sounds, hit(Screen::Home, false, r.x + r.w - 1, r.y + r.h - 1));
-    TEST_ASSERT_EQUAL_INT(None, hit(Screen::Home, false, r.x + r.w, r.y));
-    TEST_ASSERT_EQUAL_INT(None, hit(Screen::Home, false, 50, 50));   // her portrait
+    buttons(Screen::Sounds, false, b);
+    const Rect r = b[0].r;                                 // HOWL
+    TEST_ASSERT_EQUAL_INT(Howl, hit(Screen::Sounds, false, r.x, r.y));
+    TEST_ASSERT_EQUAL_INT(Howl, hit(Screen::Sounds, false, r.x + r.w - 1, r.y + r.h - 1));
+    TEST_ASSERT_EQUAL_INT(None, hit(Screen::Sounds, false, r.x + r.w, r.y));
 }
 // Review Focus 4
 void test_vroom_only_when_offered() {
@@ -90,7 +87,7 @@ void test_idle_text() {
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_buttons_fit_above_the_bar_and_do_not_overlap);
-    RUN_TEST(test_home_has_the_three_menu_buttons);
+    RUN_TEST(test_home_has_no_buttons);
     RUN_TEST(test_hit_edges);
     RUN_TEST(test_vroom_only_when_offered);
     RUN_TEST(test_navigation);

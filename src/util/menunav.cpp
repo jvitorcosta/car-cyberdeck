@@ -4,10 +4,7 @@ namespace menunav {
 int buttons(Screen s, bool vroom, Btn out[MAX_BTNS]) {
     int n = 0;
     switch (s) {
-    case Screen::Home:                         // the command box at x 200..312
-        out[n++] = {Lyrics, {206, 14, 100, 48}, "LYRICS"};
-        out[n++] = {Sounds, {206, 66, 100, 48}, "SOUNDS"};
-        out[n++] = {Trip, {206, 118, 100, 48}, "TRIP"};
+    case Screen::Home:                         // just her: the phone page opens the screens
         break;
     case Screen::Lyrics:                       // under her 1x portrait and name tag
         out[n++] = {Back, {4, 110, 92, 36}, "BACK"};
