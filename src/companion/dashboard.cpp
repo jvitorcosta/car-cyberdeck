@@ -1,5 +1,6 @@
 #include "dashboard.h"
 #include "avatarview.h"
+#include "../util/menunav.h"
 #include <cstring>
 #include "../ui/textdraw.h"
 #include "../ui/theme.h"
@@ -58,7 +59,7 @@ static void lyrics(TFT_eSPI& t, const char* big, const char* small) {
     strncpy(s_big, big, sizeof s_big - 1);
     strncpy(s_small, small, sizeof s_small - 1);
     const int x0 = avatarview::on() ? 104 : 0;   // she keeps the left side
-    t.fillRect(x0, 0, W - x0, H - 22, theme::pal().top);
+    t.fillRect(x0, 0, W - x0, avatarview::on() ? menunav::BAR.y - 2 : H - 22, theme::pal().top);
     bigLine(t, big, x0, 92);
     if (small[0])
         ui::drawText(t, small, x0 + (W - x0) / 2, 168, theme::pal().iconOff, TFT_BLACK, MC_DATUM,
@@ -66,22 +67,17 @@ static void lyrics(TFT_eSPI& t, const char* big, const char* small) {
 }
 
 void draw(TFT_eSPI& t, const decklink::View& v, uint32_t nowMs) {
-    const char* say = nullptr;
-    if (say) {                       // her own line takes the column while she says it
-        lyrics(t, say, "");
-        status(t, v.deckOk ? "" : "Looking for the deck...");
-        return;
-    }
+    const bool full = !avatarview::on();     // no avatar: today's screen, with its status strip
     if (v.wrongKey) {
         lyrics(t, "Wrong key", "REMOTE_TOKEN must match on both decks");
-        status(t, "");
+        if (full) status(t, "");
     } else if (!v.polledAtMs) {
         lyrics(t, "Looking for the deck...", "Is the new deck on, on the same hotspot?");
-        status(t, "");
+        if (full) status(t, "");
     } else {
         const lyricclock::View lv = lyricclock::pick(v.deck, nowMs - v.polledAtMs);
         lyrics(t, lv.big, lv.small);
-        status(t, v.deckOk ? "" : "Looking for the deck...");
+        if (full) status(t, v.deckOk ? "" : "Looking for the deck...");
     }
 }
 }
