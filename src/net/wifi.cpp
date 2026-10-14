@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include "../config.h"
 #include "../util/hotspotip.h"
+#include "../util/netup.h"
 #include "ping/ping_sock.h"
 
 namespace net {
@@ -64,7 +65,7 @@ bool connectAny() {
         WiFi.begin(WIFI_NETWORKS[i].ssid, WIFI_NETWORKS[i].pass);
         uint32_t start = millis();
         while (millis() - start < CONNECT_TRY_MS) {
-            if (WiFi.status() == WL_CONNECTED) {
+            if (isOnline()) {                       // connected AND an address
                 Serial.printf("[wifi] connected to %s ip=%s\n",
                               WIFI_NETWORKS[i].ssid, WiFi.localIP().toString().c_str());
                 pinHotspotAddress();
@@ -78,7 +79,9 @@ bool connectAny() {
     return false;
 }
 
-bool isOnline() { return WiFi.status() == WL_CONNECTED; }
+// Connected AND holding an address: after an auto-reconnect the driver can report connected at
+// 0.0.0.0 with no DNS (40 s of failed lookups on 2026-10-14); then loop() reconnects cleanly.
+bool isOnline() { return netup::usable(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP()); }
 String deviceIp() { return WiFi.localIP().toString(); }
 String ssid() { return isOnline() ? WiFi.SSID() : String(); }
 

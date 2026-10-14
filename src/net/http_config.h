@@ -1,6 +1,7 @@
 #pragma once
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include "../util/netup.h"
 // Shared HTTP(S) settings for every request the deck makes (Spotify, LRCLIB, Apple, art,
 // walk sheets). Inline where possible: no extra RAM or stack at the call sites.
 namespace netcfg {
@@ -18,7 +19,8 @@ constexpr uint32_t IMAGE_DEADLINE_MS = 20000;
 // WiFi is up. Every request checks it first: with the link gone, a connect would still sit
 // out its timeouts (connect + handshake + read), several times per walker, and the network
 // task (which also reconnects WiFi) froze for 2 minutes on 2026-10-13.
-inline bool linkUp() { return WiFi.status() == WL_CONNECTED; }
+// "Up" also needs an address: the driver can say connected with 0.0.0.0 (util/netup).
+inline bool linkUp() { return netup::usable(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP()); }
 
 // No certificate validation, bounded handshake: for public data only (lyrics, genres,
 // sprites), where a full chain check isn't worth the RAM. See SECURITY.md.
