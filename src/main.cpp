@@ -151,6 +151,7 @@ void setup() {
     // last frame, i.e. a black screen, up for as long as a slow hotspot took.)
     if (net::connectAny()) {
         mem::log("boot+wifi");
+        netclock::begin();                // the clock (night palette) right away, not after login
         bootscene::setCaption("Connecting to Spotify...");
         nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
         bootscene::waitDone();            // the display is ours again
