@@ -19,6 +19,9 @@ constexpr Rect BAR{4, 206, 312, 34};   // the message bar (dialogue box) on ever
 int buttons(Screen s, bool vroom, Btn out[MAX_BTNS]);
 // The button at (x, y) on screen s, or None.
 Button hit(Screen s, bool vroom, int x, int y);
+// Whether the new deck offers what button b asks for (VROOM only when it lists the clip). The
+// phone page shows every button; one the deck doesn't offer must do nothing.
+bool offered(Button b, bool vroom);
 // RESET fires after a 1 s hold; every other button on release.
 bool isHold(Button b);
 // Where button b on screen s leads; action buttons stay on s.

@@ -34,6 +34,8 @@ Button hit(Screen s, bool vroom, int x, int y) {
 
 bool isHold(Button b) { return b == Reset; }
 
+bool offered(Button b, bool vroom) { return b != Vroom || vroom; }
+
 Screen next(Screen s, Button b) {
     switch (b) {
     case Lyrics: return s == Screen::Home ? Screen::Lyrics : s;

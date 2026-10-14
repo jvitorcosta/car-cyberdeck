@@ -57,6 +57,7 @@ static void redrawButton(menunav::Button id, bool pressed, float fill) {
 // A button fired, by touch or by the phone: navigate, or send an action to the deck. From the
 // phone, LYRICS / SOUNDS / TRIP open their screen from anywhere.
 static void fire(menunav::Button b) {
+    if (!menunav::offered(b, s_vroom)) return;    // e.g. VROOM from the phone, not on the deck
     switch (b) {
     case menunav::None: return;
     case menunav::Howl: decklink::request(decklink::Action::Howl); s_waiting = true; return;

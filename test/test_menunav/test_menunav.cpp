@@ -84,6 +84,16 @@ void test_idle_text() {
     TEST_ASSERT_EQUAL_STRING("Wrong key: REMOTE_TOKEN must match", idleText(Screen::Trip, false, true));
 }
 
+// Final review I2: the phone page always shows VROOM; when the deck doesn't offer it, pressing
+// it must do nothing (it used to reach the deck, get 404 and say "I can't reach the deck").
+void test_vroom_is_only_offered_when_the_deck_has_it() {
+    TEST_ASSERT_FALSE(offered(Vroom, false));
+    TEST_ASSERT_TRUE(offered(Vroom, true));
+    TEST_ASSERT_TRUE(offered(Howl, false));
+    TEST_ASSERT_TRUE(offered(Reset, false));
+    TEST_ASSERT_TRUE(offered(Lyrics, false));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_buttons_fit_above_the_bar_and_do_not_overlap);
@@ -94,5 +104,6 @@ int main() {
     RUN_TEST(test_every_screen_but_home_has_back);
     RUN_TEST(test_only_reset_is_a_hold_button);
     RUN_TEST(test_idle_text);
+    RUN_TEST(test_vroom_is_only_offered_when_the_deck_has_it);
     return UNITY_END();
 }
