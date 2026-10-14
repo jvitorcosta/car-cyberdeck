@@ -80,10 +80,10 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   CYD (the S3 has BLE only), library `esp32-ps3`; one-time pairing with SixaxisPairTool;
   D-pad = cursor, X = open, O = back. A cable needs a USB host (MAX3421E module + wiring): the
   CYD's USB port is a device-only CH340.
-- **Switch back to the hotspot, confirm on device** (code in place 2026-10-14, `util/roam`):
-  the S3 saw the hotspot at -52 dBm, but joins were refused at the time (likely "Allow Others to
-  Join" off), so the automatic move back was never seen working. Owner: fine as is (home WiFi
-  is dev only; in the car there is only the hotspot).
+- **Switch back to the hotspot automatically** (tried 2026-10-14, then removed): scanning on
+  the home WiFi paused the S3's network task and blipped the companion, and the move back was
+  never seen working (joins were refused, likely "Allow Others to Join" off). Owner: decks stay
+  where they joined; home WiFi is dev only, the car has only the hotspot.
 
 - **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
   top strip with clock, trip and outside weather (`util/weather` is committed), Howl/Vroom and

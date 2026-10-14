@@ -1,58 +1,9 @@
 #pragma once
-#include <cstdint>
-// Getting back to the preferred network (config.h order: the iPhone hotspot first). On a
-// fallback network the deck scans in the background every SCAN_MS and moves back once the
-// preferred network was seen strong enough in SEEN_NEEDED scans in a row (no flapping at the
-// edge of range); the second look comes CONFIRM_MS after the first sighting, so a move takes
-// ~15 s once the hotspot is back. Scans back off to 2, then 3 minutes while the preferred network
-// stays unseen (each scan pauses the radio ~2 s) or after a move that doesn't stick. On the
-// preferred network it never scans. PURE, host-tested.
+// Which network to try how often (config.h order: the iPhone hotspot first). A deck stays on the
+// network it joined (owner, 2026-10-14: the home WiFi is for development; in the car there is
+// only the hotspot), so all that's left is: a short hotspot blip gets two tries. PURE, host-tested.
 namespace roam {
-constexpr uint32_t SCAN_MS = 60000;
-constexpr uint32_t CONFIRM_MS = 15000;   // after one sighting: look again this soon
-constexpr int MIN_RSSI = -75;     // dBm: weaker sightings don't count
-constexpr int SEEN_NEEDED = 2;
-
 // Connect tries for network `index` after a drop from `lastIndex` (-1 = boot): two for the
-// preferred network the deck was just on (a short hotspot blip), else one.
+// preferred network the deck was just on, else one.
 inline int tries(int index, int lastIndex) { return (index == 0 && lastIndex == 0) ? 2 : 1; }
-
-class Roam {
-public:
-    // Connected to network `index` (0 = preferred).
-    void onConnected(int index, uint32_t nowMs) {
-        index_ = index;
-        since_ = nowMs;
-        seen_ = 0;
-        misses_ = 0;
-        if (index == 0) fails_ = 0;
-    }
-    // On a fallback and the wait since the last scan (or connect) is over.
-    bool wantScan(uint32_t nowMs) const { return index_ > 0 && nowMs - since_ >= waitMs(); }
-    // A scan finished: whether the preferred network was seen, and its signal. True = move back now.
-    bool onScan(bool seen, int rssi, uint32_t nowMs) {
-        since_ = nowMs;
-        const bool good = seen && rssi >= MIN_RSSI;
-        seen_ = good ? seen_ + 1 : 0;
-        misses_ = good ? 0 : misses_ + 1;
-        if (seen_ < SEEN_NEEDED) return false;
-        seen_ = 0;
-        return true;
-    }
-    // A move back didn't stick (the deck is on a fallback again): scan less often.
-    void onMoveFailed(uint32_t nowMs) {
-        ++fails_;
-        since_ = nowMs;
-        seen_ = 0;
-    }
-    uint32_t waitMs() const {
-        if (seen_ > 0) return CONFIRM_MS;                  // confirm a sighting quickly
-        const int k = fails_ > misses_ ? fails_ : misses_;
-        return k == 0 ? SCAN_MS : k == 1 ? 2 * 60000u : 3 * 60000u;
-    }
-
-private:
-    int index_ = -1, seen_ = 0, fails_ = 0, misses_ = 0;
-    uint32_t since_ = 0;
-};
 }

@@ -10,8 +10,6 @@ namespace net {
 static uint32_t s_lastCheck = 0;
 static int s_index = -1;          // network in use (config.h order; 0 = preferred), -1 = none
 static int s_lastIndex = -1;      // the one before a drop (two tries when it was the preferred)
-static roam::Roam s_roam;
-static bool s_roaming = true;     // the companion turns this off: it follows the new deck
 constexpr uint32_t CONNECT_TRY_MS = 8000;   // per network in connectAny()
 constexpr uint32_t CHECK_MS = 5000;         // loop(): reconnect check period
 // Fixed address on the iPhone hotspot (util/hotspotip): 172.20.10.10 for the S3, .11 for the
@@ -75,7 +73,6 @@ static bool join(int i, int tries) {
                               WIFI_NETWORKS[i].ssid, WiFi.localIP().toString().c_str());
                 pinHotspotAddress();
                 s_index = s_lastIndex = i;
-                s_roam.onConnected(i, millis());
                 return true;
             }
             delay(200);
@@ -97,13 +94,21 @@ bool connectAny() {
 bool switchNetwork() {
     if (WIFI_NETWORK_COUNT < 2) return false;
     const int next = (s_index < 0 ? 0 : s_index + 1) % WIFI_NETWORK_COUNT;
+    // Only when it's actually in range (a ~1.6 s scan): in the car the home WiFi isn't, and a
+    // blind switch dropped the hotspot for 10-20 s each time the new deck was late.
+    const int n = WiFi.scanNetworks(false, false, false, 120);
+    bool seen = false;
+    for (int k = 0; k < n && !seen; ++k) seen = WiFi.SSID(k) == WIFI_NETWORKS[next].ssid;
+    WiFi.scanDelete();
+    if (!seen) {
+        Serial.printf("[wifi] %s not in range, staying\n", WIFI_NETWORKS[next].ssid);
+        return false;
+    }
     Serial.printf("[wifi] switching to %s\n", WIFI_NETWORKS[next].ssid);
     WiFi.disconnect();
     if (join(next, 1)) return true;
     return connectAny();                     // that one isn't there: anything that is
 }
-
-void setRoaming(bool on) { s_roaming = on; }
 
 // Connected AND holding an address: after an auto-reconnect the driver can report connected at
 // 0.0.0.0 with no DNS (40 s of failed lookups on 2026-10-14); then loop() reconnects cleanly.
@@ -120,41 +125,13 @@ void savedNetworks(char* out, size_t n) {
     }
 }
 
-// On a fallback network: a short scan every minute or so (util/roam); once the preferred
-// network (the hotspot) has been seen strong enough twice in a row, move back to it.
-static void roamStep(uint32_t now) {
-    if (!s_roaming || s_index <= 0 || !s_roam.wantScan(now)) return;
-    // A short blocking scan (~120 ms per channel, ~1.6 s): it pauses only this task. The async
-    // scan failed every second time on this core (-2), which read as "hotspot gone".
-    const int n = WiFi.scanNetworks(false, false, false, 120);
-    if (n < 0) {                                        // the scan itself failed: not a sighting
-        Serial.printf("[wifi] scan failed (%d), retrying\n", n);
-        return;                                         // nothing counted; the next check retries
-    }
-    bool seen = false;
-    int rssi = -127;
-    for (int k = 0; k < n; ++k)
-        if (WiFi.SSID(k) == WIFI_NETWORKS[0].ssid && WiFi.RSSI(k) > rssi) {
-            seen = true;
-            rssi = WiFi.RSSI(k);
-        }
-    WiFi.scanDelete();
-    if (seen) Serial.printf("[wifi] scan: %s seen at %d dBm\n", WIFI_NETWORKS[0].ssid, rssi);
-    else Serial.printf("[wifi] scan: %s not seen (%d networks)\n", WIFI_NETWORKS[0].ssid, n);
-    if (!s_roam.onScan(seen, rssi, now)) return;
-    Serial.printf("[wifi] %s is back (%d dBm), moving to it\n", WIFI_NETWORKS[0].ssid, rssi);
-    WiFi.disconnect();
-    if (!join(0, 1) && connectAny() && s_index > 0) s_roam.onMoveFailed(millis());   // didn't stick
-}
-
 void loop() {
     if (millis() - s_lastCheck < CHECK_MS) return;
     s_lastCheck = millis();
-    if (!isOnline()) {
+    static netup::Watch watch;
+    if (watch.reconnect(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP())) {
         Serial.println("[wifi] dropped, reconnecting...");
         connectAny();
-        return;
     }
-    roamStep(millis());
 }
 }
