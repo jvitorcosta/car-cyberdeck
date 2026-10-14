@@ -78,7 +78,7 @@ These settings were tuned on the three images during brainstorming.
 
 ## `data/avatar.bin` format
 
-Little-endian.
+Header fields are single bytes; frames are big-endian RGB565.
 
 | Offset | Size | Field |
 |---|---|---|
@@ -87,7 +87,7 @@ Little-endian.
 | 5 | 1 | reserved, 0 |
 | 6 | 12 | name, NUL-padded ASCII (e.g. `ZERO TWO`) |
 | 18 | n × 2 | per mood: id (0 smug, 1 talk, 2 happy; others reserved), frame count (1–8) |
-| 18 + 2n | sum of frames × 16 928 | 92×92 RGB565 frames, mood by mood in entry order, ready for `pushImage` |
+| 18 + 2n | sum of frames × 16 928 | 92×92 RGB565 frames, **high byte first** (the byte order `pushImage` sends as is, like `theme::be`), mood by mood in entry order |
 
 The size today: 7 frames, about 118 KB.
 
@@ -107,7 +107,7 @@ The size today: 7 frames, about 118 KB.
 She never appears on a status screen (offline or nothing playing). If one comes up during her scene, the scene is cancelled.
 
 **Her scene (about 5.5 s on the UI loop; no new task):**
-1. **Slide-in (~240 ms, 6 steps).** The portrait enters the art box from the left. It's drawn through a TFT_eSPI viewport clipped to the box, so the part still outside stays hidden. Pixels are read straight from the embedded flash data, with no RAM copy.
+1. **Slide-in (~240 ms, 6 steps).** The portrait enters the art box from the left. It's drawn through a TFT_eSPI viewport clipped to the box, so the part still outside stays hidden. Rows are copied from the embedded flash data through a 184-byte row buffer (the embedded file may not be 2-byte aligned) and pushed one row at a time. Only the visible columns are pushed, so no viewport is needed.
 2. **Name tag and line.** The pink name tag (`name` from the file) goes on the dialogue box's top-left corner. Her line types out in the dialogue box at ~40 characters per second, replacing the lyric. It wraps over the existing two lines, and anything too long ends in "...".
    - **Talking.** If the mood has more than one frame, its frames alternate while the line types. A new frame is pushed every ~100 ms: an open shape after each letter, the rest frame on spaces and punctuation. At the end it settles on the rest frame.
 3. **Hold.** The full line stays up for at least 3 s.
