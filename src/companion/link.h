@@ -10,6 +10,14 @@ struct View {
     uint32_t polledAtMs;       // millis() of the last good answer (0 = none yet)
     stateparse::Deck deck;     // last good state
 };
+// Buttons on the companion ask the new deck for something (POST, same REMOTE_TOKEN).
+enum class Action : uint8_t { None, Howl, Vroom, TripReset };
+// Ok: 2xx. Busy: the deck refused for now (409 busy, 429 too soon, 503 low memory).
+// Failed: no answer or any other code.
+enum class Result : uint8_t { Idle, Pending, Ok, Busy, Failed };
+void request(Action a);              // UI loop; replaces one still waiting
+// Ok / Busy / Failed are reported once (with the action), then Idle; Pending while waiting.
+Result takeResult(Action* which);
 void start();                  // network task on core 0
 void snapshot(View& out);      // copy under the lock (UI loop)
 }
