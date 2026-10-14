@@ -4,6 +4,34 @@
 **Status:** draft for review
 **Builds:** `s3` only
 
+## Revision (2026-10-14): she lives on the old deck
+
+The owner moved her during implementation: "she should be in the old deck, not in the new", and "new deck stays as it was". This section **supersedes** these parts of the spec below:
+- the placement decision;
+- "S3 only";
+- "On the deck";
+- the device-only modules.
+
+Everything else stands: the converter, the file format, the moods, the canned lines and the scene timing.
+
+- **Build:** `cyd_companion` only. That's the CYD running the companion lyrics screen, at 49 % flash, so the 68 KB file fits easily. The `s3` and `cyd` builds don't embed the file, and the new deck's firmware is unchanged.
+- **Layout (always there):**
+  - Her 92×92 portrait stays at the left of the companion screen (x 10, y 40). The pink name tag sits under it.
+  - The lyrics move into a column to her right (x 112–312). The current line is at 2× when it fits in two rows, otherwise at 1× over two rows. The dim next line goes under it, and the status strip stays at the bottom.
+  - Without an avatar file, the companion shows the lyrics full-width as before.
+- **Singing:**
+  - **When:** the new deck reports `synced` lyrics, the song is playing, and the current line is non-empty.
+  - **How:** her `talk` frames alternate (open/closed every **150 ms**) for the first **3/4** of the time until the next line. With no next line, she sings for 4 s. Then she rests on the closed frame.
+  - **Otherwise:** with plain or no lyrics, paused, or the deck unreachable, she shows `smug` (the lollipop).
+- **Her own lines:**
+  - **When:** the boot greeting on the first good poll of the new deck, then on `trackGen` changes, with the same 5-minute gap and 1-in-3 odds.
+  - **How:** her line replaces the lyric column. It types out with the mood's frames (`happy` and `smug` are stills, `talk` flaps), holds 3 s, then the lyrics come back. There's no slide-in: she's already on screen.
+- **Pokémon name:** the new deck's `/state` doesn't carry it, and its firmware stays unchanged. So on the old deck, lines with `{P}` are skipped when there's no Pokémon name.
+- **Modules:**
+  - new pure `util/avatarsing`: whether she's singing, and the open/closed frame;
+  - `companion/avatarview`: the embedded file, her portrait, name tag, triggers and her line;
+  - `companion/dashboard`: the lyric column.
+
 ## Goal
 
 A character, the "avatar", slides into the album-art box now and then. She shows an expression and says a short line in the battle dialogue box, then the deck goes back to normal. The owner's avatar is Zero Two (Darling in the Franxx). Her art comes from images the owner supplies.
