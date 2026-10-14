@@ -143,26 +143,24 @@ void setup() {
     bootscene::start(s_tft, net::isOnline);
     bootscene::setCaption("Connecting WiFi...");
 
-    bool spotifyReady = false;
 #ifdef BOARD_S3
-    // The S3 has heap to spare while the scene plays (~230 KB largest block): log into Spotify
-    // and start polling underneath it, so the deck shows the song as soon as the scene ends
-    // instead of a black "Spotify auth..." screen and an empty deck (~8 s, longer on a slow
-    // hotspot).
+    // The S3 has heap to spare while the scene plays (~230 KB largest block), so the network task
+    // logs into Spotify and polls underneath it (its late-WiFi path: spclient::begin +
+    // netclock::begin). setup() never blocks on the login: when the scene ends the deck shows at
+    // once, the song as soon as the first poll lands. (Logging in here left the scene's faded
+    // last frame, i.e. a black screen, up for as long as a slow hotspot took.)
     if (net::connectAny()) {
         mem::log("boot+wifi");
-        netclock::begin();
         bootscene::setCaption("Connecting to Spotify...");
-        spclient::begin();
-        spotifyReady = true;
-        nettask::start(spotifyReady, nullptr);   // no TLS hold: the first poll runs under the scene
-        bootscene::waitDone();                   // the display is ours again
+        nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
+        bootscene::waitDone();            // the display is ours again
     } else {
         // The scene keeps running; the network task retries and the car leaves once WiFi is up.
         bootscene::setCaption("WiFi not found - retrying...");
-        nettask::start(spotifyReady, nullptr);
+        nettask::start(false, nullptr);
     }
 #else
+    bool spotifyReady = false;
     if (net::connectAny()) {
         mem::log("boot+wifi");
         netclock::begin();
