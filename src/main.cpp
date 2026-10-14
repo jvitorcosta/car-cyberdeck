@@ -144,6 +144,25 @@ void setup() {
     bootscene::setCaption("Connecting WiFi...");
 
     bool spotifyReady = false;
+#ifdef BOARD_S3
+    // The S3 has heap to spare while the scene plays (~230 KB largest block): log into Spotify
+    // and start polling underneath it, so the deck shows the song as soon as the scene ends
+    // instead of a black "Spotify auth..." screen and an empty deck (~8 s, longer on a slow
+    // hotspot).
+    if (net::connectAny()) {
+        mem::log("boot+wifi");
+        netclock::begin();
+        bootscene::setCaption("Connecting to Spotify...");
+        spclient::begin();
+        spotifyReady = true;
+        nettask::start(spotifyReady, nullptr);   // no TLS hold: the first poll runs under the scene
+        bootscene::waitDone();                   // the display is ours again
+    } else {
+        // The scene keeps running; the network task retries and the car leaves once WiFi is up.
+        bootscene::setCaption("WiFi not found - retrying...");
+        nettask::start(spotifyReady, nullptr);
+    }
+#else
     if (net::connectAny()) {
         mem::log("boot+wifi");
         netclock::begin();
@@ -158,6 +177,7 @@ void setup() {
         bootscene::setCaption("WiFi not found - retrying...");
     }
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
+#endif
     remote::begin(bootscene::active);
 }
 
