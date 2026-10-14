@@ -193,7 +193,10 @@ static void run(void*) {
             // or no block big enough for TLS. A dead zone or a 401/429 is not that.
             bool starved = s_st.lastPollCode != 429 &&   // rate limited: a reboot only asks again
                            (mem::failTotal() != s_failsAtOk || mem::byteLargest() < netplan::TLS_NEED);
-            if (!ok) mem::log("poll failed");
+            if (!ok) {
+                mem::log("poll failed");
+                net::diagnose(s_st.lastPollCode, s_st.lastPollOkMs ? millis() - s_st.lastPollOkMs : 0);
+            }
             const bool wifiUp = net::isOnline();   // one reading for the decision and the log
             if (s_health.onPoll(ok, wifiUp, starved, now) == netplan::Health::Action::Restart) {
                 mem::log("restart");

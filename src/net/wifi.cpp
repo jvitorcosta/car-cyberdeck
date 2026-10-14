@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include "../config.h"
 #include "../util/hotspotip.h"
+#include "../util/netdiag.h"
 #include "../util/netup.h"
 #include "../util/roam.h"
 #include "ping/ping_sock.h"
@@ -114,6 +115,26 @@ bool switchNetwork() {
 // 0.0.0.0 with no DNS (40 s of failed lookups on 2026-10-14); then loop() reconnects cleanly.
 bool isOnline() { return netup::usable(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP()); }
 String deviceIp() { return WiFi.localIP().toString(); }
+
+void diagnose(int code, uint32_t sinceOkMs) {
+    static uint32_t last = 0;
+    if (last && millis() - last < 15000) return;     // at most every 15 s (it pings and resolves)
+    last = millis() | 1;
+    const bool up = isOnline();
+    bool gw = false, dns = false;
+    IPAddress addr;
+    if (up) {
+        gw = answers(WiFi.gatewayIP());               // ~0.3-1.2 s
+        dns = WiFi.hostByName("api.spotify.com", addr) == 1 && (uint32_t)addr != 0;
+    }
+    Serial.printf("[diag] poll failed (code %d, last good %lus ago) | wifi %s %d dBm ip %s | "
+                  "gateway %s | dns %s -> %s\n",
+                  code, (unsigned long)(sinceOkMs / 1000), up ? WiFi.SSID().c_str() : "-",
+                  up ? (int)WiFi.RSSI() : 0, up ? WiFi.localIP().toString().c_str() : "-",
+                  !up ? "-" : gw ? "answers" : "silent",
+                  !up ? "-" : dns ? addr.toString().c_str() : "FAILED",
+                  netdiag::verdict(up, gw, dns, code));
+}
 String ssid() { return isOnline() ? WiFi.SSID() : String(); }
 
 void savedNetworks(char* out, size_t n) {

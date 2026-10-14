@@ -8,6 +8,10 @@ bool switchNetwork();
 bool isOnline();
 void loop();
 String deviceIp();
+// Logs why a Spotify poll failed ("[diag] ..."): WiFi, signal, address, whether the phone/router
+// answers a ping and api.spotify.com resolves, and what that means (util/netdiag). At most every
+// 15 s; takes up to a few seconds, so only the network task calls it, after a failed poll.
+void diagnose(int code, uint32_t sinceOkMs);
 String ssid();                            // connected network, "" when offline
 void savedNetworks(char* out, size_t n);  // "Cecilia, iPhone" from config.h
 }
