@@ -2,9 +2,7 @@
 #include <Arduino.h>
 #include <cstring>
 #include <esp_system.h>
-#include "../ui/theme.h"
 #include "../util/avatarbin.h"
-#include "../util/avatarlines.h"
 #include "../util/avatarscene.h"
 #include "../util/avatarsing.h"
 
@@ -14,6 +12,7 @@ extern const uint8_t _binary_data_avatar_bin_end[] asm("_binary_data_avatar_bin_
 namespace avatarview {
 static constexpr uint16_t TAG_PINK = 0xF497;   // #F090B8
 static avatarbin::Info s_info{};
+static int s_x = 0, s_y = 0, s_scale = 0;        // where the current screen shows her
 static int s_entry = -1, s_frame = -1;           // on screen (-1: repaint)
 static bool s_tag = false;
 static bool s_talking = false;                    // her own line is up
@@ -35,33 +34,50 @@ bool begin() {
 bool on() { return s_info.moods > 0; }
 void invalidate() { s_entry = s_frame = -1; s_tag = false; }
 
-// Whole frame, row by row through a RAM buffer (the embedded file need not be 2-byte aligned).
+void place(int x, int y, int scale) {
+    if (x == s_x && y == s_y && scale == s_scale) return;
+    s_x = x;
+    s_y = y;
+    s_scale = scale;
+    invalidate();
+}
+
+// Frame f of entry e at (s_x, s_y), 1x or pixel-doubled 2x, row by row through a RAM buffer
+// (the embedded file need not be 2-byte aligned); then her name tag, once.
 static void show(TFT_eSPI& t, int e, int f) {
     constexpr int N = avatarbin::SIDE;
-    if (e == s_entry && f == s_frame) return;
+    if (s_scale == 0 || (e == s_entry && f == s_frame)) return;
     const uint8_t* px = _binary_data_avatar_bin_start + avatarbin::frameOffset(s_info, e, f);
-    static uint16_t row[N];
+    static uint16_t src[N], row[2 * N];
     for (int y = 0; y < N; ++y) {
-        memcpy(row, px + (size_t)y * N * 2, N * 2);
-        t.pushImage(X, Y + y, N, 1, row);       // bytes as stored: RGB565 high byte first
+        memcpy(src, px + (size_t)y * N * 2, N * 2);   // RGB565 high byte first, pushed as stored
+        if (s_scale == 1) {
+            t.pushImage(s_x, s_y + y, N, 1, src);
+            continue;
+        }
+        for (int x = 0; x < N; ++x) row[2 * x] = row[2 * x + 1] = src[x];
+        t.pushImage(s_x, s_y + 2 * y, 2 * N, 1, row);
+        t.pushImage(s_x, s_y + 2 * y + 1, 2 * N, 1, row);
     }
     s_entry = e;
     s_frame = f;
-    if (!s_tag) {                                // the name tag, centred under her
+    if (!s_tag) {                                 // the name tag, centred under her
+        const int side = N * s_scale;
         const int w = (int)strlen(s_info.name) * 6 + 6;
-        const int x = X + (N - w) / 2;
-        t.fillRect(x, Y + N + 4, w, 9, TAG_PINK);
+        const int x = s_x + (side - w) / 2;
+        t.fillRect(x, s_y + side + 2, w, 9, TAG_PINK);
         t.setTextDatum(TL_DATUM);
         t.setTextColor(TFT_WHITE, TAG_PINK);
-        t.drawString(s_info.name, x + 3, Y + N + 5, 1);
+        t.drawString(s_info.name, x + 3, s_y + side + 3, 1);
         s_tag = true;
     }
 }
 
-static void speak(avatarlines::Event ev, const decklink::View& v, uint32_t now) {
+void say(avatarlines::Event ev, const decklink::View& v, uint32_t now) {
     static bool spoke = false;
     static uint32_t lastAt = 0;
     static avatarlines::Out out;
+    if (!on()) return;
     const avatarlines::In in{ev, spoke, now - lastAt, esp_random(), v.deck.track, v.deck.artist, ""};
     if (!avatarlines::pick(in, out)) return;
     spoke = true;
@@ -81,13 +97,13 @@ const char* update(TFT_eSPI& t, const decklink::View& v, uint32_t now) {
         if (!greeted) {
             greeted = true;
             gen = v.deck.trackGen;
-            speak(avatarlines::Event::Boot, v, now);
+            say(avatarlines::Event::Boot, v, now);
         } else if (v.deck.trackGen != gen) {
             gen = v.deck.trackGen;
-            speak(avatarlines::Event::Track, v, now);
+            say(avatarlines::Event::Track, v, now);
         }
     }
-    if (s_talking) {                             // her line: typing + hold (no slide: she is on)
+    if (s_talking) {                             // her line: typing + hold
         const avatarscene::State st = avatarscene::at(now - s_t0 + avatarscene::SLIDE_MS, s_text,
                                                       s_info.frames[s_lineEntry]);
         if (st.phase != avatarscene::Phase::Done) {

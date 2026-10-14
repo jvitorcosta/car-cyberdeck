@@ -57,7 +57,7 @@ static void lyrics(TFT_eSPI& t, const char* big, const char* small) {
     if (strcmp(big, s_big) == 0 && strcmp(small, s_small) == 0) return;
     strncpy(s_big, big, sizeof s_big - 1);
     strncpy(s_small, small, sizeof s_small - 1);
-    const int x0 = avatarview::on() ? avatarview::COL_X : 0;   // she keeps the left side
+    const int x0 = avatarview::on() ? 104 : 0;   // she keeps the left side
     t.fillRect(x0, 0, W - x0, H - 22, theme::pal().top);
     bigLine(t, big, x0, 92);
     if (small[0])
@@ -66,7 +66,7 @@ static void lyrics(TFT_eSPI& t, const char* big, const char* small) {
 }
 
 void draw(TFT_eSPI& t, const decklink::View& v, uint32_t nowMs) {
-    const char* say = avatarview::update(t, v, nowMs);
+    const char* say = nullptr;
     if (say) {                       // her own line takes the column while she says it
         lyrics(t, say, "");
         status(t, v.deckOk ? "" : "Looking for the deck...");
