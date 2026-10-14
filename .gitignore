@@ -31,3 +31,7 @@ data/montage.bin
 greeting-sounds/
 data/finale.pcm
 data/opener.pcm
+
+# Your deck avatar (tools/gen_avatar.py): the images and the built file stay local
+avatar-photos/
+data/avatar.bin
