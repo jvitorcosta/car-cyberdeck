@@ -2,9 +2,12 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <ESPmDNS.h>
 #include "../config.h"
 #include "../net/wifi.h"
 #include "../net/http_config.h"
+#include "../util/follow.h"
+#include "../util/hotspotip.h"
 #include "../util/pollpace.h"
 #include "../util/readguard.h"
 
@@ -19,6 +22,31 @@ namespace decklink {
 static SemaphoreHandle_t s_lock = nullptr;
 static View s_view{};
 static char s_body[1536];   // /state is < 1 KB; static: off the task stack
+static IPAddress s_deckIp;  // the new deck's address off the hotspot (mDNS), 0 = look it up
+static bool s_mdns = false;
+static follow::Follow s_follow;
+
+static uint32_t hostOrder(const IPAddress& a) {
+    return (uint32_t)a[0] << 24 | (uint32_t)a[1] << 16 | (uint32_t)a[2] << 8 | a[3];
+}
+
+// Where the new deck is: its fixed address on the hotspot, else its mDNS name ("cardeck",
+// announced by its remote) on whatever network both are on. False when it can't be found.
+static bool deckHost(char* out, size_t n) {
+    if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()),
+                             hostOrder(WiFi.subnetMask()))) {
+        strlcpy(out, COMPANION_DECK, n);
+        return true;
+    }
+    if (!s_mdns) s_mdns = MDNS.begin("cardeck-companion");
+    if ((uint32_t)s_deckIp == 0) {
+        s_deckIp = MDNS.queryHost("cardeck", 1500);
+        if ((uint32_t)s_deckIp == 0) return false;
+        Serial.printf("[companion] deck found at %s (mDNS)\n", s_deckIp.toString().c_str());
+    }
+    strlcpy(out, s_deckIp.toString().c_str(), n);
+    return true;
+}
 static Action s_want = Action::None;          // requested, not yet sent
 static Action s_doneAct = Action::None;       // the action the result belongs to
 static Result s_result = Result::Idle;
@@ -47,11 +75,12 @@ static int postAction(Action a) {
     HTTPClient h;
     h.setTimeout(2000);
     h.setConnectTimeout(2000);
-    char url[128];
+    char host[40], url[128];
+    if (!deckHost(host, sizeof host)) return -1;
     if (a == Action::TripReset)
-        snprintf(url, sizeof url, "http://%s/trip/reset?k=%s", COMPANION_DECK, REMOTE_TOKEN);
+        snprintf(url, sizeof url, "http://%s/trip/reset?k=%s", host, REMOTE_TOKEN);
     else
-        snprintf(url, sizeof url, "http://%s/play?clip=%s&k=%s", COMPANION_DECK,
+        snprintf(url, sizeof url, "http://%s/play?clip=%s&k=%s", host,
                  a == Action::Howl ? "howl" : "vroom", REMOTE_TOKEN);
     if (!h.begin(c, url)) return -1;
     const int rc = h.POST((uint8_t*)nullptr, 0);
@@ -74,8 +103,9 @@ static int pollState() {
     HTTPClient h;
     h.setTimeout(1500);
     h.setConnectTimeout(1500);
-    char url[128];
-    snprintf(url, sizeof url, "http://%s/state?k=%s", COMPANION_DECK, REMOTE_TOKEN);
+    char host[40], url[128];
+    if (!deckHost(host, sizeof host)) return -1;
+    snprintf(url, sizeof url, "http://%s/state?k=%s", host, REMOTE_TOKEN);
     if (!h.begin(c, url)) return -1;
     const int rc = h.GET();
     size_t len = 0;
@@ -129,6 +159,11 @@ static void run(void*) {
             if (pace.misses() == 0 && !ok) Serial.printf("[companion] deck lost (rc=%d)\n", rc);
             if (pace.misses() > 0 && ok) Serial.println("[companion] deck back");
             pace.onResult(ok);
+            if (!ok) s_deckIp = IPAddress();       // look the name up again next time
+            if (s_follow.update(rc > 0, millis())) {   // 30 s without the deck: its network?
+                Serial.println("[companion] deck not found here: trying the other network");
+                net::switchNetwork();
+            }
             xSemaphoreTake(s_lock, portMAX_DELAY);
             s_view.wrongKey = rc == 403;
             s_view.deckOk = ok;
@@ -140,6 +175,7 @@ static void run(void*) {
 }
 
 void start() {
+    net::setRoaming(false);   // the new deck leads; the companion follows it (util/follow)
     s_lock = xSemaphoreCreateMutex();
     xTaskCreatePinnedToCore(run, "link", 6144, nullptr, 1, nullptr, 0);
 }

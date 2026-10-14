@@ -34,11 +34,19 @@ void test_addresses_outside_the_hotspot_range_are_refused() {
     TEST_ASSERT_EQUAL_HEX32(0, hotspotip::wanted(ip(172, 20, 10, 3), GW, MASK, 0));
 }
 
+void test_on_hotspot() {
+    TEST_ASSERT_TRUE(hotspotip::onHotspot(ip(172, 20, 10, 11), GW, MASK));
+    TEST_ASSERT_FALSE(hotspotip::onHotspot(ip(192, 168, 100, 10), ip(192, 168, 100, 1), ip(255, 255, 255, 0)));
+    TEST_ASSERT_FALSE(hotspotip::onHotspot(ip(172, 20, 10, 3), GW, ip(255, 255, 0, 0)));
+    TEST_ASSERT_FALSE(hotspotip::onHotspot(0, 0, 0));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_on_the_iphone_hotspot_asks_for_its_fixed_address);
     RUN_TEST(test_already_there_means_no_change);
     RUN_TEST(test_other_networks_keep_dhcp);
     RUN_TEST(test_addresses_outside_the_hotspot_range_are_refused);
+    RUN_TEST(test_on_hotspot);
     return UNITY_END();
 }
