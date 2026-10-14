@@ -12,6 +12,7 @@
 #include "../util/version.h"
 #include "dashboard.h"
 #include "link.h"
+#include "avatarview.h"
 
 static TFT_eSPI s_tft;
 
@@ -27,6 +28,7 @@ void setup() {
     net::connectAny();          // if it fails, the link task keeps retrying (net::loop)
     netclock::begin();          // night palette
     decklink::start();
+    avatarview::begin();
     dashboard::invalidate();
 }
 
@@ -41,6 +43,7 @@ void loop() {
             backlight::set(night);
             s_tft.fillScreen(theme::pal().top);
             dashboard::invalidate();
+            avatarview::invalidate();
         }
     }
     decklink::View v;
