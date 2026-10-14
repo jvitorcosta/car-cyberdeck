@@ -27,6 +27,12 @@ static void onPlaying(CurrentlyPlaying cp) {
     // so none of them may be read. Show the "Nothing playing" screen until music resumes; the
     // last song's fields stay as they were, so no new track is detected for the ad.
     if (cp.currentlyPlayingType != track && cp.currentlyPlayingType != episode) {
+        static uint32_t lastLog = 0;
+        if (millis() - lastLog > 30000) {
+            lastLog = millis();
+            Serial.printf("[spotify] poll 200 but not a track/episode (type %d, playing %d)\n",
+                          (int)cp.currentlyPlayingType, (int)cp.isPlaying);
+        }
         st.isPlaying = cp.isPlaying;
         st.lastPollMs = millis();
         st.status = PlaybackStatus::Stopped;
@@ -192,6 +198,7 @@ void poll(AppState& st) {
         }
         txt::copy(st.context, cachedName, sizeof(st.context));
     } else if (code == 204) {
+        if (lastCode != 204) Serial.println("[spotify] poll 204: Spotify says nothing is playing");
         st.status = PlaybackStatus::Stopped;
     } else {
         st.certRejected = netcfg::certRejected(s_client, "api.spotify.com");
