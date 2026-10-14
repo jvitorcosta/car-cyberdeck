@@ -39,6 +39,11 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Companion screen:** a second (CYD) deck beside the S3 shows the current lyric line big,
   with the next one dimmed underneath. It reads the S3 over the hotspot and has no Spotify
   client of its own (build target `cyd_companion`).
+- **Avatar (companion):** a character of your choice becomes the companion's home screen: drawn
+  big beside a Pokemon-style menu (LYRICS / SOUNDS / TRIP), she sings along with synced lyrics,
+  greets you, remarks on new songs and reacts when you play a sound or reset the trip. Drive the
+  menu from your phone (the companion's own page) or the touchscreen. Her portraits come from
+  your own images (`tools/gen_avatar.py`).
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>
@@ -81,6 +86,8 @@ tests the display, colours, backlight and audio.
 `COMPANION_DECK` to the S3's address (`172.20.10.10`, its fixed address on the iPhone hotspot),
 then flash the second CYD with `pio run -e cyd_companion -t upload`. It shows
 **Looking for the deck...** until it reaches the S3, and **Wrong key** if the tokens differ.
+With an avatar file (see Make it yours) the companion serves its own menu remote at
+`http://172.20.10.11/?k=<REMOTE_TOKEN>` (its fixed hotspot address).
 
 ## Make it yours
 
@@ -93,6 +100,7 @@ built-in defaults.
 | Montage sounds | `gen_greeting.py --opener` / `--finale my.wav` | silent |
 | Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (needs ffmpeg) | no montage |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
+| Avatar (companion) | images + `avatar-photos/avatar.json`, then `python tools/gen_avatar.py` (needs ffmpeg; see the script's header) | lyrics only |
 | Car sprite | edit and run `python tools/gen_car_sprite.py` (`--png out.png` previews it) | a silver sedan |
 
 Convert other audio formats to WAV first, for example `ffmpeg -i in.mp3 in.wav`. After

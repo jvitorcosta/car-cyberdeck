@@ -57,12 +57,23 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   show from the song position plus the time since the poll (`util/lyricclock`) and draws it at
   2x (`drawRunScaled`). The S3 side builds `/state` in `util/statejson` and keeps the trip in
   `util/tripclock`. v1 is lyrics only; `util/weather` is in place for the dashboard.
+- **Avatar home** (`companion/{avatarview,screens,touch,phone,app}`, `util/{avatarbin,
+  avatarlines,avatarscene,avatarsing,menunav,press,touchmap,touchguard,phonepress}`) — companion
+  only. `data/avatar.bin` (from `tools/gen_avatar.py`; `tools/avatar_clip.py` writes an empty one
+  that turns it off) holds 92×92 RGB565 frames per mood, drawn 1× or pixel-doubled from flash
+  through a row buffer. Input: the companion's own page (`POST /press?b=..&k=..`, its own
+  WebServer task) and the XPT2046 touchscreen on VSPI (`press`: tap on release, 1 s hold;
+  `touchguard` ignores a press stuck in one spot). Both feed one `fire(button)`; `menunav` holds
+  the screens and buttons. Actions go to the S3 through `companion/link` (POST `/play`,
+  `/trip/reset`). Her lines come from `avatarlines` and type out in the message bar
+  (`avatarscene`); she sings along by `avatarsing`.
 - **Pure, host-tested modules** (one suite each under `test/`) — `ui/{theme,icon_map,accents,
   cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,labels,car_sprite,montage}`,
   `pokemon/dex`, `util/{animdata,walkanim,walkrect,netplan,lyricstatus,interp,text,glyphrun,
   lrcstream,lyricbuf,artmap,ctxcache,dexset,genre,genrebadge,rgb565,daynight,bootanim,loudness,
   bios,linkstatus,howl,remotegate,tripclock,jsonflat,statejson,stateparse,lyricclock,pollpace,
-  weather}`.
+  weather,avatarbin,avatarlines,avatarscene,avatarsing,menunav,press,touchmap,touchguard,
+  phonepress,netup}`.
 
 ## Layers
 

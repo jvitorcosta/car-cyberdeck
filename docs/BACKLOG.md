@@ -4,6 +4,10 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **Old deck touch layer is faulty** (2026-10-14): one constant press (raw x=0, y~3977) under
+  both the companion and `hwcheck`, stylus taps never register. The avatar menu is driven from
+  the phone; touch stays in code (with the stuck-press guard) for a working board.
+
 - **Phone remote on the CYD**: Howl from Safari on the iPhone hotspot works on the S3
   (2026-10-13: page from 172.20.10.1, howl played in 2.4 s). Not yet tried on the CYD. The
   planned refusal below ~32 KB largest heap block is the 503 guard in `net/remote`; watch
@@ -69,6 +73,15 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   sensor (GPIO 34), even though it was suggested for night glare.
 
 ## Ideas
+
+- **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
+  Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
+- **PS3 controller for the avatar menu** (side idea, 2026-10-14): over Bluetooth Classic on the
+  CYD (the S3 has BLE only), library `esp32-ps3`; one-time pairing with SixaxisPairTool;
+  D-pad = cursor, X = open, O = back. A cable needs a USB host (MAX3421E module + wiring): the
+  CYD's USB port is a device-only CH340.
+- **Switch back to the hotspot** when it appears while on the home WiFi (today a deck only
+  re-runs the network order after a drop or reboot).
 
 - **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
   top strip with clock, trip and outside weather (`util/weather` is committed), Howl/Vroom and

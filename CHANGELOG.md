@@ -6,6 +6,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
+- Avatar on the companion (old deck): your character is the home screen, drawn 2x beside a menu
+  (Lyrics, Sounds, Trip). She sings along with synced lyrics, greets you, remarks on new songs
+  (at most every 5 min) and reacts to Howl and trip reset. Drive the menu from the companion's
+  own phone page (`http://172.20.10.11/?k=<REMOTE_TOKEN>`) or its touchscreen. Portraits come
+  from your own images via `tools/gen_avatar.py` (`avatar-photos/`, git-ignored); without one
+  the companion shows the lyrics as before. The companion now sends Howl and trip reset to the
+  new deck.
 - Phone remote (proof of concept): `http://cardeck.local/?k=<REMOTE_TOKEN>` (`cardeck-cyd.local`
   on the CYD, or the deck's IP) shows a Howl button
   that plays a synthesised wolf howl on the deck while it keeps playing. Off unless
@@ -29,6 +36,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - When Spotify answers 429 (too many requests), the deck waits as long as Spotify's
   `Retry-After` asks (falling back to 8, 16, 32, then 60 s), skips the player-details call,
   and shows **Spotify busy...** with the time left right away.
+
+### Fixed
+- After a hotspot reconnect the WiFi driver could report "connected" with no address, and the
+  deck failed every Spotify lookup for ~40 s. Online now means connected with an address, so it
+  reconnects within ~5-10 s.
 
 ## [1.1.0] - 2026-10-13
 
