@@ -17,6 +17,7 @@
 #include "avatarview.h"
 #include "dashboard.h"
 #include "link.h"
+#include "phone.h"
 #include "screens.h"
 #include "touch.h"
 
@@ -53,7 +54,27 @@ static void redrawButton(menunav::Button id, bool pressed, float fill) {
                         s_screen == menunav::Screen::Home && id == s_cursor);
 }
 
-// Touch -> press -> a button fires: navigate, or send an action to the deck.
+// A button fired, by touch or by the phone: navigate, or send an action to the deck. From the
+// phone, LYRICS / SOUNDS / TRIP open their screen from anywhere.
+static void fire(menunav::Button b) {
+    switch (b) {
+    case menunav::None: return;
+    case menunav::Howl: decklink::request(decklink::Action::Howl); s_waiting = true; return;
+    case menunav::Vroom: decklink::request(decklink::Action::Vroom); s_waiting = true; return;
+    case menunav::Reset:
+        decklink::request(decklink::Action::TripReset);
+        s_waiting = true;
+        redrawButton(menunav::Reset, false, 0.0f);
+        return;
+    case menunav::Back: enter(menunav::Screen::Home); return;
+    default:                                      // Lyrics / Sounds / Trip
+        s_cursor = b;
+        enter(menunav::next(menunav::Screen::Home, b));
+        return;
+    }
+}
+
+// Touch -> press -> a button fires.
 static void handleTouch(uint32_t now) {
     int x = 0, y = 0;
     const bool down = touch::read(&x, &y);
@@ -71,20 +92,7 @@ static void handleTouch(uint32_t now) {
         lastFill = now;
         redrawButton(after, true, s_press.holdProgress(now));
     }
-    if (fired == menunav::None) return;
-    switch (fired) {
-    case menunav::Howl: decklink::request(decklink::Action::Howl); s_waiting = true; break;
-    case menunav::Vroom: decklink::request(decklink::Action::Vroom); s_waiting = true; break;
-    case menunav::Reset:
-        decklink::request(decklink::Action::TripReset);
-        s_waiting = true;
-        redrawButton(menunav::Reset, false, 0.0f);
-        break;
-    default:                                      // navigation
-        if (s_screen == menunav::Screen::Home) s_cursor = fired;
-        enter(menunav::next(s_screen, fired));
-        break;
-    }
+    fire(fired);
 }
 
 // The deck answered an action: she reacts.
@@ -115,6 +123,7 @@ void setup() {
     decklink::start();
     if (avatarview::begin()) {
         touch::begin();
+        phone::begin();
         enter(menunav::Screen::Home);
     } else {
         s_tft.fillScreen(theme::pal().top);
@@ -151,6 +160,7 @@ void loop() {
         if (s_screen == menunav::Screen::Sounds) enter(s_screen);
     }
     handleTouch(now);
+    fire(phone::take());
     handleResult(v, now);
     const char* line = avatarview::update(s_tft, v, now);
     if (s_screen == menunav::Screen::Lyrics) dashboard::draw(s_tft, v, now);
