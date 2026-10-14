@@ -31,11 +31,6 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes);
 void drawNoteFrame(TFT_eSPI& t, int frame);
 // Forget the last drawn lyric so the next drawLyricArea() repaints (after drawNow).
 void resetLyricArea();
-// The deck avatar's name tag: a pink label (font 1) on the dialogue box's top edge.
-void drawNameTag(TFT_eSPI& t, const char* name);
-// Removes it: repaints the grass strip under it and the dialogue box (empty; the caller draws
-// the lyric next). No-op when no tag is shown.
-void clearNameTag(TFT_eSPI& t);
 // Full status screen ("No WiFi...", "Spotify busy...", "Nothing playing"): the cause's Pokemon
 // on its platform (ui/statusscene) and a dialogue box with `msg` and an optional smaller
 // `detail` line.

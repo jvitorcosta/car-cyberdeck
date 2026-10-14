@@ -269,29 +269,6 @@ void drawArtistRow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
              TL_DATUM, maxW);
 }
 
-// Avatar name tag: between the status box (ends at y 193) and the dialogue box (y 198), over
-// the dialogue frame's top edge; 9 px tall so it stays clear of the lyric text.
-static constexpr int TAG_X = DLG_X + 8, TAG_Y = STAT_Y + STAT_H, TAG_H = 9;
-static constexpr uint16_t TAG_PINK = 0xF497;   // #F090B8
-static int s_tagW = 0;                         // 0 = no tag on screen
-
-void drawNameTag(TFT_eSPI& t, const char* name) {
-    const char* n = name ? name : "";
-    s_tagW = (int)strlen(n) * 6 + 6;            // font 1: 6 px per character, 3 px padding
-    t.fillRect(TAG_X, TAG_Y, s_tagW, TAG_H, TAG_PINK);
-    t.setTextDatum(TL_DATUM);
-    t.setTextColor(TFT_WHITE, TAG_PINK);
-    t.drawString(n, TAG_X + 3, TAG_Y + 1, 1);
-}
-
-void clearNameTag(TFT_eSPI& t) {
-    if (s_tagW == 0) return;
-    t.fillRect(TAG_X, TAG_Y, s_tagW, DLG_Y - TAG_Y, theme::pal().grass);
-    dialogueBox(t, DLG_X, DLG_Y, DLG_W, DLG_H);
-    resetLyricArea();
-    s_tagW = 0;
-}
-
 void drawNow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
     background(t);
     drawTopStrip(t, st);
@@ -333,7 +310,6 @@ void drawNow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
     drawProgressRegion(t, st);
 
     dialogueBox(t, DLG_X, DLG_Y, DLG_W, DLG_H);
-    s_tagW = 0;          // a full redraw also removes the avatar's name tag
     resetLyricArea();   // box just repainted; main draws the current line next
 }
 
