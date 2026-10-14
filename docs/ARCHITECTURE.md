@@ -50,11 +50,19 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   is set. A one-button page on port 80 (`http://cardeck.local/`, mDNS) served from the UI
   loop; `POST /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays,
   and the howl is synthesised while it plays (`audio/greeting`).
+- **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
+  build without Spotify, Pokémon or audio code. A network task polls the S3's
+  `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with
+  `util/{jsonflat,stateparse}` and hands the UI loop a snapshot; the UI loop picks the line to
+  show from the song position plus the time since the poll (`util/lyricclock`) and draws it at
+  2x (`drawRunScaled`). The S3 side builds `/state` in `util/statejson` and keeps the trip in
+  `util/tripclock`. v1 is lyrics only; `util/weather` is in place for the dashboard.
 - **Pure, host-tested modules** (one suite each under `test/`) — `ui/{theme,icon_map,accents,
   cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,labels,car_sprite,montage}`,
   `pokemon/dex`, `util/{animdata,walkanim,walkrect,netplan,lyricstatus,interp,text,glyphrun,
   lrcstream,lyricbuf,artmap,ctxcache,dexset,genre,genrebadge,rgb565,daynight,bootanim,loudness,
-  bios,linkstatus,howl,remotegate}`.
+  bios,linkstatus,howl,remotegate,tripclock,jsonflat,statejson,stateparse,lyricclock,pollpace,
+  weather}`.
 
 ## Layers
 

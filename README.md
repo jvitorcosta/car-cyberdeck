@@ -36,6 +36,9 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Phone remote (proof of concept):** set `REMOTE_TOKEN` in `src/config.h` and open
   `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD) on a phone on the same
   network for a Howl button.
+- **Companion screen:** a second (CYD) deck beside the S3 shows the current lyric line big,
+  with the next one dimmed underneath. It reads the S3 over the hotspot and has no Spotify
+  client of its own (build target `cyd_companion`).
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>
@@ -47,6 +50,7 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 |---|---|---|
 | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `cyd` | ESP32, no PSRAM. Optional speaker on the 2-pin SPEAK connector. |
 | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | 8 MB PSRAM, 16 MB flash, ES8311 codec and speaker. |
+| A second CYD, as a lyrics screen | `cyd_companion` | Optional. Reads the S3's `/state`; needs the S3 with `REMOTE_TOKEN` set. |
 
 Both are 320×240 ILI9341 boards and run the same code. You also need a USB car charger
 (5 V, 2 A recommended) and a phone with a 2.4 GHz hotspot (on iPhone, turn on
@@ -72,6 +76,11 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
 
 To check a new board without WiFi or Spotify, flash `hwcheck` (CYD) or `hwcheck_s3` (S3): it
 tests the display, colours, backlight and audio.
+
+**Companion screen (optional):** set the same `REMOTE_TOKEN` on both decks and
+`COMPANION_DECK` to the S3's address (`172.20.10.10`, its fixed address on the iPhone hotspot),
+then flash the second CYD with `pio run -e cyd_companion -t upload`. It shows
+**Looking for the deck...** until it reaches the S3, and **Wrong key** if the tokens differ.
 
 ## Make it yours
 

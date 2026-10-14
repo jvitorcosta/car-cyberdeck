@@ -10,6 +10,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   on the CYD, or the deck's IP) shows a Howl button
   that plays a synthesised wolf howl on the deck while it keeps playing. Off unless
   `REMOTE_TOKEN` is set in `config.h`.
+- Companion screen (`cyd_companion`): a second CYD shows the S3's current lyric line at double
+  size with the next line dimmed, and moves to the next line on its own clock between polls.
+  New `config.h` option `COMPANION_DECK` (the S3's address).
+- `GET /state` on the S3 also returns the song timing, the current and next lyric line and a
+  trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
 - "No signal..." now says why: **No WiFi...** (lists the saved networks), **No internet...**

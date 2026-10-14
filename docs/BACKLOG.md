@@ -13,6 +13,12 @@ Open items, not scheduled. Newest decisions first within each section.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
+- **Companion screen** (built 2026-10-13, never run on the board): flash `cyd_companion` to
+  the CYD, both decks on the hotspot. Check the lyric line follows the S3 within ~0.3 s,
+  **Looking for the deck...** within ~2 s of unplugging the S3 and recovery within ~5 s, and
+  that `[mem]` stays stable over 10 min. Also open `/state` from Safari once to check the new
+  fields.
+
 ## Investigate
 
 - **Dropped WiFi receive buffers.** The WiFi driver can't get a ~1.5 KB buffer (caps 0x1800)
@@ -63,6 +69,14 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   sensor (GPIO 34), even though it was suggested for night glare.
 
 ## Ideas
+
+- **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
+  top strip with clock, trip and outside weather (`util/weather` is committed), Howl/Vroom and
+  trip-reset touch buttons (plan Task 5, with touch calibration via `hwcheck`). Plan:
+  `docs/superpowers/plans/2026-10-13-companion-screen.md`.
+- **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
+  extra: retro map"): gets its own plan.
+- **OBD2 car info** over a Bluetooth ELM327 dongle, after the companion.
 
 - **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
   skip/pause through the deck, a screen flash. After the hotspot check above.

@@ -26,6 +26,9 @@ instead, with steps to reproduce and the board and version (first serial line,
   It is off unless `REMOTE_TOKEN` is set; use a long random token and don't reuse it, and
   only on networks you trust (your own hotspot): anyone on the network can reach the web
   server, and a deliberately slow request can hold it, though not the display.
+- **The companion screen reads `/state` the same way:** it sends `REMOTE_TOKEN` in plain HTTP
+  on the hotspot about once a second, so anyone on that network can read the token and the
+  now-playing feed.
 
 - Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
   7 bundled root certificates (`src/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).
