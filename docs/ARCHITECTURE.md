@@ -67,13 +67,19 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   the screens and buttons. Actions go to the S3 through `companion/link` (POST `/play`,
   `/trip/reset`). Her lines come from `avatarlines` and type out in the message bar
   (`avatarscene`); she sings along by `avatarsing`.
+- **Network choice** (`net/wifi`, `util/{roam,follow,deckaddr,netup,hotspotip}`) — config.h
+  order (the hotspot first; two tries after a drop from it). On a fallback the S3 scans briefly
+  (blocking ~1.6 s in the network task, every 1-3 min) and moves back after two sightings
+  (`roam`). The companion doesn't roam: it reaches the S3 at its fixed hotspot address or by
+  mDNS (`cardeck`), keeps that address through blips (`deckaddr`) and switches networks after
+  30 s without the S3 (`follow`). Online means connected with an address (`netup`).
 - **Pure, host-tested modules** (one suite each under `test/`) — `ui/{theme,icon_map,accents,
   cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,labels,car_sprite,montage}`,
   `pokemon/dex`, `util/{animdata,walkanim,walkrect,netplan,lyricstatus,interp,text,glyphrun,
   lrcstream,lyricbuf,artmap,ctxcache,dexset,genre,genrebadge,rgb565,daynight,bootanim,loudness,
   bios,linkstatus,howl,remotegate,tripclock,jsonflat,statejson,stateparse,lyricclock,pollpace,
   weather,avatarbin,avatarlines,avatarscene,avatarsing,menunav,press,touchmap,touchguard,
-  phonepress,netup}`.
+  phonepress,netup,roam,follow,deckaddr}`.
 
 ## Layers
 

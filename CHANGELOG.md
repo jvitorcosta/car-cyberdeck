@@ -38,6 +38,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   and shows **Spotify busy...** with the time left right away.
 
 ### Fixed
+- The S3 logs into Spotify and fetches the first song while its intro plays, instead of a black
+  "Spotify auth..." screen after it.
+- Both decks prefer the hotspot: two tries after a drop from it; on the home WiFi a short scan
+  (backing off to 3 min) moves a deck back once the hotspot is seen twice. The companion finds
+  the new deck by name (`cardeck`, mDNS) off the hotspot and follows it to the other network
+  after 30 s without it.
 - After a hotspot reconnect the WiFi driver could report "connected" with no address, and the
   deck failed every Spotify lookup for ~40 s. Online now means connected with an address, so it
   reconnects within ~5-10 s.
