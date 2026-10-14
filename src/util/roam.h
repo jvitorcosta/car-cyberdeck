@@ -3,8 +3,9 @@
 // Getting back to the preferred network (config.h order: the iPhone hotspot first). On a
 // fallback network the deck scans in the background every SCAN_MS and moves back once the
 // preferred network was seen strong enough in SEEN_NEEDED scans in a row (no flapping at the
-// edge of range); a move that doesn't stick backs the scans off to 2, then 5 minutes. On the
-// preferred network it never scans. PURE, host-tested.
+// edge of range). Scans back off to 2, then 5 minutes while the preferred network stays unseen
+// (each scan pauses the radio ~2 s) or after a move that doesn't stick; a sighting brings them
+// back to every minute. On the preferred network it never scans. PURE, host-tested.
 namespace roam {
 constexpr uint32_t SCAN_MS = 60000;
 constexpr int MIN_RSSI = -75;     // dBm: weaker sightings don't count
@@ -21,6 +22,7 @@ public:
         index_ = index;
         since_ = nowMs;
         seen_ = 0;
+        misses_ = 0;
         if (index == 0) fails_ = 0;
     }
     // On a fallback and the wait since the last scan (or connect) is over.
@@ -28,7 +30,9 @@ public:
     // A scan finished: whether the preferred network was seen, and its signal. True = move back now.
     bool onScan(bool seen, int rssi, uint32_t nowMs) {
         since_ = nowMs;
-        seen_ = (seen && rssi >= MIN_RSSI) ? seen_ + 1 : 0;
+        const bool good = seen && rssi >= MIN_RSSI;
+        seen_ = good ? seen_ + 1 : 0;
+        misses_ = good ? 0 : misses_ + 1;
         if (seen_ < SEEN_NEEDED) return false;
         seen_ = 0;
         return true;
@@ -39,10 +43,13 @@ public:
         since_ = nowMs;
         seen_ = 0;
     }
-    uint32_t waitMs() const { return fails_ == 0 ? SCAN_MS : fails_ == 1 ? 2 * 60000u : 5 * 60000u; }
+    uint32_t waitMs() const {
+        const int k = fails_ > misses_ ? fails_ : misses_;
+        return k == 0 ? SCAN_MS : k == 1 ? 2 * 60000u : 5 * 60000u;
+    }
 
 private:
-    int index_ = -1, seen_ = 0, fails_ = 0;
+    int index_ = -1, seen_ = 0, fails_ = 0, misses_ = 0;
     uint32_t since_ = 0;
 };
 }

@@ -33,7 +33,7 @@ void test_weak_or_missing_hotspot_resets_the_count() {
 void test_a_scan_restarts_the_wait() {
     roam::Roam r;
     r.onConnected(1, 0);
-    r.onScan(false, 0, 60000);
+    r.onScan(true, -60, 60000);                             // a sighting keeps the 1-minute pace
     TEST_ASSERT_FALSE(r.wantScan(60000 + roam::SCAN_MS - 1));
     TEST_ASSERT_TRUE(r.wantScan(60000 + roam::SCAN_MS));
 }
@@ -65,6 +65,21 @@ void test_tries_per_network_after_a_drop() {
     TEST_ASSERT_EQUAL_INT(1, roam::tries(0, -1));   // boot
 }
 
+// While the hotspot simply isn't around, scan less (each scan pauses the radio ~2 s): 1, 2, then
+// 5 minutes; a sighting brings it back to every minute.
+void test_scans_back_off_while_the_hotspot_stays_away() {
+    roam::Roam r;
+    r.onConnected(1, 0);
+    r.onScan(false, 0, 60000);                              // miss 1
+    TEST_ASSERT_FALSE(r.wantScan(60000 + 2 * 60000 - 1));
+    TEST_ASSERT_TRUE(r.wantScan(60000 + 2 * 60000));
+    r.onScan(false, 0, 180000);                             // miss 2
+    TEST_ASSERT_FALSE(r.wantScan(180000 + 5 * 60000 - 1));
+    TEST_ASSERT_TRUE(r.wantScan(180000 + 5 * 60000));
+    r.onScan(true, -60, 480000);                            // seen (once): every minute again
+    TEST_ASSERT_TRUE(r.wantScan(480000 + roam::SCAN_MS));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_on_the_preferred_network_never_scans);
@@ -75,5 +90,6 @@ int main() {
     RUN_TEST(test_failed_moves_back_off);
     RUN_TEST(test_reaching_the_preferred_network_clears_the_back_off);
     RUN_TEST(test_tries_per_network_after_a_drop);
+    RUN_TEST(test_scans_back_off_while_the_hotspot_stays_away);
     return UNITY_END();
 }

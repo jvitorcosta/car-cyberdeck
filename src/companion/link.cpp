@@ -6,6 +6,7 @@
 #include "../config.h"
 #include "../net/wifi.h"
 #include "../net/http_config.h"
+#include "../util/deckaddr.h"
 #include "../util/follow.h"
 #include "../util/hotspotip.h"
 #include "../util/pollpace.h"
@@ -22,7 +23,7 @@ namespace decklink {
 static SemaphoreHandle_t s_lock = nullptr;
 static View s_view{};
 static char s_body[1536];   // /state is < 1 KB; static: off the task stack
-static IPAddress s_deckIp;  // the new deck's address off the hotspot (mDNS), 0 = look it up
+static deckaddr::Keep s_deckIp;   // the new deck's address off the hotspot (mDNS), kept through blips
 static bool s_mdns = false;
 static follow::Follow s_follow;
 
@@ -39,12 +40,13 @@ static bool deckHost(char* out, size_t n) {
         return true;
     }
     if (!s_mdns) s_mdns = MDNS.begin("cardeck-companion");
-    if ((uint32_t)s_deckIp == 0) {
-        s_deckIp = MDNS.queryHost("cardeck", 1500);
-        if ((uint32_t)s_deckIp == 0) return false;
-        Serial.printf("[companion] deck found at %s (mDNS)\n", s_deckIp.toString().c_str());
+    if (s_deckIp.addr() == 0) {
+        const IPAddress a = MDNS.queryHost("cardeck", 1500);
+        if ((uint32_t)a == 0) return false;
+        s_deckIp.found((uint32_t)a);
+        Serial.printf("[companion] deck found at %s (mDNS)\n", a.toString().c_str());
     }
-    strlcpy(out, s_deckIp.toString().c_str(), n);
+    strlcpy(out, IPAddress(s_deckIp.addr()).toString().c_str(), n);
     return true;
 }
 static Action s_want = Action::None;          // requested, not yet sent
@@ -159,10 +161,11 @@ static void run(void*) {
             if (pace.misses() == 0 && !ok) Serial.printf("[companion] deck lost (rc=%d)\n", rc);
             if (pace.misses() > 0 && ok) Serial.println("[companion] deck back");
             pace.onResult(ok);
-            if (!ok) s_deckIp = IPAddress();       // look the name up again next time
+            s_deckIp.onPoll(rc > 0);                // 3 misses in a row: look the name up again
             if (s_follow.update(rc > 0, millis())) {   // 30 s without the deck: its network?
                 Serial.println("[companion] deck not found here: trying the other network");
                 net::switchNetwork();
+                s_deckIp.forget();
             }
             xSemaphoreTake(s_lock, portMAX_DELAY);
             s_view.wrongKey = rc == 403;
