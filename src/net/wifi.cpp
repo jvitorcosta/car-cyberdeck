@@ -12,7 +12,6 @@ static int s_index = -1;          // network in use (config.h order; 0 = preferr
 static int s_lastIndex = -1;      // the one before a drop (two tries when it was the preferred)
 static roam::Roam s_roam;
 static bool s_roaming = true;     // the companion turns this off: it follows the new deck
-static bool s_scanning = false;
 constexpr uint32_t CONNECT_TRY_MS = 8000;   // per network in connectAny()
 constexpr uint32_t CHECK_MS = 5000;         // loop(): reconnect check period
 // Fixed address on the iPhone hotspot (util/hotspotip): 172.20.10.10 for the S3, .11 for the
@@ -89,7 +88,6 @@ static bool join(int i, int tries) {
 
 bool connectAny() {
     WiFi.mode(WIFI_STA);
-    s_scanning = false;
     s_index = -1;
     for (int i = 0; i < WIFI_NETWORK_COUNT; ++i)
         if (join(i, roam::tries(i, s_lastIndex))) return true;   // the hotspot first
@@ -100,7 +98,6 @@ bool switchNetwork() {
     if (WIFI_NETWORK_COUNT < 2) return false;
     const int next = (s_index < 0 ? 0 : s_index + 1) % WIFI_NETWORK_COUNT;
     Serial.printf("[wifi] switching to %s\n", WIFI_NETWORKS[next].ssid);
-    s_scanning = false;
     WiFi.disconnect();
     if (join(next, 1)) return true;
     return connectAny();                     // that one isn't there: anything that is
@@ -123,18 +120,17 @@ void savedNetworks(char* out, size_t n) {
     }
 }
 
-// On a fallback network: a background scan every minute or so (util/roam); once the preferred
+// On a fallback network: a short scan every minute or so (util/roam); once the preferred
 // network (the hotspot) has been seen strong enough twice in a row, move back to it.
 static void roamStep(uint32_t now) {
-    if (!s_roaming || s_index <= 0) return;
-    if (!s_scanning) {
-        if (!s_roam.wantScan(now)) return;
-        s_scanning = WiFi.scanNetworks(true /* async */) == WIFI_SCAN_RUNNING;
-        return;
+    if (!s_roaming || s_index <= 0 || !s_roam.wantScan(now)) return;
+    // A short blocking scan (~120 ms per channel, ~1.6 s): it pauses only this task. The async
+    // scan failed every second time on this core (-2), which read as "hotspot gone".
+    const int n = WiFi.scanNetworks(false, false, false, 120);
+    if (n < 0) {                                        // the scan itself failed: not a sighting
+        Serial.printf("[wifi] scan failed (%d), retrying\n", n);
+        return;                                         // nothing counted; the next check retries
     }
-    const int n = WiFi.scanComplete();
-    if (n == WIFI_SCAN_RUNNING) return;
-    s_scanning = false;
     bool seen = false;
     int rssi = -127;
     for (int k = 0; k < n; ++k)
