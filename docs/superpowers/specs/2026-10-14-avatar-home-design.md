@@ -5,6 +5,14 @@
 **Build:** `cyd_companion` (the old deck). The new deck's firmware doesn't change.
 **Builds on:** `docs/superpowers/specs/2026-10-14-avatar-design.md`. That spec's converter, file format, moods, canned lines, typing timeline and singing still apply. Its "beside the lyrics" layout is **replaced** by this spec.
 
+## Revision (2026-10-14): the phone drives her menu
+
+The old deck's touch layer is faulty. It reports one constant press (raw x=0, y≈3977) with this firmware and with `hwcheck`, while the owner tapped with the stylus. The owner chose to drive her from the phone.
+- **The page:** the old deck serves its own remote at `http://<old deck>/?k=<REMOTE_TOKEN>` (172.20.10.11 on the hotspot), with LYRICS, SOUNDS, TRIP, BACK, HOWL, VROOM and a hold-to-reset TRIP. The new deck is unchanged.
+- **The input path:** `POST /press?b=<name>` queues a button. It goes through the same handling as touch, and LYRICS, SOUNDS and TRIP open their screen from anywhere.
+- **Touch stays:** it still works on a good board. A stuck press (the same point for more than 5 s) is ignored.
+- **Details:** in the plan's revision, Tasks 7A and 7B.
+
 ## Goal
 
 On the old deck, the avatar (Zero Two, from the owner's git-ignored `data/avatar.bin`) is the main interface:

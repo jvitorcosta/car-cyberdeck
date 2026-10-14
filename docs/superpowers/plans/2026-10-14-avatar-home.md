@@ -1518,3 +1518,391 @@ Expected: `suites pass=52 fail=0`; `OK`; three SUCCESS.
 git add README.md CHANGELOG.md docs/ARCHITECTURE.md docs/BACKLOG.md include/pins.h
 git commit -m "docs: avatar home screen on the companion"
 ```
+
+---
+
+## Revision (2026-10-14): the phone drives her menu (Tasks 7A, 7B before Task 8)
+
+**Why:** the old deck's touch layer is faulty. The owner said "it came with a pencil and touch", but it reports one constant press: 2 400 readings at raw x=0, y≈3977, both with this firmware and with `hwcheck`, while the owner tapped with the stylus. The owner chose "From the phone".
+
+**What changes:**
+- The old deck serves its own remote page. The new deck stays as it was.
+- Phone presses enter the same button handling as touch.
+- The touch driver gains a guard that ignores a press stuck in the same spot for more than 5 s, so a faulty panel can't block anything.
+
+**Global Constraints, added:**
+- **Page:** `http://<old deck>/?k=<REMOTE_TOKEN>`. On the hotspot that's `172.20.10.11`, the companion's fixed address. It uses the same `REMOTE_TOKEN` as the new deck.
+- **Press endpoint:** `POST /press?b=<name>&k=<token>`, where name is one of `lyrics sounds trip back howl vroom reset`.
+  - 204 = queued;
+  - 400 = unknown button;
+  - 403 = wrong key.
+- **Phone buttons work from any screen:**
+  - LYRICS, SOUNDS and TRIP open their screen (the `▶` follows);
+  - BACK → Home;
+  - HOWL, VROOM and RESET send the action.
+- **RESET hold:** the page needs a 1 s press-and-hold before it sends `reset`, with no dialogs.
+- **Stuck touch:** the same raw point (within ±60) pressed for more than 5000 ms reads as not pressed until the panel reads released.
+
+### Task 7A: `util/phonepress` and `util/touchguard` (pure)
+
+**Files:**
+- Create: `src/util/phonepress.h`, `src/util/phonepress.cpp`, `src/util/touchguard.h`
+- Test: `test/test_phonepress/test_phonepress.cpp`, `test/test_touchguard/test_touchguard.cpp`
+
+**Interfaces:**
+- Produces:
+  - `menunav::Button phonepress::parse(const char* name)`;
+  - `class touchguard::Guard { bool update(bool down, int rawX, int rawY, uint32_t nowMs); }`.
+
+- [ ] **Step 1: Failing tests**
+
+`test/test_phonepress/test_phonepress.cpp`:
+
+```cpp
+#include <unity.h>
+#include "../../src/util/phonepress.h"
+
+using namespace menunav;
+void setUp() {}
+void tearDown() {}
+
+void test_names_map_to_buttons() {
+    TEST_ASSERT_EQUAL_INT(Lyrics, phonepress::parse("lyrics"));
+    TEST_ASSERT_EQUAL_INT(Sounds, phonepress::parse("sounds"));
+    TEST_ASSERT_EQUAL_INT(Trip, phonepress::parse("trip"));
+    TEST_ASSERT_EQUAL_INT(Back, phonepress::parse("back"));
+    TEST_ASSERT_EQUAL_INT(Howl, phonepress::parse("howl"));
+    TEST_ASSERT_EQUAL_INT(Vroom, phonepress::parse("vroom"));
+    TEST_ASSERT_EQUAL_INT(Reset, phonepress::parse("reset"));
+}
+void test_unknown_names_are_none() {
+    TEST_ASSERT_EQUAL_INT(None, phonepress::parse(""));
+    TEST_ASSERT_EQUAL_INT(None, phonepress::parse(nullptr));
+    TEST_ASSERT_EQUAL_INT(None, phonepress::parse("LYRICS"));      // exact, lower case
+    TEST_ASSERT_EQUAL_INT(None, phonepress::parse("lyricsx"));
+    TEST_ASSERT_EQUAL_INT(None, phonepress::parse("none"));
+}
+
+int main() {
+    UNITY_BEGIN();
+    RUN_TEST(test_names_map_to_buttons);
+    RUN_TEST(test_unknown_names_are_none);
+    return UNITY_END();
+}
+```
+
+`test/test_touchguard/test_touchguard.cpp`:
+
+```cpp
+#include <unity.h>
+#include "../../src/util/touchguard.h"
+
+void setUp() {}
+void tearDown() {}
+
+void test_a_normal_press_passes() {
+    touchguard::Guard g;
+    TEST_ASSERT_TRUE(g.update(true, 1000, 2000, 0));
+    TEST_ASSERT_TRUE(g.update(true, 1010, 1990, 4000));
+    TEST_ASSERT_FALSE(g.update(false, 0, 0, 4100));
+}
+void test_a_stuck_point_is_ignored_after_five_seconds() {
+    touchguard::Guard g;
+    TEST_ASSERT_TRUE(g.update(true, 0, 3977, 0));
+    TEST_ASSERT_TRUE(g.update(true, 0, 3980, 4999));
+    TEST_ASSERT_FALSE(g.update(true, 0, 3975, 5000));
+    TEST_ASSERT_FALSE(g.update(true, 0, 3977, 60000));          // stays ignored
+}
+void test_moving_finger_is_not_stuck() {
+    touchguard::Guard g;
+    g.update(true, 1000, 1000, 0);
+    g.update(true, 1500, 1000, 3000);                            // moved: the clock restarts
+    TEST_ASSERT_TRUE(g.update(true, 1500, 1000, 7000));
+}
+void test_release_clears_the_stuck_state() {
+    touchguard::Guard g;
+    g.update(true, 0, 3977, 0);
+    g.update(true, 0, 3977, 6000);
+    TEST_ASSERT_FALSE(g.update(false, 0, 0, 6100));
+    TEST_ASSERT_TRUE(g.update(true, 2000, 2000, 6200));          // a real touch again
+}
+
+int main() {
+    UNITY_BEGIN();
+    RUN_TEST(test_a_normal_press_passes);
+    RUN_TEST(test_a_stuck_point_is_ignored_after_five_seconds);
+    RUN_TEST(test_moving_finger_is_not_stuck);
+    RUN_TEST(test_release_clears_the_stuck_state);
+    return UNITY_END();
+}
+```
+
+Run: `powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1`
+Expected: `FAIL test_phonepress` and `FAIL test_touchguard`; 52 others pass.
+
+- [ ] **Step 2: Implement**
+
+`src/util/phonepress.h`:
+
+```cpp
+#pragma once
+#include "menunav.h"
+// The companion's phone remote: a button name from POST /press?b=<name> -> the menu button it
+// presses. PURE, host-tested. Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md
+// (Revision: the phone drives her menu).
+namespace phonepress {
+// "lyrics" "sounds" "trip" "back" "howl" "vroom" "reset" (exact, lower case); anything else: None.
+menunav::Button parse(const char* name);
+}
+```
+
+`src/util/phonepress.cpp`:
+
+```cpp
+#include "phonepress.h"
+#include <cstring>
+
+namespace phonepress {
+menunav::Button parse(const char* name) {
+    if (!name) return menunav::None;
+    static const struct { const char* n; menunav::Button b; } MAP[] = {
+        {"lyrics", menunav::Lyrics}, {"sounds", menunav::Sounds}, {"trip", menunav::Trip},
+        {"back", menunav::Back},     {"howl", menunav::Howl},     {"vroom", menunav::Vroom},
+        {"reset", menunav::Reset},
+    };
+    for (const auto& m : MAP)
+        if (strcmp(name, m.n) == 0) return m.b;
+    return menunav::None;
+}
+}
+```
+
+`src/util/touchguard.h`:
+
+```cpp
+#pragma once
+#include <cstdint>
+// Ignores a resistive touch panel that reports one press that never moves (a damaged layer or a
+// frame pressing an edge): the same raw point (within SLACK) for STUCK_MS reads as released
+// until the panel really reads released. PURE, host-tested.
+namespace touchguard {
+constexpr uint32_t STUCK_MS = 5000;
+constexpr int SLACK = 60;
+class Guard {
+public:
+    // The panel's reading; returns whether to treat it as pressed.
+    bool update(bool down, int rawX, int rawY, uint32_t nowMs) {
+        if (!down) {
+            stuck_ = false;
+            on_ = false;
+            return false;
+        }
+        if (stuck_) return false;
+        const bool same = on_ && rawX - x_ <= SLACK && x_ - rawX <= SLACK && rawY - y_ <= SLACK &&
+                          y_ - rawY <= SLACK;
+        if (!same) {
+            on_ = true;
+            x_ = rawX;
+            y_ = rawY;
+            t0_ = nowMs;
+            return true;
+        }
+        if (nowMs - t0_ >= STUCK_MS) {
+            stuck_ = true;
+            return false;
+        }
+        return true;
+    }
+
+private:
+    bool on_ = false, stuck_ = false;
+    int x_ = 0, y_ = 0;
+    uint32_t t0_ = 0;
+};
+}
+```
+
+Run: `powershell -ExecutionPolicy Bypass -File tools/run_tests.ps1`
+Expected: `suites pass=54 fail=0`
+
+- [ ] **Step 3: Guard the touch driver**
+
+In `src/companion/touch.cpp`:
+- add `#include "../util/touchguard.h"` and `static touchguard::Guard s_guard;`;
+- in `read()`, after the `p.z < MIN_Z` check, add:
+
+  ```cpp
+      if (!s_guard.update(true, p.x, p.y, millis())) return false;   // a press stuck in one spot
+  ```
+
+- in the two early `return false` paths for "not touched" and "too light", call `s_guard.update(false, 0, 0, millis());` first.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/util/phonepress.h src/util/phonepress.cpp src/util/touchguard.h test/test_phonepress/test_phonepress.cpp test/test_touchguard/test_touchguard.cpp src/companion/touch.cpp
+git commit -m "feat(companion): phone button names; ignore a stuck touch panel"
+```
+
+### Task 7B: The old deck's remote page (`companion/phone`) and the app
+
+**Files:**
+- Create: `src/companion/phone.h`, `src/companion/phone.cpp`
+- Modify: `src/companion/app.cpp`, `platformio.ini` (`cyd_companion` sources: `+<util/remotegate.cpp>` is already covered by `+<util/>`, so no change unless the build says otherwise)
+
+**Interfaces:**
+- Produces:
+  - `phone::begin()`: the web server on its own task;
+  - `menunav::Button phone::take()`: the last queued press, once, or None.
+
+- [ ] **Step 1: `phone`**
+
+`src/companion/phone.h`:
+
+```cpp
+#pragma once
+#include "../util/menunav.h"
+// The old deck's own remote page for her menu (its touch layer is faulty): GET / serves the
+// page, POST /press?b=<name>&k=<REMOTE_TOKEN> queues a button press. Off without REMOTE_TOKEN.
+// Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md (Revision: the phone).
+namespace phone {
+void begin();                  // web server on its own task, once WiFi is up
+menunav::Button take();        // the latest queued press, once; None when there is none
+}
+```
+
+`src/companion/phone.cpp`:
+
+```cpp
+#include "phone.h"
+#include <Arduino.h>
+#include <WebServer.h>
+#include "../config.h"
+#include "../net/wifi.h"
+#include "../util/phonepress.h"
+#include "../util/remotegate.h"
+
+#ifndef REMOTE_TOKEN
+#define REMOTE_TOKEN ""
+#endif
+
+namespace phone {
+static WebServer* s_server = nullptr;
+static remotegate::Gate s_gate(REMOTE_TOKEN);
+static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
+static int s_pending = menunav::None;
+
+static const char PAGE[] PROGMEM = R"HTML(<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><title>Zero Two</title>
+<style>body{margin:0;background:#1c1424;color:#fff;font:600 20px system-ui;padding:16px;
+-webkit-user-select:none;user-select:none}h1{font-size:18px;color:#f497b8;margin:0 0 12px}
+.g{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+button{font:inherit;padding:22px 0;border:0;border-radius:14px;background:#f8f0e8;color:#2a1a2a}
+button:active{background:#f497b8;color:#fff}#reset{background:#ffd9a8;position:relative;overflow:hidden}
+#fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#f497b8;opacity:.6}
+#msg{min-height:24px;font-size:16px;color:#ccc}</style></head><body>
+<h1>Darling's menu</h1>
+<div class="g"><button data-b="lyrics">LYRICS</button><button data-b="sounds">SOUNDS</button>
+<button data-b="trip">TRIP</button><button data-b="back">BACK</button></div>
+<div class="g"><button data-b="howl">HOWL</button><button data-b="vroom">VROOM</button></div>
+<div class="g"><button id="reset">HOLD TO RESET TRIP<span id="fill"></span></button></div>
+<div id="msg"></div>
+<script>const k=new URLSearchParams(location.search).get('k')||'';
+const msg=t=>{document.getElementById('msg').textContent=t};
+async function press(b){try{const r=await fetch('/press?b='+b+'&k='+encodeURIComponent(k),{method:'POST'});
+msg(r.status==204?'':r.status==403?'Wrong key':'Error '+r.status)}catch(e){msg('Old deck not reachable')}}
+document.querySelectorAll('button[data-b]').forEach(e=>e.onclick=()=>press(e.dataset.b));
+const R=document.getElementById('reset'),F=document.getElementById('fill');let t=null,s=0;
+function stop(){clearInterval(t);t=null;F.style.width='0'}
+R.onpointerdown=e=>{e.preventDefault();s=Date.now();t=setInterval(()=>{const p=(Date.now()-s)/1000;
+F.style.width=Math.min(100,p*100)+'%';if(p>=1){stop();press('reset')}},30)};
+R.onpointerup=R.onpointerleave=R.onpointercancel=stop;</script></body></html>)HTML";
+
+menunav::Button take() {
+    portENTER_CRITICAL(&s_mux);
+    const int b = s_pending;
+    s_pending = menunav::None;
+    portEXIT_CRITICAL(&s_mux);
+    return (menunav::Button)b;
+}
+
+static void handlePress() {
+    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    const menunav::Button b = phonepress::parse(s_server->arg("b").c_str());
+    if (b == menunav::None) { s_server->send(400, "text/plain", "unknown button"); return; }
+    portENTER_CRITICAL(&s_mux);
+    s_pending = b;
+    portEXIT_CRITICAL(&s_mux);
+    s_server->send(204);
+}
+
+static void task(void*) {
+    while (!net::isOnline()) vTaskDelay(pdMS_TO_TICKS(200));
+    s_server->begin();
+    Serial.printf("[phone] on: http://%s/?k=<REMOTE_TOKEN>\n", net::deviceIp().c_str());
+    for (;;) {
+        s_server->handleClient();
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+void begin() {
+    if (!s_gate.enabled()) { Serial.println("[phone] off (REMOTE_TOKEN empty)"); return; }
+    s_server = new WebServer(80);
+    s_server->on("/", HTTP_GET, [] { s_server->send_P(200, "text/html", PAGE); });
+    s_server->on("/press", HTTP_POST, handlePress);
+    xTaskCreatePinnedToCore(task, "phone", 4096, nullptr, 0, nullptr, 1);
+}
+}
+```
+
+- [ ] **Step 2: The app takes phone presses**
+
+In `src/companion/app.cpp`:
+- add `#include "phone.h"`;
+- replace the `switch (fired)` block in `handleTouch` with a call `fire(fired);`;
+- add before `handleTouch`:
+
+  ```cpp
+  // A button fired, by touch or by the phone: navigate, or send an action to the deck. From the
+  // phone, LYRICS / SOUNDS / TRIP open their screen from anywhere.
+  static void fire(menunav::Button b) {
+      switch (b) {
+      case menunav::None: return;
+      case menunav::Howl: decklink::request(decklink::Action::Howl); s_waiting = true; return;
+      case menunav::Vroom: decklink::request(decklink::Action::Vroom); s_waiting = true; return;
+      case menunav::Reset:
+          decklink::request(decklink::Action::TripReset);
+          s_waiting = true;
+          redrawButton(menunav::Reset, false, 0.0f);
+          return;
+      case menunav::Back: enter(menunav::Screen::Home); return;
+      default:                                      // Lyrics / Sounds / Trip
+          s_cursor = b;
+          enter(menunav::next(menunav::Screen::Home, b));
+          return;
+      }
+  }
+  ```
+
+- in `setup()`, after `touch::begin();`, add `phone::begin();`;
+- in `loop()`, after `handleTouch(now);`, add `fire(phone::take());`.
+
+`redrawButton` and `enter` are defined above `handleTouch`, so `fire` goes after `redrawButton` and before `handleTouch`.
+
+- [ ] **Step 3: Build**
+
+Run: `pio run -e cyd_companion -e s3 -e cyd`
+Expected: three SUCCESS; `s3` and `cyd` unchanged.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/companion/phone.h src/companion/phone.cpp src/companion/app.cpp
+git commit -m "feat(companion): phone remote page for her menu"
+```
+
+**Task 8 additions:**
+- On the phone (hotspot), open `http://172.20.10.11/?k=<token>`. Expected: LYRICS, SOUNDS, TRIP and BACK move her screens; HOWL howls with her reaction; RESET needs the 1 s hold; a wrong `k` gives "Wrong key".
+- The log shows `[phone] on: ...`, and no `[touch]` press lasts longer than 5 s.
