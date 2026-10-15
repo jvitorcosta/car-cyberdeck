@@ -6,7 +6,10 @@
 #include <SpotifyArduino.h>
 #include "../config.h"
 #include "../util/ctxcache.h"
+#include "../util/nowplaying.h"
 #include "../util/text.h"
+#include "../util/netplan.h"
+#include "../core/mem.h"
 
 namespace spclient {
 static WiFiClientSecure s_client;
@@ -25,6 +28,12 @@ static void onPlaying(CurrentlyPlaying cp) {
     // so none of them may be read. Show the "Nothing playing" screen until music resumes; the
     // last song's fields stay as they were, so no new track is detected for the ad.
     if (cp.currentlyPlayingType != track && cp.currentlyPlayingType != episode) {
+        static uint32_t lastLog = 0;
+        if (millis() - lastLog > 30000) {
+            lastLog = millis();
+            Serial.printf("[spotify] poll 200 but not a track/episode (type %d, playing %d)\n",
+                          (int)cp.currentlyPlayingType, (int)cp.isPlaying);
+        }
         st.isPlaying = cp.isPlaying;
         st.lastPollMs = millis();
         st.status = PlaybackStatus::Stopped;
@@ -142,10 +151,47 @@ static bool resolveContext(const char* uri, char* out, size_t n) {
     return ok;
 }
 
+// After a 429: how long Spotify asks us to wait (Retry-After, seconds), or -1. SpotifyArduino
+// discards the response headers, so this asks once more with our own token and keeps only
+// that header. Skipped when the heap can't hold another TLS session (the back-off then just
+// doubles), and called once per episode by poll().
+static int fetchRetryAfter() {
+    if (mem::byteLargest() < netplan::TLS_NEED) return -1;
+    if (!ensureAccessToken()) return -1;
+    WiFiClientSecure c;
+    netcfg::spotify(c);
+    HTTPClient https;
+    https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
+    if (!https.begin(c, "https://api.spotify.com/v1/me/player/currently-playing")) return -1;
+    https.addHeader("Authorization", s_accessToken);
+    const char* keys[] = {"Retry-After"};
+    https.collectHeaders(keys, 1);
+    int rc = https.GET();
+    int s = rc == 429 ? netplan::parseRetryAfter(https.header("Retry-After").c_str()) : -1;
+    https.end();
+    Serial.printf("[spotify] Retry-After: %d s (HTTP %d)\n", s, rc);
+    return s;
+}
+
+// /me/player's playing flag and position, for a 204 from currently-playing (poll()).
+static bool s_pdPlaying = false;
+static long s_pdProgress = 0;
+static void onPlayerCheck(PlayerDetails pd) {
+    s_pdPlaying = pd.isPlaying;
+    s_pdProgress = pd.progressMs;
+}
+
 void poll(AppState& st) {
     if (!s_sp) return;
     s_target = &st;
+    const int lastCode = st.lastPollCode;
     int code = s_sp->getCurrentlyPlaying(onPlaying, SPOTIFY_MARKET);
+    st.lastPollCode = code;
+    st.certRejected = false;
+    // Ask how long once per episode: on the first 429, and again only after waiting a time
+    // Spotify gave. A missing or failed answer is not retried on every 60 s poll.
+    const bool askWait = code == 429 && (lastCode != 429 || st.retryAfterS > 0);
+    st.retryAfterS = askWait ? fetchRetryAfter() : -1;
     if (code == 200) {
         // st.context holds the raw context URI (set in onPlaying). Resolve it to
         // a human name once per context change (cached), done here — never inside
@@ -161,10 +207,23 @@ void poll(AppState& st) {
         }
         txt::copy(st.context, cachedName, sizeof(st.context));
     } else if (code == 204) {
-        st.status = PlaybackStatus::Stopped;
+        // currently-playing sometimes says 204 for minutes while the phone plays; /me/player
+        // still knows (util/nowplaying). Ask it before showing "Nothing playing".
+        s_pdPlaying = false;
+        const int pc = s_sp->getPlayerDetails(onPlayerCheck, SPOTIFY_MARKET);
+        if (nowplaying::on204(pc, s_pdPlaying, st.trackName[0] != '\0') == nowplaying::On204::KeepTrack) {
+            if (lastCode != 204) Serial.println("[spotify] poll 204 but /me/player says playing: keeping the song");
+            st.isPlaying = true;
+            st.progressMs = (uint32_t)s_pdProgress;
+            st.lastPollMs = millis();
+            st.status = PlaybackStatus::Playing;
+        } else {
+            if (lastCode != 204) Serial.println("[spotify] poll 204: Spotify says nothing is playing");
+            st.status = PlaybackStatus::Stopped;
+        }
     } else {
-        if (!netcfg::certRejected(s_client, "api.spotify.com"))
-            Serial.printf("[spotify] poll HTTP %d\n", code);
+        st.certRejected = netcfg::certRejected(s_client, "api.spotify.com");
+        if (!st.certRejected) Serial.printf("[spotify] poll HTTP %d\n", code);
         st.status = PlaybackStatus::Offline;
     }
 }

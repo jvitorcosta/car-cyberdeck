@@ -2,16 +2,21 @@
 
 namespace status_sprite {
 
+struct Sprite { int w, h; const uint16_t* px; const uint8_t* mask; };
 #include "status_sprite.inc"
+static_assert(sizeof(SPRITES) / sizeof(SPRITES[0]) == COUNT, "regenerate status_sprite.inc");
 
-int width() { return SPRITE_W; }
-int height() { return SPRITE_H; }
+static const Sprite* get(int id) { return id >= 0 && id < COUNT ? &SPRITES[id] : nullptr; }
 
-bool pixel(int x, int y, uint16_t* rgb565) {
-    if (x < 0 || y < 0 || x >= SPRITE_W || y >= SPRITE_H) return false;
-    int i = y * SPRITE_W + x;
-    if (!((SPRITE_MASK[i >> 3] >> (7 - (i & 7))) & 1)) return false;
-    if (rgb565) *rgb565 = SPRITE_PX[i];
+int width(int id) { const Sprite* s = get(id); return s ? s->w : 0; }
+int height(int id) { const Sprite* s = get(id); return s ? s->h : 0; }
+
+bool pixel(int id, int x, int y, uint16_t* rgb565) {
+    const Sprite* s = get(id);
+    if (!s || x < 0 || y < 0 || x >= s->w || y >= s->h) return false;
+    int i = y * s->w + x;
+    if (!((s->mask[i >> 3] >> (7 - (i & 7))) & 1)) return false;
+    if (rgb565) *rgb565 = s->px[i];
     return true;
 }
 

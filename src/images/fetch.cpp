@@ -2,6 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "../net/http_config.h"
+#include "../util/readguard.h"
 
 namespace fetch {
 
@@ -10,6 +11,7 @@ bool httpsGetInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen, int
     *outLen = 0;
     if (httpCode) *httpCode = 0;
     if (!url || !url[0] || !buf || cap < 2) return false;
+    if (!netcfg::linkUp()) return false;
     WiFiClientSecure client;
     netcfg::secure(client);
     HTTPClient https;
@@ -34,16 +36,17 @@ bool httpsGetInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen, int
     }
     WiFiClient* s = https.getStreamPtr();
     int got = 0;
-    uint32_t last = millis();
+    readguard::Guard guard(millis(), netcfg::STALL_MS, netcfg::IMAGE_DEADLINE_MS);
     while (got < len && (https.connected() || s->available())) {
         size_t a = s->available();
         if (a) {
             size_t want = (size_t)(len - got);
             if (a < want) want = a;
             got += s->readBytes(buf + got, want);
-            last = millis();
+            guard.onData(millis());
+            if (guard.check(millis()) == readguard::State::Deadline) break;
         } else {
-            if (millis() - last > netcfg::STALL_MS) break;   // stalled
+            if (guard.check(millis()) != readguard::State::Ok) break;   // stalled or too slow
             delay(1);
         }
     }

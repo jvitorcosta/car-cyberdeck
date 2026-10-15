@@ -31,6 +31,19 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
   followed by a montage of your own photos.
 - **Built for a car:** never freezes on a slow link, retries a late hotspot in the background,
   and recovers on its own.
+- **Status screens that say why:** no WiFi, no internet or Spotify trouble, each with its own
+  animated Pokémon; when Spotify asks the deck to slow down it shows how long to wait.
+- **Phone remote (proof of concept):** set `REMOTE_TOKEN` in `src/config.h` and open
+  `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD) on a phone on the same
+  network for a Howl button.
+- **Companion screen:** a second (CYD) deck beside the S3 shows the current lyric line big,
+  with the next one dimmed underneath. It reads the S3 over the hotspot and has no Spotify
+  client of its own (build target `cyd_companion`).
+- **Avatar (companion):** a character of your choice becomes the companion's home screen: drawn
+  big beside a Pokemon-style menu (LYRICS / SOUNDS / TRIP), she sings along with synced lyrics,
+  greets you, remarks on new songs and reacts when you play a sound or reset the trip. Drive the
+  menu from your phone (the companion's own page) or the touchscreen. Her portraits come from
+  your own images (`tools/gen_avatar.py`).
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>
@@ -42,6 +55,7 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 |---|---|---|
 | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `cyd` | ESP32, no PSRAM. Optional speaker on the 2-pin SPEAK connector. |
 | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | 8 MB PSRAM, 16 MB flash, ES8311 codec and speaker. |
+| A second CYD, as a lyrics screen | `cyd_companion` | Optional. Reads the S3's `/state`; needs the S3 with `REMOTE_TOKEN` set. |
 
 Both are 320×240 ILI9341 boards and run the same code. You also need a USB car charger
 (5 V, 2 A recommended) and a phone with a 2.4 GHz hotspot (on iPhone, turn on
@@ -68,6 +82,13 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
 To check a new board without WiFi or Spotify, flash `hwcheck` (CYD) or `hwcheck_s3` (S3): it
 tests the display, colours, backlight and audio.
 
+**Companion screen (optional):** set the same `REMOTE_TOKEN` on both decks and
+`COMPANION_DECK` to the S3's address (`172.20.10.10`, its fixed address on the iPhone hotspot),
+then flash the second CYD with `pio run -e cyd_companion -t upload`. It shows
+**Looking for the deck...** until it reaches the S3, and **Wrong key** if the tokens differ.
+With an avatar file (see Make it yours) the companion serves its own menu remote at
+`http://172.20.10.11/?k=<REMOTE_TOKEN>` (its fixed hotspot address).
+
 ## Make it yours
 
 All personal media is git-ignored and embedded at build time. Without it the deck uses
@@ -79,6 +100,7 @@ built-in defaults.
 | Montage sounds | `gen_greeting.py --opener` / `--finale my.wav` | silent |
 | Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (needs ffmpeg) | no montage |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
+| Avatar (companion) | images + `avatar-photos/avatar.json`, then `python tools/gen_avatar.py` (needs ffmpeg; see the script's header) | lyrics only |
 | Car sprite | edit and run `python tools/gen_car_sprite.py` (`--png out.png` previews it) | a silver sedan |
 
 Convert other audio formats to WAV first, for example `ffmpeg -i in.mp3 in.wav`. After

@@ -72,12 +72,31 @@ void test_cache_evicts_oldest_when_full() {
         c.store(name, (uint8_t)(i % 29));
     }
     uint8_t b = 0;
-    TEST_ASSERT_TRUE(c.find("artist 0", &b));
-    c.store("newcomer", 3);
+    c.store("newcomer", 3);                          // nobody looked anything up: oldest goes
     TEST_ASSERT_FALSE(c.find("artist 0", &b));       // oldest replaced
     TEST_ASSERT_TRUE(c.find("artist 1", &b));
     TEST_ASSERT_TRUE(c.find("newcomer", &b));
     TEST_ASSERT_EQUAL_UINT8(3, b);
+}
+
+void test_cache_keeps_an_artist_on_repeat() {
+    // Least recently used goes first: an artist you keep coming back to stays cached.
+    genre::Cache c;
+    char name[16];
+    uint8_t b = 0;
+    for (int i = 0; i < genre::Cache::N; ++i) {
+        snprintf(name, sizeof(name), "artist %d", i);
+        c.store(name, 1);
+    }
+    TEST_ASSERT_TRUE(c.find("artist 0", &b));          // played again: now the most recent
+    c.store("newcomer", 3);
+    TEST_ASSERT_TRUE(c.find("artist 0", &b));
+    TEST_ASSERT_FALSE(c.find("artist 1", &b));         // the least recently used went instead
+    for (int i = 0; i < 2 * genre::Cache::N; ++i) {    // a long run of new artists, artist 0 on repeat
+        snprintf(name, sizeof(name), "other %d", i);
+        c.store(name, 2);
+        TEST_ASSERT_TRUE(c.find("artist 0", &b));
+    }
 }
 // Final review (re-graded Important): only a complete answer may say "no genre" (cached for
 // the session); a body cut off by a dropped connection is a network error (not cached).
@@ -111,6 +130,7 @@ int main(int, char**) {
     RUN_TEST(test_cache_remembers_none);
     RUN_TEST(test_cache_empty_artist_is_known_none);
     RUN_TEST(test_cache_evicts_oldest_when_full);
+    RUN_TEST(test_cache_keeps_an_artist_on_repeat);
     RUN_TEST(test_answer_found);
     RUN_TEST(test_answer_complete_without_genre_is_no_match);
     RUN_TEST(test_answer_cut_off_is_incomplete);

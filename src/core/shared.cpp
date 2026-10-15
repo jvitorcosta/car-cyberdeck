@@ -69,6 +69,24 @@ void lyricView(uint32_t gen, uint32_t posMs, LyricView& out) {
     txt::copy(out.line, lyricbuf::lineText(l, idx), sizeof(out.line));
 }
 
+void lyricPair(uint32_t gen, uint32_t posMs, LyricPair& out) {
+    Guard g;
+    out.status = (gen != 0 && s_statusGen == gen) ? s_status : lyricstatus::Status::Searching;
+    out.line[0] = out.next[0] = '\0';
+    out.lineStartMs = out.nextStartMs = 0;
+    if (gen == 0 || s_lyricsGen != gen) return;
+    const lyricbuf::Lyrics& l = lyricsvc::arena();
+    lyricbuf::Pair p = lyricbuf::pairAt(l, posMs);
+    if (p.cur >= 0) {
+        txt::copy(out.line, lyricbuf::lineText(l, p.cur), sizeof(out.line));
+        out.lineStartMs = l.lines[p.cur].tMs;
+    }
+    if (p.next >= 0) {
+        txt::copy(out.next, lyricbuf::lineText(l, p.next), sizeof(out.next));
+        out.nextStartMs = l.lines[p.next].tMs;
+    }
+}
+
 bool takeWalker(uint32_t gen) {
     Guard g;
     if (gen == 0 || s_walkerGen != gen) return false;

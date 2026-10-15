@@ -13,6 +13,23 @@ static int feedAll(lrcstream::Extractor& ex, const char* json) {
     return ex.finish();
 }
 
+void test_knows_whether_the_body_was_json() {
+    // A captive portal or CDN error page answers 200 with HTML: that's a network problem
+    // (retry), not "this song has no lyrics".
+    lrcstream::Extractor html(L);
+    feedAll(html, "<!doctype html><html><body>Sign in to WiFi</body></html>");
+    TEST_ASSERT_FALSE(html.sawJson());
+    lrcstream::Extractor obj(L);
+    feedAll(obj, " \r\n{\"id\":1,\"instrumental\":true}");
+    TEST_ASSERT_TRUE(obj.sawJson());
+    lrcstream::Extractor arr(L, lrcstream::Mode::Search, 1000);
+    feedAll(arr, "[]");
+    TEST_ASSERT_TRUE(arr.sawJson());
+    lrcstream::Extractor empty(L);
+    feedAll(empty, "");
+    TEST_ASSERT_FALSE(empty.sawJson());
+}
+
 void test_extracts_synced_lines() {
     lrcstream::Extractor ex(L);
     int n = feedAll(ex, "{\"id\":1,\"syncedLyrics\":\"[00:01.00]hello\\n[00:03.50]world\\n\"}");
@@ -277,5 +294,6 @@ int main(int, char**) {
     RUN_TEST(test_search_empty_plain_does_not_block_a_later_match);
     RUN_TEST(test_get_done_at_end_of_document);
     RUN_TEST(test_search_done_at_end_of_array);
+    RUN_TEST(test_knows_whether_the_body_was_json);
     return UNITY_END();
 }

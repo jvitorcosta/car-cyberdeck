@@ -41,11 +41,11 @@ uint32_t hashName(const char* s) {
     return h;
 }
 
-bool Cache::find(const char* artist, uint8_t* badge) const {
+bool Cache::find(const char* artist, uint8_t* badge) {
     if (!artist || !artist[0]) { *badge = NONE; return true; }
     uint32_t h = hashName(artist);
     for (int i = 0; i < count_; ++i)
-        if (hash_[i] == h) { *badge = badge_[i]; return true; }
+        if (hash_[i] == h) { *badge = badge_[i]; used_[i] = ++clock_; return true; }
     return false;
 }
 
@@ -53,12 +53,15 @@ void Cache::store(const char* artist, uint8_t badge) {
     if (!artist || !artist[0]) return;
     uint32_t h = hashName(artist);
     for (int i = 0; i < count_; ++i)
-        if (hash_[i] == h) { badge_[i] = badge; return; }
-    int slot;
+        if (hash_[i] == h) { badge_[i] = badge; used_[i] = ++clock_; return; }
+    int slot = 0;
     if (count_ < N) slot = count_++;
-    else { slot = next_; next_ = (next_ + 1) % N; }   // replace the oldest
+    else
+        for (int i = 1; i < N; ++i)   // least recently used (a session never wraps the clock)
+            if (used_[i] < used_[slot]) slot = i;
     hash_[slot] = h;
     badge_[slot] = badge;
+    used_[slot] = ++clock_;
 }
 
 }

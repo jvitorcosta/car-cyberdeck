@@ -15,9 +15,16 @@
 #include "ui/lyricmsg.h"
 #include "ui/backlight.h"
 #include "ui/bootscene.h"
+#include "ui/intro.h"
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
+#include "util/linkstatus.h"
+#include "net/remote.h"
+#include "util/qrfit.h"
+#ifdef BOARD_S3
+#include <qrcode.h>
+#endif
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
@@ -132,6 +139,33 @@ void setup() {
         Serial.println("[spotify] no refresh token in src/config.h: run tools/spotify_auth.py");
         for (;;) delay(1000);
     }
+#ifdef BOARD_S3
+    // The intro video (ui/intro, with its sound, if a clip was built) plays first, on its own task, while
+    // WiFi connects and the network task logs into Spotify underneath; then the greeting and the
+    // night drive. The S3 has heap to spare (~230 KB largest block), so the login and polls run
+    // under the scenes (the network task's late-WiFi path: spclient::begin + netclock::begin).
+    // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
+    // soon as the first poll lands. (Logging in here left the scene's faded last frame, i.e. a
+    // black screen, up for as long as a slow hotspot took.)
+    intro::start(s_tft);
+    const bool wifi = net::connectAny();
+    if (wifi) {
+        mem::log("boot+wifi");
+        netclock::begin();                // the clock (night palette) right away, not after login
+        nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
+    }
+    intro::wait();                        // the display is free for the night drive
+    greeting::play();                     // waits for the intro's sound to finish (one output)
+    bootscene::start(s_tft, net::isOnline);
+    if (wifi) {
+        bootscene::setCaption("Connecting to Spotify...");
+        bootscene::waitDone();            // the display is ours again
+    } else {
+        // The scene keeps running; the network task retries and the car leaves once WiFi is up.
+        bootscene::setCaption("WiFi not found - retrying...");
+        nettask::start(false, nullptr);
+    }
+#else
     greeting::play();          // boot sound plays while WiFi connects
     // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
     bootscene::start(s_tft, net::isOnline);
@@ -152,7 +186,69 @@ void setup() {
         bootscene::setCaption("WiFi not found - retrying...");
     }
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
+#endif
+    remote::begin(bootscene::active);
 }
+
+// Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
+static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, char* detail, size_t dn) {
+    const bool wifiUp = net::isOnline();
+    linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected});
+    char names[96];
+    if (wifiUp) strlcpy(names, net::ssid().c_str(), sizeof names);
+    else net::savedNetworks(names, sizeof names);
+    linkstatus::describe(k, st.lastPollCode, linkstatus::retryInS(millis(), st.nextPollMs), names,
+                         title, tn, detail, dn);
+    return k;
+}
+
+#ifdef BOARD_S3
+// The phone-remote link as a QR code for the "Nothing playing" screen (esp_qrcode, built into
+// the core). Rebuilt when the link changes (another network, another address), checked at most
+// every 5 s: net::deviceIp() allocates a String.
+static uint8_t s_qrBits[(29 * 29 + 7) / 8];   // qrfit::MAX_VERSION 3: 29 x 29 modules
+static statusscene::Qr s_qr{s_qrBits, 0};
+
+static void copyQr(esp_qrcode_handle_t h) {
+    const int n = esp_qrcode_get_size(h);
+    s_qr.size = 0;
+    if (n > 29) return;
+    memset(s_qrBits, 0, sizeof s_qrBits);
+    for (int y = 0; y < n; ++y)
+        for (int x = 0; x < n; ++x)
+            if (esp_qrcode_get_module(h, x, y)) {
+                const int i = y * n + x;
+                s_qrBits[i >> 3] |= (uint8_t)(0x80 >> (i & 7));
+            }
+    s_qr.size = n;
+}
+
+static const statusscene::Qr* phoneQr() {
+    static char built[96] = "";
+    static uint32_t checkedAt = 0;
+    static bool first = true;
+    if (first || millis() - checkedAt >= 5000) {
+        first = false;
+        checkedAt = millis();
+        char url[96];
+        if (!remote::link(url, sizeof url) || !qrfit::version(strlen(url))) {
+            built[0] = '\0';
+            s_qr.size = 0;
+        } else if (strcmp(url, built) != 0) {
+            strlcpy(built, url, sizeof built);
+            esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
+            cfg.display_func = copyQr;
+            cfg.max_qrcode_version = qrfit::MAX_VERSION;
+            cfg.qrcode_ecc_level = ESP_QRCODE_ECC_LOW;
+            s_qr.size = 0;
+            esp_qrcode_generate(&cfg, url);
+        }
+    }
+    return s_qr.size ? &s_qr : nullptr;
+}
+#else
+static const statusscene::Qr* phoneQr() { return nullptr; }   // CYD: no flash to spare
+#endif
 
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
 // when the mode changed (the caller redraws the current screen). No clock yet -> day.
@@ -205,14 +301,45 @@ void loop() {
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen
     if (updateDayNight()) lastMode = -1;   // redraw the deck or the status screen in the new palette
     if (mode != 0) {
-        if (lastMode != mode) {   // draw the status screen once (no flicker)
-            ui::drawOffline(s_tft, mode == 1 ? "No signal..." : "Nothing playing");
-            lastMode = mode;
+        static char shownText[80] = "", shownTitle[24] = "";
+        static char title[24], detail[48];
+        static uint32_t textAt = 0, frameAt = 0;
+        static linkstatus::Kind kind = linkstatus::Kind::Ok, shownKind = linkstatus::Kind::Ok;
+        char text[80];   // title|detail: 24 + 1 + 48
+        // Re-read the cause at most once a second: net::ssid() allocates a String.
+        if (lastMode != mode || millis() - textAt >= 1000) {
+            textAt = millis();
+            strlcpy(title, "Nothing playing", sizeof title);
+            detail[0] = '\0';
+            kind = mode == 1 ? offlineText(st, title, sizeof title, detail, sizeof detail)
+                             : linkstatus::Kind::Ok;
         }
+        const statusscene::Look look = statusscene::lookFor(kind);
+        snprintf(text, sizeof text, "%s|%s", title, detail);
+        if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
+            ui::drawOffline(s_tft, title, detail, look, millis(), mode == 2 ? phoneQr() : nullptr);
+            frameAt = millis();
+        } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown)
+            const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
+            if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
+                ui::drawOfflineDetail(s_tft, detail);
+            else ui::drawOfflineText(s_tft, title, detail);
+        } else if (millis() - frameAt >= statusscene::FRAME_MS) {   // Pokemon bob, bubble, ball
+            frameAt = millis();
+            ui::drawOfflineScene(s_tft, look, frameAt, mode == 2 ? phoneQr() : nullptr);
+        }
+        if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
+            Serial.printf("[screen] %s / %s\n", title, detail);
+        if (lastMode != mode || strcmp(text, shownText) != 0) remote::setStatus(title, detail);
+        strlcpy(shownText, text, sizeof shownText);
+        strlcpy(shownTitle, title, sizeof shownTitle);
+        shownKind = kind;
+        lastMode = mode;
     } else if (lastMode != 0 || st.trackGen != shownGen) {
         // Full deck redraw: immediately on track change (text + Pokemon name; art, lyric
         // and walker fill in as the network task delivers them), or back from a status screen.
         bool newTrack = st.trackGen != shownGen;
+        if (lastMode != 0) remote::setStatus("", "");   // the phone page: no status, the song
         lastMode = 0;
         if (newTrack) {
             shownGenre = genre::NONE;

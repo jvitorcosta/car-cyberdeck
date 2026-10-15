@@ -26,6 +26,11 @@ static const int TOUCH_MISO = 39;
 static const int TOUCH_MOSI = 32;
 static const int TOUCH_CS   = 33;
 static const int TOUCH_IRQ  = 36;
+// Touch calibration: raw XPT2046 readings at the screen's left/right (x) and top/bottom (y)
+// edges in rotation 1. Tune from the companion's "[touch] raw x=.. y=.." log lines; swap a pair
+// to flip an axis.
+static const int TOUCH_RAW_X0 = 200, TOUCH_RAW_X1 = 3900;
+static const int TOUCH_RAW_Y0 = 200, TOUCH_RAW_Y1 = 3900;
 
 // SD card (VSPI)
 static const int SD_CS   = 5;

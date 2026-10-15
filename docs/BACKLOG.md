@@ -4,8 +4,24 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **Old deck touch layer is faulty** (2026-10-14): one constant press (raw x=0, y~3977) under
+  both the companion and `hwcheck`, stylus taps never register. The avatar menu is driven from
+  the phone; touch stays in code (with the stuck-press guard) for a working board.
+
+- **Phone remote on the CYD**: Howl from Safari on the iPhone hotspot works on the S3
+  (2026-10-13: page from 172.20.10.1, howl played in 2.4 s). Not yet tried on the CYD. The
+  planned refusal below ~32 KB largest heap block is the 503 guard in `net/remote`; watch
+  `[mem]` on the CYD while howling during a track change.
+- **Animated status screens**: seen on the S3 (Spotify busy + countdown); not yet on the CYD,
+  and the no-WiFi / no-internet / certificate screens only from host renders.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
+
+- **Companion screen** (built 2026-10-13, never run on the board): flash `cyd_companion` to
+  the CYD, both decks on the hotspot. Check the lyric line follows the S3 within ~0.3 s,
+  **Looking for the deck...** within ~2 s of unplugging the S3 and recovery within ~5 s, and
+  that `[mem]` stays stable over 10 min. Also open `/state` from Safari once to check the new
+  fields.
 
 ## Investigate
 
@@ -19,25 +35,23 @@ Open items, not scheduled. Newest decisions first within each section.
   build-time settings fixed in the precompiled Arduino core (mbedTLS 16 KB input buffer, lwIP
   TCP window, WiFi RX buffer count): they need the arduino-as-ESP-IDF-component build.
 
+## Spotify rate limit
+
+- Both decks share one Spotify app, so they share its rate limit (both were blocked for
+  ~2 h on 2026-10-13). A second app for the CYD would split it.
+- Retry-After costs one extra request per 429 (`spclient::fetchRetryAfter`) because
+  SpotifyArduino skips the headers; `tools/patch_spotify_lib.py` could capture it instead.
+
 ## Lyrics polish (deferred minors, final review 2026-10-08)
 
 - Search can never match a track whose duration is 0 (lyrics wouldn't advance anyway: the
   position is clamped to the duration).
-- HTTP 200 with a non-JSON body (captive portal / CDN page) is a final "not found": no retry.
-  Fix idea: record whether the reader saw `{` or `[`; 200 without one -> temporary error.
-- No overall time limit per lyrics request: the 8 s stall timer resets on every byte, so a
-  trickling server can hold the network task (and the polls). A ~15 s deadline would bound it.
 - `test_all_messages_fit_two_lines` checks bytes, not rendered pixel width (worst case: "...").
 
 ## Genre badge polish (deferred minors, final review 2026-10-08)
 
-- The Genre step can block the network task ~24 s worst case on a bad link (8 s handshake +
-  8 s GET + 8 s stall); a 3 s stall limit would do for a ~300 B answer.
-- No stack high-water mark recorded for the genre path (`term[300]` + `url[400]` on the 10 KB
-  network-task stack); making them `static` would remove the question.
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
-- The artist cache is FIFO, not LRU: an artist on repeat is evicted after 32 newer ones.
 
 ## Parked: SD card cache (not used)
 
@@ -60,17 +74,27 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Ideas
 
-- **Phone remote: "Howl" button** (researched 2026-10-10, PoC planned, not started). Safari on
-  the phone opens `http://<deck-ip>/?k=<token>`, a one-button page; POST `/play?clip=howl`
-  plays a wolf howl while the deck keeps polling. Plan: Arduino `WebServer` (in the Arduino core,
-  ~1-3 KB RAM) polled from `loop()` after the boot scene; howl
-  synthesised at run time in a pure `util/howl` (glide ~350->700 Hz, vibrato, fall; ~2.3 s;
-  ~1-2 KB flash; a stored 16-bit clip is ~80 KB and the CYD has ~64 KB left under the 97 %
-  limit); token in `config.h`, one play per 3 s, `409` while any clip plays (today a queued
-  clip holds a 3 KB task stack each, so button spam could drain the CYD heap), refuse below
-  ~32 KB largest block. IP on the idle/offline screens; no mDNS (unreliable from an iPhone
-  hotspot, ~20 KB flash). S3 first, CYD behind a build flag. First check on device that the
-  iPhone reaches a client of its own hotspot (172.20.10.x).
+- **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
+  Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
+- **PS3 controller for the avatar menu** (side idea, 2026-10-14): over Bluetooth Classic on the
+  CYD (the S3 has BLE only), library `esp32-ps3`; one-time pairing with SixaxisPairTool;
+  D-pad = cursor, X = open, O = back. A cable needs a USB host (MAX3421E module + wiring): the
+  CYD's USB port is a device-only CH340.
+- **Switch back to the hotspot automatically** (tried 2026-10-14, then removed): scanning on
+  the home WiFi paused the S3's network task and blipped the companion, and the move back was
+  never seen working (joins were refused, likely "Allow Others to Join" off). Owner: decks stay
+  where they joined; home WiFi is dev only, the car has only the hotspot.
+
+- **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
+  top strip with clock, trip and outside weather (`util/weather` is committed), Howl/Vroom and
+  trip-reset touch buttons (plan Task 5, with touch calibration via `hwcheck`). Plan:
+  `docs/superpowers/plans/2026-10-13-companion-screen.md`.
+- **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
+  extra: retro map"): gets its own plan.
+- **OBD2 car info** over a Bluetooth ELM327 dongle, after the companion.
+
+- **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
+  skip/pause through the deck, a screen flash. After the hotspot check above.
 - **Musixmatch as a second lyrics source** (parked 2026-10-07). Official API free plan: API
   key, ~2k calls/day, only a ~30% untimed preview (full/synced lyrics are paid, licensed).
   Unofficial desktop endpoint (`apic-desktop.musixmatch.com`, `macro.subtitles.get` +

@@ -118,4 +118,12 @@ const char* lineText(const Lyrics& l, int i) {
     return (i >= 0 && i < l.n) ? l.text + l.lines[i].off : "";
 }
 
+Pair pairAt(const Lyrics& l, uint32_t posMs) {
+    Pair p{-1, -1};
+    if (l.n <= 0) return p;
+    p.cur = currentIndex(l, posMs);
+    p.next = p.cur + 1 < l.n ? p.cur + 1 : -1;
+    return p;
+}
+
 }

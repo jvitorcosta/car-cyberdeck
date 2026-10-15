@@ -4,7 +4,7 @@
  *   SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *   SPDX-License-Identifier: Apache-2.0
  * Changes: Arduino Wire instead of the IDF I2C driver; playback only (16-bit I2S slave, MCLK
- * from the MCLK pin); only the 16 kHz clock rows this project uses.
+ * from the MCLK pin); only the clock rows this project uses (16 kHz clips, the 48 kHz intro).
  */
 #include "es8311.h"
 #include <Arduino.h>
@@ -20,6 +20,7 @@ struct Coeff {
 constexpr Coeff COEFFS[] = {
     {6144000, 16000, 0x03, 0x01, 0x01, 0x01, 0x00, 0x00, 0xff, 0x04, 0x10, 0x10},   // 384 x fs (Freenove)
     {4096000, 16000, 0x01, 0x00, 0x01, 0x01, 0x00, 0x00, 0xff, 0x04, 0x10, 0x10},   // 256 x fs
+    {18432000, 48000, 0x03, 0x01, 0x01, 0x01, 0x00, 0x00, 0xff, 0x04, 0x10, 0x10},  // 384 x fs, the 16 kHz row scaled
 };
 
 bool wr(uint8_t reg, uint8_t v) {

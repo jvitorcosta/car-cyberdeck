@@ -5,9 +5,59 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Added
+- Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.
+  She sings along with synced lyrics, greets you, remarks on new songs (at most every 5 min) and
+  reacts to Howl and trip reset. The Lyrics, Sounds and Trip screens open from the companion's
+  own phone page (`http://172.20.10.11/?k=<REMOTE_TOKEN>` on the hotspot). Portraits come
+  from your own images via `tools/gen_avatar.py` (`avatar-photos/`, git-ignored); without one
+  the companion shows the lyrics as before. The companion now sends Howl and trip reset to the
+  new deck.
+- Boot intro video on the S3: your own clip (`tools/gen_intro.py`, git-ignored) plays first with
+  its sound, 20 fps / 48 kHz, while WiFi connects and Spotify logs in underneath; then the
+  greeting and the night drive. `--seg START-END` cuts play in the order given.
+- A second boot greeting on the S3, picked at random each boot (`tools/gen_greeting.py --alt`).
+- The S3's Howl plays a real wolf recording when one is built (`tools/gen_howl.py`, e.g. the
+  public-domain "Wolf howls.ogg" from Wikimedia Commons); otherwise the synthesised howl.
+- Phone remote (proof of concept): `http://cardeck.local/?k=<REMOTE_TOKEN>` (`cardeck-cyd.local`
+  on the CYD, or the deck's IP) shows a Howl button
+  that plays a synthesised wolf howl on the deck while it keeps playing. Off unless
+  `REMOTE_TOKEN` is set in `config.h`.
+- Companion screen (`cyd_companion`): a second CYD shows the S3's current lyric line at double
+  size with the next line dimmed, and moves to the next line on its own clock between polls.
+  New `config.h` option `COMPANION_DECK` (the S3's address).
+- `GET /state` on the S3 also returns the song timing, the current and next lyric line and a
+  trip clock; `POST /trip/reset` restarts the trip clock.
+
 ### Changed
+- "No signal..." now says why: **No WiFi...** (lists the saved networks), **No internet...**
+  (connected, but the network or hotspot passes no traffic) or **Spotify error** (HTTP code or
+  rejected certificate).
+- The status screens are animated, with a Pokemon per cause: Zubat searching for WiFi (with a
+  rolling Poke Ball), Psyduck when there's no internet, Slowpoke while Spotify rate-limits
+  (**Spotify busy...** counts down to the next try), Porygon for a rejected certificate,
+  Pikachu for "Nothing playing". All bundled in flash: they show when nothing can download.
 - The CYD no longer probes the microSD slot at boot (~0.6 s faster, no `Card Failed` errors);
   the parked SD cache is built only with `-DSD_CACHE`.
+- When Spotify answers 429 (too many requests), the deck waits as long as Spotify's
+  `Retry-After` asks (falling back to 8, 16, 32, then 60 s), skips the player-details call,
+  and shows **Spotify busy...** with the time left right away.
+
+### Fixed
+- The S3 froze its network task ("No internet", stale songs) while plugged into a PC with no
+  serial monitor open: a USB serial write with a 0 ms timeout waits forever in this core. Writes
+  now give up after 1 ms.
+- A "nothing playing" answer from Spotify while the phone still plays now checks the player
+  before showing **Nothing playing**.
+- The S3 logs into Spotify and fetches the first song while its intro plays, instead of a black
+  "Spotify auth..." screen after it.
+- Both decks join the hotspot first (two tries after a drop from it), else the home WiFi, and
+  stay there. The companion finds the new deck by name (`cardeck`, mDNS) off the hotspot, and
+  after 30 s without it moves to the other network only if that one is in range (in the car it
+  never leaves the hotspot).
+- After a hotspot reconnect the WiFi driver could report "connected" with no address, and the
+  deck failed every Spotify lookup for ~40 s. Online now means connected with an address, so it
+  reconnects within ~5-10 s.
 
 ## [1.1.0] - 2026-10-13
 

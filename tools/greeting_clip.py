@@ -22,3 +22,13 @@ if not os.path.isfile(opener):
     with open(opener, "wb") as f:
         f.write(bytes(2))
     print("greeting_clip: no data/opener.pcm, the montage starts silently")
+alt = os.path.join(data, "greeting_alt.pcm")   # the S3's second greeting (gen_greeting.py --alt)
+if not os.path.isfile(alt):
+    with open(alt, "wb") as f:
+        f.write(bytes(2))
+    print("greeting_clip: no data/greeting_alt.pcm, the S3 always plays its one greeting")
+howl = os.path.join(data, "howl.pcm")          # the S3's real wolf (tools/gen_howl.py)
+if not os.path.isfile(howl):
+    with open(howl, "wb") as f:
+        f.write(bytes(2))
+    print("greeting_clip: no data/howl.pcm, the S3 synthesises its howl")

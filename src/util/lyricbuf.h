@@ -30,4 +30,8 @@ bool addPlain(Lyrics& out, const char* line, size_t len);
 void spreadPlain(Lyrics& out, uint32_t durationMs);
 int currentIndex(const Lyrics& l, uint32_t posMs);   // -1 before the first line
 const char* lineText(const Lyrics& l, int i);         // "" if out of range
+// Current line for posMs (-1 before the first) and the one after it (-1 when none): what the
+// companion screen shows as the big line and the dim next line.
+struct Pair { int cur; int next; };
+Pair pairAt(const Lyrics& l, uint32_t posMs);
 }

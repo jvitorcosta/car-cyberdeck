@@ -25,6 +25,9 @@ public:
     bool truncated() const { return truncated_; }     // arena filled up
     int finish();                                      // flush + sort; returns stored lines
     Kind kind() const { return kind_; }                // valid after finish()
+    // The body started like JSON ('{' or '[' first). False for an HTML page answered with 200
+    // (captive portal, CDN error): a network problem, not "no lyrics".
+    bool sawJson() const { return sawJson_; }
 private:
     enum class Str { None, Key, Skip, Plain, Synced };
     enum class Esc { None, Backslash, Unicode };
@@ -56,6 +59,7 @@ private:
     bool objMatch_ = false;        // search: this object's duration matched
     bool plainTaken_ = false;      // the first accepted plain string was read
     bool instrumental_ = false, truncated_ = false, done_ = false;
+    bool sawFirst_ = false, sawJson_ = false;   // first non-blank byte seen / it opened JSON
     int syncedLines_ = 0;
     size_t bytes_ = 0;
     Kind kind_ = Kind::None;

@@ -153,6 +153,10 @@ void Extractor::endLiteral() {
 
 void Extractor::feed(char c) {
     if (done_) return;
+    if (!sawFirst_ && c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+        sawFirst_ = true;
+        sawJson_ = c == '{' || c == '[';
+    }
     if (mode_ == Mode::Search && ++bytes_ > SEARCH_CAP) { done_ = true; return; }   // time/data cap
     if (inStr_) { stringChar(c); return; }
     if (inLit_) {
