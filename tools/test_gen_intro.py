@@ -49,7 +49,7 @@ class Sound(unittest.TestCase):
         self.assertEqual(gi.fit(b"", frames=1, fps=10, rate=40), b"" + bytes(6))
 
     def test_defaults(self):
-        self.assertEqual((gi.FPS, gi.RATE), (24, 48000))
+        self.assertEqual((gi.FPS, gi.RATE), (20, 48000))
 
 
 if __name__ == "__main__":

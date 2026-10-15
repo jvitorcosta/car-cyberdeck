@@ -22,7 +22,7 @@ import tempfile
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 OUT = os.path.join(ROOT, "data", "intro.bin")
 OUT_PCM = os.path.join(ROOT, "data", "intro.pcm")
-FPS = 24
+FPS = 20
 RATE = 48000               # sound sample rate (the S3's ES8311 has a 48 kHz clock row)
 MAX_BYTES = 4_000_000      # the S3 has an 8 MB app partition; keep the video under ~4 MB
 QUALITY = 2                # ffmpeg -q:v (2 best .. 31 worst); raised automatically to fit

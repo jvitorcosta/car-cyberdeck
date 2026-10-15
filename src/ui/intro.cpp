@@ -18,31 +18,17 @@ namespace intro {
 static TFT_eSPI* s_tft = nullptr;
 static volatile bool s_playing = false;
 
-// JPEGDEC (bitbank2): ~3x faster than tjpgd on the S3 (SIMD), so the clip plays at its full rate
-// while WiFi and the Spotify login run underneath. ~18 KB of state: static, the S3 has RAM to
-// spare. A 320 x 240 frame takes ~31 ms on the 40 MHz SPI bus, so each block it hands over goes
-// out by DMA from one of two buffers while the next one decodes.
+// JPEGDEC (bitbank2): ~2x faster than tjpgd on the S3, ~52 ms a frame with the push. ~18 KB of
+// state: static, the S3 has RAM to spare. No DMA: TFT_eSPI's initDMA() on this board left every
+// later draw (night drive, deck) on a black screen (2026-10-15).
 static JPEGDEC s_jpeg;
-constexpr int BLOCK_PX = MAX_BUFFERED_PIXELS;   // the most JPEGDEC hands over per call
-static uint16_t s_dma[2][BLOCK_PX];
-static int s_buf = 0;
-static bool s_useDma = false;
 
 static int draw(JPEGDRAW* d) {
-    const int n = d->iWidth * d->iHeight;
-    if (!s_useDma || n > BLOCK_PX) {
-        s_tft->pushImage(d->x, d->y, d->iWidth, d->iHeight, d->pPixels);
-        return 1;
-    }
-    uint16_t* b = s_dma[s_buf];
-    s_buf ^= 1;
-    memcpy(b, d->pPixels, 2 * n);   // free: only the other buffer can still be going out
-    s_tft->pushImageDMA(d->x, d->y, d->iWidth, d->iHeight, b);
+    s_tft->pushImage(d->x, d->y, d->iWidth, d->iHeight, d->pPixels);
     return 1;
 }
 
 static void task(void*) {
-    s_useDma = s_tft->initDMA();
     const uint32_t t0 = millis();
     int shown = -1, drawn = 0;
     uint32_t busy = 0;
@@ -56,10 +42,7 @@ static void task(void*) {
                 const uint32_t f0 = millis();
                 if (s_jpeg.openFLASH((uint8_t*)jpg, (int)len, draw)) {
                     s_jpeg.setPixelType(RGB565_BIG_ENDIAN);   // as pushImage sends it as-is
-                    s_tft->startWrite();                      // DMA needs the bus held
                     s_jpeg.decode(0, 0, 0);
-                    s_tft->dmaWait();
-                    s_tft->endWrite();
                     s_jpeg.close();
                 }
                 busy += millis() - f0;
@@ -69,10 +52,8 @@ static void task(void*) {
         }
         vTaskDelay(pdMS_TO_TICKS(2));
     }
-    // DMA stays attached: deInitDMA() frees the SPI bus, and every later draw (night drive, deck)
-    // went nowhere, a black screen (2026-10-15). Plain pushes work alongside it.
-    Serial.printf("[intro] %d of %d frames in %lu ms (%lu ms a frame%s)\n", drawn, montage::count(),
-                  (unsigned long)(millis() - t0), (unsigned long)(drawn ? busy / drawn : 0), s_useDma ? ", DMA" : "");
+    Serial.printf("[intro] %d of %d frames in %lu ms (%lu ms a frame)\n", drawn, montage::count(),
+                  (unsigned long)(millis() - t0), (unsigned long)(drawn ? busy / drawn : 0));
     s_playing = false;
     vTaskDelete(nullptr);
 }
