@@ -3,7 +3,8 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ESPmDNS.h>
-#include "../config.h"
+#include "../net/remote_config.h"
+#include "../net/ipaddr.h"
 #include "../net/wifi.h"
 #include "../net/http_config.h"
 #include "../util/deckaddr.h"
@@ -13,12 +14,6 @@
 #include "../util/readguard.h"
 #include "../util/statejson.h"
 
-#ifndef COMPANION_DECK
-#define COMPANION_DECK "172.20.10.10"   // the S3's fixed address on the iPhone hotspot
-#endif
-#ifndef REMOTE_TOKEN
-#define REMOTE_TOKEN ""
-#endif
 
 namespace decklink {
 static SemaphoreHandle_t s_lock = nullptr;
@@ -28,10 +23,6 @@ static deckaddr::Keep s_deckIp;   // the new deck's address off the hotspot (mDN
 static bool s_mdns = false;
 static follow::Follow s_follow;
 
-static uint32_t hostOrder(const IPAddress& a) {
-    return (uint32_t)a[0] << 24 | (uint32_t)a[1] << 16 | (uint32_t)a[2] << 8 | a[3];
-}
-
 // Where the new deck is: its fixed address on the hotspot, else its mDNS name ("cardeck",
 // announced by its remote) on whatever network both are on. False when it can't be found.
 static bool deckHost(char* out, size_t n) {
@@ -40,9 +31,9 @@ static bool deckHost(char* out, size_t n) {
         strlcpy(out, COMPANION_DECK, n);
         return true;
     }
-    if (!s_mdns) s_mdns = MDNS.begin("cardeck-companion");
+    if (!s_mdns) s_mdns = MDNS.begin(COMPANION_MDNS_NAME);
     if (s_deckIp.addr() == 0) {
-        const IPAddress a = MDNS.queryHost("cardeck", 1500);
+        const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
         if ((uint32_t)a == 0) return false;
         s_deckIp.found((uint32_t)a);
         Serial.printf("[companion] deck found at %s (mDNS)\n", a.toString().c_str());

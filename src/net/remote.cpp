@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
-#include "../config.h"
+#include "remote_config.h"
 #include "wifi.h"
 #include "../audio/greeting.h"
 #include "../util/remotegate.h"
@@ -14,18 +14,6 @@
 #include "../util/interp.h"
 #include <WiFi.h>
 
-#ifndef REMOTE_TOKEN
-#define REMOTE_TOKEN ""   // older config.h: remote off
-#endif
-// Name on the local network: http://<REMOTE_NAME>.local/ (mDNS / Bonjour). Different per
-// board so both decks can be on at once.
-#ifndef REMOTE_NAME
-#ifdef BOARD_S3
-#define REMOTE_NAME "cardeck"
-#else
-#define REMOTE_NAME "cardeck-cyd"
-#endif
-#endif
 
 namespace remote {
 static WebServer* s_server = nullptr;   // created only when the remote is on

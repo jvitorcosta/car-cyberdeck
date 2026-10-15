@@ -1,14 +1,10 @@
 #include "phone.h"
 #include <Arduino.h>
 #include <WebServer.h>
-#include "../config.h"
+#include "../net/remote_config.h"
 #include "../net/wifi.h"
 #include "../util/phonepress.h"
 #include "../util/remotegate.h"
-
-#ifndef REMOTE_TOKEN
-#define REMOTE_TOKEN ""
-#endif
 
 namespace phone {
 static WebServer* s_server = nullptr;

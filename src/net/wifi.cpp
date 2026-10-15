@@ -1,6 +1,8 @@
 #include "wifi.h"
 #include <WiFi.h>
-#include "../config.h"
+#include "remote_config.h"
+#include "ipaddr.h"
+#include "http_config.h"
 #include "../util/hotspotip.h"
 #include "../util/netdiag.h"
 #include "../util/netup.h"
@@ -16,14 +18,10 @@ constexpr uint32_t CHECK_MS = 5000;         // loop(): reconnect check period
 // Fixed address on the iPhone hotspot (util/hotspotip): 172.20.10.10 for the S3, .11 for the
 // CYD, so a Home Screen bookmark of http://172.20.10.10/ keeps working.
 #ifdef BOARD_S3
-constexpr uint8_t HOTSPOT_OCTET = 10;
+constexpr uint8_t HOTSPOT_OCTET = DECK_HOTSPOT_OCTET;
 #else
-constexpr uint8_t HOTSPOT_OCTET = 11;
+constexpr uint8_t HOTSPOT_OCTET = CYD_HOTSPOT_OCTET;
 #endif
-
-static uint32_t hostOrder(const IPAddress& a) {
-    return (uint32_t)a[0] << 24 | (uint32_t)a[1] << 16 | (uint32_t)a[2] << 8 | a[3];
-}
 
 static void onPingReply(esp_ping_handle_t, void* arg) { *(volatile bool*)arg = true; }
 
@@ -113,7 +111,7 @@ bool switchNetwork() {
 
 // Connected AND holding an address: after an auto-reconnect the driver can report connected at
 // 0.0.0.0 with no DNS (40 s of failed lookups on 2026-10-14); then loop() reconnects cleanly.
-bool isOnline() { return netup::usable(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP()); }
+bool isOnline() { return netcfg::linkUp(); }   // connected AND holding an address (util/netup)
 String deviceIp() { return WiFi.localIP().toString(); }
 
 void diagnose(int code, uint32_t sinceOkMs) {
