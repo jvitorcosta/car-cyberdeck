@@ -4,8 +4,8 @@ firmware you actually flash. Only the sizes are committed (data/media_sizes.txt)
   python tools/media_sizes.py record          after changing your clips/montage: update the sizes
   python tools/media_sizes.py placeholders    CI: same-size stand-ins for the missing files
 
-Stand-ins are silent PCM and an empty montage ("MTG1", 0 frames) padded to size, so the firmware
-links at its real size and still boots.
+Stand-ins are silent PCM and empty containers (montage/intro "MTG1" with 0 frames, avatar "AVT1")
+padded to size, so the firmware links at its real size and still boots.
 """
 import os
 import sys
@@ -13,8 +13,13 @@ import sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
 SIZES = os.path.join(DATA, "media_sizes.txt")
-FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin"]
+# Both decks' media: the CYD's sounds and montage, the S3's intro video and sound, second greeting
+# and wolf howl, the companion's avatar.
+FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin",
+         "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "avatar.bin"]
 MONTAGE_EMPTY = b"MTG1" + (0).to_bytes(2, "little") + (10).to_bytes(2, "little")
+# Stand-ins start with an empty header, so the firmware reads "no clip" / "no avatar" and boots.
+HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "avatar.bin": b"AVT1"}
 
 
 def record():
@@ -36,7 +41,7 @@ def placeholders():
         path = os.path.join(DATA, name)
         if os.path.isfile(path):
             continue
-        head = MONTAGE_EMPTY if name == "montage.bin" else b""
+        head = HEADS.get(name, b"")
         with open(path, "wb") as f:
             f.write(head + bytes(int(size) - len(head)))
         print("media_sizes: stand-in %s (%s B)" % (name, size))

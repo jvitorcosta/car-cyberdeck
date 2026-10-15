@@ -3,3 +3,8 @@ greeting.pcm 203200
 opener.pcm 27100
 finale.pcm 120762
 montage.bin 722205
+intro.bin 1845675
+intro.pcm 1372800
+greeting_alt.pcm 54502
+howl.pcm 624000
+avatar.bin 67736
