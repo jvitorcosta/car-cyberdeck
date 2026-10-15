@@ -122,3 +122,16 @@ never blocks on the network) are here. The design records behind each step are i
     to 31 Gen-3 style badges (`tools/gen_genres.py` → `src/util/genre_data.inc`: subgenres take
     the parent's badge, with overrides such as Baile Funk → FUNK BR); unknown ids show a grey
     `???`, a nod to Gen 3's mystery type.
+15. **The S3's USB serial stall (2026-10-15).** Plugged into a PC with no serial monitor open,
+    the S3 showed "No internet" and stale songs, and it all cleared the moment anyone opened a
+    monitor. In arduino-esp32 2.0.17, `HWCDC::write` with a tx timeout of 0 waits forever (its
+    retry counter starts at 0 and wraps on the first decrement), so with the port enumerated but
+    closed the first log line froze the network task. In the car (charger, no USB host) it
+    hardly ever happened. `Serial.setTxTimeoutMs(1)` (`board/s3/board_s3.cpp`): a log line is
+    dropped instead.
+16. **The intro's DMA blackout (2026-10-15).** The S3's boot intro video first decoded with
+    JPEGDEC and pushed frames by DMA from two buffers: 36 ms a frame, against 83–90 ms with
+    tjpgd. But after TFT_eSPI's `initDMA()` every later draw (night drive, deck) landed on a
+    black screen, with or without `deInitDMA()`. The intro now pushes without DMA (~50 ms a
+    frame) at 20 fps; `util/introclock` skips the frames it is late for, so the clip keeps its
+    length and stays in sync with its sound.

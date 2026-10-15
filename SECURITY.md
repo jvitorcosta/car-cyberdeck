@@ -22,10 +22,14 @@ instead, with steps to reproduce and the board and version (first serial line,
 ## Known limitations
 
 - **The phone remote is plain HTTP on the local network.** Its token travels in the URL and
-  the request, readable by anyone on the same WiFi or hotspot; it only gates a sound effect.
-  It is off unless `REMOTE_TOKEN` is set; use a long random token and don't reuse it, and
-  only on networks you trust (your own hotspot): anyone on the network can reach the web
-  server, and a deliberately slow request can hold it, though not the display.
+  the request, readable by anyone on the same WiFi or hotspot. It gates more than a sound
+  effect: on the decks' web servers it guards `GET /state` (now playing, lyrics, the deck's
+  status, network name and trip), `POST /play` (sounds), `POST /trip/reset`, and on the
+  companion `POST /press` (its menu, Howl and trip reset). The page itself and the Home Screen
+  icon are public; they carry no data of their own. The remote is off unless
+  `REMOTE_TOKEN` is set; use a long random token and don't reuse it, and only on networks you
+  trust (your own hotspot): anyone on the network can reach the web server, and a deliberately
+  slow request can hold it, though not the display.
 - **The companion screen reads `/state` the same way:** it sends `REMOTE_TOKEN` in plain HTTP
   on the hotspot about once a second, so anyone on that network can read the token and the
   now-playing feed.

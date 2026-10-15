@@ -28,22 +28,27 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
 - **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, optionally
-  followed by a montage of your own photos.
+  followed by a montage of your own photos. On the S3 your own intro video plays first, with its
+  sound, while WiFi connects and Spotify logs in underneath; the boot sound is picked at random
+  between two clips when you build a second one.
 - **Built for a car:** never freezes on a slow link, retries a late hotspot in the background,
   and recovers on its own.
 - **Status screens that say why:** no WiFi, no internet or Spotify trouble, each with its own
   animated Pokémon; when Spotify asks the deck to slow down it shows how long to wait.
-- **Phone remote (proof of concept):** set `REMOTE_TOKEN` in `src/config.h` and open
-  `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD) on a phone on the same
-  network for a Howl button.
+- **Phone remote:** set `REMOTE_TOKEN` in `src/config.h` and open
+  `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD; see [Two decks](#two-decks))
+  on a phone on the same network: what's playing, the deck's status and a Howl button. Add it
+  to the Home Screen for a full-screen app with its own icon. On the S3 the "Nothing playing"
+  screen shows the link as a QR code, and Howl plays a real wolf recording when you build one
+  (otherwise, and always on the CYD, a synthesised howl).
 - **Companion screen:** a second (CYD) deck beside the S3 shows the current lyric line big,
   with the next one dimmed underneath. It reads the S3 over the hotspot and has no Spotify
   client of its own (build target `cyd_companion`).
-- **Avatar (companion):** a character of your choice becomes the companion's home screen: drawn
-  big beside a Pokemon-style menu (LYRICS / SOUNDS / TRIP), she sings along with synced lyrics,
-  greets you, remarks on new songs and reacts when you play a sound or reset the trip. Drive the
-  menu from your phone (the companion's own page) or the touchscreen. Her portraits come from
-  your own images (`tools/gen_avatar.py`).
+- **Avatar (companion):** a character of your choice becomes the companion's home screen, drawn
+  2x and centred on her own. She sings along with synced lyrics, greets you, remarks on new
+  songs and reacts when you play a sound or reset the trip. The Lyrics, Sounds and Trip screens,
+  Howl and trip reset (Vroom once the new deck offers it) are on the companion's own phone page.
+  Her portraits come from your own images (`tools/gen_avatar.py`).
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>
@@ -55,7 +60,7 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 |---|---|---|
 | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `cyd` | ESP32, no PSRAM. Optional speaker on the 2-pin SPEAK connector. |
 | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | 8 MB PSRAM, 16 MB flash, ES8311 codec and speaker. |
-| A second CYD, as a lyrics screen | `cyd_companion` | Optional. Reads the S3's `/state`; needs the S3 with `REMOTE_TOKEN` set. |
+| A second CYD, as a companion screen | `cyd_companion` | Optional. Reads the S3's `/state`; needs the S3 with `REMOTE_TOKEN` set. |
 
 Both are 320×240 ILI9341 boards and run the same code. You also need a USB car charger
 (5 V, 2 A recommended) and a phone with a 2.4 GHz hotspot (on iPhone, turn on
@@ -71,7 +76,7 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
    with the redirect URI `http://127.0.0.1:8888/callback`.
 2. **Configure:** copy `include/config.example.h` to `src/config.h` (git-ignored) and fill in
    your WiFi networks, the app's client ID and secret, and your time zone. Networks are tried
-   in order, so put the phone hotspot where you want it.
+   in order: put the phone hotspot **first** (see [Two decks](#two-decks)).
 3. **Authorize:** run `python tools/spotify_auth.py`. It opens the browser and writes a refresh
    token into `src/config.h`.
 4. **Flash:** `pio run -e cyd -t upload` (or `-e s3`). Add `--upload-port <port>` if needed;
@@ -89,6 +94,26 @@ then flash the second CYD with `pio run -e cyd_companion -t upload`. It shows
 With an avatar file (see Make it yours) the companion serves its own menu remote at
 `http://172.20.10.11/?k=<REMOTE_TOKEN>` (its fixed hotspot address).
 
+## Two decks
+
+The new deck (S3) and the old one (a CYD, as the companion or on its own) are meant to share the
+iPhone hotspot. There each takes a fixed address, so a Home Screen bookmark never breaks (unless
+something already answers there); on any other network they use DHCP and mDNS names.
+
+| Deck | Build target | On the iPhone hotspot | mDNS name (other networks) | Phone page |
+|---|---|---|---|---|
+| New deck (S3) | `s3` | `172.20.10.10` | `cardeck.local` | `http://172.20.10.10/?k=<REMOTE_TOKEN>` |
+| Old deck as the companion | `cyd_companion` | `172.20.10.11` | `cardeck-companion.local` | `http://172.20.10.11/?k=<REMOTE_TOKEN>` (with an avatar) |
+| Old deck on its own | `cyd` | `172.20.10.11` | `cardeck-cyd.local` | `http://172.20.10.11/?k=<REMOTE_TOKEN>` |
+
+- **The hotspot goes first in `WIFI_NETWORKS`.** It gets two tries after a drop, and the fixed
+  addresses are pinned only on an iPhone hotspot. A deck stays on the network it joined; off the
+  hotspot the companion finds the S3 by its mDNS name.
+- **Home WiFi:** the ESP32 speaks 2.4 GHz only. If the router isolates clients, or puts 2.4 and
+  5 GHz on separate networks, a phone or PC on the other band can't reach the decks' pages even
+  while the two decks see each other (seen 2026-10-15: "Destination host unreachable" from a PC
+  on 5 GHz). Use the hotspot, or join the phone or PC to the same 2.4 GHz network.
+
 ## Make it yours
 
 All personal media is git-ignored and embedded at build time. Without it the deck uses
@@ -97,15 +122,19 @@ built-in defaults.
 | What | How | Default |
 |---|---|---|
 | Boot sound | `python tools/gen_greeting.py my.wav` → `data/greeting.pcm` (up to 13 s) | a synthesized chime |
+| Second boot sound (S3) | `gen_greeting.py --alt my.wav` → `data/greeting_alt.pcm`, picked at random each boot | the boot sound only |
 | Montage sounds | `gen_greeting.py --opener` / `--finale my.wav` | silent |
 | Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (needs ffmpeg) | no montage |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
+| Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; needs ffmpeg) | none: boots to the night drive |
+| Wolf howl (S3) | `python tools/gen_howl.py wolf.ogg` → `data/howl.pcm` (cut 13-19.5 s by default, `--start`/`--end`; needs ffmpeg), for example the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) | a synthesised howl |
 | Avatar (companion) | images + `avatar-photos/avatar.json`, then `python tools/gen_avatar.py` (needs ffmpeg; see the script's header) | lyrics only |
 | Car sprite | edit and run `python tools/gen_car_sprite.py` (`--png out.png` previews it) | a silver sedan |
 
 Convert other audio formats to WAV first, for example `ffmpeg -i in.mp3 in.wav`. After
 changing your media, run `python tools/media_sizes.py record` and commit
-`data/media_sizes.txt` (sizes only) so CI checks the flash budget with your real sizes.
+`data/media_sizes.txt` (sizes only): CI builds stand-ins of those sizes, so its flash check
+counts your real media on every deck.
 
 ## How it works
 
@@ -126,9 +155,10 @@ powershell -ExecutionPolicy Bypass -File tools\run_tests.ps1   # host unit tests
 pio run -e cyd -e s3                                            # both firmwares
 ```
 
-CI builds both boards and both hardware checks, enforces the flash budget, and runs the
-host tests with ASan/UBSan and again as 32-bit. See [CONTRIBUTING.md](CONTRIBUTING.md) for
-setup, test rules and commit style.
+CI builds both boards, the companion and both hardware checks, enforces the flash budget
+(`cyd`, `cyd_companion`, `s3`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
+the media tool tests (`python -m unittest discover -s tools -p "test_gen_*.py"`). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for setup, test rules and commit style.
 
 ### Versioning
 

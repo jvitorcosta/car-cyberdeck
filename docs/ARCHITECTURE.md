@@ -36,6 +36,16 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   16 kHz, played at 32 kHz: IDF 4.4 DAC mode mis-clocks below ~20 kHz) streamed by I2S0 to
   the built-in DAC on GPIO 26 at 30 % volume, noise-shaped down to the DAC's 8 bits, in a
   one-shot task that frees the driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
+  The S3 plays it through the ES8311 after the intro and picks between `data/greeting.pcm` and
+  `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`) at random each boot (`util/greetpick`).
+- **Intro video** (`ui/intro`, `util/introclock`, S3 only) — plays first at boot, on its own task,
+  while WiFi connects and the network task logs into Spotify underneath; then the greeting and
+  the night drive. `data/intro.bin` (from `tools/gen_intro.py`; `tools/intro_clip.py` writes an
+  empty one that turns it off) holds 320×240 baseline JPEG frames in the montage's container, 20
+  fps, with `data/intro.pcm` (48 kHz mono) as its sound. Frames are decoded with JPEGDEC and
+  pushed without DMA (~50 ms a frame: `initDMA()` left every later draw black); `introclock`
+  picks the frame by time, so late frames are skipped instead of slowing the clip. If the task
+  can't start, the deck skips the intro.
 - **Boot scene** (`ui/bootscene`, `ui/car_sprite`, `ui/montage`, `util/bootanim`,
   `util/loudness`) — own task at boot; cruising: sky drawn once, y 72–239 re-rendered through one
   320×24 strip (15 KB, freed before the montage); brake: whole-screen fade; montage: JPEG frames
@@ -46,17 +56,24 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   certificate) plus a bundled Pokémon per cause on the battle platform with a speech bubble,
   4 fps, pushed in 4-row strips. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
-- **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`) — off unless `REMOTE_TOKEN`
-  is set. A one-button page on port 80 (`http://cardeck.local/`, mDNS) served from the UI
-  loop; `POST /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays,
-  and the howl is synthesised while it plays (`audio/greeting`).
+- **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`,
+  `util/qrfit`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
+  mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority
+  task, never the UI loop. It reads `GET /state` every 5 s (now playing, the deck's status,
+  network, the sound buttons) and has a Home Screen icon (`GET /icon.png`, public). `POST
+  /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. On the S3 the
+  howl is the real recording in `data/howl.pcm` (`tools/gen_howl.py`, 48 kHz) when the build has
+  one; otherwise, and always on the CYD, it is synthesised while it plays (`audio/greeting`).
+  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). On the S3 the "Nothing playing"
+  screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` picks a version ≤ 3).
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with
   `util/{jsonflat,stateparse}` and hands the UI loop a snapshot; the UI loop picks the line to
   show from the song position plus the time since the poll (`util/lyricclock`) and draws it at
   2x (`drawRunScaled`). The S3 side builds `/state` in `util/statejson` and keeps the trip in
-  `util/tripclock`. v1 is lyrics only; `util/weather` is in place for the dashboard.
+  `util/tripclock`. It started as lyrics only (v1); the avatar home below added the screens and
+  buttons. `util/weather` is in place but not wired in.
 - **Avatar home** (`companion/{avatarview,screens,touch,phone,app}`, `util/{avatarbin,
   avatarlines,avatarscene,avatarsing,menunav,press,touchmap,touchguard,phonepress}`) — companion
   only. `data/avatar.bin` (from `tools/gen_avatar.py`; `tools/avatar_clip.py` writes an empty one
@@ -73,13 +90,15 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   address through blips (`deckaddr`), and after 30 s without the S3 (`follow`) moves to the
   other network if a quick scan finds it. Online means connected with an address; "connected
   without an address" reconnects on the second check in a row (`netup`).
-- **Pure, host-tested modules** (one suite each under `test/`) — `ui/{theme,icon_map,accents,
-  cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,labels,car_sprite,montage}`,
-  `pokemon/dex`, `util/{animdata,walkanim,walkrect,netplan,lyricstatus,interp,text,glyphrun,
-  lrcstream,lyricbuf,artmap,ctxcache,dexset,genre,genrebadge,rgb565,daynight,bootanim,loudness,
-  bios,linkstatus,howl,remotegate,tripclock,jsonflat,statejson,stateparse,lyricclock,pollpace,
-  weather,avatarbin,avatarlines,avatarscene,avatarsing,menunav,press,touchmap,touchguard,
-  phonepress,netup,roam,follow,deckaddr}`.
+- **Pure, host-tested modules** (suites under `test/`, one per module except `lyricstatus` in
+  `netplan`'s, `pollpace` in `lyricclock`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
+  accents,cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,car_sprite,montage}`,
+  `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
+  avatarscene,avatarsing,bios,bootanim,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
+  genrebadge,glyphrun,greetpick,hotspotip,howl,interp,introclock,jsonflat,linkstatus,loudness,
+  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
+  pollpace,press,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,text,touchguard,
+  touchmap,tripclock,version,walkanim,walkrect,weather}`.
 
 ## Layers
 

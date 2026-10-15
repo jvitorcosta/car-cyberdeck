@@ -23,6 +23,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   on the CYD, or the deck's IP) shows a Howl button
   that plays a synthesised wolf howl on the deck while it keeps playing. Off unless
   `REMOTE_TOKEN` is set in `config.h`.
+- The phone page opens full-screen from the iPhone Home Screen with its own icon, and shows
+  what's playing and the deck's status. On the iPhone hotspot the decks take fixed addresses,
+  `172.20.10.10` (S3) and `172.20.10.11` (CYD), unless something already answers there, so a
+  bookmark keeps working; DHCP on any other network. The S3's "Nothing playing" screen shows
+  the page's link as a QR code.
 - Companion screen (`cyd_companion`): a second CYD shows the S3's current lyric line at double
   size with the next line dimmed, and moves to the next line on its own clock between polls.
   New `config.h` option `COMPANION_DECK` (the S3's address).
@@ -42,6 +47,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - When Spotify answers 429 (too many requests), the deck waits as long as Spotify's
   `Retry-After` asks (falling back to 8, 16, 32, then 60 s), skips the player-details call,
   and shows **Spotify busy...** with the time left right away.
+- Fewer Spotify requests while nothing is playing: a "nothing playing" answer asks the player
+  only when there is a song on screen to keep.
+- The config template (`include/config.example.h`) lists the hotspot first.
+- CI also builds the companion, checks its flash budget, counts the S3's real intro, howl and
+  greeting sizes in its flash check, and runs the media tool tests.
 
 ### Fixed
 - The S3 froze its network task ("No internet", stale songs) while plugged into a PC with no
@@ -55,6 +65,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   stay there. The companion finds the new deck by name (`cardeck`, mDNS) off the hotspot, and
   after 30 s without it moves to the other network only if that one is in range (in the car it
   never leaves the hotspot).
+- `GET /state` no longer fails (HTTP 500, the companion slowing to 5 s polls) with a long title
+  and long lyric lines: its buffer is now 2 KB.
+- The S3 no longer hangs at boot when the intro's task can't start: it skips the intro.
 - After a hotspot reconnect the WiFi driver could report "connected" with no address, and the
   deck failed every Spotify lookup for ~40 s. Online now means connected with an address, so it
   reconnects within ~5-10 s.
