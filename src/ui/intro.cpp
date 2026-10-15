@@ -67,12 +67,13 @@ void start(TFT_eSPI& t) {
     s_tft = &t;
     s_playing = true;
     t.fillScreen(TFT_BLACK);
+    // The sound starts first: started after the decode task (priority 2, busy from its first
+    // frame), its task got going late and played the 14 s clip in 24 s, full of gaps.
+    greeting::playIntro();
     if (xTaskCreatePinnedToCore(task, "intro", 6144, nullptr, 2, nullptr, 1) != pdPASS) {
         s_playing = false;     // wait() would spin forever and the deck never boot
-        Serial.println("[intro] no memory for its task: skipped");
-        return;
+        Serial.println("[intro] no memory for its task: skipped (its sound still plays)");
     }
-    greeting::playIntro();     // the clip's sound, started with the first frame
 }
 
 bool playing() { return s_playing; }
