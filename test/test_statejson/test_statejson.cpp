@@ -44,6 +44,25 @@ void test_writes_the_whole_state() {
     TEST_ASSERT_EQUAL_size_t(strlen(out), n);
 }
 
+// The deck's own buffer (statejson::MAX_JSON) holds the largest state it can produce: every
+// string at the size the deck stores it (track and artist 96, status 24, detail 48, ssid 33,
+// lyric lines 160), all of them quotes (escaped to 2 bytes each), every number at its widest.
+void test_the_largest_state_fits_max_json() {
+    static char track[96], artist[96], title[24], detail[48], ssid[33], line[160], next[160];
+    char* fields[] = {track, artist, title, detail, ssid, line, next};
+    const size_t sizes[] = {sizeof track, sizeof artist, sizeof title, sizeof detail, sizeof ssid,
+                            sizeof line, sizeof next};
+    for (int i = 0; i < 7; ++i) { memset(fields[i], '"', sizes[i] - 1); fields[i][sizes[i] - 1] = 0; }
+    statejson::State s = sample();
+    s.track = track; s.artist = artist; s.title = title; s.detail = detail; s.ssid = ssid;
+    s.line = line; s.next = next;
+    s.rssi = -2147483647; s.uptimeS = s.trackGen = s.progressMs = s.durationMs = s.tripS = 4294967295u;
+    s.lineStartMs = s.nextStartMs = 4294967295u;
+    s.lyricKind = "instrumental";
+    static char out[statejson::MAX_JSON];
+    TEST_ASSERT_NOT_EQUAL(0, statejson::write(s, out, sizeof out));
+}
+
 void test_lyric_kind_names() {
     using lyricstatus::Status;
     TEST_ASSERT_EQUAL_STRING("searching", statejson::lyricKindName(Status::Searching));
@@ -93,6 +112,7 @@ void test_too_small_buffer_gives_an_empty_string_not_half_json() {
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_writes_the_whole_state);
+    RUN_TEST(test_the_largest_state_fits_max_json);
     RUN_TEST(test_lyric_kind_names);
     RUN_TEST(test_escapes_quotes_backslashes_and_control_characters);
     RUN_TEST(test_utf8_passes_through);

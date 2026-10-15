@@ -11,6 +11,7 @@
 #include "../util/hotspotip.h"
 #include "../util/pollpace.h"
 #include "../util/readguard.h"
+#include "../util/statejson.h"
 
 #ifndef COMPANION_DECK
 #define COMPANION_DECK "172.20.10.10"   // the S3's fixed address on the iPhone hotspot
@@ -22,7 +23,7 @@
 namespace decklink {
 static SemaphoreHandle_t s_lock = nullptr;
 static View s_view{};
-static char s_body[1536];   // /state is < 1 KB; static: off the task stack
+static char s_body[statejson::MAX_JSON];   // the largest /state; static: off the task stack
 static deckaddr::Keep s_deckIp;   // the new deck's address off the hotspot (mDNS), kept through blips
 static bool s_mdns = false;
 static follow::Follow s_follow;

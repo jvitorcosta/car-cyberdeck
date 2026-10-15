@@ -99,7 +99,7 @@ bool link(char* out, size_t n) {
 static void handleState() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)
-    static char out[768];
+    static char out[statejson::MAX_JSON];   // 768 B overflowed with a long title and lyric lines
     static shared::LyricPair lp;   // static: two 160-byte lines, off this task's stack
     shared::snapshot(st);
     char title[sizeof s_title], detail[sizeof s_detail];
