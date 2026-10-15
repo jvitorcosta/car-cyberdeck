@@ -94,8 +94,9 @@ void test_no_pokemon_lines_without_a_pokemon() {
 
 // Reactions always speak: no gap, no odds.
 void test_reactions_always_speak() {
-    const Event evs[] = {Event::Howl, Event::Vroom, Event::TripReset, Event::Busy, Event::Unreachable};
-    for (int i = 0; i < 5; ++i) {
+    const Event evs[] = {Event::Howl, Event::Vroom, Event::TripReset, Event::Busy, Event::Unreachable,
+                         Event::CarOn, Event::CarOff};
+    for (int i = 0; i < (int)(sizeof evs / sizeof evs[0]); ++i) {
         avatarlines::In in{evs[i], true, 0, 1, "", "", ""};   // just spoke; rnd fails the odds
         TEST_ASSERT_TRUE(avatarlines::pick(in, out));
         TEST_ASSERT_EQUAL_STRING(avatarlines::REACT[i].text, out.text);
@@ -103,6 +104,8 @@ void test_reactions_always_speak() {
     }
     TEST_ASSERT_EQUAL_STRING("I can't reach the deck, darling.", avatarlines::REACT[4].text);
     TEST_ASSERT_EQUAL_STRING("One at a time, darling!", avatarlines::REACT[3].text);
+    TEST_ASSERT_EQUAL_STRING("Car connected, darling! Let's see what she can do~", avatarlines::REACT[5].text);
+    TEST_ASSERT_EQUAL_STRING("The car's asleep~", avatarlines::REACT[6].text);
 }
 
 int main() {
