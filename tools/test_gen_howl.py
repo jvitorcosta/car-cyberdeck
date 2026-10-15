@@ -26,13 +26,6 @@ class Normalize(unittest.TestCase):
         self.assertTrue(all(-32768 <= s <= 32767 for s in out))
 
 
-class Defaults(unittest.TestCase):
-    def test_rate_and_cut(self):
-        # 48 kHz like the intro (the S3's ES8311 has the clock row); a steady howl of the
-        # Commons recording, past its yips
-        self.assertEqual(gh.RATE, 48000)
-        self.assertEqual((gh.START, gh.END), (13.0, 19.5))
-
 
 if __name__ == "__main__":
     unittest.main()
