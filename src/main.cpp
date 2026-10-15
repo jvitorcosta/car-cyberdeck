@@ -206,13 +206,14 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
 // The phone-remote link as a QR code for the "Nothing playing" screen (esp_qrcode, built into
 // the core). Rebuilt when the link changes (another network, another address), checked at most
 // every 5 s: net::deviceIp() allocates a String.
-static uint8_t s_qrBits[(29 * 29 + 7) / 8];   // qrfit::MAX_VERSION 3: 29 x 29 modules
+constexpr int QR_N = qrfit::modules(qrfit::MAX_VERSION);   // modules per side (29)
+static uint8_t s_qrBits[(QR_N * QR_N + 7) / 8];
 static statusscene::Qr s_qr{s_qrBits, 0};
 
 static void copyQr(esp_qrcode_handle_t h) {
     const int n = esp_qrcode_get_size(h);
     s_qr.size = 0;
-    if (n > 29) return;
+    if (n > QR_N) return;
     memset(s_qrBits, 0, sizeof s_qrBits);
     for (int y = 0; y < n; ++y)
         for (int x = 0; x < n; ++x)

@@ -1,11 +1,12 @@
 #pragma once
 #include <cstdint>
-// Boot greeting: plays the embedded clip (data/greeting.pcm, 16-bit mono 16 kHz) once on the
-// CYD SPEAK connector (GPIO 26, built-in DAC through I2S0). Runs in its own short-lived task,
-// so boot carries on while it plays; the task frees the I2S driver and itself when done.
+// The deck's sound clips (boot greeting, montage opener and finale, the S3's intro sound, howl):
+// embedded 16-bit mono PCM played on the board's audio output (audio/sink.h: the CYD's DAC on
+// its SPEAK connector, the S3's ES8311 codec). Each plays in its own short-lived task, one at a
+// time, so boot carries on while it plays; the task frees the audio driver and itself when done.
 namespace greeting {
 void play();                    // S3: the original or data/greeting_alt.pcm, at random (util/greetpick)
-uint32_t durationMs();          // clip length (16 kHz)
+uint32_t durationMs();          // this boot's greeting's length
 uint8_t level(uint32_t ms);     // clip loudness 0-255 over 20 ms at `ms`; 0 past the end. Ignores VOLUME.
 // Finale (data/finale.pcm, git-ignored, may be empty): played by the boot scene so it ends with
 // the montage's fade to black. Never overlaps the greeting (the scene only ends after it).

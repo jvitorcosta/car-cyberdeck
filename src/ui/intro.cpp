@@ -1,6 +1,6 @@
 #include "intro.h"
 #include <Arduino.h>
-#include <cstring>
+#include <atomic>
 #include "montage.h"
 #include "../util/introclock.h"
 #include "../audio/greeting.h"
@@ -9,14 +9,14 @@
 #include <FS.h>
 using fs::File;            // JPEGDEC.h names the global File, which this core's FS.h may not export
 #include <JPEGDEC.h>
-extern const uint8_t _binary_data_intro_bin_start[] asm("_binary_data_intro_bin_start");
-extern const uint8_t _binary_data_intro_bin_end[] asm("_binary_data_intro_bin_end");
+#include "../core/embed.h"
+EMBED(data_intro_bin);
 #endif
 
 namespace intro {
 #ifdef BOARD_S3
 static TFT_eSPI* s_tft = nullptr;
-static volatile bool s_playing = false;
+static std::atomic<bool> s_playing{false};   // set here, cleared by the intro task
 
 // JPEGDEC (bitbank2): ~2x faster than tjpgd on the S3, ~52 ms a frame with the push. ~18 KB of
 // state: static, the S3 has RAM to spare. No DMA: TFT_eSPI's initDMA() on this board left every
@@ -59,16 +59,21 @@ static void task(void*) {
 }
 
 void start(TFT_eSPI& t) {
-    const size_t len = (size_t)(_binary_data_intro_bin_end - _binary_data_intro_bin_start);
-    if (!montage::parse(_binary_data_intro_bin_start, len) || montage::count() == 0) {
+    const size_t len = EMBED_SIZE(data_intro_bin);
+    if (!montage::parse(EMBED_DATA(data_intro_bin), len) || montage::count() == 0) {
         Serial.println("[intro] none");
         return;
     }
     s_tft = &t;
     s_playing = true;
     t.fillScreen(TFT_BLACK);
-    greeting::playIntro();     // the clip's sound, started with the first frame
-    xTaskCreatePinnedToCore(task, "intro", 6144, nullptr, 2, nullptr, 1);
+    // The sound starts first: started after the decode task (priority 2, busy from its first
+    // frame), its task got going late and played the 14 s clip in 24 s, full of gaps.
+    greeting::playIntro();
+    if (xTaskCreatePinnedToCore(task, "intro", 6144, nullptr, 2, nullptr, 1) != pdPASS) {
+        s_playing = false;     // wait() would spin forever and the deck never boot
+        Serial.println("[intro] no memory for its task: skipped (its sound still plays)");
+    }
 }
 
 bool playing() { return s_playing; }

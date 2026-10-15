@@ -1,11 +1,13 @@
 #pragma once
 // Copy to src/config.h and fill in. src/config.h is git-ignored.
 
-// Up to 3 WiFi networks tried in order (home for dev, phone hotspot for car).
+// Up to 3 WiFi networks tried in order. The phone hotspot (the car) goes FIRST: it gets two tries
+// after a drop (util/roam) and both decks pin fixed addresses on it (172.20.10.10 / .11, iPhone
+// only). Enable "Maximize Compatibility" on the iPhone: the ESP32 only speaks 2.4 GHz.
 struct WifiCred { const char* ssid; const char* pass; };
 static const WifiCred WIFI_NETWORKS[] = {
-    {"YOUR_HOME_SSID", "YOUR_HOME_PASSWORD"},
     {"YOUR_IPHONE_HOTSPOT", "YOUR_HOTSPOT_PASSWORD"},
+    {"YOUR_HOME_SSID", "YOUR_HOME_PASSWORD"},
 };
 static const int WIFI_NETWORK_COUNT = 2;
 

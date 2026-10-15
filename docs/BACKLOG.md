@@ -17,11 +17,9 @@ Open items, not scheduled. Newest decisions first within each section.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
-- **Companion screen** (built 2026-10-13, never run on the board): flash `cyd_companion` to
-  the CYD, both decks on the hotspot. Check the lyric line follows the S3 within ~0.3 s,
-  **Looking for the deck...** within ~2 s of unplugging the S3 and recovery within ~5 s, and
-  that `[mem]` stays stable over 10 min. Also open `/state` from Safari once to check the new
-  fields.
+- **Companion screen timing** (runs on the old deck since 2026-10-14): not yet measured. Check
+  the lyric line follows the S3 within ~0.3 s, **Looking for the deck...** within ~2 s of
+  unplugging the S3 and recovery within ~5 s, and that `[mem]` stays stable over 10 min.
 
 ## Investigate
 
@@ -35,10 +33,16 @@ Open items, not scheduled. Newest decisions first within each section.
   build-time settings fixed in the precompiled Arduino core (mbedTLS 16 KB input buffer, lwIP
   TCP window, WiFi RX buffer count): they need the arduino-as-ESP-IDF-component build.
 
+- **DMA for the S3 intro** (blocked, 2026-10-15): pushing frames by DMA from two buffers ran
+  at ~36 ms a frame, but TFT_eSPI's `initDMA()` on this board left every later draw black, with
+  or without `deInitDMA()`. Plain pushes take ~50 ms, so some frames of the 20 fps clip are
+  skipped. Worth another try only with a way to hand the bus back cleanly.
+
 ## Spotify rate limit
 
-- Both decks share one Spotify app, so they share its rate limit (both were blocked for
-  ~2 h on 2026-10-13). A second app for the CYD would split it.
+- Running `cyd` (the CYD's own Spotify build) next to the S3 shares one Spotify app, so both
+  share its rate limit (both were blocked for ~2 h on 2026-10-13). A second app for the CYD
+  would split it. The companion (`cyd_companion`) has no Spotify client and doesn't count.
 - Retry-After costs one extra request per 429 (`spclient::fetchRetryAfter`) because
   SpotifyArduino skips the headers; `tools/patch_spotify_lib.py` could capture it instead.
 
@@ -86,9 +90,9 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   where they joined; home WiFi is dev only, the car has only the hotspot.
 
 - **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
-  top strip with clock, trip and outside weather (`util/weather` is committed), Howl/Vroom and
-  trip-reset touch buttons (plan Task 5, with touch calibration via `hwcheck`). Plan:
-  `docs/superpowers/plans/2026-10-13-companion-screen.md`.
+  a top strip with the clock and outside weather (`util/weather` is committed, not wired in).
+  Howl, Vroom and trip reset are built (the avatar menu and its phone page), and the trip time
+  has its own screen. Plan: `docs/superpowers/plans/2026-10-13-companion-screen.md`.
 - **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
   extra: retro map"): gets its own plan.
 - **OBD2 car info** over a Bluetooth ELM327 dongle, after the companion.

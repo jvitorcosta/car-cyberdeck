@@ -209,9 +209,11 @@ void poll(AppState& st) {
     } else if (code == 204) {
         // currently-playing sometimes says 204 for minutes while the phone plays; /me/player
         // still knows (util/nowplaying). Ask it before showing "Nothing playing".
+        // Only with a song to keep: parked with nothing playing, every 4 s poll would ask twice.
         s_pdPlaying = false;
-        const int pc = s_sp->getPlayerDetails(onPlayerCheck, SPOTIFY_MARKET);
-        if (nowplaying::on204(pc, s_pdPlaying, st.trackName[0] != '\0') == nowplaying::On204::KeepTrack) {
+        const bool haveTrack = st.trackName[0] != '\0';
+        const int pc = haveTrack ? s_sp->getPlayerDetails(onPlayerCheck, SPOTIFY_MARKET) : 0;
+        if (nowplaying::on204(pc, s_pdPlaying, haveTrack) == nowplaying::On204::KeepTrack) {
             if (lastCode != 204) Serial.println("[spotify] poll 204 but /me/player says playing: keeping the song");
             st.isPlaying = true;
             st.progressMs = (uint32_t)s_pdProgress;

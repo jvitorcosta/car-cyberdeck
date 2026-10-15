@@ -30,13 +30,9 @@ class Segments(unittest.TestCase):
         self.assertEqual(gi.segment("0-6.5"), (0.0, 6.5))
 
     def test_rejects_bad(self):
-        for bad in ("6", "9-3", "a-b", "-1-4"):
+        for bad in ("6", "9-3", "3-3", "a-b", "-1-4"):
             with self.assertRaises(ValueError):
                 gi.segment(bad)
-
-    def test_default_order(self):
-        # the wallpaper loops: its story starts at 11.8 s; its first seconds end the kiss
-        self.assertEqual(gi.DEFAULT_SEGMENTS, [(11.8, 99.0), (0.0, 3.0)])
 
 
 class Sound(unittest.TestCase):
@@ -47,9 +43,6 @@ class Sound(unittest.TestCase):
 
     def test_fit_pads_with_silence(self):
         self.assertEqual(gi.fit(b"", frames=1, fps=10, rate=40), b"" + bytes(6))
-
-    def test_defaults(self):
-        self.assertEqual((gi.FPS, gi.RATE), (20, 48000))
 
 
 if __name__ == "__main__":

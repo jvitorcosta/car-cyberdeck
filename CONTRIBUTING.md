@@ -7,12 +7,17 @@ approach before you spend time on it.
 ## Setup
 
 1. Follow the README's [Quick start](README.md#quick-start) to build and flash a board.
+   For the serial tools (`tools/capture_serial.py`), `pip install -r tools/requirements.txt`
+   (pyserial); the generators (`tools/gen_*.py`) need only the standard library, and the media
+   ones ffmpeg on `PATH`.
 2. Install a host compiler for the unit tests: g++ on `PATH` (on Windows, MinGW-w64; or set
    `$env:MINGW_BIN`), then Unity once:
    `pio pkg install -e native -l throwtheswitch/Unity@2.6.0`.
 3. Run the tests: `powershell -ExecutionPolicy Bypass -File tools\run_tests.ps1`.
    One suite: `tools\ntest.ps1 test\<suite>\<suite>.cpp <module.cpp ...>`.
    (`pio test -e native` doesn't work with this layout.)
+4. Run the media tool tests (standard library only, no ffmpeg):
+   `python -m unittest discover -s tools -p "test_gen_*.py"`.
 
 ## Project layout
 
@@ -31,7 +36,9 @@ Code that can be pure belongs in `util/` with a test.
 
 ## Tests
 
-Every change to logic comes with a test, written first. What a test must earn:
+Every change to logic comes with a test, written first. Firmware logic goes in a Unity suite under
+`test/`; the media tools (`tools/gen_*.py`) have Python `unittest` tests next to them
+(`tools/test_gen_*.py`, see Setup). CI runs both. What a test must earn:
 
 - A test earns its place when a plausible change would make it fail **and** the failure points
   at a real problem: behaviour a user or another module relies on, a past bug, a bound, a wrap.
@@ -55,8 +62,9 @@ python tools/capture_serial.py <port> 600 session.log
 python tools/analyze_session.py session.log
 ```
 
-and mention the `[mem]` lines (free and largest block) before and after your change. Keep the
-CYD app partition under 97 % (CI enforces it).
+and mention the `[mem]` lines (free and largest block) before and after your change. Keep each
+deck's app partition (`cyd`, `cyd_companion`, `s3`) under 97 % (CI enforces it, counting your
+media's real sizes from `data/media_sizes.txt`).
 
 ## Commits and pull requests
 

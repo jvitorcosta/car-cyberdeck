@@ -20,16 +20,14 @@ Result lookup(const char* artist, uint32_t* genreId, int* rc) {
     *rc = 0;
     if (!artist || !artist[0]) return Result::None;
     if (!netcfg::linkUp()) { *rc = -1; return Result::Error; }
-    char* term = s_term;
-    char* url = s_url;
-    txt::urlEncode(artist, term, sizeof(s_term));
-    snprintf(url, sizeof(s_url),
-             "https://itunes.apple.com/search?term=%s&entity=musicArtist&limit=1&country=BR", term);
+    txt::urlEncode(artist, s_term, sizeof(s_term));
+    snprintf(s_url, sizeof(s_url),
+             "https://itunes.apple.com/search?term=%s&entity=musicArtist&limit=1&country=BR", s_term);
     WiFiClientSecure client;
     netcfg::secure(client);
     HTTPClient https;
     netcfg::streamed(https);
-    if (!https.begin(client, url)) { *rc = -1; return Result::Error; }
+    if (!https.begin(client, s_url)) { *rc = -1; return Result::Error; }
     https.addHeader("User-Agent", netcfg::USER_AGENT);
     *rc = https.GET();
     if (*rc != 200) { https.end(); return Result::Error; }

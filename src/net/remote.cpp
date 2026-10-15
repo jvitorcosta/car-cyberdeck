@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
-#include "../config.h"
+#include "remote_config.h"
 #include "wifi.h"
 #include "../audio/greeting.h"
 #include "../util/remotegate.h"
@@ -14,18 +14,6 @@
 #include "../util/interp.h"
 #include <WiFi.h>
 
-#ifndef REMOTE_TOKEN
-#define REMOTE_TOKEN ""   // older config.h: remote off
-#endif
-// Name on the local network: http://<REMOTE_NAME>.local/ (mDNS / Bonjour). Different per
-// board so both decks can be on at once.
-#ifndef REMOTE_NAME
-#ifdef BOARD_S3
-#define REMOTE_NAME "cardeck"
-#else
-#define REMOTE_NAME "cardeck-cyd"
-#endif
-#endif
 
 namespace remote {
 static WebServer* s_server = nullptr;   // created only when the remote is on
@@ -99,7 +87,7 @@ bool link(char* out, size_t n) {
 static void handleState() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)
-    static char out[768];
+    static char out[statejson::MAX_JSON];   // 768 B overflowed with a long title and lyric lines
     static shared::LyricPair lp;   // static: two 160-byte lines, off this task's stack
     shared::snapshot(st);
     char title[sizeof s_title], detail[sizeof s_detail];

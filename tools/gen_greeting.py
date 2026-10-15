@@ -12,6 +12,7 @@ data/greeting.pcm, which is git-ignored and, when present, replaces the default 
 build (tools/greeting_clip.py). Input: a PCM WAV of any rate/width/channels; convert other
 formats first (e.g. ffmpeg -i in.mp3 out.wav). Standard library only.
 """
+import argparse
 import math
 import os
 import struct
@@ -107,18 +108,26 @@ def write_pcm(x, path):
 
 
 def main():
-    if len(sys.argv) == 1:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    kind = ap.add_mutually_exclusive_group()
+    kind.add_argument("--finale", action="store_const", dest="out", const=FINALE_OUT)
+    kind.add_argument("--opener", action="store_const", dest="out", const=OPENER_OUT)
+    kind.add_argument("--alt", action="store_const", dest="out", const=ALT_OUT)
+    ap.add_argument("clip", nargs="?", help="a PCM WAV; none = rebuild the default chime")
+    a = ap.parse_args()
+    if a.clip is None:
+        if a.out:
+            ap.error("--finale/--opener/--alt need a clip")
         write_pcm(chime(), DEFAULT_OUT)
         return
-    out = (FINALE_OUT if "--finale" in sys.argv else OPENER_OUT if "--opener" in sys.argv
-           else ALT_OUT if "--alt" in sys.argv else USER_OUT)
-    args = [a for a in sys.argv[1:] if a not in ("--finale", "--opener", "--alt")]
-    x, rate = read_wav(args[0])
+    if not os.path.isfile(a.clip):
+        sys.exit(f"gen_greeting: no such file {a.clip}")
+    x, rate = read_wav(a.clip)
     x = trim_normalize(resample(x, rate))
     if len(x) > RATE * MAX_SECONDS:
         sys.exit("gen_greeting: clip is %.2f s after trimming; keep it under %.0f s"
                  % (len(x) / RATE, MAX_SECONDS))
-    write_pcm(x, out)
+    write_pcm(x, a.out or USER_OUT)
 
 
 if __name__ == "__main__":

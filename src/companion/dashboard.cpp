@@ -6,6 +6,7 @@
 #include "../ui/theme.h"
 #include "../util/glyphrun.h"
 #include "../util/lyricclock.h"
+#include "../util/text.h"
 
 namespace dashboard {
 static constexpr int W = 320, H = 240;
@@ -49,15 +50,15 @@ static void bigLine(TFT_eSPI& t, const char* text, int x0, int cy) {
 
 static void status(TFT_eSPI& t, const char* text) {
     if (strcmp(text, s_status) == 0) return;
-    strncpy(s_status, text, sizeof s_status - 1);
+    txt::copy(s_status, text, sizeof s_status);
     t.fillRect(0, H - 22, W, 22, theme::pal().top);
     if (text[0]) ui::drawText(t, text, W / 2, H - 11, theme::pal().iconOff, TFT_BLACK, MC_DATUM, W - 16);
 }
 
 static void lyrics(TFT_eSPI& t, const char* big, const char* small) {
     if (strcmp(big, s_big) == 0 && strcmp(small, s_small) == 0) return;
-    strncpy(s_big, big, sizeof s_big - 1);
-    strncpy(s_small, small, sizeof s_small - 1);
+    txt::copy(s_big, big, sizeof s_big);
+    txt::copy(s_small, small, sizeof s_small);
     const int x0 = avatarview::on() ? 104 : 0;   // she keeps the left side
     t.fillRect(x0, 0, W - x0, avatarview::on() ? menunav::BAR.y - 2 : H - 22, theme::pal().top);
     bigLine(t, big, x0, 92);

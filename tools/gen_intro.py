@@ -30,13 +30,13 @@ DEFAULT_SEGMENTS = [(11.8, 99.0), (0.0, 3.0)]
 
 
 def segment(text):
-    """'6-99' -> (6.0, 99.0); ValueError unless 0 <= start < end."""
+    """'6-99' -> (6.0, 99.0); ValueError unless start < end (a '-' can't start a number here)."""
     a, sep, b = text.partition("-")
     if not sep:
         raise ValueError(f"segment {text!r}: want START-END")
     start, end = float(a), float(b)
-    if start < 0 or end <= start:
-        raise ValueError(f"segment {text!r}: want 0 <= START < END")
+    if end <= start:
+        raise ValueError(f"segment {text!r}: want START < END")
     return start, end
 
 
