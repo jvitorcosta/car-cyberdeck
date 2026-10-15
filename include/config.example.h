@@ -36,3 +36,8 @@ static const int WIFI_NETWORK_COUNT = 2;
 // Companion screen (env cyd_companion): the new deck it reads. 172.20.10.10 is the S3's fixed
 // address on the iPhone hotspot. Both decks need the same REMOTE_TOKEN.
 #define COMPANION_DECK        "172.20.10.10"
+
+// OBD gauges on the companion (ELM327 over Bluetooth Classic, read-only). All optional.
+// #define OBD_NAME           "OBDII"   // the adapter's exact Bluetooth name (default: any OBD/ELM/V-LINK)
+// #define OBD_PIN            "1234"    // its pairing PIN (1234, 0000 or 8888 on most clones)
+// #define OBD_REDLINE        6500      // the RPM bar's full scale

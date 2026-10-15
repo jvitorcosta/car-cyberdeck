@@ -17,6 +17,7 @@
 #include "avatarview.h"
 #include "dashboard.h"
 #include "link.h"
+#include "obdlink.h"
 #include "phone.h"
 #include "screens.h"
 #include "touch.h"
@@ -122,6 +123,7 @@ void setup() {
     net::connectAny();          // if it fails, the link task keeps retrying (net::loop)
     netclock::begin();          // night palette
     decklink::start();
+    obdlink::start();           // Bluetooth to the ELM327 (its own task); gauges when it answers
     if (avatarview::begin()) {
         touch::begin();
         phone::begin();
