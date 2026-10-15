@@ -19,6 +19,7 @@ summary is now [`../HISTORY.md`](../HISTORY.md).
 | 2026-10-09 | `specs/2026-10-09-s3-port-design.md` | `plans/2026-10-09-s3-port.md` | implemented (8ddb104, 25b64a1) |
 | 2026-10-13 | `specs/2026-10-13-companion-screen-design.md` | `plans/2026-10-13-companion-screen.md` | v1 cut to lyrics only (2eaf363); later extended by the avatar home (trip time on its Trip screen, buttons on the phone page); the clock and weather strip and the retro map not built |
 | 2026-10-14 | `specs/2026-10-14-avatar-design.md` | `plans/2026-10-14-avatar.md` | step 1 superseded: moved from the S3 to the companion during implementation (spec revision, ac13e2c); converter, file format, lines and singing kept |
+| 2026-10-15 | `specs/2026-10-15-obd-gauges-design.md` | `plans/2026-10-15-obd-gauges.md` | implemented on the companion; on-car check pending |
 | 2026-10-14 | `specs/2026-10-14-avatar-home-design.md` | `plans/2026-10-14-avatar-home.md` | implemented (2303503); revised to phone-driven (touch layer faulty, e089b4d) and Home shows her alone, centred (1473f97) |
 
 Plans keep the machine-specific commands they were executed with (`.devtools\…`, `COM11`);

@@ -95,7 +95,9 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   has its own screen. Plan: `docs/superpowers/plans/2026-10-13-companion-screen.md`.
 - **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
   extra: retro map"): gets its own plan.
-- **OBD2 car info** over a Bluetooth ELM327 dongle, after the companion.
+- **OBD2 car info, next** (gauges built 2026-10-15 as a showcase on the companion, Bluetooth
+  Classic ELM327): fault codes (read, then clear with a confirm), a CAR button on the phone
+  page, trip logging, BLE / WiFi adapters.
 
 - **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
   skip/pause through the deck, a screen flash. After the hotspot check above.

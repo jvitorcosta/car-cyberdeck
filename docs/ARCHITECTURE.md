@@ -84,6 +84,13 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   the screens and buttons. Actions go to the S3 through `companion/link` (POST `/play`,
   `/trip/reset`). Her lines come from `avatarlines` and type out in the message bar
   (`avatarscene`); she sings along by `avatarsing`.
+- **OBD gauges** (`companion/{obdlink,gauges}`, `util/{obd,obdplan}`) — companion only: a task
+  owns `BluetoothSerial` (master), discovers the ELM327 by name, connects with its PIN, sends
+  `ATZ ATE0 ATL0 ATS0 ATSP0`, then asks mode 01 PIDs in `obdplan`'s order (RPM and speed each
+  cycle, the slow values every 2 s, unsupported ones every 30 s) and publishes a snapshot under
+  a lock. `obd` parses replies tolerantly (echo, SEARCHING..., CAN headers, several ECUs) and
+  never sends mode 03/04. The app shows `gauges` while the link is live (5 s hold, `obdplan`),
+  her home otherwise; she says when the car comes and goes.
 - **Network choice** (`net/wifi`, `util/{roam,follow,deckaddr,netup,hotspotip}`) — config.h
   order (the hotspot first; two tries after a drop from it, `roam`), then a deck stays put. The
   companion reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`), keeps that
@@ -96,7 +103,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
   avatarscene,avatarsing,bios,bootanim,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
   genrebadge,glyphrun,greetpick,hotspotip,howl,interp,introclock,jsonflat,linkstatus,loudness,
-  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
+  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,obd,obdplan,phonepress,
   pollpace,press,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.
 

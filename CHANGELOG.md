@@ -6,6 +6,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
+- OBD gauges on the companion (old deck): over a Bluetooth Classic ELM327 it reads RPM, speed,
+  coolant, engine load, intake air, throttle and battery voltage, and shows them as Pokémon
+  HP-style bars while the car answers; the avatar's home comes back when it stops. Read-only.
+  Optional `OBD_NAME`, `OBD_PIN`, `OBD_REDLINE` in `src/config.h`.
 - Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.
   She sings along with synced lyrics, greets you, remarks on new songs (at most every 5 min) and
   reacts to Howl and trip reset. The Lyrics, Sounds and Trip screens open from the companion's
