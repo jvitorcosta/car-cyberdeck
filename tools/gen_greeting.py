@@ -5,6 +5,7 @@
   python tools/gen_greeting.py clip.wav     convert your own sound   -> data/greeting.pcm
   python tools/gen_greeting.py --finale clip.wav   boot-scene finale (ends with the montage) -> data/finale.pcm
   python tools/gen_greeting.py --opener clip.wav   montage opener (starts with the montage) -> data/opener.pcm
+  python tools/gen_greeting.py --alt clip.wav      S3 only: a second greeting, picked at random -> data/greeting_alt.pcm
 
 The default chime is synthesized here (original, safe to commit). Your own clip goes to
 data/greeting.pcm, which is git-ignored and, when present, replaces the default on the next
@@ -27,6 +28,7 @@ DEFAULT_OUT = os.path.join(ROOT, "data", "greeting_default.pcm")
 USER_OUT = os.path.join(ROOT, "data", "greeting.pcm")
 FINALE_OUT = os.path.join(ROOT, "data", "finale.pcm")
 OPENER_OUT = os.path.join(ROOT, "data", "opener.pcm")
+ALT_OUT = os.path.join(ROOT, "data", "greeting_alt.pcm")
 
 
 def chime():
@@ -108,8 +110,9 @@ def main():
     if len(sys.argv) == 1:
         write_pcm(chime(), DEFAULT_OUT)
         return
-    out = FINALE_OUT if "--finale" in sys.argv else OPENER_OUT if "--opener" in sys.argv else USER_OUT
-    args = [a for a in sys.argv[1:] if a not in ("--finale", "--opener")]
+    out = (FINALE_OUT if "--finale" in sys.argv else OPENER_OUT if "--opener" in sys.argv
+           else ALT_OUT if "--alt" in sys.argv else USER_OUT)
+    args = [a for a in sys.argv[1:] if a not in ("--finale", "--opener", "--alt")]
     x, rate = read_wav(args[0])
     x = trim_normalize(resample(x, rate))
     if len(x) > RATE * MAX_SECONDS:

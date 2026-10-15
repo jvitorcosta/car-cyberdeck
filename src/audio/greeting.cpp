@@ -5,6 +5,7 @@
 #include "sink.h"
 #include "../util/loudness.h"
 #include "../util/howl.h"
+#include "../util/greetpick.h"
 
 extern const uint8_t _binary_data_greeting_pcm_start[] asm("_binary_data_greeting_pcm_start");
 extern const uint8_t _binary_data_greeting_pcm_end[] asm("_binary_data_greeting_pcm_end");
@@ -15,12 +16,16 @@ extern const uint8_t _binary_data_opener_pcm_end[] asm("_binary_data_opener_pcm_
 #ifdef BOARD_S3
 extern const uint8_t _binary_data_intro_pcm_start[] asm("_binary_data_intro_pcm_start");
 extern const uint8_t _binary_data_intro_pcm_end[] asm("_binary_data_intro_pcm_end");
+extern const uint8_t _binary_data_howl_pcm_start[] asm("_binary_data_howl_pcm_start");
+extern const uint8_t _binary_data_howl_pcm_end[] asm("_binary_data_howl_pcm_end");
+extern const uint8_t _binary_data_greeting_alt_pcm_start[] asm("_binary_data_greeting_alt_pcm_start");
+extern const uint8_t _binary_data_greeting_alt_pcm_end[] asm("_binary_data_greeting_alt_pcm_end");
 #endif
 
 namespace greeting {
 
 constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (16-bit signed LE)
-constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py output rate
+constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_howl.py output rate
 constexpr int CHUNK = 128;               // samples per audiosink::write
 
 // Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
@@ -40,7 +45,29 @@ static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_V
 static const Clip INTRO = {_binary_data_intro_pcm_start,
                            (size_t)(_binary_data_intro_pcm_end - _binary_data_intro_pcm_start) / 2,
                            "intro", &audiosink::GREETING_VOLUME, INTRO_RATE};
+// A real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none.
+static const Clip WOLF = {_binary_data_howl_pcm_start,
+                          (size_t)(_binary_data_howl_pcm_end - _binary_data_howl_pcm_start) / 2,
+                          "howl", &audiosink::GREETING_VOLUME, INTRO_RATE};
+// The second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot.
+static const Clip GREETING_ALT = {_binary_data_greeting_alt_pcm_start,
+                                  (size_t)(_binary_data_greeting_alt_pcm_end - _binary_data_greeting_alt_pcm_start) / 2,
+                                  "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
 #endif
+
+// This boot's greeting, picked once: play(), durationMs() and level() (the boot scene's timing
+// and car lights) must all agree on it.
+static const Clip* greetingClip() {
+    static const Clip* c = nullptr;
+    if (!c) {
+#ifdef BOARD_S3
+        c = greetpick::pick(esp_random(), GREETING_ALT.samples > 1) ? &GREETING_ALT : &GREETING;
+#else
+        c = &GREETING;
+#endif
+    }
+    return c;
+}
 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
 static std::atomic<int> s_playing{0};
@@ -95,9 +122,14 @@ static void start(const Clip* c, const char* name) {
     }
 }
 
-void play() { start(&GREETING, "greeting"); }
+void play() { start(greetingClip(), "greeting"); }
 
-void playHowl() { start(&HOWL, "howl"); }
+void playHowl() {
+#ifdef BOARD_S3
+    if (WOLF.samples > 1) { start(&WOLF, "howl"); return; }   // 1 sample = the build's placeholder
+#endif
+    start(&HOWL, "howl");
+}
 
 void playFinale() {
     if (FINALE.samples <= 1) return;                 // 1 sample = the build's placeholder
@@ -118,7 +150,7 @@ void playOpener() {
 
 uint32_t openerMs() { return OPENER.samples > 1 ? (uint32_t)((uint64_t)OPENER.samples * 1000 / CLIP_RATE) : 0; }
 
-uint32_t durationMs() { return (uint32_t)((uint64_t)GREETING.samples * 1000 / CLIP_RATE); }
+uint32_t durationMs() { return (uint32_t)((uint64_t)greetingClip()->samples * 1000 / CLIP_RATE); }
 
 bool playing() { return s_playing.load() > 0; }
 
@@ -126,7 +158,7 @@ uint32_t finaleMs() { return FINALE.samples > 1 ? (uint32_t)((uint64_t)FINALE.sa
 
 uint8_t level(uint32_t ms) {
     const size_t at = (size_t)((uint64_t)ms * CLIP_RATE / 1000);
-    return loudness::loudness(GREETING.data, GREETING.samples, at, CLIP_RATE / 50);
+    return loudness::loudness(greetingClip()->data, greetingClip()->samples, at, CLIP_RATE / 50);
 }
 
 }
