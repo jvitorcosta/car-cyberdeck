@@ -69,7 +69,8 @@ static void task(void*) {
         }
         vTaskDelay(pdMS_TO_TICKS(2));
     }
-    if (s_useDma) s_tft->deInitDMA();          // the rest of the firmware draws without it
+    // DMA stays attached: deInitDMA() frees the SPI bus, and every later draw (night drive, deck)
+    // went nowhere, a black screen (2026-10-15). Plain pushes work alongside it.
     Serial.printf("[intro] %d of %d frames in %lu ms (%lu ms a frame%s)\n", drawn, montage::count(),
                   (unsigned long)(millis() - t0), (unsigned long)(drawn ? busy / drawn : 0), s_useDma ? ", DMA" : "");
     s_playing = false;
