@@ -4,7 +4,7 @@
 void setUp() {}
 void tearDown() {}
 
-// The companion's intro video plays by the clock: frame i is due at i * 1000 / fps; a late
+// The S3's intro video plays by the clock: frame i is due at i * 1000 / fps; a late
 // decode skips ahead instead of slowing the clip down.
 void test_frames_follow_the_clock() {
     TEST_ASSERT_EQUAL_INT(0, introclock::frameAt(0, 10, 100));

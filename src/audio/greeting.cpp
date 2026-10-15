@@ -12,25 +12,35 @@ extern const uint8_t _binary_data_finale_pcm_start[] asm("_binary_data_finale_pc
 extern const uint8_t _binary_data_finale_pcm_end[] asm("_binary_data_finale_pcm_end");
 extern const uint8_t _binary_data_opener_pcm_start[] asm("_binary_data_opener_pcm_start");
 extern const uint8_t _binary_data_opener_pcm_end[] asm("_binary_data_opener_pcm_end");
+#ifdef BOARD_S3
+extern const uint8_t _binary_data_intro_pcm_start[] asm("_binary_data_intro_pcm_start");
+extern const uint8_t _binary_data_intro_pcm_end[] asm("_binary_data_intro_pcm_end");
+#endif
 
 namespace greeting {
 
 constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (16-bit signed LE)
+constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py output rate
 constexpr int CHUNK = 128;               // samples per audiosink::write
 
 // Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
-struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; };
+struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
 static const Clip GREETING = {_binary_data_greeting_pcm_start,
                               (size_t)(_binary_data_greeting_pcm_end - _binary_data_greeting_pcm_start) / 2,
-                              "greeting", &audiosink::GREETING_VOLUME};
+                              "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
 static const Clip FINALE = {_binary_data_finale_pcm_start,
                             (size_t)(_binary_data_finale_pcm_end - _binary_data_finale_pcm_start) / 2,
-                            "finale", &audiosink::FINALE_VOLUME};
+                            "finale", &audiosink::FINALE_VOLUME, CLIP_RATE};
 static const Clip OPENER = {_binary_data_opener_pcm_start,
                             (size_t)(_binary_data_opener_pcm_end - _binary_data_opener_pcm_start) / 2,
-                            "opener", &audiosink::GREETING_VOLUME};
-static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME};
+                            "opener", &audiosink::GREETING_VOLUME, CLIP_RATE};
+static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME, CLIP_RATE};
+#ifdef BOARD_S3
+static const Clip INTRO = {_binary_data_intro_pcm_start,
+                           (size_t)(_binary_data_intro_pcm_end - _binary_data_intro_pcm_start) / 2,
+                           "intro", &audiosink::GREETING_VOLUME, INTRO_RATE};
+#endif
 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
 static std::atomic<int> s_playing{0};
@@ -44,7 +54,7 @@ static void task(void* arg) {
     const int volume = *c->volume;
     xSemaphoreTake(s_output, portMAX_DELAY);
     const uint32_t t0 = millis();
-    if (!audiosink::open(CLIP_RATE)) {
+    if (!audiosink::open(c->rate)) {
         xSemaphoreGive(s_output);
         s_playing.fetch_sub(1);
         vTaskDelete(nullptr);
@@ -71,7 +81,7 @@ static void task(void* arg) {
     xSemaphoreGive(s_output);
     Serial.printf("[greeting] %s: played %u samples in ~%u ms (clip %u ms)\n", c->name,
                   (unsigned)c->samples, (unsigned)(millis() - t0),
-                  (unsigned)(c->samples * 1000 / CLIP_RATE));
+                  (unsigned)(c->samples * 1000 / c->rate));
     s_playing.fetch_sub(1);
     vTaskDelete(nullptr);
 }
@@ -92,6 +102,13 @@ void playHowl() { start(&HOWL, "howl"); }
 void playFinale() {
     if (FINALE.samples <= 1) return;                 // 1 sample = the build's placeholder
     start(&FINALE, "finale");
+}
+
+void playIntro() {
+#ifdef BOARD_S3
+    if (INTRO.samples <= 1) return;                  // 1 sample = the build's placeholder
+    start(&INTRO, "intro");
+#endif
 }
 
 void playOpener() {

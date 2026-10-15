@@ -37,3 +37,4 @@ avatar-photos/
 data/avatar.bin
 __pycache__/
 data/intro.bin
+data/intro.pcm

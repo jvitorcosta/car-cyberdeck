@@ -24,5 +24,33 @@ class Pack(unittest.TestCase):
         self.assertEqual(gi.pack([], 10), b"MTG1" + struct.pack("<HH", 0, 10))
 
 
+class Segments(unittest.TestCase):
+    def test_parse(self):
+        self.assertEqual(gi.segment("6-99"), (6.0, 99.0))
+        self.assertEqual(gi.segment("0-6.5"), (0.0, 6.5))
+
+    def test_rejects_bad(self):
+        for bad in ("6", "9-3", "a-b", "-1-4"):
+            with self.assertRaises(ValueError):
+                gi.segment(bad)
+
+    def test_default_order(self):
+        # the wallpaper loops: its story starts at 11.8 s; its first seconds end the kiss
+        self.assertEqual(gi.DEFAULT_SEGMENTS, [(11.8, 99.0), (0.0, 3.0)])
+
+
+class Sound(unittest.TestCase):
+    # each segment's sound is cut to its frames' length, so the seams stay in sync with the picture
+    def test_fit_trims(self):
+        pcm = bytes(range(200))                          # 100 samples
+        self.assertEqual(gi.fit(pcm, frames=3, fps=10, rate=200), pcm[:120])   # 0.3 s = 60 samples
+
+    def test_fit_pads_with_silence(self):
+        self.assertEqual(gi.fit(b"", frames=1, fps=10, rate=40), b"" + bytes(6))
+
+    def test_defaults(self):
+        self.assertEqual((gi.FPS, gi.RATE), (24, 48000))
+
+
 if __name__ == "__main__":
     unittest.main()

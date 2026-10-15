@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-// The companion's boot intro video plays by the clock: frame i is due at i * 1000 / fps, so a
+// The S3's boot intro video plays by the clock: frame i is due at i * 1000 / fps, so a
 // slow decode skips frames instead of slowing the clip down. PURE, host-tested.
 namespace introclock {
 // The frame to show `ms` after the start; == count once the clip is over (also for no clip).

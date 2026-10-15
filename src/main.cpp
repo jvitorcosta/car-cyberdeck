@@ -15,6 +15,7 @@
 #include "ui/lyricmsg.h"
 #include "ui/backlight.h"
 #include "ui/bootscene.h"
+#include "ui/intro.h"
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
@@ -138,22 +139,26 @@ void setup() {
         Serial.println("[spotify] no refresh token in src/config.h: run tools/spotify_auth.py");
         for (;;) delay(1000);
     }
-    greeting::play();          // boot sound plays while WiFi connects
-    // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
-    bootscene::start(s_tft, net::isOnline);
-    bootscene::setCaption("Connecting WiFi...");
-
 #ifdef BOARD_S3
-    // The S3 has heap to spare while the scene plays (~230 KB largest block), so the network task
-    // logs into Spotify and polls underneath it (its late-WiFi path: spclient::begin +
-    // netclock::begin). setup() never blocks on the login: when the scene ends the deck shows at
-    // once, the song as soon as the first poll lands. (Logging in here left the scene's faded
-    // last frame, i.e. a black screen, up for as long as a slow hotspot took.)
-    if (net::connectAny()) {
+    // The intro video (ui/intro, with its sound, if a clip was built) plays first, on its own task, while
+    // WiFi connects and the network task logs into Spotify underneath; then the greeting and the
+    // night drive. The S3 has heap to spare (~230 KB largest block), so the login and polls run
+    // under the scenes (the network task's late-WiFi path: spclient::begin + netclock::begin).
+    // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
+    // soon as the first poll lands. (Logging in here left the scene's faded last frame, i.e. a
+    // black screen, up for as long as a slow hotspot took.)
+    intro::start(s_tft);
+    const bool wifi = net::connectAny();
+    if (wifi) {
         mem::log("boot+wifi");
         netclock::begin();                // the clock (night palette) right away, not after login
-        bootscene::setCaption("Connecting to Spotify...");
         nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
+    }
+    intro::wait();                        // the display is free for the night drive
+    greeting::play();                     // waits for the intro's sound to finish (one output)
+    bootscene::start(s_tft, net::isOnline);
+    if (wifi) {
+        bootscene::setCaption("Connecting to Spotify...");
         bootscene::waitDone();            // the display is ours again
     } else {
         // The scene keeps running; the network task retries and the car leaves once WiFi is up.
@@ -161,6 +166,11 @@ void setup() {
         nettask::start(false, nullptr);
     }
 #else
+    greeting::play();          // boot sound plays while WiFi connects
+    // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
+    bootscene::start(s_tft, net::isOnline);
+    bootscene::setCaption("Connecting WiFi...");
+
     bool spotifyReady = false;
     if (net::connectAny()) {
         mem::log("boot+wifi");

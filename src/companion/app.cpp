@@ -16,7 +16,6 @@
 #include "../util/version.h"
 #include "avatarview.h"
 #include "dashboard.h"
-#include "intro.h"
 #include "link.h"
 #include "phone.h"
 #include "screens.h"
@@ -118,15 +117,11 @@ void setup() {
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1);
     s_tft.fillScreen(theme::pal().top);
     backlight::begin();
-    intro::start(s_tft);        // the boot video (if any) plays while WiFi connects below
-    if (!intro::playing()) {
-        s_tft.setTextColor(theme::pal().topText, theme::pal().top);
-        s_tft.drawString("Connecting to WiFi...", 10, 10, 2);
-    }
+    s_tft.setTextColor(theme::pal().topText, theme::pal().top);
+    s_tft.drawString("Connecting to WiFi...", 10, 10, 2);
     net::connectAny();          // if it fails, the link task keeps retrying (net::loop)
     netclock::begin();          // night palette
     decklink::start();
-    intro::wait();              // the display is ours again
     if (avatarview::begin()) {
         touch::begin();
         phone::begin();
