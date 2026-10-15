@@ -32,7 +32,7 @@ obd::Pid Plan::next(uint32_t nowMs) {
 }
 
 void Plan::done(obd::Pid p, obd::Reply r, uint32_t nowMs) {
-    if (r == obd::Reply::NoData) {
+    if (r == obd::Reply::NoData && p != obd::Pid::Rpm) {   // RPM's NO DATA: engine off, ask again
         noData_[(int)p] = true;
         noDataAt_[(int)p] = nowMs;
     } else if (r == obd::Reply::Ok) {
@@ -40,13 +40,16 @@ void Plan::done(obd::Pid p, obd::Reply r, uint32_t nowMs) {
     }
 }
 
-Link Health::reply(obd::Reply r) {
+Link Health::reply(obd::Pid p, obd::Reply r) {
     if (r == obd::Reply::Error) {
         ++errors_;
         return state_;
     }
-    errors_ = 0;
-    state_ = r == obd::Reply::NoEngine ? Link::NoEngine : Link::Live;
+    errors_ = 0;                                         // the adapter answered
+    if (r == obd::Reply::NoEngine || (r == obd::Reply::NoData && p == obd::Pid::Rpm))
+        state_ = Link::NoEngine;
+    else if (r == obd::Reply::Ok && p != obd::Pid::Battery)
+        state_ = Link::Live;
     return state_;
 }
 

@@ -115,7 +115,7 @@ static void task(void*) {
             float v = 0.0f;
             const obd::Reply r = got ? obd::parse(p, raw, &v) : obd::Reply::Error;
             plan.done(p, r, millis());
-            const obdplan::Link l = health.reply(r);
+            const obdplan::Link l = health.reply(p, r);
             publish(p, r, v, l);
             if (health.lost()) { Serial.println("[obd] adapter stopped answering"); break; }
             if (l == obdplan::Link::NoEngine) delay(NO_ENGINE_MS);

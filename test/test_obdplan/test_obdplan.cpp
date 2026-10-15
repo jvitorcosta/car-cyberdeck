@@ -64,15 +64,41 @@ void test_every_pid_unsupported_still_gives_a_request() {
 void test_health_states() {
     obdplan::Health h;
     TEST_ASSERT_EQUAL_INT((int)Link::Connecting, (int)h.state());
-    TEST_ASSERT_EQUAL_INT((int)Link::Live, (int)h.reply(Reply::Ok));
-    TEST_ASSERT_EQUAL_INT((int)Link::Live, (int)h.reply(Reply::NoData));   // the car answered
-    TEST_ASSERT_EQUAL_INT((int)Link::NoEngine, (int)h.reply(Reply::NoEngine));
-    h.reply(Reply::Error);
-    h.reply(Reply::Error);
+    TEST_ASSERT_EQUAL_INT((int)Link::Live, (int)h.reply(Pid::Rpm, Reply::Ok));
+    TEST_ASSERT_EQUAL_INT((int)Link::Live, (int)h.reply(Pid::Load, Reply::NoData));   // just unsupported
+    TEST_ASSERT_EQUAL_INT((int)Link::NoEngine, (int)h.reply(Pid::Speed, Reply::NoEngine));
+    h.reply(Pid::Rpm, Reply::Error);
+    h.reply(Pid::Rpm, Reply::Error);
     TEST_ASSERT_FALSE(h.lost());
-    TEST_ASSERT_EQUAL_INT((int)Link::Live, (int)h.reply(Reply::Ok));       // errors reset
-    for (int i = 0; i < obdplan::LOST_AFTER; ++i) h.reply(Reply::Error);
+    TEST_ASSERT_EQUAL_INT((int)Link::Live, (int)h.reply(Pid::Rpm, Reply::Ok));       // errors reset
+    for (int i = 0; i < obdplan::LOST_AFTER; ++i) h.reply(Pid::Rpm, Reply::Error);
     TEST_ASSERT_TRUE(h.lost());
+}
+
+// Ignition off: the adapter still reads the battery, and on CAN every PID may say NO DATA. The
+// gauges must not come back for either (RPM is mandatory on every OBD-II car).
+void test_ignition_off_never_reads_as_live() {
+    obdplan::Health h;
+    h.reply(Pid::Rpm, Reply::NoEngine);
+    TEST_ASSERT_EQUAL_INT((int)Link::NoEngine, (int)h.reply(Pid::Battery, Reply::Ok));
+    TEST_ASSERT_EQUAL_INT((int)Link::NoEngine, (int)h.reply(Pid::Rpm, Reply::NoData));
+    obdplan::Health fresh;
+    TEST_ASSERT_EQUAL_INT((int)Link::Connecting, (int)fresh.reply(Pid::Battery, Reply::Ok));
+    TEST_ASSERT_EQUAL_INT((int)Link::Live, (int)h.reply(Pid::Rpm, Reply::Ok));       // engine back
+}
+
+// RPM is never backed off: after a NO DATA (ignition off) it is asked again at once, so the
+// gauges return as soon as the engine runs.
+void test_rpm_is_never_backed_off() {
+    obdplan::Plan plan;
+    uint32_t t = 0;
+    for (int i = 0; i < 20; ++i, t += 100) {
+        const Pid p = plan.next(t);
+        plan.done(p, Reply::NoData, t);
+    }
+    bool rpm = false;
+    for (int i = 0; i < 4 && !rpm; ++i, t += 100) rpm = plan.next(t) == Pid::Rpm;
+    TEST_ASSERT_TRUE(rpm);
 }
 
 void test_hold_shows_at_once_and_leaves_after_5_s_off() {
@@ -110,6 +136,8 @@ int main() {
     RUN_TEST(test_unsupported_pid_backs_off_then_is_asked_again);
     RUN_TEST(test_every_pid_unsupported_still_gives_a_request);
     RUN_TEST(test_health_states);
+    RUN_TEST(test_ignition_off_never_reads_as_live);
+    RUN_TEST(test_rpm_is_never_backed_off);
     RUN_TEST(test_hold_shows_at_once_and_leaves_after_5_s_off);
     RUN_TEST(test_colour_bands_at_their_edges);
     return UNITY_END();

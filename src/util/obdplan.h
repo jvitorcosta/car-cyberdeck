@@ -7,6 +7,7 @@
 namespace obdplan {
 constexpr uint32_t SLOW_MS = 2000;     // one slow value per this long; RPM and speed otherwise
 constexpr uint32_t RETRY_MS = 30000;   // a PID the car doesn't support is asked again after this
+                                       // (never RPM: its NO DATA means the engine is off)
 constexpr uint32_t HOLD_MS = 5000;     // the gauges stay this long after the link leaves Live
 constexpr int LOST_AFTER = 3;          // failed requests in a row: the adapter is gone
 
@@ -25,11 +26,14 @@ private:
     uint32_t noDataAt_[(int)obd::Pid::COUNT] = {};
 };
 
-// Ok / NoData: Live (the car answered). NoEngine: NoEngine. Error: counted; LOST_AFTER in a row
-// and lost() is true (the state stays as it was).
+// The link's state from each reply to request p. Live only from a mode 01 value: the adapter
+// reads the battery (ATRV) with the ignition off too. NoEngine from NoEngine, and from NO DATA
+// on RPM (mandatory on every OBD-II car: no answer means the engine isn't on). NO DATA on another
+// PID only means unsupported. Error: counted; LOST_AFTER in a row and lost() is true (the state
+// stays as it was).
 class Health {
 public:
-    Link reply(obd::Reply r);
+    Link reply(obd::Pid p, obd::Reply r);
     bool lost() const { return errors_ >= LOST_AFTER; }
     Link state() const { return state_; }
 private:
