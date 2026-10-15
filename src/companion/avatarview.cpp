@@ -5,9 +5,9 @@
 #include "../util/avatarbin.h"
 #include "../util/avatarscene.h"
 #include "../util/avatarsing.h"
+#include "../core/embed.h"
 
-extern const uint8_t _binary_data_avatar_bin_start[] asm("_binary_data_avatar_bin_start");
-extern const uint8_t _binary_data_avatar_bin_end[] asm("_binary_data_avatar_bin_end");
+EMBED(data_avatar_bin);
 
 namespace avatarview {
 static constexpr uint16_t TAG_PINK = 0xF497;   // #F090B8
@@ -22,8 +22,8 @@ static char s_text[avatarlines::TEXT_CAP], s_typed[avatarlines::TEXT_CAP];
 
 bool begin() {
     const char* why = "";
-    const size_t len = (size_t)(_binary_data_avatar_bin_end - _binary_data_avatar_bin_start);
-    if (avatarbin::parse(_binary_data_avatar_bin_start, len, s_info, &why)) {
+    const size_t len = EMBED_SIZE(data_avatar_bin);
+    if (avatarbin::parse(EMBED_DATA(data_avatar_bin), len, s_info, &why)) {
         Serial.printf("[avatar] %s: %d moods\n", s_info.name, s_info.moods);
         return true;
     }
@@ -47,7 +47,7 @@ void place(int x, int y, int scale) {
 static void show(TFT_eSPI& t, int e, int f) {
     constexpr int N = avatarbin::SIDE;
     if (s_scale == 0 || (e == s_entry && f == s_frame)) return;
-    const uint8_t* px = _binary_data_avatar_bin_start + avatarbin::frameOffset(s_info, e, f);
+    const uint8_t* px = EMBED_DATA(data_avatar_bin) + avatarbin::frameOffset(s_info, e, f);
     static uint16_t src[N], row[2 * N];
     for (int y = 0; y < N; ++y) {
         memcpy(src, px + (size_t)y * N * 2, N * 2);   // RGB565 high byte first, pushed as stored

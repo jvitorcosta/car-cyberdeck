@@ -9,8 +9,8 @@
 #include <FS.h>
 using fs::File;            // JPEGDEC.h names the global File, which this core's FS.h may not export
 #include <JPEGDEC.h>
-extern const uint8_t _binary_data_intro_bin_start[] asm("_binary_data_intro_bin_start");
-extern const uint8_t _binary_data_intro_bin_end[] asm("_binary_data_intro_bin_end");
+#include "../core/embed.h"
+EMBED(data_intro_bin);
 #endif
 
 namespace intro {
@@ -59,8 +59,8 @@ static void task(void*) {
 }
 
 void start(TFT_eSPI& t) {
-    const size_t len = (size_t)(_binary_data_intro_bin_end - _binary_data_intro_bin_start);
-    if (!montage::parse(_binary_data_intro_bin_start, len) || montage::count() == 0) {
+    const size_t len = EMBED_SIZE(data_intro_bin);
+    if (!montage::parse(EMBED_DATA(data_intro_bin), len) || montage::count() == 0) {
         Serial.println("[intro] none");
         return;
     }

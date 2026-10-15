@@ -6,20 +6,15 @@
 #include "../util/loudness.h"
 #include "../util/howl.h"
 #include "../util/greetpick.h"
+#include "../core/embed.h"
 
-extern const uint8_t _binary_data_greeting_pcm_start[] asm("_binary_data_greeting_pcm_start");
-extern const uint8_t _binary_data_greeting_pcm_end[] asm("_binary_data_greeting_pcm_end");
-extern const uint8_t _binary_data_finale_pcm_start[] asm("_binary_data_finale_pcm_start");
-extern const uint8_t _binary_data_finale_pcm_end[] asm("_binary_data_finale_pcm_end");
-extern const uint8_t _binary_data_opener_pcm_start[] asm("_binary_data_opener_pcm_start");
-extern const uint8_t _binary_data_opener_pcm_end[] asm("_binary_data_opener_pcm_end");
+EMBED(data_greeting_pcm);
+EMBED(data_finale_pcm);
+EMBED(data_opener_pcm);
 #ifdef BOARD_S3
-extern const uint8_t _binary_data_intro_pcm_start[] asm("_binary_data_intro_pcm_start");
-extern const uint8_t _binary_data_intro_pcm_end[] asm("_binary_data_intro_pcm_end");
-extern const uint8_t _binary_data_howl_pcm_start[] asm("_binary_data_howl_pcm_start");
-extern const uint8_t _binary_data_howl_pcm_end[] asm("_binary_data_howl_pcm_end");
-extern const uint8_t _binary_data_greeting_alt_pcm_start[] asm("_binary_data_greeting_alt_pcm_start");
-extern const uint8_t _binary_data_greeting_alt_pcm_end[] asm("_binary_data_greeting_alt_pcm_end");
+EMBED(data_intro_pcm);
+EMBED(data_howl_pcm);
+EMBED(data_greeting_alt_pcm);
 #endif
 
 namespace greeting {
@@ -31,42 +26,48 @@ constexpr int CHUNK = 128;               // samples per audiosink::write
 // Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
-static const Clip GREETING = {_binary_data_greeting_pcm_start,
-                              (size_t)(_binary_data_greeting_pcm_end - _binary_data_greeting_pcm_start) / 2,
+static const Clip GREETING = {EMBED_DATA(data_greeting_pcm),
+                              EMBED_SIZE(data_greeting_pcm) / 2,
                               "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
-static const Clip FINALE = {_binary_data_finale_pcm_start,
-                            (size_t)(_binary_data_finale_pcm_end - _binary_data_finale_pcm_start) / 2,
+static const Clip FINALE = {EMBED_DATA(data_finale_pcm),
+                            EMBED_SIZE(data_finale_pcm) / 2,
                             "finale", &audiosink::FINALE_VOLUME, CLIP_RATE};
-static const Clip OPENER = {_binary_data_opener_pcm_start,
-                            (size_t)(_binary_data_opener_pcm_end - _binary_data_opener_pcm_start) / 2,
+static const Clip OPENER = {EMBED_DATA(data_opener_pcm),
+                            EMBED_SIZE(data_opener_pcm) / 2,
                             "opener", &audiosink::GREETING_VOLUME, CLIP_RATE};
+static_assert(howl::RATE == CLIP_RATE, "the synthesised howl plays at the clip rate");
 static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME, CLIP_RATE};
 #ifdef BOARD_S3
-static const Clip INTRO = {_binary_data_intro_pcm_start,
-                           (size_t)(_binary_data_intro_pcm_end - _binary_data_intro_pcm_start) / 2,
+static const Clip INTRO = {EMBED_DATA(data_intro_pcm),
+                           EMBED_SIZE(data_intro_pcm) / 2,
                            "intro", &audiosink::GREETING_VOLUME, INTRO_RATE};
 // A real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none.
-static const Clip WOLF = {_binary_data_howl_pcm_start,
-                          (size_t)(_binary_data_howl_pcm_end - _binary_data_howl_pcm_start) / 2,
+static const Clip WOLF = {EMBED_DATA(data_howl_pcm),
+                          EMBED_SIZE(data_howl_pcm) / 2,
                           "howl", &audiosink::GREETING_VOLUME, INTRO_RATE};
 // The second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot.
-static const Clip GREETING_ALT = {_binary_data_greeting_alt_pcm_start,
-                                  (size_t)(_binary_data_greeting_alt_pcm_end - _binary_data_greeting_alt_pcm_start) / 2,
+static const Clip GREETING_ALT = {EMBED_DATA(data_greeting_alt_pcm),
+                                  EMBED_SIZE(data_greeting_alt_pcm) / 2,
                                   "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
 #endif
 
-// This boot's greeting, picked once: play(), durationMs() and level() (the boot scene's timing
-// and car lights) must all agree on it.
-static const Clip* greetingClip() {
-    static const Clip* c = nullptr;
-    if (!c) {
+// An optional clip the build may lack: the pre-build scripts write one silent sample instead.
+static bool present(const Clip& c) { return c.samples > 1; }
+static uint32_t lengthMs(const Clip& c) { return (uint32_t)((uint64_t)c.samples * 1000 / c.rate); }
+
+static const Clip* pickGreeting() {
 #ifdef BOARD_S3
-        c = greetpick::pick(esp_random(), GREETING_ALT.samples > 1) ? &GREETING_ALT : &GREETING;
+    return greetpick::pick(esp_random(), present(GREETING_ALT)) ? &GREETING_ALT : &GREETING;
 #else
-        c = &GREETING;
+    return &GREETING;
 #endif
-    }
-    return c;
+}
+
+// This boot's greeting, picked once (a function-local static: initialised once, thread-safe):
+// play(), durationMs() and level() (the boot scene's timing and car lights) must agree on it.
+static const Clip& greetingClip() {
+    static const Clip* const c = pickGreeting();
+    return *c;
 }
 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
@@ -87,7 +88,7 @@ static void task(void* arg) {
         vTaskDelete(nullptr);
     }
     int16_t buf[CHUNK];
-    static howl::Synth synth;                            // one howl at a time (net/remote's gate)
+    static howl::Synth synth;                            // one clip plays at a time (s_output)
     if (!c->data) synth = howl::Synth();
     for (size_t i = 0; i < c->samples;) {
         size_t n = 0;
@@ -122,43 +123,37 @@ static void start(const Clip* c, const char* name) {
     }
 }
 
-void play() { start(greetingClip(), "greeting"); }
+void play() { start(&greetingClip(), "greeting"); }
 
 void playHowl() {
 #ifdef BOARD_S3
-    if (WOLF.samples > 1) { start(&WOLF, "howl"); return; }   // 1 sample = the build's placeholder
+    if (present(WOLF)) { start(&WOLF, "howl"); return; }
 #endif
     start(&HOWL, "howl");
 }
 
-void playFinale() {
-    if (FINALE.samples <= 1) return;                 // 1 sample = the build's placeholder
-    start(&FINALE, "finale");
-}
+void playFinale() { if (present(FINALE)) start(&FINALE, "finale"); }
 
 void playIntro() {
 #ifdef BOARD_S3
-    if (INTRO.samples <= 1) return;                  // 1 sample = the build's placeholder
-    start(&INTRO, "intro");
+    if (present(INTRO)) start(&INTRO, "intro");
 #endif
 }
 
-void playOpener() {
-    if (OPENER.samples <= 1) return;                 // 1 sample = the build's placeholder
-    start(&OPENER, "opener");
-}
+void playOpener() { if (present(OPENER)) start(&OPENER, "opener"); }
 
-uint32_t openerMs() { return OPENER.samples > 1 ? (uint32_t)((uint64_t)OPENER.samples * 1000 / CLIP_RATE) : 0; }
+uint32_t openerMs() { return present(OPENER) ? lengthMs(OPENER) : 0; }
 
-uint32_t durationMs() { return (uint32_t)((uint64_t)greetingClip()->samples * 1000 / CLIP_RATE); }
+uint32_t durationMs() { return lengthMs(greetingClip()); }
 
 bool playing() { return s_playing.load() > 0; }
 
-uint32_t finaleMs() { return FINALE.samples > 1 ? (uint32_t)((uint64_t)FINALE.samples * 1000 / CLIP_RATE) : 0; }
+uint32_t finaleMs() { return present(FINALE) ? lengthMs(FINALE) : 0; }
 
 uint8_t level(uint32_t ms) {
-    const size_t at = (size_t)((uint64_t)ms * CLIP_RATE / 1000);
-    return loudness::loudness(greetingClip()->data, greetingClip()->samples, at, CLIP_RATE / 50);
+    const Clip& c = greetingClip();
+    const size_t at = (size_t)((uint64_t)ms * c.rate / 1000);
+    return loudness::loudness(c.data, c.samples, at, c.rate / 50);
 }
 
 }

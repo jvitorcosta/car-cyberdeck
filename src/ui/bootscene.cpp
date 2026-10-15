@@ -11,9 +11,9 @@
 #include "../core/mem.h"
 #include "../util/bootanim.h"
 #include "../util/bios.h"
+#include "../core/embed.h"
 
-extern const uint8_t _binary_data_montage_bin_start[] asm("_binary_data_montage_bin_start");
-extern const uint8_t _binary_data_montage_bin_end[] asm("_binary_data_montage_bin_end");
+EMBED(data_montage_bin);
 
 namespace bootscene {
 namespace {
@@ -487,8 +487,8 @@ void runWithoutScene(uint32_t t0) {
 void task(void*) {
     mem::log("bootscene start");
     const uint32_t t0 = millis();
-    montage::parse(_binary_data_montage_bin_start,
-                   (size_t)(_binary_data_montage_bin_end - _binary_data_montage_bin_start));
+    montage::parse(EMBED_DATA(data_montage_bin),
+                   EMBED_SIZE(data_montage_bin));
     initTrees();
     for (int k = 0; k < 64; ++k) {
         const float d = (float)k / 64.0f;
