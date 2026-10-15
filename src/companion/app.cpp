@@ -12,11 +12,13 @@
 #include "../ui/theme.h"
 #include "../util/daynight.h"
 #include "../util/menunav.h"
+#include "../util/obdplan.h"
 #include "../util/press.h"
 #include "../util/version.h"
 #include "avatarview.h"
 #include "dashboard.h"
 #include "link.h"
+#include "gauges.h"
 #include "obdlink.h"
 #include "phone.h"
 #include "screens.h"
@@ -28,9 +30,12 @@ static menunav::Button s_cursor = menunav::Lyrics;   // last menu choice (the â–
 static bool s_vroom = false;                          // the new deck offers VROOM (as drawn)
 static bool s_waiting = false;                        // an action is on its way to the deck
 static press::Press s_press;
+static obdplan::Hold s_obdHold;   // gauges on screen (util/obdplan: shown at once, gone 5 s after)
+static bool s_gauges = false;     // as drawn
 
 // Moves to screen s and repaints it whole.
 static void enter(menunav::Screen s) {
+    if (s_gauges) { s_screen = s; return; }       // the gauges own the screen; s shows on return
     s_screen = s;
     screens::draw(s_tft, s, s_vroom, s_cursor);
     if (s == menunav::Screen::Home) avatarview::place(68, 8, 2);      // centred, 184x184
@@ -155,6 +160,31 @@ void loop() {
     const uint32_t now = millis();
     if (!avatarview::on()) {                      // no avatar: lyrics only, touch ignored
         dashboard::draw(s_tft, v, now);
+        delay(20);
+        return;
+    }
+    obdlink::View car;
+    obdlink::snapshot(car);
+    const bool showGauges = s_obdHold.update(car.link == obdplan::Link::Live, now);
+    if (showGauges != s_gauges) {                 // the car came or went
+        s_gauges = showGauges;
+        if (s_gauges) {
+            s_tft.fillRect(0, 0, 320, menunav::BAR.y - 2, theme::pal().top);
+            avatarview::place(0, 0, 0);           // she leaves the screen, her bar stays
+            gauges::invalidate();
+            screens::invalidate();
+            avatarview::say(avatarlines::Event::CarOn, v, now);
+        } else {
+            enter(s_screen);                      // back to the screen it left
+            avatarview::say(avatarlines::Event::CarOff, v, now);
+        }
+    }
+    if (s_gauges) {
+        fire(phone::take());                      // the phone still works; screens apply on return
+        handleResult(v, now);
+        const char* line = avatarview::update(s_tft, v, now);
+        gauges::draw(s_tft, car, now);
+        screens::bar(s_tft, line ? line : "Live from the car");
         delay(20);
         return;
     }
