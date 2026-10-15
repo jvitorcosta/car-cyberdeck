@@ -54,6 +54,7 @@ static bool findBtn(menunav::Button id, menunav::Btn* out) {
 }
 
 static void redrawButton(menunav::Button id, bool pressed, float fill) {
+    if (s_gauges) return;                         // the gauges own the screen (e.g. a phone RESET)
     menunav::Btn b;
     if (id != menunav::None && findBtn(id, &b))
         screens::button(s_tft, b, pressed, fill,
@@ -148,7 +149,11 @@ void loop() {
         if (night != theme::isNightActive()) {
             theme::setNight(night);
             backlight::set(night);
-            if (avatarview::on()) enter(s_screen);
+            if (s_gauges) {                       // repaint the gauges in the new palette
+                s_tft.fillRect(0, 0, 320, menunav::BAR.y - 2, theme::pal().top);
+                gauges::invalidate();
+                screens::invalidate();
+            } else if (avatarview::on()) enter(s_screen);
             else {
                 s_tft.fillScreen(theme::pal().top);
                 dashboard::invalidate();
