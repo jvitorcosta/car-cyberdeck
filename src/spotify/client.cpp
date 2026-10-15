@@ -6,6 +6,7 @@
 #include <SpotifyArduino.h>
 #include "../config.h"
 #include "../util/ctxcache.h"
+#include "../util/nowplaying.h"
 #include "../util/text.h"
 #include "../util/netplan.h"
 #include "../core/mem.h"
@@ -172,6 +173,14 @@ static int fetchRetryAfter() {
     return s;
 }
 
+// /me/player's playing flag and position, for a 204 from currently-playing (poll()).
+static bool s_pdPlaying = false;
+static long s_pdProgress = 0;
+static void onPlayerCheck(PlayerDetails pd) {
+    s_pdPlaying = pd.isPlaying;
+    s_pdProgress = pd.progressMs;
+}
+
 void poll(AppState& st) {
     if (!s_sp) return;
     s_target = &st;
@@ -198,8 +207,20 @@ void poll(AppState& st) {
         }
         txt::copy(st.context, cachedName, sizeof(st.context));
     } else if (code == 204) {
-        if (lastCode != 204) Serial.println("[spotify] poll 204: Spotify says nothing is playing");
-        st.status = PlaybackStatus::Stopped;
+        // currently-playing sometimes says 204 for minutes while the phone plays; /me/player
+        // still knows (util/nowplaying). Ask it before showing "Nothing playing".
+        s_pdPlaying = false;
+        const int pc = s_sp->getPlayerDetails(onPlayerCheck, SPOTIFY_MARKET);
+        if (nowplaying::on204(pc, s_pdPlaying, st.trackName[0] != '\0') == nowplaying::On204::KeepTrack) {
+            if (lastCode != 204) Serial.println("[spotify] poll 204 but /me/player says playing: keeping the song");
+            st.isPlaying = true;
+            st.progressMs = (uint32_t)s_pdProgress;
+            st.lastPollMs = millis();
+            st.status = PlaybackStatus::Playing;
+        } else {
+            if (lastCode != 204) Serial.println("[spotify] poll 204: Spotify says nothing is playing");
+            st.status = PlaybackStatus::Stopped;
+        }
     } else {
         st.certRejected = netcfg::certRejected(s_client, "api.spotify.com");
         if (!st.certRejected) Serial.printf("[spotify] poll HTTP %d\n", code);
