@@ -78,12 +78,6 @@ void setStatus(const char* title, const char* detail) {
     portEXIT_CRITICAL(&s_mux);
 }
 
-bool link(char* out, size_t n) {
-    if (!s_gate.enabled() || !net::isOnline()) return false;
-    snprintf(out, n, "http://%s/?k=%s", net::deviceIp().c_str(), REMOTE_TOKEN);
-    return true;
-}
-
 static void handleState() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)

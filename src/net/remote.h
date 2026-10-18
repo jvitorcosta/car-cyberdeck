@@ -12,7 +12,4 @@ namespace remote {
 void begin(bool (*hold)());
 // The status screen's text for GET /state ("" while the deck shows the song). Any task.
 void setStatus(const char* title, const char* detail);
-// The page's full link ("http://<ip>/?k=<token>") for the QR code; false when the remote is
-// off or WiFi is down.
-bool link(char* out, size_t n);
 }

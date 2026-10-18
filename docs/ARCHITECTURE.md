@@ -56,16 +56,14 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   certificate) plus a bundled Pokémon per cause on the battle platform with a speech bubble,
   4 fps, pushed in 4-row strips. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
-- **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`,
-  `util/qrfit`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
+- **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
   mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority
   task, never the UI loop. It reads `GET /state` every 5 s (now playing, the deck's status,
   network, the sound buttons) and has a Home Screen icon (`GET /icon.png`, public). `POST
   /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. On the S3 the
   howl is the real recording in `data/howl.pcm` (`tools/gen_howl.py`, 48 kHz) when the build has
   one; otherwise, and always on the CYD, it is synthesised while it plays (`audio/greeting`).
-  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). On the S3 the "Nothing playing"
-  screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` picks a version ≤ 3).
+  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`).
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with
@@ -97,7 +95,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   avatarscene,avatarsing,bios,bootanim,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
   genrebadge,glyphrun,greetpick,hotspotip,howl,interp,introclock,jsonflat,linkstatus,loudness,
   lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
-  pollpace,press,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,text,touchguard,
+  pollpace,press,readguard,remotegate,rgb565,roam,statejson,stateparse,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.
 
 ## Layers

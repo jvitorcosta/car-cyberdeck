@@ -38,9 +38,8 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Phone remote:** set `REMOTE_TOKEN` in `src/config.h` and open
   `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD; see [Two decks](#two-decks))
   on a phone on the same network: what's playing, the deck's status and a Howl button. Add it
-  to the Home Screen for a full-screen app with its own icon. On the S3 the "Nothing playing"
-  screen shows the link as a QR code, and Howl plays a real wolf recording when you build one
-  (otherwise, and always on the CYD, a synthesised howl).
+  to the Home Screen for a full-screen app with its own icon. On the S3 Howl plays a real wolf
+  recording when you build one (otherwise, and always on the CYD, a synthesised howl).
 - **Companion screen:** a second (CYD) deck beside the S3 shows the current lyric line big,
   with the next one dimmed underneath. It reads the S3 over the hotspot and has no Spotify
   client of its own (build target `cyd_companion`).

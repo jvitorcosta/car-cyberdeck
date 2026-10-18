@@ -129,33 +129,6 @@ void test_bubble_has_room_around_the_text() {
     TEST_ASSERT_TRUE(r.h >= 14 + 2 * 6);
 }
 
-// 21x21 test pattern: dark where (x + y) is even, plus the top-left corner always dark.
-static uint8_t QR_BITS[(21 * 21 + 7) / 8];
-static statusscene::Qr testQr() {
-    for (int i = 0; i < 21 * 21; ++i) {
-        int x = i % 21, y = i / 21;
-        if ((x + y) % 2 == 0) QR_BITS[i >> 3] |= (uint8_t)(0x80 >> (i & 7));
-    }
-    return {QR_BITS, 21};
-}
-
-void test_qr_drawn_with_a_white_quiet_zone_left_of_the_pokemon() {
-    statusscene::Look l = statusscene::lookFor(Kind::Ok);
-    statusscene::Pose p = statusscene::poseAt(0, l);
-    statusscene::Qr qr = testQr();
-    const int x0 = statusscene::QR_X, y0 = statusscene::QR_Y, q = 4 * 2;   // 4-module quiet zone
-    TEST_ASSERT_EQUAL_HEX16(C.bubble, statusscene::pixel(x0 + 1, y0 + 1, l, p, C, &qr));          // quiet zone
-    TEST_ASSERT_EQUAL_HEX16(C.ink, statusscene::pixel(x0 + q, y0 + q, l, p, C, &qr));             // module (0,0)
-    TEST_ASSERT_EQUAL_HEX16(C.bubble, statusscene::pixel(x0 + q + 2, y0 + q, l, p, C, &qr));      // module (1,0)
-    TEST_ASSERT_EQUAL_HEX16(C.sky, statusscene::pixel(x0 + 1, y0 + 1, l, p, C, nullptr));         // no QR: sky
-    const int size = (21 + 8) * 2;
-    const int spriteLeft = statusscene::CX - status_sprite::width(l.sprite);
-    TEST_ASSERT_TRUE(x0 >= statusscene::X0 && x0 + size + 2 <= spriteLeft);   // clear of Pikachu
-    TEST_ASSERT_TRUE(y0 >= statusscene::Y0);
-    const int size3 = (29 + 8) * 2;                                           // the real link's version 3
-    TEST_ASSERT_TRUE(x0 + size3 + 2 <= spriteLeft && y0 + size3 <= 118);      // still in the sky
-}
-
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_each_cause_gets_its_own_pokemon_and_bubble);
@@ -167,6 +140,5 @@ int main(int, char**) {
     RUN_TEST(test_everything_stays_inside_the_redrawn_region);
     RUN_TEST(test_region_leaves_room_for_the_info_box_and_dialogue);
     RUN_TEST(test_bubble_has_room_around_the_text);
-    RUN_TEST(test_qr_drawn_with_a_white_quiet_zone_left_of_the_pokemon);
     return UNITY_END();
 }

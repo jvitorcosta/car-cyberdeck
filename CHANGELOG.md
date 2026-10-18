@@ -26,8 +26,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - The phone page opens full-screen from the iPhone Home Screen with its own icon, and shows
   what's playing and the deck's status. On the iPhone hotspot the decks take fixed addresses,
   `172.20.10.10` (S3) and `172.20.10.11` (CYD), unless something already answers there, so a
-  bookmark keeps working; DHCP on any other network. The S3's "Nothing playing" screen shows
-  the page's link as a QR code.
+  bookmark keeps working; DHCP on any other network.
 - Companion screen (`cyd_companion`): a second CYD shows the S3's current lyric line at double
   size with the next line dimmed, and moves to the next line on its own clock between polls.
   New `config.h` option `COMPANION_DECK` (the S3's address).
