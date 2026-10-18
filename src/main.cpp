@@ -16,6 +16,11 @@
 #include "ui/backlight.h"
 #include "ui/bootscene.h"
 #include "ui/intro.h"
+#include "util/idlesprite.h"
+#include "core/embed.h"
+#ifdef BOARD_S3
+EMBED(data_idle_bin);   // Sonic waiting on "Nothing playing" (tools/gen_idle_sprite.py), else empty
+#endif
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
@@ -143,6 +148,8 @@ void setup() {
     // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
     // soon as the first poll lands. (Logging in here left the scene's faded last frame, i.e. a
     // black screen, up for as long as a slow hotspot took.)
+    Serial.println(idlesprite::parse(EMBED_DATA(data_idle_bin), EMBED_SIZE(data_idle_bin))
+                       ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
     intro::start(s_tft);
     const bool wifi = net::connectAny();
     if (wifi) {
@@ -252,7 +259,7 @@ void loop() {
     if (mode != 0) {
         static char shownText[80] = "", shownTitle[24] = "";
         static char title[24], detail[48];
-        static uint32_t textAt = 0, frameAt = 0;
+        static uint32_t textAt = 0, shownAt = 0, shownKey = 0;   // shownAt: the screen appeared
         static linkstatus::Kind kind = linkstatus::Kind::Ok, shownKind = linkstatus::Kind::Ok;
         char text[80];   // title|detail: 24 + 1 + 48
         // Re-read the cause at most once a second: net::ssid() allocates a String.
@@ -266,16 +273,18 @@ void loop() {
         const statusscene::Look look = statusscene::lookFor(kind);
         snprintf(text, sizeof text, "%s|%s", title, detail);
         if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
-            ui::drawOffline(s_tft, title, detail, look, millis());
-            frameAt = millis();
+            shownAt = millis();
+            shownKey = statusscene::frameKey(0, look);
+            ui::drawOffline(s_tft, title, detail, look, 0);
         } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown)
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
             if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
                 ui::drawOfflineDetail(s_tft, detail);
             else ui::drawOfflineText(s_tft, title, detail);
-        } else if (millis() - frameAt >= statusscene::FRAME_MS) {   // Pokemon bob, bubble, ball
-            frameAt = millis();
-            ui::drawOfflineScene(s_tft, look, frameAt);
+        } else if (statusscene::frameKey(millis() - shownAt, look) != shownKey) {   // next frame
+            const uint32_t t = millis() - shownAt;   // Pokemon bob, bubble, ball; Sonic waiting
+            shownKey = statusscene::frameKey(t, look);
+            ui::drawOfflineScene(s_tft, look, t);
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
             Serial.printf("[screen] %s / %s\n", title, detail);

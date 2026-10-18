@@ -2,6 +2,8 @@
 #include <cstdint>
 #include "../../src/ui/statusscene.h"
 #include "../../src/ui/status_sprite.h"
+#include "../../src/util/idlesprite.h"
+#include <cstring>
 
 using linkstatus::Kind;
 using statusscene::Bubble;
@@ -129,6 +131,56 @@ void test_bubble_has_room_around_the_text() {
     TEST_ASSERT_TRUE(r.h >= 14 + 2 * 6);
 }
 
+// A 4-frame, 2x2 idle sprite: frame f's top-left pixel is opaque (palette f+1), rest clear.
+static uint8_t s_idle[8 + 32 + 4 * 2];
+static void loadIdle() {
+    memcpy(s_idle, "IDL1", 4);
+    s_idle[4] = 4; s_idle[5] = 2; s_idle[6] = 2; s_idle[7] = 0;
+    for (int i = 0; i < 16; ++i) { s_idle[8 + 2 * i] = (uint8_t)(0x40 + i); s_idle[9 + 2 * i] = 0; }
+    memset(s_idle + 40, 0, 8);
+    for (int f = 0; f < 4; ++f) s_idle[40 + f * 2] = (uint8_t)((f + 1) << 4);
+    TEST_ASSERT_TRUE(idlesprite::parse(s_idle, sizeof s_idle));
+}
+
+// "Nothing playing" shows Sonic waiting when the deck has his file, Pikachu otherwise; every
+// other cause keeps its Pokemon.
+void test_nothing_playing_is_sonic_with_the_file() {
+    idlesprite::parse(nullptr, 0);
+    TEST_ASSERT_FALSE(statusscene::lookFor(Kind::Ok).idle);
+    loadIdle();
+    TEST_ASSERT_TRUE(statusscene::lookFor(Kind::Ok).idle);
+    TEST_ASSERT_FALSE(statusscene::lookFor(Kind::NoWifi).idle);
+}
+
+// He stands at 2x with his feet on the platform, doesn't bob, and his frame follows the game's
+// waiting timeline (frame f's top-left pixel is palette entry f+1).
+void test_sonic_drawn_2x_on_the_platform_following_the_timeline() {
+    loadIdle();
+    const statusscene::Look l = statusscene::lookFor(Kind::Ok);
+    const int left = statusscene::CX - idlesprite::width();
+    const int top = statusscene::FEET_Y - 2 * idlesprite::height();
+    struct { uint32_t ms; int frame; } rows[] = {{0, idlesprite::STAND}, {4800, idlesprite::WAIT2},
+                                                 {5200, idlesprite::WAIT1}, {6800, idlesprite::WAIT3}};
+    for (auto& r : rows) {
+        const statusscene::Pose p = statusscene::poseAt(r.ms, l);
+        TEST_ASSERT_EQUAL_INT(0, p.bob);
+        TEST_ASSERT_EQUAL_HEX16(0x40 + r.frame + 1, statusscene::pixel(left + 1, top + 1, l, p, C));
+        TEST_ASSERT_NOT_EQUAL(0x40 + r.frame + 1, statusscene::pixel(left + 2, top, l, p, C));
+    }
+}
+
+// The scene redraws when its key changes: every FRAME_MS for the Pokemon; for Sonic only when
+// his frame (400 ms) or the dialogue's blinking arrow (500 ms) can change.
+void test_redraw_key() {
+    loadIdle();
+    const statusscene::Look poke = statusscene::lookFor(Kind::NoWifi);
+    TEST_ASSERT_EQUAL_UINT32(3, statusscene::frameKey(3 * statusscene::FRAME_MS, poke));
+    const statusscene::Look sonic = statusscene::lookFor(Kind::Ok);
+    TEST_ASSERT_EQUAL_UINT32(statusscene::frameKey(0, sonic), statusscene::frameKey(399, sonic));
+    TEST_ASSERT_NOT_EQUAL(statusscene::frameKey(399, sonic), statusscene::frameKey(400, sonic));
+    TEST_ASSERT_NOT_EQUAL(statusscene::frameKey(499, sonic), statusscene::frameKey(500, sonic));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_each_cause_gets_its_own_pokemon_and_bubble);
@@ -140,5 +192,8 @@ int main(int, char**) {
     RUN_TEST(test_everything_stays_inside_the_redrawn_region);
     RUN_TEST(test_region_leaves_room_for_the_info_box_and_dialogue);
     RUN_TEST(test_bubble_has_room_around_the_text);
+    RUN_TEST(test_nothing_playing_is_sonic_with_the_file);
+    RUN_TEST(test_sonic_drawn_2x_on_the_platform_following_the_timeline);
+    RUN_TEST(test_redraw_key);
     return UNITY_END();
 }

@@ -7,7 +7,8 @@
 // pixel's colour, ui::drawOfflineScene pushes the region in small strips (no big buffer).
 namespace statusscene {
 enum class Bubble : uint8_t { None, Question, Dots, Zzz, Bang };
-struct Look { int sprite; Bubble bubble; bool ball; };
+// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Nothing playing" with his file.
+struct Look { int sprite; Bubble bubble; bool ball; bool idle = false; };
 // Ok = "Nothing playing" (Pikachu, no bubble).
 Look lookFor(linkstatus::Kind k);
 
@@ -19,8 +20,12 @@ constexpr int CX = 160;              // sprite and platform centre
 constexpr int FEET_Y = 132;          // sprite's bottom edge at rest
 constexpr uint32_t FRAME_MS = 250;   // 4 fps: gentle, and cheap on the UI loop
 
-struct Pose { int bob; int step; int ballX; int ballFrame; };   // bob: px up; ballX: from centre
+struct Pose { int bob; int step; int ballX; int ballFrame; int idleFrame; };   // bob: px up; ballX: from centre
+// ms: time since the screen appeared (Sonic's waiting animation starts over with it).
 Pose poseAt(uint32_t ms, const Look& look);
+// The scene needs redrawing when this changes: each FRAME_MS for the Pokemon; for Sonic only
+// when his frame (every 400 ms) or the dialogue box's blinking arrow (every 500 ms) can change.
+uint32_t frameKey(uint32_t ms, const Look& look);
 
 struct Colors {
     uint16_t sky, horizon, grass, platform, edge;

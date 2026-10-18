@@ -8,3 +8,4 @@ intro.pcm 2217600
 greeting_alt.pcm 54502
 howl.pcm 624000
 avatar.bin 67736
+idle.bin 2536

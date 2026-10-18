@@ -40,3 +40,7 @@ data/intro.bin
 data/intro.pcm
 data/howl.pcm
 data/greeting_alt.pcm
+
+# Sonic waiting sprite: SEGA art fetched locally by tools/gen_idle_sprite.py, never committed
+sonic-sprites/
+data/idle.bin

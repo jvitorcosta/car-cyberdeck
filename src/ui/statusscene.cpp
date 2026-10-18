@@ -1,6 +1,7 @@
 #include "statusscene.h"
 #include "status_sprite.h"
 #include "pokeball.h"
+#include "../util/idlesprite.h"
 
 namespace statusscene {
 
@@ -12,7 +13,7 @@ Look lookFor(linkstatus::Kind k) {
     case linkstatus::Kind::CertRejected: return {status_sprite::PORYGON, Bubble::Bang, false};    // alarm
     case linkstatus::Kind::Ok:           break;
     }
-    return {status_sprite::PIKACHU, Bubble::None, false};
+    return {status_sprite::PIKACHU, Bubble::None, false, idlesprite::count() > 0};   // Sonic waits
 }
 
 static constexpr int PLAT_Y = 136, PLAT_RX = 60, PLAT_RY = 12;
@@ -25,7 +26,8 @@ Pose poseAt(uint32_t ms, const Look& look) {
     static const int BOB[] = {0, 1, 2, 1};
     Pose p{};
     p.step = (int)(ms / FRAME_MS);
-    p.bob = BOB[p.step & 3];
+    p.bob = look.idle ? 0 : BOB[p.step & 3];   // Sonic stands still; the game animates him
+    if (look.idle) p.idleFrame = idlesprite::frameAt(ms);
     if (look.ball) {
         int pos = p.step % (2 * BALL_STEPS);
         p.ballX = pos < BALL_STEPS ? -BALL_RANGE + pos * BALL_STEP
@@ -66,12 +68,15 @@ static const char* bubbleText(Bubble b, int step) {
     return "";
 }
 
+static int spriteW(const Look& look) { return look.idle ? idlesprite::width() : status_sprite::width(look.sprite); }
+static int spriteH(const Look& look) { return look.idle ? idlesprite::height() : status_sprite::height(look.sprite); }
+
 static int spriteTop(const Look& look, const Pose& pose) {
-    return FEET_Y - 2 * status_sprite::height(look.sprite) - pose.bob;
+    return FEET_Y - 2 * spriteH(look) - pose.bob;
 }
 
 Rect bubbleRect(const Look& look, const Pose& pose) {
-    Rect r{CX + status_sprite::width(look.sprite) - 6, spriteTop(look, pose) - BUBBLE_H + 6,
+    Rect r{CX + spriteW(look) - 6, spriteTop(look, pose) - BUBBLE_H + 6,
            BUBBLE_W, BUBBLE_H};
     if (r.y < Y0) r.y = Y0;
     return r;
@@ -134,16 +139,24 @@ uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c
     uint16_t v;
     if (bubblePixel(x, y, look, pose, c, &v)) return v;
     if (ballPixel(x, y, look, pose, c, &v)) return v;
-    const int w = status_sprite::width(look.sprite);
+    const int w = spriteW(look);
     const int left = CX - w, top = spriteTop(look, pose);
-    if (x >= left && y >= top && status_sprite::pixel(look.sprite, (x - left) / 2, (y - top) / 2, &v))
-        return v;
+    if (x >= left && y >= top) {
+        const int sx = (x - left) / 2, sy = (y - top) / 2;
+        if (look.idle ? idlesprite::pixel(pose.idleFrame, sx, sy, &v) : status_sprite::pixel(look.sprite, sx, sy, &v))
+            return v;
+    }
     const int dx = x - CX, dy = y - PLAT_Y;
     if (insideEllipse(dx, dy, PLAT_RX, PLAT_RY))
         return insideEllipse(dx, dy, PLAT_RX - 1, PLAT_RY - 1) ? c.platform : c.edge;
     if (y < 118) return c.sky;      // same bands as ui::background()
     if (y < 122) return c.horizon;
     return c.grass;
+}
+
+uint32_t frameKey(uint32_t ms, const Look& look) {
+    if (!look.idle) return ms / FRAME_MS;
+    return idlesprite::tickAt(ms) << 1 | ((ms / (2 * FRAME_MS)) & 1);   // arrow: (step >> 1) & 1
 }
 
 }
