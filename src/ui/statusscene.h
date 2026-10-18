@@ -7,8 +7,9 @@
 // pixel's colour, ui::drawOfflineScene pushes the region in small strips (no big buffer).
 namespace statusscene {
 enum class Bubble : uint8_t { None, Question, Dots, Zzz, Bang };
-// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Nothing playing" with his file.
-struct Look { int sprite; Bubble bubble; bool ball; bool idle = false; };
+// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Nothing playing" with his file,
+// in front of the Sunset drive (ui/sunset); night: its night palette (the caller sets it).
+struct Look { int sprite; Bubble bubble; bool ball; bool idle = false; bool night = false; };
 // Ok = "Nothing playing" (Pikachu, no bubble).
 Look lookFor(linkstatus::Kind k);
 

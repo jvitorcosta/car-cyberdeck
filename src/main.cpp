@@ -270,7 +270,8 @@ void loop() {
             kind = mode == 1 ? offlineText(st, title, sizeof title, detail, sizeof detail)
                              : linkstatus::Kind::Ok;
         }
-        const statusscene::Look look = statusscene::lookFor(kind);
+        statusscene::Look look = statusscene::lookFor(kind);
+        look.night = theme::isNightActive();   // Sonic's sunset turns to night with the palette
         snprintf(text, sizeof text, "%s|%s", title, detail);
         if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
             shownAt = millis();

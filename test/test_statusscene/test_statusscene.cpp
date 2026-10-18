@@ -3,6 +3,7 @@
 #include "../../src/ui/statusscene.h"
 #include "../../src/ui/status_sprite.h"
 #include "../../src/util/idlesprite.h"
+#include "../../src/ui/sunset.h"
 #include <cstring>
 
 using linkstatus::Kind;
@@ -181,6 +182,22 @@ void test_redraw_key() {
     TEST_ASSERT_NOT_EQUAL(statusscene::frameKey(499, sonic), statusscene::frameKey(500, sonic));
 }
 
+// Behind Sonic: the Sunset drive backdrop (no platform; he waits on the sidewalk), in the
+// night palette when the deck is in night mode. The Pokemon keep the battle field.
+void test_sonic_waits_in_front_of_the_sunset() {
+    loadIdle();
+    statusscene::Look l = statusscene::lookFor(Kind::Ok);
+    const statusscene::Pose p = statusscene::poseAt(0, l);
+    const int x = statusscene::X0 + 1;
+    TEST_ASSERT_EQUAL_HEX16(sunset::pixel(x, 30, false), statusscene::pixel(x, 30, l, p, C));
+    TEST_ASSERT_EQUAL_HEX16(sunset::pixel(statusscene::CX, 140, false), statusscene::pixel(statusscene::CX, 140, l, p, C));
+    l.night = true;
+    TEST_ASSERT_EQUAL_HEX16(sunset::pixel(x, 30, true), statusscene::pixel(x, 30, l, p, C));
+    statusscene::Look poke = statusscene::lookFor(Kind::NoWifi);
+    poke.night = true;
+    TEST_ASSERT_EQUAL_HEX16(C.sky, statusscene::pixel(x, 30, poke, statusscene::poseAt(0, poke), C));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_each_cause_gets_its_own_pokemon_and_bubble);
@@ -195,5 +212,6 @@ int main(int, char**) {
     RUN_TEST(test_nothing_playing_is_sonic_with_the_file);
     RUN_TEST(test_sonic_drawn_2x_on_the_platform_following_the_timeline);
     RUN_TEST(test_redraw_key);
+    RUN_TEST(test_sonic_waits_in_front_of_the_sunset);
     return UNITY_END();
 }

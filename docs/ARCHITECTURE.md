@@ -57,7 +57,9 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   4 fps, pushed in 4-row strips. On the S3 "Nothing playing" shows Sonic instead
   (`util/idlesprite`, `data/idle.bin` from `tools/gen_idle_sprite.py`): Sonic 1's waiting
   animation with the game's timing (12 x stand, then the foot tap, 400 ms a frame), from when
-  the screen appears; the scene redraws when his frame or the arrow can change. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
+  the screen appears; the scene redraws when his frame or the arrow can change. He waits on a
+  sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
+  screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
 - **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
   mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority

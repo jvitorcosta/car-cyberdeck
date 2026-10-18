@@ -7,6 +7,7 @@
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
 #include "statusscene.h"
+#include "sunset.h"
 #include "labels.h"
 #include "textdraw.h"
 #include "theme.h"
@@ -199,14 +200,19 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
 
 static void drawMoreArrow(TFT_eSPI& t, bool on);
 
+// The scene's strips, also the sunset's rows. 1.9 KB, static: the CYD has no heap to spare.
+constexpr int SCENE_ROWS = 4;
+static uint16_t s_sceneBuf[statusscene::W * SCENE_ROWS];
+static_assert(statusscene::W * SCENE_ROWS >= 320, "a full row fits");
+
 void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs) {
     const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
                                    theme::pal().horizon, theme::pal().boxShadow,
                                    TFT_WHITE, theme::BALL_DARK,
                                    theme::POKE_RED, TFT_WHITE, theme::BALL_DARK};
     const statusscene::Pose pose = statusscene::poseAt(animMs, look);
-    constexpr int ROWS = 4;
-    static uint16_t buf[statusscene::W * ROWS];   // 1.9 KB, static: the CYD has no heap to spare
+    constexpr int ROWS = SCENE_ROWS;
+    uint16_t* buf = s_sceneBuf;
     for (int y0 = statusscene::Y0; y0 < statusscene::Y0 + statusscene::H; y0 += ROWS) {
         for (int r = 0; r < ROWS; ++r)
             for (int x = 0; x < statusscene::W; ++x)
@@ -237,9 +243,20 @@ void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
     shadowText(t, detail, 18, y + 2, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
 }
 
+// Sonic's Sunset drive, edge to edge under the top strip: once per screen (it doesn't move), so
+// one row at a time is quick enough and reuses the scene's buffer.
+static void sunsetBackdrop(TFT_eSPI& t, bool night) {
+    uint16_t* row = s_sceneBuf;
+    for (int y = sunset::SKY_Y; y < 240; ++y) {
+        for (int x = 0; x < 320; ++x) row[x] = theme::be(sunset::pixel(x, y, night));
+        t.pushImage(0, y, 320, 1, row);
+    }
+}
+
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
                  uint32_t animMs) {
-    background(t);
+    if (look.idle) sunsetBackdrop(t, look.night);
+    else background(t);
     topStrip(t);
     drawOfflineText(t, msg, detail);
     drawOfflineScene(t, look, animMs);

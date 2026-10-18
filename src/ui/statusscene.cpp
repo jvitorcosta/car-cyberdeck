@@ -1,6 +1,7 @@
 #include "statusscene.h"
 #include "status_sprite.h"
 #include "pokeball.h"
+#include "sunset.h"
 #include "../util/idlesprite.h"
 
 namespace statusscene {
@@ -146,6 +147,7 @@ uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c
         if (look.idle ? idlesprite::pixel(pose.idleFrame, sx, sy, &v) : status_sprite::pixel(look.sprite, sx, sy, &v))
             return v;
     }
+    if (look.idle) return sunset::pixel(x, y, look.night);   // no platform: he waits on the sidewalk
     const int dx = x - CX, dy = y - PLAT_Y;
     if (insideEllipse(dx, dy, PLAT_RX, PLAT_RY))
         return insideEllipse(dx, dy, PLAT_RX - 1, PLAT_RY - 1) ? c.platform : c.edge;
