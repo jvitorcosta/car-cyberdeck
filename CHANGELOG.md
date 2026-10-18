@@ -37,7 +37,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
-- A paused song keeps the deck for a minute before "Nothing playing" shows (it used to show only
+- A paused song keeps the deck for 30 s before "Nothing playing" shows (it used to show only
   when Spotify had nothing at all).
 - On the S3, "Nothing playing" shows Sonic waiting (Sonic 1's foot tap, with the game's timing)
   instead of Pikachu when you build his sprite (`tools/gen_idle_sprite.py`, git-ignored), and no

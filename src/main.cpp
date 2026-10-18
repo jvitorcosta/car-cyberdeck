@@ -283,8 +283,8 @@ void loop() {
     view.progressMs = interp::currentProgressMs(st.progressMs, st.durationMs, st.isPlaying,
                                                 millis() - st.lastPollMs);
 
-    // Screen mode: deck when playing (or paused under a minute); a status screen when offline,
-    // when Spotify has nothing, or when the song has stayed paused a minute (util/idlewait).
+    // Screen mode: deck when playing (or paused under 30 s); a status screen when offline, when
+    // Spotify has nothing, or when the song has stayed paused 30 s (util/idlewait).
     static idlewait::Clock idle;
     const bool idleNow = idle.update(st.status == PlaybackStatus::Paused,
                                      st.status == PlaybackStatus::Stopped, millis());

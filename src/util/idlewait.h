@@ -4,7 +4,7 @@
 // nothing at all, or after the song has stayed paused for PAUSE_MS (a short pause keeps the
 // deck). PURE, host-tested; the UI loop feeds it every pass.
 namespace idlewait {
-constexpr uint32_t PAUSE_MS = 60000;
+constexpr uint32_t PAUSE_MS = 30000;
 
 class Clock {
 public:

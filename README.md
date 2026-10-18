@@ -37,7 +37,7 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
   animated Pokémon; when Spotify asks the deck to slow down it shows how long to wait. On the
   S3, "Nothing playing" shows Sonic waiting, tapping his foot as in the 1991 game, on a city
   sidewalk at sunset (at night: stars, a crescent moon, more windows lit), and a music box
-  plays softly until the song comes back. A paused song keeps the deck for a minute first.
+  plays softly until the song comes back. A paused song keeps the deck for 30 s first.
 - **Phone remote:** set `REMOTE_TOKEN` in `src/config.h` and open
   `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD; see [Two decks](#two-decks))
   on a phone on the same network: what's playing, the deck's status and a Howl button. Add it
