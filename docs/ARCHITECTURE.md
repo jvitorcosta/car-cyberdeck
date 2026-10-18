@@ -61,6 +61,13 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
+- **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Nothing
+  playing" shows when Spotify has nothing, or once the song has stayed paused 60 s. On the S3 a
+  music box then loops `data/tunes.txt` (packed by `tools/tune_clip.py` from `data/tunes/*.txt`,
+  git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices, synthesised in a
+  4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
+  screen goes, starts only with the howl's TLS margin, stops when the largest block nears
+  `TLS_NEED`, and retries at most once a minute. `tools/gen_tune.py` makes tunes from MIDI.
 - **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
   mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority
   task, never the UI loop. It reads `GET /state` every 5 s (now playing, the deck's status,

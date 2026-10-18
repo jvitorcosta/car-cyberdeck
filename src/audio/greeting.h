@@ -23,4 +23,10 @@ void playIntro();
 // tools/gen_howl.py, git-ignored) when the build has one, else synthesised on the fly (util/howl).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
+// The S3's music box behind "Nothing playing" (util/musicbox): loops data/tunes.txt (tools/
+// tune_clip.py) until stopTunes(), which fades it out within musicbox::FADE_MS. Counts as playing(), so a
+// phone howl meanwhile gets "busy". No-op on the CYD.
+void playTunes();
+void stopTunes();
+bool tunesPlaying();
 }

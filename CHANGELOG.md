@@ -6,6 +6,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
+- A music box on the S3's "Nothing playing" screen: soft plucked tunes loop in random order until
+  the song comes back. Make your own from MIDI with `tools/gen_tune.py` (`data/tunes/`,
+  git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
 - Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.
   She sings along with synced lyrics, greets you, remarks on new songs (at most every 5 min) and
   reacts to Howl and trip reset. The Lyrics, Sounds and Trip screens open from the companion's
@@ -34,6 +37,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- A paused song keeps the deck for a minute before "Nothing playing" shows (it used to show only
+  when Spotify had nothing at all).
 - On the S3, "Nothing playing" shows Sonic waiting (Sonic 1's foot tap, with the game's timing)
   instead of Pikachu when you build his sprite (`tools/gen_idle_sprite.py`, git-ignored), and no
   longer shows a QR code. He waits on a city sidewalk at sunset: banded sky, striped low sun,

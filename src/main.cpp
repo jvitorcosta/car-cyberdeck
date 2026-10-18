@@ -30,6 +30,7 @@ EMBED(data_idle_bin);   // Sonic waiting on "Nothing playing" (tools/gen_idle_sp
 #include "util/version.h"
 #include "util/interp.h"
 #include "util/netplan.h"
+#include "util/idlewait.h"
 #include "images/art.h"
 #include "images/walksprite.h"
 #include "images/cache.h"
@@ -206,6 +207,43 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
 }
 
 
+// The S3's music box loops while "Nothing playing" is up, and stops (a short fade) as it goes.
+// It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
+// starts with the same margin as a phone howl, stops when memory runs low, and then tries again
+// at most once a minute.
+static void musicBox(bool want) {
+#ifdef BOARD_S3
+    constexpr uint32_t RETRY_MS = 60000;
+    static uint32_t gaveUpAt = 0;
+    static bool gaveUp = false;
+    if (!want) {
+        if (greeting::tunesPlaying()) greeting::stopTunes();
+        gaveUp = false;
+        return;
+    }
+    if (greeting::tunesPlaying()) {
+        if (mem::byteLargest() < netplan::TLS_NEED + 4000) {
+            Serial.printf("[tunes] low memory (largest %u): stopping\n", (unsigned)mem::byteLargest());
+            greeting::stopTunes();
+            gaveUp = true;
+            gaveUpAt = millis();
+        }
+        return;
+    }
+    if (gaveUp && millis() - gaveUpAt < RETRY_MS) return;
+    if (greeting::playing()) return;   // a howl, or the last tune still fading: next pass
+    if (mem::byteLargest() < netplan::TLS_NEED + 12000) {
+        gaveUp = true;
+        gaveUpAt = millis();
+        return;
+    }
+    gaveUp = false;
+    greeting::playTunes();
+#else
+    (void)want;
+#endif
+}
+
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
 // when the mode changed (the caller redraws the current screen). No clock yet -> day.
 static bool updateDayNight() {
@@ -245,11 +283,16 @@ void loop() {
     view.progressMs = interp::currentProgressMs(st.progressMs, st.durationMs, st.isPlaying,
                                                 millis() - st.lastPollMs);
 
-    // Screen mode: deck when playing/paused; a status screen when offline or stopped.
+    // Screen mode: deck when playing (or paused under a minute); a status screen when offline,
+    // when Spotify has nothing, or when the song has stayed paused a minute (util/idlewait).
+    static idlewait::Clock idle;
+    const bool idleNow = idle.update(st.status == PlaybackStatus::Paused,
+                                     st.status == PlaybackStatus::Stopped, millis());
     int mode = 0;   // 0 = deck, 1 = offline, 2 = nothing playing
     if (!net::isOnline() || st.status == PlaybackStatus::Offline ||
         netplan::stale(millis(), st.lastPollOkMs, STALE_MS)) mode = 1;
-    else if (st.status == PlaybackStatus::Stopped) mode = 2;
+    else if (idleNow) mode = 2;
+    musicBox(mode == 2);
 
     static int lastMode = -1;
     static uint32_t shownGen = 0;

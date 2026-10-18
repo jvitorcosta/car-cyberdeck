@@ -6,6 +6,7 @@
 #include "../util/loudness.h"
 #include "../util/howl.h"
 #include "../util/greetpick.h"
+#include "../util/musicbox.h"
 #include "../core/embed.h"
 
 EMBED(data_greeting_pcm);
@@ -15,6 +16,7 @@ EMBED(data_opener_pcm);
 EMBED(data_intro_pcm);
 EMBED(data_howl_pcm);
 EMBED(data_greeting_alt_pcm);
+EMBED(data_tunes_txt);
 #endif
 
 namespace greeting {
@@ -124,6 +126,64 @@ static void start(const Clip* c, const char* name) {
 }
 
 void play() { start(&greetingClip(), "greeting"); }
+
+static std::atomic<bool> s_tunes{false};      // the music box's task is alive
+static std::atomic<bool> s_tunesStop{false};
+
+#ifdef BOARD_S3
+static_assert(musicbox::RATE == CLIP_RATE, "the music box plays at the clip rate");
+
+// Like task(), but the music box never ends by itself: it plays until stopTunes() and its fade.
+static void tuneTask(void*) {
+    xSemaphoreTake(s_output, portMAX_DELAY);
+    if (!s_tunesStop.load() && audiosink::open(CLIP_RATE)) {
+        musicbox::Player box((const char*)EMBED_DATA(data_tunes_txt), EMBED_SIZE(data_tunes_txt),
+                             esp_random());
+        char name[32] = "";
+        int shown = -1;
+        int16_t buf[CHUNK];
+        const int volume = audiosink::GREETING_VOLUME;
+        for (;;) {
+            if (s_tunesStop.load()) box.stop();
+            if (box.tune() != shown) {
+                shown = box.tune();
+                tunes::name((const char*)EMBED_DATA(data_tunes_txt), EMBED_SIZE(data_tunes_txt), shown,
+                            name, sizeof name);
+                Serial.printf("[tunes] %s\n", name);
+            }
+            const size_t n = box.fill(buf, CHUNK);
+            if (n == 0) break;
+            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 100);
+            audiosink::write(buf, n);
+        }
+        audiosink::close();
+    }
+    xSemaphoreGive(s_output);
+    Serial.println("[tunes] stopped");
+    s_tunes.store(false);
+    s_playing.fetch_sub(1);
+    vTaskDelete(nullptr);
+}
+#endif
+
+void playTunes() {
+#ifdef BOARD_S3
+    if (s_tunes.load()) return;
+    if (!s_output) s_output = xSemaphoreCreateMutex();
+    s_tunesStop.store(false);
+    s_tunes.store(true);
+    s_playing.fetch_add(1);
+    if (xTaskCreate(tuneTask, "tunes", 4096, nullptr, 1, nullptr) != pdPASS) {
+        s_tunes.store(false);
+        s_playing.fetch_sub(1);
+        Serial.println("[tunes] no memory for its task");
+    }
+#endif
+}
+
+void stopTunes() { s_tunesStop.store(true); }
+
+bool tunesPlaying() { return s_tunes.load(); }
 
 void playHowl() {
 #ifdef BOARD_S3
