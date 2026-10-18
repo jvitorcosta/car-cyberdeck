@@ -35,6 +35,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- The S3's app partition is 12 MB (was 8 MB; taken from the unused storage area of its 16 MB
+  flash), and the boot intro plays its whole clip in story order (`gen_intro.py`'s default cut:
+  11.8 s to the end, then 0-11.8 s). Flash the S3 once with `pio run -e s3 -t upload` to write the
+  new partition table.
 - "No signal..." now says why: **No WiFi...** (lists the saved networks), **No internet...**
   (connected, but the network or hotspot passes no traffic) or **Spotify error** (HTTP code or
   rejected certificate).
