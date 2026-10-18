@@ -34,6 +34,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- On the S3, "Nothing playing" shows Sonic waiting (Sonic 1's foot tap, with the game's timing)
+  instead of Pikachu when you build his sprite (`tools/gen_idle_sprite.py`, git-ignored), and no
+  longer shows a QR code.
 - The S3's app partition is 12 MB (was 8 MB; taken from the unused storage area of its 16 MB
   flash), and the boot intro plays its whole clip in story order (`gen_intro.py`'s default cut:
   11.8 s to the end, then 0-11.8 s). Flash the S3 once with `pio run -e s3 -t upload` to write the

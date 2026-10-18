@@ -54,7 +54,10 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
   Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
   certificate) plus a bundled Pokémon per cause on the battle platform with a speech bubble,
-  4 fps, pushed in 4-row strips. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
+  4 fps, pushed in 4-row strips. On the S3 "Nothing playing" shows Sonic instead
+  (`util/idlesprite`, `data/idle.bin` from `tools/gen_idle_sprite.py`): Sonic 1's waiting
+  animation with the game's timing (12 x stand, then the foot tap, 400 ms a frame), from when
+  the screen appears; the scene redraws when his frame or the arrow can change. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
 - **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
   mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority
@@ -93,7 +96,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   accents,cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,car_sprite,montage}`,
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
   avatarscene,avatarsing,bios,bootanim,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
-  genrebadge,glyphrun,greetpick,hotspotip,howl,interp,introclock,jsonflat,linkstatus,loudness,
+  genrebadge,glyphrun,greetpick,hotspotip,howl,idlesprite,interp,introclock,jsonflat,linkstatus,loudness,
   lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
   pollpace,press,readguard,remotegate,rgb565,roam,statejson,stateparse,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.

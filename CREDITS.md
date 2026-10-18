@@ -50,6 +50,11 @@ avatar art (`tools/gen_avatar.py`), the intro clip (`tools/gen_intro.py`), the g
 the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) on
 Wikimedia Commons.
 
+Sonic waiting on the S3's "Nothing playing" screen is rebuilt locally by `tools/gen_idle_sprite.py`
+from Sonic the Hedgehog (Mega Drive, 1991) art in the
+[s1disasm](https://github.com/sonicretro/s1disasm) disassembly. The art is © SEGA; it is fetched
+into the git-ignored `sonic-sprites/` and `data/idle.bin`, never distributed here.
+
 ## Inspiration
 
 [intellij-pokemon-progress](https://github.com/kagof/intellij-pokemon-progress).
@@ -57,5 +62,6 @@ Wikimedia Commons.
 ## Trademarks
 
 CarDeck is a personal, non-commercial fan project, not affiliated with or endorsed by
-Spotify, Nintendo, The Pokémon Company, Creatures Inc., GAME FREAK inc. or Honda. Pokémon is a
-trademark of Nintendo; Spotify is a trademark of Spotify AB.
+Spotify, Nintendo, The Pokémon Company, Creatures Inc., GAME FREAK inc., SEGA or Honda. Pokémon
+is a trademark of Nintendo; Sonic the Hedgehog is a trademark of SEGA; Spotify is a trademark of
+Spotify AB.
