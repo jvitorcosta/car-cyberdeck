@@ -31,10 +31,10 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes);
 void drawNoteFrame(TFT_eSPI& t, int frame);
 // Forget the last drawn lyric so the next drawLyricArea() repaints (after drawNow).
 void resetLyricArea();
-// Full status screen ("No WiFi...", "Spotify busy...", "Nothing playing"): the cause's Pokemon
+// Full status screen ("No WiFi...", "Spotify busy...", "Spotify is silent"): the cause's Pokemon
 // on its platform (ui/statusscene) and a dialogue box with `msg` and an optional smaller
 // `detail` line. sound: the music box's speaker button in the box (statusscene::SOUND_ICON):
-// -1 none, 0 muted, 1 on. qr: the phone-remote link drawn in the sky ("Nothing playing" on
+// -1 none, 0 muted, 1 on. qr: the phone-remote link drawn in the sky ("Spotify is silent" on
 // the S3), or nullptr.
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
                  uint32_t animMs, int sound = -1, const statusscene::Qr* qr = nullptr);

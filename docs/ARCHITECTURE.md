@@ -68,15 +68,15 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
   Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
   certificate) plus a bundled Pokémon per cause on the battle platform with a speech bubble,
-  4 fps, pushed in 4-row strips. On the S3 "Nothing playing" shows Sonic instead
+  4 fps, pushed in 4-row strips. On the S3 "Spotify is silent" shows Sonic instead
   (`util/idlesprite`, `data/idle.bin` from `tools/gen_idle_sprite.py`): Sonic 1's waiting
   animation with the game's timing (12 x stand, then the foot tap, 400 ms a frame), from when
   the screen appears; the scene redraws when his frame or the arrow can change. He waits on a
   sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
-- **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Nothing
-  playing" shows when Spotify has nothing, or once the song has stayed paused 30 s. On the S3 a
+- **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Spotify
+  is silent" shows when Spotify has nothing, or once the song has stayed paused 30 s. On the S3 a
   music box then loops `data/tunes.txt` (packed by `tools/tune_clip.py` from `data/tunes/*.txt`,
   git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at 5 % of the clip volume (`TUNE_LEVEL`),
   synthesised in a 4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
@@ -90,7 +90,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. On the S3 the
   howl is the real recording in `data/howl.pcm` (`tools/gen_howl.py`, 48 kHz) when the build has
   one; otherwise, and always on the CYD, it is synthesised while it plays (`audio/greeting`).
-  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). On the S3 the "Nothing playing"
+  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). On the S3 the "Spotify is silent"
   screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` builds
   `http://<ip>/?k=<token>` from the current address and picks a version ≤ 3), checked when the
   screen appears and every 5 s, redrawn when the address changes.

@@ -7,10 +7,10 @@
 // pixel's colour, ui::drawOfflineScene pushes the region in small strips (no big buffer).
 namespace statusscene {
 enum class Bubble : uint8_t { None, Question, Dots, Zzz, Bang };
-// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Nothing playing" with his file,
+// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Spotify is silent" with his file,
 // in front of the Sunset drive (ui/sunset); night: its night palette (the caller sets it).
 struct Look { int sprite; Bubble bubble; bool ball; bool idle = false; bool night = false; };
-// Ok = "Nothing playing" (Pikachu, no bubble).
+// Ok = "Spotify is silent" (Pikachu, no bubble).
 Look lookFor(linkstatus::Kind k);
 
 // Layout: the Pokemon on its platform in the middle, its bubble to the upper right, the
@@ -34,7 +34,7 @@ struct Colors {
 };
 // QR code of the phone-remote link (util/qrfit): modules row-major, MSB first, 1 = dark. Drawn
 // at QR_X/QR_Y, 2 px per module inside a white 4-module quiet zone, in the sky left of Sonic or
-// Pikachu (only the "Nothing playing" screen passes one).
+// Pikachu (only the "Spotify is silent" screen passes one).
 struct Qr { const uint8_t* bits; int size; };
 constexpr int QR_X = X0 + 4, QR_Y = Y0 + 4;
 uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c,
@@ -43,7 +43,7 @@ uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c
 struct Rect { int x, y, w, h; };
 Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail and shadow
 
-// The music box's speaker key on "Nothing playing" (S3): centred on the dialogue box's right
+// The music box's speaker key on "Spotify is silent" (S3): centred on the dialogue box's right
 // end, clear of the title; a tap anywhere on that end toggles it.
 constexpr Rect SOUND_ICON = {262, DLG_Y + 16, 44, 36};
 bool onSoundButton(int x, int y);

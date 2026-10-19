@@ -42,7 +42,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
-- The S3's "Nothing playing" screen shows the phone page's link as a QR code again, in the sky
+- The "Nothing playing" screen now says **Spotify is silent** (same screen, same timing).
+- The S3's "Spotify is silent" screen shows the phone page's link as a QR code again, in the sky
   left of Sonic: `http://<deck address>/?k=<REMOTE_TOKEN>` with the address it has now
   (`172.20.10.10` on the iPhone hotspot, the DHCP one on any other network), redrawn when the
   address changes. None while offline or without `REMOTE_TOKEN`.

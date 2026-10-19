@@ -19,7 +19,7 @@
 #include "util/idlesprite.h"
 #include "core/embed.h"
 #ifdef BOARD_S3
-EMBED(data_idle_bin);   // Sonic waiting on "Nothing playing" (tools/gen_idle_sprite.py), else empty
+EMBED(data_idle_bin);   // Sonic on "Spotify is silent" (tools/gen_idle_sprite.py), else empty
 #endif
 #include "audio/greeting.h"
 #include "ui/theme.h"
@@ -253,7 +253,7 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
 }
 
 #ifdef BOARD_S3
-// The phone-remote link as a QR code for the "Nothing playing" screen (esp_qrcode, built into
+// The phone-remote link as a QR code for the "Spotify is silent" screen (esp_qrcode, built into
 // the core), from the deck's current address: 172.20.10.10 on the iPhone hotspot, the DHCP one
 // elsewhere. Rebuilt when the link changes (another network, a reconnect, the hotspot address
 // pinned after DHCP), checked when the screen appears and then at most every 5 s:
@@ -311,7 +311,7 @@ static const statusscene::Qr* phoneQr(bool) { return nullptr; }   // CYD: no fla
 static constexpr uint32_t s_qrGen = 0;
 #endif
 
-// The S3's music box loops while "Nothing playing" is up, and stops (a short fade) as it goes.
+// The S3's music box loops while "Spotify is silent" is up, and stops (a short fade) as it goes.
 // It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
 // starts with the same margin as a phone howl, stops when memory runs low, and then tries again
 // at most once a minute.
@@ -350,7 +350,7 @@ static void musicBox(bool want) {
 
 #ifdef BOARD_S3
 // A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on
-// the companion. Touch is read every 20 ms, only while "Nothing playing" is up.
+// the companion. Touch is read every 20 ms, only while "Spotify is silent" is up.
 static press::Press s_soundPress;
 static bool soundTapped() {
     press::Press& p = s_soundPress;
@@ -438,7 +438,7 @@ void loop() {
         // Re-read the cause at most once a second: net::ssid() allocates a String.
         if (lastMode != mode || millis() - textAt >= 1000) {
             textAt = millis();
-            strlcpy(title, "Nothing playing", sizeof title);
+            strlcpy(title, "Spotify is silent", sizeof title);
             detail[0] = '\0';
             kind = mode == 1 ? offlineText(st, title, sizeof title, detail, sizeof detail)
                              : linkstatus::Kind::Ok;

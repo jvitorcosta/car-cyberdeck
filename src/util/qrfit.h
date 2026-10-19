@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 // The phone-remote link as a QR code, drawn in the sky left of Sonic (or Pikachu) on the
-// "Nothing playing" screen (ui/statusscene): 2 px per module and the standard 4-module white
+// "Spotify is silent" screen (ui/statusscene): 2 px per module and the standard 4-module white
 // quiet zone, which phone cameras need. Byte mode, error correction L. PURE, host-tested.
 namespace qrfit {
 constexpr int MAX_VERSION = 3;          // 29 modules: 74 px with the quiet zone

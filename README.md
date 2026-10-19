@@ -36,13 +36,13 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
   and recovers on its own.
 - **Status screens that say why:** no WiFi, no internet or Spotify trouble, each with its own
   animated Pokémon; when Spotify asks the deck to slow down it shows how long to wait. On the
-  S3, "Nothing playing" shows Sonic waiting, tapping his foot as in the 1991 game, on a city
+  S3, "Spotify is silent" shows Sonic waiting, tapping his foot as in the 1991 game, on a city
   sidewalk at sunset (at night: stars, a crescent moon, more windows lit), and a music box
   plays softly until the song comes back. A paused song keeps the deck for 30 s first.
 - **Phone remote:** set `REMOTE_TOKEN` in `src/config.h` and open
   `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD; see [Two decks](#two-decks))
   on a phone on the same network: what's playing, the deck's status and a Howl button. Add it
-  to the Home Screen for a full-screen app with its own icon. On the S3 the "Nothing playing"
+  to the Home Screen for a full-screen app with its own icon. On the S3 the "Spotify is silent"
   screen shows the link as a QR code, built from the deck's current address (`172.20.10.10` on
   the iPhone hotspot, the DHCP one elsewhere), and Howl plays a real wolf recording when you
   build one (otherwise, and always on the CYD, a synthesised howl).
@@ -133,7 +133,7 @@ built-in defaults.
 | Pixel McQueen (S3) | a 200 × 66 side view facing right, then `python tools/gen_mcqueen_sprite.py montage-photos/mcqueen.png` → `data/mcqueen.bin` (the defaults fit the approved art; new art sets `--wheels`, `--head`, `--tail`, `--beam`) | two openings: the kiss and the Honda |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
 | Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; default: the kiss wallpaper's walk-in and kiss, ~13 s; needs ffmpeg). One of the random boot openings | none: the night drive openings only |
-| Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Nothing playing" |
+| Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Spotify is silent" |
 | Music-box tunes (S3) | `python tools/gen_tune.py song.mid --name "National Park"` → `data/tunes/national_park.txt`, one per song (the melody line; `--track N` if it picks the accompaniment); all of `data/tunes/` loop in random order | two public-domain tunes (`data/tunes_default.txt`) |
 | Wolf howl (S3) | `python tools/gen_howl.py wolf.ogg` → `data/howl.pcm` (cut 13-19.5 s by default, `--start`/`--end`; needs ffmpeg), for example the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) | a synthesised howl |
 | Avatar (companion) | images + `avatar-photos/avatar.json`, then `python tools/gen_avatar.py` (needs ffmpeg; see the script's header) | lyrics only |

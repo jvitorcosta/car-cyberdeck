@@ -246,7 +246,7 @@ static void drawTuneNoteAt(TFT_eSPI& t, int frame) {
 
 void drawTuneNote(TFT_eSPI& t, int frame) { drawTuneNoteAt(t, frame); }
 
-// "Nothing playing"'s second line: ♪ and the tune; muted, the words in a softer ink.
+// "Spotify is silent"'s second line: ♪ and the tune; muted, the words in a softer ink.
 static void drawTuneLine(TFT_eSPI& t, const char* detail, int sound) {
     t.fillRect(16, TUNE_Y - 2, TUNE_LINE_W, 20, theme::pal().dlgFill);
     if (!detail || !detail[0]) return;
