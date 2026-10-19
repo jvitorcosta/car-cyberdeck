@@ -13,18 +13,37 @@ constexpr int LOST_AFTER = 3;          // failed requests in a row: the adapter 
 
 enum class Link : uint8_t { Off, Connecting, NoEngine, Live };
 
+// The request order. Fast, repeating: RPM, speed, then one of pedal (D, else E), throttle, air
+// (MAF, else MAP) in turn; one slow value (coolant, battery, fuel, intake, ethanol, load, fuel
+// system) every SLOW_MS. What the car's scan says it lacks is never asked (the adapter's battery
+// always is); before setSupported() everything counts as supported.
 class Plan {
 public:
     obd::Pid next(uint32_t nowMs);
     void done(obd::Pid p, obd::Reply r, uint32_t nowMs);
+    void setSupported(const uint32_t bits[4]);
+    // Waiting for the engine to start: only the battery (9 in 10) and RPM, for the crank dip.
+    void crankWatch(bool on) { crank_ = on; }
 private:
-    bool blocked(obd::Pid p, uint32_t nowMs) const;
-    bool started_ = false, fastSpeed_ = false;
-    uint8_t slowNext_ = 0;
+    bool blocked(obd::Pid p, uint32_t nowMs) const;   // unsupported, or backing off after NO DATA
+    obd::Pid fastExtra(uint32_t nowMs);              // pedal / throttle / air in turn; COUNT if none
+    bool started_ = false, crank_ = false;
+    uint8_t slowNext_ = 0, fastStep_ = 0, fastExtra_ = 0, crankN_ = 0;
     uint32_t lastSlowMs_ = 0;
+    uint32_t supported_[4] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
     bool noData_[(int)obd::Pid::COUNT] = {};
     uint32_t noDataAt_[(int)obd::Pid::COUNT] = {};
 };
+
+constexpr uint32_t STALE_FAST_MS = 3000, STALE_SLOW_MS = 30000;
+// How old a reading may be before it's drawn as stale: STALE_FAST_MS for the fast set (RPM, speed,
+// pedal, throttle, MAF/MAP), STALE_SLOW_MS for the slow ones (read only every ~14 s).
+uint32_t staleAfterMs(obd::Pid p);
+// Warnings, drawn inverted: battery under 13.0 V with the engine running (not charging) or under
+// 12.2 V with it off; coolant over 105 C; RPM from 85 % of the redline.
+bool batteryWarn(float volts, bool engineRunning);
+bool coolantWarn(float c);
+bool rpmWarn(float rpm, float redline);
 
 // The link's state from each reply to request p. Live only from a mode 01 value: the adapter
 // reads the battery (ATRV) with the ignition off too. NoEngine from NoEngine, and from NO DATA

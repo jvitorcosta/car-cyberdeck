@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <cstdint>
+#include <initializer_list>
 #include "../../src/util/obdplan.h"
 
 using obd::Pid;
@@ -10,7 +11,15 @@ using obdplan::Link;
 void setUp() {}
 void tearDown() {}
 
-static bool isFast(Pid p) { return p == Pid::Rpm || p == Pid::Speed; }
+static bool isFast(Pid p) {
+    return p == Pid::Rpm || p == Pid::Speed || p == Pid::PedalD || p == Pid::PedalE || p == Pid::Throttle ||
+           p == Pid::Maf || p == Pid::Map;
+}
+// Unread bits: every PID supported except those cleared.
+static void allBut(uint32_t bits[4], std::initializer_list<uint8_t> off) {
+    for (int i = 0; i < 4; ++i) bits[i] = 0xFFFFFFFFu;
+    for (uint8_t pid : off) bits[(pid - 1) / 32] &= ~(1u << (31 - (pid - 1) % 32));
+}
 
 void test_fast_pair_every_cycle_slow_ones_in_turn() {
     obdplan::Plan plan;
@@ -25,7 +34,124 @@ void test_fast_pair_every_cycle_slow_ones_in_turn() {
     }
     TEST_ASSERT_INT_WITHIN(2, 10, slow);                 // one slow request per SLOW_MS
     TEST_ASSERT_EQUAL_INT(200 - slow, fast);
-    for (int i = 0; i < (int)Pid::COUNT; ++i) TEST_ASSERT_TRUE(seen[i]);   // all of them, in turn
+    for (int i = 0; i < (int)Pid::COUNT; ++i)              // all of them, in turn; the fallbacks
+        if ((Pid)i != Pid::PedalE && (Pid)i != Pid::Map)   // (pedal E, MAP) only without D / MAF
+            TEST_ASSERT_TRUE(seen[i]);
+}
+
+void test_rpm_and_speed_at_least_three_a_second() {
+    obdplan::Plan plan;
+    int rpm = 0, speed = 0;
+    for (uint32_t t = 1000; t < 11000; t += 80) {          // 10 s at 80 ms a request
+        const Pid p = plan.next(t);
+        rpm += p == Pid::Rpm;
+        speed += p == Pid::Speed;
+        plan.done(p, Reply::Ok, t);
+    }
+    TEST_ASSERT_GREATER_OR_EQUAL(30, rpm);
+    TEST_ASSERT_GREATER_OR_EQUAL(30, speed);
+}
+
+void test_pedal_falls_back_to_e_then_nothing() {
+    uint32_t bits[4];
+    allBut(bits, {0x49});
+    obdplan::Plan plan;
+    plan.setSupported(bits);
+    bool d = false, e = false;
+    for (uint32_t t = 0; t < 5000; t += 80) {
+        const Pid p = plan.next(t);
+        d |= p == Pid::PedalD;
+        e |= p == Pid::PedalE;
+        plan.done(p, Reply::Ok, t);
+    }
+    TEST_ASSERT_FALSE(d);
+    TEST_ASSERT_TRUE(e);
+    allBut(bits, {0x49, 0x4A});
+    obdplan::Plan none;
+    none.setSupported(bits);
+    for (uint32_t t = 0; t < 5000; t += 80) {
+        const Pid p = none.next(t);
+        TEST_ASSERT_FALSE(p == Pid::PedalD || p == Pid::PedalE);
+        none.done(p, Reply::Ok, t);
+    }
+}
+
+void test_maf_preferred_map_otherwise() {
+    uint32_t bits[4];
+    allBut(bits, {});
+    obdplan::Plan maf;
+    maf.setSupported(bits);
+    bool sawMaf = false;
+    for (uint32_t t = 0; t < 5000; t += 80) {
+        const Pid p = maf.next(t);
+        sawMaf |= p == Pid::Maf;
+        TEST_ASSERT_FALSE(p == Pid::Map);
+        maf.done(p, Reply::Ok, t);
+    }
+    TEST_ASSERT_TRUE(sawMaf);
+    allBut(bits, {0x10});
+    obdplan::Plan map;
+    map.setSupported(bits);
+    bool sawMap = false;
+    for (uint32_t t = 0; t < 5000; t += 80) {
+        const Pid p = map.next(t);
+        sawMap |= p == Pid::Map;
+        TEST_ASSERT_FALSE(p == Pid::Maf);
+        map.done(p, Reply::Ok, t);
+    }
+    TEST_ASSERT_TRUE(sawMap);
+}
+
+void test_unsupported_slow_pid_is_never_asked() {
+    uint32_t bits[4];
+    allBut(bits, {0x52, 0x2F});                           // no ethanol, no fuel level
+    obdplan::Plan plan;
+    plan.setSupported(bits);
+    bool battery = false;
+    for (uint32_t t = 0; t < 40000; t += 80) {
+        const Pid p = plan.next(t);
+        TEST_ASSERT_FALSE(p == Pid::Ethanol || p == Pid::Fuel);
+        battery |= p == Pid::Battery;                     // ATRV is the adapter's: always asked
+        plan.done(p, Reply::Ok, t);
+    }
+    TEST_ASSERT_TRUE(battery);
+}
+
+void test_crank_watch_is_mostly_battery() {
+    obdplan::Plan plan;
+    plan.crankWatch(true);
+    int bat = 0, rpm = 0;
+    for (uint32_t t = 0; t < 2000; t += 100) {
+        const Pid p = plan.next(t);
+        bat += p == Pid::Battery;
+        rpm += p == Pid::Rpm;
+        TEST_ASSERT_TRUE(p == Pid::Battery || p == Pid::Rpm);
+    }
+    TEST_ASSERT_EQUAL_INT(18, bat);
+    TEST_ASSERT_EQUAL_INT(2, rpm);
+    plan.crankWatch(false);
+    bool other = false;
+    for (uint32_t t = 2000; t < 4000; t += 100) {
+        const Pid p = plan.next(t);
+        other |= p != Pid::Battery && p != Pid::Rpm;
+        plan.done(p, Reply::Ok, t);
+    }
+    TEST_ASSERT_TRUE(other);
+}
+
+void test_stale_and_warnings() {
+    TEST_ASSERT_EQUAL_UINT32(3000, obdplan::staleAfterMs(Pid::Rpm));
+    TEST_ASSERT_EQUAL_UINT32(3000, obdplan::staleAfterMs(Pid::PedalE));
+    TEST_ASSERT_EQUAL_UINT32(30000, obdplan::staleAfterMs(Pid::Coolant));
+    TEST_ASSERT_EQUAL_UINT32(30000, obdplan::staleAfterMs(Pid::Battery));
+    TEST_ASSERT_TRUE(obdplan::batteryWarn(12.9f, true));
+    TEST_ASSERT_FALSE(obdplan::batteryWarn(12.9f, false));
+    TEST_ASSERT_TRUE(obdplan::batteryWarn(12.1f, false));
+    TEST_ASSERT_FALSE(obdplan::batteryWarn(14.1f, true));
+    TEST_ASSERT_TRUE(obdplan::coolantWarn(106));
+    TEST_ASSERT_FALSE(obdplan::coolantWarn(105));
+    TEST_ASSERT_TRUE(obdplan::rpmWarn(5525, 6500));
+    TEST_ASSERT_FALSE(obdplan::rpmWarn(5500, 6500));
 }
 
 void test_unsupported_pid_backs_off_then_is_asked_again() {
@@ -133,6 +259,12 @@ void test_colour_bands_at_their_edges() {
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_fast_pair_every_cycle_slow_ones_in_turn);
+    RUN_TEST(test_rpm_and_speed_at_least_three_a_second);
+    RUN_TEST(test_pedal_falls_back_to_e_then_nothing);
+    RUN_TEST(test_maf_preferred_map_otherwise);
+    RUN_TEST(test_unsupported_slow_pid_is_never_asked);
+    RUN_TEST(test_crank_watch_is_mostly_battery);
+    RUN_TEST(test_stale_and_warnings);
     RUN_TEST(test_unsupported_pid_backs_off_then_is_asked_again);
     RUN_TEST(test_every_pid_unsupported_still_gives_a_request);
     RUN_TEST(test_health_states);
