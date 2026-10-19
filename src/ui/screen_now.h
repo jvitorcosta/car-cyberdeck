@@ -34,9 +34,10 @@ void resetLyricArea();
 // Full status screen ("No WiFi...", "Spotify busy...", "Nothing playing"): the cause's Pokemon
 // on its platform (ui/statusscene) and a dialogue box with `msg` and an optional smaller
 // `detail` line. sound: the music box's speaker button in the box (statusscene::SOUND_ICON):
-// -1 none, 0 muted, 1 on.
+// -1 none, 0 muted, 1 on. qr: the phone-remote link drawn in the sky ("Nothing playing" on
+// the S3), or nullptr.
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs, int sound = -1);
+                 uint32_t animMs, int sound = -1, const statusscene::Qr* qr = nullptr);
 // Repaints only the dialogue box (the text changed, e.g. the retry countdown).
 void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, int sound = -1);
 // Repaints only the detail line (same title, new detail: the countdown ticking, the next tune).
@@ -47,5 +48,6 @@ void drawSoundButton(TFT_eSPI& t, int sound, bool pressed);
 void drawTuneNote(TFT_eSPI& t, int frame);
 // Next animation frame of the scene (and the dialogue box's blinking arrow), pushed in small
 // strips: no flicker, ~1.9 KB buffer.
-void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow = true);
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow = true,
+                      const statusscene::Qr* qr = nullptr);
 }

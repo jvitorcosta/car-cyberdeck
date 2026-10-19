@@ -42,6 +42,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- The S3's "Nothing playing" screen shows the phone page's link as a QR code again, in the sky
+  left of Sonic: `http://<deck address>/?k=<REMOTE_TOKEN>` with the address it has now
+  (`172.20.10.10` on the iPhone hotspot, the DHCP one on any other network), redrawn when the
+  address changes. None while offline or without `REMOTE_TOKEN`.
 - A shorter S3 boot: about 19-21 s from power-on to the deck (measured: McQueen 19.2 s, Honda
   19.3 s, kiss 21.1 s; it was 27-35 s), most of it waiting for WiFi. The car openings start
   driving at once instead of after WiFi connects; the kiss is cut to the walk-in and the kiss
@@ -51,10 +55,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - A paused song keeps the deck for 30 s before "Nothing playing" shows (it used to show only
   when Spotify had nothing at all).
 - On the S3, "Nothing playing" shows Sonic waiting (Sonic 1's foot tap, with the game's timing)
-  instead of Pikachu when you build his sprite (`tools/gen_idle_sprite.py`, git-ignored), and no
-  longer shows a QR code. He waits on a city sidewalk at sunset: banded sky, striped low sun,
-  skyline with lit windows, street lamps and the road; at night a navy sky with stars and a
-  crescent moon, and more windows lit.
+  instead of Pikachu when you build his sprite (`tools/gen_idle_sprite.py`, git-ignored). He
+  waits on a city sidewalk at sunset: banded sky, striped low sun, skyline with lit windows,
+  street lamps and the road; at night a navy sky with stars and a crescent moon, and more
+  windows lit.
 - The S3's app partition is 12 MB (was 8 MB; taken from the unused storage area of its 16 MB
   flash), and the boot intro plays its whole clip in story order (`gen_intro.py`'s default cut:
   11.8 s to the end, then 0-11.8 s). Flash the S3 once with `pio run -e s3 -t upload` to write the

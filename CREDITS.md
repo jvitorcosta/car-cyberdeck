@@ -26,6 +26,10 @@ CarDeck stands on a lot of other people's work. Thank you.
 [XPT2046_Touchscreen](https://github.com/PaulStoffregen/XPT2046_Touchscreen) (MIT, hardware
 check only), [Unity](https://github.com/ThrowTheSwitch/Unity) (MIT, host tests).
 
+The S3's QR code uses `esp_qrcode`, ESP-IDF's qrcode component shipped in the Arduino-ESP32
+core (Apache-2.0), which is built on Project Nayuki's
+[QR Code generator library](https://www.nayuki.io/page/qr-code-generator-library) (MIT).
+
 ## Files in this repository not covered by the MIT license
 
 The MIT license in [LICENSE](LICENSE) covers the code and the original assets. These

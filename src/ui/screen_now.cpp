@@ -205,7 +205,8 @@ constexpr int SCENE_ROWS = 4;
 static uint16_t s_sceneBuf[statusscene::W * SCENE_ROWS];
 static_assert(statusscene::W * SCENE_ROWS >= 320, "a full row fits");
 
-void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow) {
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow,
+                      const statusscene::Qr* qr) {
     const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
                                    theme::pal().horizon, theme::pal().boxShadow,
                                    TFT_WHITE, theme::BALL_DARK,
@@ -217,7 +218,7 @@ void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animM
         for (int r = 0; r < ROWS; ++r)
             for (int x = 0; x < statusscene::W; ++x)
                 buf[r * statusscene::W + x] =
-                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
+                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c, qr));
         t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
     }
     if (arrow) drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
@@ -321,12 +322,12 @@ static void sunsetBackdrop(TFT_eSPI& t, bool night) {
 }
 
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs, int sound) {
+                 uint32_t animMs, int sound, const statusscene::Qr* qr) {
     if (look.idle) sunsetBackdrop(t, look.night);
     else background(t);
     topStrip(t);
     drawOfflineText(t, msg, detail, sound);
-    drawOfflineScene(t, look, animMs, sound < 0);   // the music box's screen has no arrow
+    drawOfflineScene(t, look, animMs, sound < 0, qr);   // the music box's screen has no arrow
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.
