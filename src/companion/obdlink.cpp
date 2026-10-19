@@ -290,6 +290,8 @@ static void closeLink() {
     s_client = nullptr;
 }
 
+static void transportRestart() {}   // BLE: a fresh client per attempt is enough (closeLink)
+
 static bool transportBegin() {
     esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);   // BLE only: classic's RAM back to the heap
     NimBLEDevice::init("cardeck-obd");
@@ -300,6 +302,7 @@ static bool transportBegin() {
 // Discovers nearby Bluetooth Classic devices and picks the adapter; logs every name seen.
 static bool findAdapter(Addr* addr, char* name, size_t n) {
     BTScanResults* found = s_bt.discover(DISCOVER_MS);
+    Serial.printf("[obd] scan: %d device(s)\n", found ? found->getCount() : -1);
     if (!found) return false;
     for (int i = 0; i < found->getCount(); ++i) {
         BTAdvertisedDevice* d = found->getDevice(i);
@@ -333,6 +336,15 @@ static bool openLink(const Addr& addr) {
 static void closeLink() {
     s_bt.disconnect();
     for (int i = 0; i < 30 && s_bt.connected(); ++i) delay(100);
+}
+
+// Restarts the Bluetooth Classic stack. The car test: after a failed connect, discover() found
+// nothing at all (not even devices it saw before), so the deck looped on a dead reconnect forever.
+static void transportRestart() {
+    s_bt.end();
+    delay(500);
+    if (!s_bt.begin("cardeck-obd", true) || !s_bt.setPin(OBD_PIN)) Serial.println("[obd] Bluetooth restart failed");
+    else Serial.println("[obd] Bluetooth restarted");
 }
 
 static bool transportBegin() {
@@ -418,6 +430,7 @@ static bool connectAdapter(char* name, size_t n) {
         Serial.printf("[obd] connecting to %s (remembered)\n", name);
         if (openLink(addr) && init()) { remember(addr, name); return true; }
         closeLink();
+        transportRestart();                               // a failed connect leaves discovery blind
     }
     setLink(obdplan::Link::Off);
     if (!findAdapter(&addr, name, n)) return false;
@@ -425,6 +438,7 @@ static bool connectAdapter(char* name, size_t n) {
     Serial.printf("[obd] connecting to %s\n", name);
     if (openLink(addr) && init()) { remember(addr, name); return true; }
     closeLink();
+    transportRestart();
     Serial.println("[obd] connect failed");
     return false;
 }
