@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <atomic>
 #include <cstring>
+#include <Preferences.h>
 #include "sink.h"
 #include "../util/loudness.h"
 #include "../util/howl.h"
@@ -131,6 +132,14 @@ void play() { start(&greetingClip(), "greeting"); }
 
 static std::atomic<bool> s_tunes{false};      // the music box's task is alive
 static std::atomic<bool> s_tunesStop{false};
+static portMUX_TYPE s_nameMux = portMUX_INITIALIZER_UNLOCKED;
+static char s_tuneName[32] = "";                // the tune playing (tuneTask writes, any task reads)
+
+[[maybe_unused]] static void setTuneName(const char* s) {   // tuneTask: S3 only
+    portENTER_CRITICAL(&s_nameMux);
+    strlcpy(s_tuneName, s, sizeof s_tuneName);
+    portEXIT_CRITICAL(&s_nameMux);
+}
 
 #ifdef BOARD_S3
 static_assert(musicbox::RATE == CLIP_RATE, "the music box plays at the clip rate");
@@ -152,6 +161,7 @@ static void tuneTask(void*) {
                 tunes::name((const char*)EMBED_DATA(data_tunes_txt), EMBED_SIZE(data_tunes_txt), shown,
                             name, sizeof name);
                 Serial.printf("[tunes] %s\n", name);
+                setTuneName(name);
             }
             const size_t n = box.fill(buf, CHUNK);
             if (n == 0) break;
@@ -161,6 +171,7 @@ static void tuneTask(void*) {
         audiosink::close();
     }
     xSemaphoreGive(s_output);
+    setTuneName("");
     Serial.println("[tunes] stopped");
     s_tunes.store(false);
     s_playing.fetch_sub(1);
@@ -186,6 +197,48 @@ void playTunes() {
 void stopTunes() { s_tunesStop.store(true); }
 
 bool tunesPlaying() { return s_tunes.load(); }
+
+void tuneName(char* out, size_t n) {
+    if (n == 0) return;
+    portENTER_CRITICAL(&s_nameMux);
+    strlcpy(out, s_tuneName, n);
+    portEXIT_CRITICAL(&s_nameMux);
+}
+
+#ifdef BOARD_S3
+// Loaded once, on first use (a function-local static: thread-safe), then kept in RAM.
+static std::atomic<bool>& muted() {
+    static std::atomic<bool> m{[] {
+        Preferences p;
+        p.begin("tunes", true);
+        const bool v = p.getBool("muted", false);
+        p.end();
+        return v;
+    }()};
+    return m;
+}
+#endif
+
+void setTunesMuted(bool m) {
+#ifdef BOARD_S3
+    if (muted().exchange(m) == m) return;
+    Preferences p;
+    p.begin("tunes", false);
+    p.putBool("muted", m);
+    p.end();
+    Serial.printf("[tunes] %s\n", m ? "muted" : "unmuted");
+#else
+    (void)m;
+#endif
+}
+
+bool tunesMuted() {
+#ifdef BOARD_S3
+    return muted().load();
+#else
+    return false;
+#endif
+}
 
 void playHowl() {
 #ifdef BOARD_S3

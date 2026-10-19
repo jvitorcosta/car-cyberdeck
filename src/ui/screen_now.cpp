@@ -229,12 +229,32 @@ static void drawMoreArrow(TFT_eSPI& t, bool on) {
     t.fillTriangle(x, y, x + 8, y, x + 4, y + 5, on ? theme::POKE_RED : theme::pal().dlgFill);
 }
 
-void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail) {
+// The music box's speaker: a cone, then two sound waves when on or a cross when muted.
+static void drawSoundIcon(TFT_eSPI& t, bool on) {
+    const statusscene::Rect r = statusscene::SOUND_ICON;
+    const uint16_t ink = theme::pal().text;
+    const int cy = r.y + r.h / 2;
+    t.fillRect(r.x, cy - 3, 4, 7, ink);                                  // the magnet
+    t.fillTriangle(r.x + 3, cy, r.x + 10, cy - 8, r.x + 10, cy + 8, ink);  // the cone
+    if (on) {
+        t.drawCircleHelper(r.x + 11, cy, 5, 0x2 | 0x4, ink);             // ")" ...
+        t.drawCircleHelper(r.x + 11, cy, 9, 0x2 | 0x4, ink);             // "))"
+        t.drawCircleHelper(r.x + 12, cy, 9, 0x2 | 0x4, ink);
+    } else {
+        for (int d = 0; d < 2; ++d) {                                    // a 2 px cross
+            t.drawLine(r.x + 15 + d, cy - 5, r.x + 23 + d - 1, cy + 5, ink);
+            t.drawLine(r.x + 15 + d, cy + 5, r.x + 23 + d - 1, cy - 5, ink);
+        }
+    }
+}
+
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, int sound) {
     const int y = statusscene::DLG_Y;
     dialogueBox(t, 4, y, 312, statusscene::DLG_H);
     const bool two = detail && detail[0];
     shadowText(t, msg, 18, two ? y + 12 : y + 22, 4, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
     if (two) shadowText(t, detail, 18, y + 42, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+    if (sound >= 0) drawSoundIcon(t, sound == 1);
 }
 
 void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
@@ -254,11 +274,11 @@ static void sunsetBackdrop(TFT_eSPI& t, bool night) {
 }
 
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs) {
+                 uint32_t animMs, int sound) {
     if (look.idle) sunsetBackdrop(t, look.night);
     else background(t);
     topStrip(t);
-    drawOfflineText(t, msg, detail);
+    drawOfflineText(t, msg, detail, sound);
     drawOfflineScene(t, look, animMs);
 }
 

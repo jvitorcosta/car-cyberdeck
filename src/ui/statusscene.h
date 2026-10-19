@@ -36,4 +36,9 @@ uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c
 
 struct Rect { int x, y, w, h; };
 Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail and shadow
+
+// The music box's speaker button on "Nothing playing" (S3): drawn at the dialogue box's top
+// right, clear of the title; a tap anywhere on the box's right end toggles it.
+constexpr Rect SOUND_ICON = {280, DLG_Y + 12, 24, 20};
+bool onSoundButton(int x, int y);
 }

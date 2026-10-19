@@ -198,6 +198,17 @@ void test_sonic_waits_in_front_of_the_sunset() {
     TEST_ASSERT_EQUAL_HEX16(C.sky, statusscene::pixel(x, 30, poke, statusscene::poseAt(0, poke), C));
 }
 
+// The music box's speaker button (S3): drawn at the dialogue box's top right, tapped anywhere
+// on the box's right end; the text stays clear of it.
+void test_sound_button() {
+    const statusscene::Rect i = statusscene::SOUND_ICON;
+    TEST_ASSERT_TRUE(statusscene::onSoundButton(i.x + i.w / 2, i.y + i.h / 2));
+    TEST_ASSERT_TRUE(i.y >= statusscene::DLG_Y + 4 && i.x + i.w <= 4 + 312 - 4);   // inside the box
+    TEST_ASSERT_TRUE(statusscene::onSoundButton(300, statusscene::DLG_Y + statusscene::DLG_H - 6));
+    TEST_ASSERT_FALSE(statusscene::onSoundButton(100, statusscene::DLG_Y + 20));   // the text
+    TEST_ASSERT_FALSE(statusscene::onSoundButton(i.x, statusscene::DLG_Y - 10));   // the scene
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_each_cause_gets_its_own_pokemon_and_bubble);
@@ -213,5 +224,6 @@ int main(int, char**) {
     RUN_TEST(test_sonic_drawn_2x_on_the_platform_following_the_timeline);
     RUN_TEST(test_redraw_key);
     RUN_TEST(test_sonic_waits_in_front_of_the_sunset);
+    RUN_TEST(test_sound_button);
     return UNITY_END();
 }

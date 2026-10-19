@@ -156,6 +156,10 @@ uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c
     return c.grass;
 }
 
+bool onSoundButton(int x, int y) {
+    return x >= 256 && x < 316 && y >= DLG_Y && y < DLG_Y + DLG_H;
+}
+
 uint32_t frameKey(uint32_t ms, const Look& look) {
     if (!look.idle) return ms / FRAME_MS;
     return idlesprite::tickAt(ms) << 1 | ((ms / (2 * FRAME_MS)) & 1);   // arrow: (step >> 1) & 1

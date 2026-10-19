@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 // The deck's sound clips (boot greeting, montage opener and finale, the S3's intro sound, howl):
 // embedded 16-bit mono PCM played on the board's audio output (audio/sink.h: the CYD's DAC on
@@ -29,4 +30,10 @@ bool playing();                     // a clip is still playing (its task and I2S
 void playTunes();
 void stopTunes();
 bool tunesPlaying();
+// Muted by the deck's speaker button or the phone page: remembered across restarts (NVS). The
+// UI loop stops and starts the music box to match. Any task. Always false on the CYD.
+void setTunesMuted(bool muted);
+bool tunesMuted();
+// The tune playing now into out ("" between runs of the music box). Any task.
+void tuneName(char* out, size_t n);
 }
