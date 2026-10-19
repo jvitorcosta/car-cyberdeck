@@ -103,11 +103,15 @@ decides how, e.g. min/max seen since boot with sane starting values).
   E30 (builder computes for the mix). km/l = speed / fuel L per h. Below a small speed (e.g. 3
   km/h) show `--` (idle). Smoothed over ~1–2 s so it's readable.
 - **AVG:** km/l over the trip since the gauges first went live this power-on (distance from speed,
-  fuel from the same estimate). Resets on power-off.
+  fuel from the same estimate). The deck powers off with the ignition, so this is per drive.
 - **KM LEFT:** fuel level % × 44 L (the City's tank) × AVG. `--` until AVG has a few km behind it
   (builder picks the threshold, e.g. 2 km) or without a fuel level.
-- **AT START:** the lowest battery reading around the engine start (the crank dip): the minimum
-  `ATRV` seen in the first seconds after RPM first appears. Shown for the rest of the power-on.
+- **AT START:** the battery's dip while the engine cranks. The deck is powered with the ignition
+  (owner, 2026-10-19), so it boots at key-on and the crank often comes before the link is up.
+  While the link answers but the engine isn't running yet (RPM absent or 0), `ATRV` is read in a
+  tight loop (~10 a second) and the minimum is kept; when RPM appears, that minimum is AT START for
+  the rest of the power-on. If the engine was already running at the first reading, the dip was
+  missed: AT START shows `--` (never a resting voltage presented as the dip).
 - **CHARGING:** battery ≥ 13.2 V with the engine running.
 
 ## The request schedule
@@ -193,6 +197,11 @@ enforces:
   added to the slow set and is read-only; when the car doesn't report it, the fallback is pedal
   released + RPM > 1200 + speed > 20 km/h. During fuel cut km/l now shows a capped `99.9`, and
   AVG/KM LEFT count that distance at zero fuel.
+
+- **Reconnect fast to the last adapter.** The link remembers the last adapter that answered (its
+  Bluetooth address, in NVS) and connects to it straight away at boot, falling back to the
+  existing discovery only if that fails. That cuts ~10 s of discovery from every drive, so the
+  gauges come up sooner and AT START catches the crank more often.
 
 ## Left to the builder
 
