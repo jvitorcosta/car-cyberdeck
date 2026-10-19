@@ -34,6 +34,9 @@ EMBED(data_idle_bin);   // Sonic waiting on "Nothing playing" (tools/gen_idle_sp
 #include "util/press.h"
 #ifdef BOARD_S3
 #include "board/s3/touch_ft6336.h"
+#include <Preferences.h>
+#include "util/intropick.h"
+#include "ui/carlook.h"
 #endif
 #include "images/art.h"
 #include "images/walksprite.h"
@@ -108,6 +111,25 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
     s_notesDance = out.dance;
 }
 
+#ifdef BOARD_S3
+// This boot's opening (util/intropick): random, never last boot's (NVS "boot"/"last"), only
+// from what the build has. -D INTRO_FORCE=\"kiss\" (or honda, mcqueen) forces one for testing.
+static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen) {
+    Preferences p;
+    p.begin("boot", false);
+    const int last = p.getInt("last", -1);
+    int o = -1;
+#ifdef INTRO_FORCE
+    o = intropick::forced(intropick::parse(INTRO_FORCE), haveKiss, haveMcQueen);
+#endif
+    if (o < 0) o = intropick::pick(esp_random(), last, haveKiss, haveMcQueen);
+    p.putInt("last", o);
+    p.end();
+    Serial.printf("[boot] opening: %s\n", intropick::name((intropick::Opening)o));
+    return (intropick::Opening)o;
+}
+#endif
+
 void setup() {
     Serial.begin(115200);
     delay(200);
@@ -149,34 +171,46 @@ void setup() {
         for (;;) delay(1000);
     }
 #ifdef BOARD_S3
-    // The intro video (ui/intro, with its sound, if a clip was built) plays first, on its own task, while
-    // WiFi connects and the network task logs into Spotify underneath; then the greeting and the
-    // night drive. The S3 has heap to spare (~230 KB largest block), so the login and polls run
+    // One random opening (pickOpening): the kiss video (ui/intro, its own task, the boot terminal
+    // over it), or the night drive with the Honda or McQueen and their greeting; all of them end
+    // in the photo montage. WiFi connects and the network task logs into Spotify underneath. The S3 has heap to spare (~230 KB largest block), so the login and polls run
     // under the scenes (the network task's late-WiFi path: spclient::begin + netclock::begin).
     // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
     // soon as the first poll lands. (Logging in here left the scene's faded last frame, i.e. a
     // black screen, up for as long as a slow hotspot took.)
     Serial.println(idlesprite::parse(EMBED_DATA(data_idle_bin), EMBED_SIZE(data_idle_bin))
                        ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
-    intro::start(s_tft, net::isOnline);
+    carlook::Look mcqueen;
+    const bool haveMcQueen = carlook::mcqueen(&mcqueen);
+    const intropick::Opening opening = pickOpening(intro::available(), haveMcQueen);
+    greeting::choose(intropick::greetingFor(opening));
+    const bootscene::Opts opts{opening == intropick::MCQUEEN ? mcqueen : carlook::honda(),
+                               opening != intropick::KISS};
+    if (opening == intropick::KISS) {
+        intro::start(s_tft, net::isOnline);
+    } else {                              // the drive covers the WiFi connect (the screen'd be black)
+        greeting::play();
+        bootscene::start(s_tft, net::isOnline, opts);
+    }
     const bool wifi = net::connectAny();
     if (wifi) {
         mem::log("boot+wifi");
         netclock::begin();                // the clock (night palette) right away, not after login
         nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
     } else {
-        // The network task retries WiFi; the terminal says RETRYING... and the intro holds its
-        // last frame until it's up (intro::wait() waits for WiFi, so this must start first).
+        // The network task retries WiFi underneath; the terminal says RETRYING... (the kiss holds
+        // its last frame, the car cruises) until it's up. Started before intro::wait(), which
+        // waits for WiFi.
         bootscene::setCaption("WiFi not found - retrying...");
         nettask::start(false, nullptr);
     }
-    intro::wait();                        // the display is free for the night drive
-    greeting::play();                     // waits for the intro's sound to finish (one output)
-    bootscene::start(s_tft, net::isOnline);
-    if (net::isOnline()) {                // always, after a clip: intro::wait() held for WiFi
-        bootscene::setCaption("Connecting to Spotify...");
-        bootscene::waitDone();            // the display is ours again
-    }   // else (no clip): the scene keeps running and the car leaves once WiFi is up
+    if (opening == intropick::KISS) {
+        intro::wait();                    // over, and online (the last frame holds till then)
+        greeting::play();                 // no greeting: waits for the intro's sound (one output)
+        bootscene::start(s_tft, net::isOnline, opts);   // straight to the montage
+    }
+    if (wifi) bootscene::setCaption("Connecting to Spotify...");
+    bootscene::waitDone();                // the display is ours again
 #else
     greeting::play();          // boot sound plays while WiFi connects
     // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
