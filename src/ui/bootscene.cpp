@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include "car_sprite.h"
+#include "carlook.h"
 #include "montage.h"
 #include "../util/rgb565.h"
 #include "../audio/greeting.h"
@@ -40,6 +41,7 @@ constexpr uint16_t WHITE = 0xFFFF;
 constexpr bool MONTAGE_SOUND_AT_START = false;
 
 TFT_eSPI* s_tft = nullptr;
+carlook::Look s_car = carlook::honda();   // the car that drives (ui/carlook)
 bool (*s_online)() = nullptr;
 volatile bool s_active = false;
 const char* volatile s_caption = "";
@@ -303,11 +305,11 @@ void drawCar(const Car& c) {
     const uint8_t ba = bootanim::beamAlpha(c.e);                      // headlight beam, cool white
     for (int i = 0; i < 90; ++i) {
         const int h = 3 + i * 35 / 100;
-        blendRect(c.x + 200 + i, c.top + 31 - h / 3, 1, h, hex(0xF0F5FF), (uint8_t)(ba * (90 - i) / 90));
+        blendRect(c.x + s_car.headX + i, c.top + s_car.headY - h / 3, 1, h, hex(0xF0F5FF), (uint8_t)(ba * (90 - i) / 90));
     }
-    blendRect(c.x - 4, c.top + 21, 6, 9, hex(0xFF3030), bootanim::tailGlowAlpha(c.e));
+    blendRect(c.x - 4, c.top + s_car.tailY, 6, 9, hex(0xFF3030), bootanim::tailGlowAlpha(c.e));
 
-    int x0 = c.x, x1 = c.x + car_sprite::width(), y0 = c.top, y1 = c.top + car_sprite::height();
+    int x0 = c.x, x1 = c.x + s_car.w, y0 = c.top, y1 = c.top + s_car.h;
     if (bootanim::clip(x0, x1, 0, W) && bootanim::clip(y0, y1, s_y0, s_y0 + STRIP_H)) {
         const uint16_t head = bootanim::headColor(c.e), refl = hex(0xE6EEFF);
         const uint8_t tail = bootanim::tailLevel(c.e);
@@ -317,7 +319,7 @@ void drawCar(const Car& c) {
             for (int x = x0; x < x1; ++x) {
                 uint16_t col;
                 uint8_t kind;
-                if (!car_sprite::pixel(x - c.x, row, &col, &kind)) continue;
+                if (!s_car.pixel(x - c.x, row, &col, &kind)) continue;
                 if (kind == car_sprite::HEAD) col = head;
                 else if (kind == car_sprite::TAIL) col = bootanim::scale565(col, tail);
                 else if (c.lamp && (kind == car_sprite::UPPER || kind == car_sprite::LOWER)) {
@@ -332,9 +334,9 @@ void drawCar(const Car& c) {
     if (s_wheelAng) {                                                  // wheels stay on the road (no bob)
         uint8_t spokes[256];
         spokeTable(c.spoke, spokes);
-        const int wy = CAR_TOP + car_sprite::WHEEL_Y;
-        wheel(c.x + car_sprite::REAR_WHEEL_X, wy, spokes, glow);
-        wheel(c.x + car_sprite::FRONT_WHEEL_X, wy, spokes, glow);
+        const int wy = CAR_TOP + s_car.wheelY;
+        wheel(c.x + s_car.rearX, wy, spokes, glow);
+        wheel(c.x + s_car.frontX, wy, spokes, glow);
     }
 }
 

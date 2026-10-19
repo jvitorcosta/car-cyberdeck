@@ -48,3 +48,6 @@ data/idle.bin
 data/tunes/
 data/tunes.txt
 *.mid
+# Pixel McQueen (a Disney/Pixar character): the art and the packed sprite stay local
+data/mcqueen.bin
+mcqueen*.png
