@@ -158,24 +158,25 @@ void setup() {
     // black screen, up for as long as a slow hotspot took.)
     Serial.println(idlesprite::parse(EMBED_DATA(data_idle_bin), EMBED_SIZE(data_idle_bin))
                        ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
-    intro::start(s_tft);
+    intro::start(s_tft, net::isOnline);
     const bool wifi = net::connectAny();
     if (wifi) {
         mem::log("boot+wifi");
         netclock::begin();                // the clock (night palette) right away, not after login
         nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
+    } else {
+        // The network task retries WiFi; the terminal says RETRYING... and the intro holds its
+        // last frame until it's up (intro::wait() waits for WiFi, so this must start first).
+        bootscene::setCaption("WiFi not found - retrying...");
+        nettask::start(false, nullptr);
     }
     intro::wait();                        // the display is free for the night drive
     greeting::play();                     // waits for the intro's sound to finish (one output)
     bootscene::start(s_tft, net::isOnline);
-    if (wifi) {
+    if (net::isOnline()) {                // always, after a clip: intro::wait() held for WiFi
         bootscene::setCaption("Connecting to Spotify...");
         bootscene::waitDone();            // the display is ours again
-    } else {
-        // The scene keeps running; the network task retries and the car leaves once WiFi is up.
-        bootscene::setCaption("WiFi not found - retrying...");
-        nettask::start(false, nullptr);
-    }
+    }   // else (no clip): the scene keeps running and the car leaves once WiFi is up
 #else
     greeting::play();          // boot sound plays while WiFi connects
     // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
