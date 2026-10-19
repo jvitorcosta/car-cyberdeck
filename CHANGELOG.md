@@ -42,8 +42,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
-- The "Nothing playing" screen now says **Spotify is silent** (same screen, same timing).
-- The S3's "Spotify is silent" screen shows the phone page's link as a QR code again, left of
+- The "Nothing playing" screen now says **Waiting for a song...** (same screen, same timing).
+- The S3's "Waiting for a song..." screen shows the phone page's link as a QR code again, left of
   Sonic in a Gen-3 battle box named **REMOTE** (with a phone icon): 3 px modules (half as big
   again as before) on the battle boxes' cream, so phones read it from further away.
   `http://<deck address>/?k=<REMOTE_TOKEN>` with the address it has now (`172.20.10.10` on the

@@ -7,10 +7,10 @@
 // pixel's colour, ui::drawOfflineScene pushes the region in small strips (no big buffer).
 namespace statusscene {
 enum class Bubble : uint8_t { None, Question, Dots, Zzz, Bang };
-// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Spotify is silent" with his file,
-// in front of the Sunset drive (ui/sunset); night: its night palette (the caller sets it).
+// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Waiting for a song..." with his
+// file, in front of the Sunset drive (ui/sunset); night: its night palette (the caller sets it).
 struct Look { int sprite; Bubble bubble; bool ball; bool idle = false; bool night = false; };
-// Ok = "Spotify is silent" (Pikachu, no bubble).
+// Ok = "Waiting for a song..." (Pikachu, no bubble).
 Look lookFor(linkstatus::Kind k);
 
 // Layout: the Pokemon on its platform in the middle, its bubble to the upper right, the
@@ -42,7 +42,7 @@ Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail 
 // card beside him (ui/qrcard) is painted once.
 Rect frameRect(const Look& look);
 
-// The music box's speaker key on "Spotify is silent" (S3): centred on the dialogue box's right
+// The music box's speaker key on "Waiting for a song..." (S3): centred on the dialogue box's right
 // end, clear of the title; a tap anywhere on that end toggles it.
 constexpr Rect SOUND_ICON = {262, DLG_Y + 16, 44, 36};
 bool onSoundButton(int x, int y);
