@@ -39,6 +39,7 @@ static NimBLEClient* s_client = nullptr;
 static NimBLERemoteCharacteristic* s_tx = nullptr;   // commands to the adapter (write)
 static bool s_txResponse = true;                      // write with response (no write-without)
 static obdble::Inbox s_inbox;                         // replies, filled by notifications
+static bool s_late = false;                           // the last ask timed out: its reply may still come
 static portMUX_TYPE s_inboxMux = portMUX_INITIALIZER_UNLOCKED;
 static const fueleco::Car CAR{OBD_DISPLACEMENT_CC / 1000.0f, (float)OBD_VE, (float)OBD_TANK_L,
                               (float)OBD_ETHANOL_PCT};
@@ -64,6 +65,9 @@ static void publish(obd::Pid p, obd::Reply r, float v, obdplan::Link l) {
     xSemaphoreTake(s_lock, portMAX_DELAY);
     s_view.link = l;
     if (r == obd::Reply::Ok) {
+        // the City has coolant / intake only as 67 / 68: they stand in for 05 / 0F everywhere
+        if (p == Pid::CoolantX) p = Pid::Coolant;
+        if (p == Pid::IntakeX) p = Pid::Intake;
         s_view.value[(int)p] = v;
         s_view.have[(int)p] = true;
         s_view.atMs[(int)p] = millis();
@@ -132,6 +136,12 @@ static bool ask(const char* cmd, char* out, size_t n, uint32_t timeoutMs) {
         return false;
     }
     if (!linkUp()) { out[0] = '\0'; return false; }
+    if (s_late) {                                         // let the late reply finish, and drop it
+        s_late = false;                                   // (the car test: replies drifted one behind)
+        const uint32_t t0 = millis();
+        for (char c = 0; c != '>' && millis() - t0 < 2000;)
+            if (!popByte(&c)) delay(2);
+    }
     portENTER_CRITICAL(&s_inboxMux);
     s_inbox.clear();                                      // drop anything left over
     portEXIT_CRITICAL(&s_inboxMux);
@@ -145,6 +155,7 @@ static bool ask(const char* cmd, char* out, size_t n, uint32_t timeoutMs) {
         if (len + 1 < n) out[len++] = c == '\r' ? '\n' : c;
     }
     out[len] = '\0';
+    s_late = true;                                        // no prompt yet: resync before the next one
     return len > 0;
 }
 
@@ -250,17 +261,31 @@ static bool openLink(const NimBLEAddress& addr) {
     return true;
 }
 
+// Disconnects and waits until it's done, then drops the client: the next attempt starts fresh
+// (the car test: reconnecting while the old link was still closing failed, and the adapter, still
+// "connected", stopped advertising).
 static void closeLink() {
     s_tx = nullptr;
-    if (s_client && s_client->isConnected()) s_client->disconnect();
+    if (!s_client) return;
+    if (s_client->isConnected()) {
+        s_client->disconnect();
+        for (int i = 0; i < 30 && s_client->isConnected(); ++i) delay(100);
+    }
+    NimBLEDevice::deleteClient(s_client);
+    s_client = nullptr;
 }
 
+// The adapter's setup. ATZ resets it, and this BLE clone can take seconds to answer the next
+// commands after it (the car test: no answer to ATSP0 within 2 s): longer waits, one retry each.
 static bool init() {
     static const char* const CMDS[] = {"ATZ\r", "ATE0\r", "ATL0\r", "ATS0\r", "ATSP0\r"};
     char raw[64];
     for (const char* c : CMDS) {
-        if (!ask(c, raw, sizeof raw, 2000)) {
-            Serial.printf("[obd] no answer to %.4s\n", c);
+        const uint32_t wait = c[2] == 'Z' ? 4000 : 3000;
+        bool ok = ask(c, raw, sizeof raw, wait);
+        if (!ok) ok = ask(c, raw, sizeof raw, wait);
+        if (!ok) {
+            logRaw(c, raw[0] ? raw : "(no answer)");
             return false;
         }
     }
@@ -337,7 +362,7 @@ static void task(void*) {
             plan.crankWatch(health.state() == obdplan::Link::NoEngine || !(rpm > 0.0f));
             const obd::Pid p = plan.next(millis());
             char raw[128];
-            const bool got = ask(obd::request(p), raw, sizeof raw, first ? 5000 : 1000);
+            const bool got = ask(obd::request(p), raw, sizeof raw, first ? 5000 : 2000);
             first = false;
             float v = 0.0f;
             const obd::Reply r = got ? obd::parse(p, raw, &v) : obd::Reply::Error;

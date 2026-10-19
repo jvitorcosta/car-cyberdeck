@@ -8,9 +8,10 @@
 // Spec: docs/superpowers/specs/2026-10-15-obd-gauges-design.md
 namespace obd {
 // PedalD/E: accelerator pedal (49/4A); Fuel: tank level (2F); Map: manifold kPa (0B); Maf: air g/s
-// (10); Ethanol: % (52); FuelSys: fuel system 1 status (03; 4 = open loop on deceleration: fuel cut).
+// (10); Ethanol: % (52); FuelSys: fuel system 1 status (03; 4 = open loop on deceleration: fuel cut);
+// CoolantX / IntakeX: the extended coolant / intake readings (67 / 68, sensor 1), all the City has.
 enum class Pid : uint8_t { Rpm, Speed, Coolant, Load, Intake, Throttle, Battery, PedalD, PedalE, Fuel,
-                           Map, Maf, Ethanol, FuelSys, COUNT };
+                           Map, Maf, Ethanol, FuelSys, CoolantX, IntakeX, COUNT };
 // Ok: *value set. NoData: the car doesn't support this PID. NoEngine: the adapter is up but the
 // car doesn't answer (ignition off). Error: anything else (timeout, junk, cut-off reply).
 enum class Reply : uint8_t { Ok, NoData, NoEngine, Error };

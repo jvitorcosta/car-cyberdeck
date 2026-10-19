@@ -34,7 +34,7 @@ void test_fast_pair_every_cycle_slow_ones_in_turn() {
     TEST_ASSERT_INT_WITHIN(2, 10, slow);                 // one slow request per SLOW_MS
     TEST_ASSERT_EQUAL_INT(200 - slow, fast);
     for (int i = 0; i < (int)Pid::COUNT; ++i)              // all of them, in turn; the fallbacks
-        if ((Pid)i != Pid::PedalE && (Pid)i != Pid::Map)   // (pedal E, MAP) only without D / MAF
+        if ((Pid)i != Pid::PedalE && (Pid)i != Pid::Map && (Pid)i != Pid::CoolantX && (Pid)i != Pid::IntakeX)  // fallbacks
             TEST_ASSERT_TRUE(seen[i]);
 }
 
@@ -151,12 +151,37 @@ void test_battery_right_after_the_engine_starts() {
     TEST_ASSERT_FALSE(plan.next(1100) == Pid::Battery && plan.next(1200) == Pid::Battery);
 }
 
+// The car test: no 05/0F on the City, only 67/68: the slow round asks those instead.
+void test_extended_coolant_and_intake_when_the_standard_ones_are_missing() {
+    uint32_t bits[4];
+    allBut(bits, {0x05, 0x0F});
+    obdplan::Plan plan;
+    plan.setSupported(bits);
+    bool cx = false, ix = false;
+    for (uint32_t t = 0; t < 40000; t += 80) {
+        const Pid p = plan.next(t);
+        TEST_ASSERT_FALSE(p == Pid::Coolant || p == Pid::Intake);
+        cx |= p == Pid::CoolantX;
+        ix |= p == Pid::IntakeX;
+        plan.done(p, Reply::Ok, t);
+    }
+    TEST_ASSERT_TRUE(cx);
+    TEST_ASSERT_TRUE(ix);
+    obdplan::Plan std;                                       // both kinds: the standard ones only
+    for (uint32_t t = 0; t < 40000; t += 80) {
+        const Pid p = std.next(t);
+        TEST_ASSERT_FALSE(p == Pid::CoolantX || p == Pid::IntakeX);
+        std.done(p, Reply::Ok, t);
+    }
+}
+
 void test_stale_and_warnings() {
     TEST_ASSERT_EQUAL_UINT32(3000, obdplan::staleAfterMs(Pid::Rpm));
     TEST_ASSERT_EQUAL_UINT32(3000, obdplan::staleAfterMs(Pid::PedalE));
     TEST_ASSERT_EQUAL_UINT32(30000, obdplan::staleAfterMs(Pid::Coolant));
     TEST_ASSERT_EQUAL_UINT32(30000, obdplan::staleAfterMs(Pid::Battery));
-    TEST_ASSERT_TRUE(obdplan::batteryWarn(12.9f, true));
+    TEST_ASSERT_FALSE(obdplan::batteryWarn(12.4f, true));   // Honda smart charging idles here
+    TEST_ASSERT_TRUE(obdplan::batteryWarn(11.9f, true));
     TEST_ASSERT_FALSE(obdplan::batteryWarn(12.9f, false));
     TEST_ASSERT_TRUE(obdplan::batteryWarn(12.1f, false));
     TEST_ASSERT_FALSE(obdplan::batteryWarn(14.1f, true));
@@ -267,6 +292,7 @@ int main() {
     RUN_TEST(test_unsupported_slow_pid_is_never_asked);
     RUN_TEST(test_crank_watch_is_mostly_battery);
     RUN_TEST(test_battery_right_after_the_engine_starts);
+    RUN_TEST(test_extended_coolant_and_intake_when_the_standard_ones_are_missing);
     RUN_TEST(test_stale_and_warnings);
     RUN_TEST(test_unsupported_pid_backs_off_then_is_asked_again);
     RUN_TEST(test_every_pid_unsupported_still_gives_a_request);

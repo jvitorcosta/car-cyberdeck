@@ -44,7 +44,8 @@ constexpr uint32_t STALE_FAST_MS = 3000, STALE_SLOW_MS = 30000;
 // How old a reading may be before it's drawn as stale: STALE_FAST_MS for the fast set (RPM, speed,
 // pedal, throttle, MAF/MAP), STALE_SLOW_MS for the slow ones (read only every ~14 s).
 uint32_t staleAfterMs(obd::Pid p);
-// Warnings, drawn inverted: battery under 13.0 V with the engine running (not charging) or under
+// Warnings, drawn inverted: battery under 12.0 V with the engine running (Honda smart charging idles
+// at ~12.3-12.8 V with a full battery, so 13 V would cry wolf; the car test 2026-10-19) or under
 // 12.2 V with it off; coolant over 105 C; RPM from 85 % of the redline.
 bool batteryWarn(float volts, bool engineRunning);
 bool coolantWarn(float c);

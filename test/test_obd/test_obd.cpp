@@ -156,8 +156,22 @@ void test_supported_bitmap_from_every_ecu() {
     TEST_ASSERT_EQUAL_HEX32(0xBE3EB811u, bits);
 }
 
+// The car test: the City reports coolant and intake only as 67/68 (A: which sensors, B: sensor 1,
+// minus 40), not 05/0F.
+void test_extended_coolant_and_intake() {
+    float v = 0;
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::CoolantX, "41 67 01 82 00", &v));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 90.0f, v);
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::IntakeX, "416801470000", &v));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 31.0f, v);
+    TEST_ASSERT_EQUAL(Reply::Error, obd::parse(Pid::CoolantX, "41 67 02 00 82", &v));   // sensor 1 absent
+    TEST_ASSERT_EQUAL_STRING("0167\r", obd::request(Pid::CoolantX));
+    TEST_ASSERT_EQUAL_STRING("0168\r", obd::request(Pid::IntakeX));
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_extended_coolant_and_intake);
     RUN_TEST(test_supported_bitmap_from_every_ecu);
     RUN_TEST(test_new_pids_formulas);
     RUN_TEST(test_supported_bitmap);

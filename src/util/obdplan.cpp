@@ -8,7 +8,7 @@ constexpr Pid SLOW[] = {Pid::Coolant, Pid::Battery, Pid::Fuel, Pid::Intake, Pid:
 constexpr int SLOW_N = (int)(sizeof SLOW / sizeof SLOW[0]);
 // The mode 01 PID byte per Pid (0: the adapter's own reading, ATRV). Order matches obd::Pid.
 constexpr uint8_t PID_BYTE[(int)Pid::COUNT] = {0x0C, 0x0D, 0x05, 0x04, 0x0F, 0x11, 0,
-                                               0x49, 0x4A, 0x2F, 0x0B, 0x10, 0x52, 0x03};
+                                               0x49, 0x4A, 0x2F, 0x0B, 0x10, 0x52, 0x03, 0x67, 0x68};
 
 bool isFast(Pid p) {
     return p == Pid::Rpm || p == Pid::Speed || p == Pid::PedalD || p == Pid::PedalE || p == Pid::Throttle ||
@@ -49,7 +49,10 @@ Pid Plan::next(uint32_t nowMs) {
         started_ = true;
         lastSlowMs_ = nowMs;
         for (int k = 0; k < SLOW_N; ++k) {
-            const obd::Pid p = SLOW[(slowNext_ + k) % SLOW_N];
+            obd::Pid p = SLOW[(slowNext_ + k) % SLOW_N];
+            // no standard coolant / intake (the City): their extended readings (67 / 68) instead
+            if (p == Pid::Coolant && blocked(p, nowMs)) p = Pid::CoolantX;
+            if (p == Pid::Intake && blocked(p, nowMs)) p = Pid::IntakeX;
             if (!blocked(p, nowMs)) {
                 slowNext_ = (uint8_t)((slowNext_ + k + 1) % SLOW_N);
                 return p;
@@ -100,7 +103,7 @@ bool Hold::update(bool live, uint32_t nowMs) {
 
 uint32_t staleAfterMs(Pid p) { return isFast(p) ? STALE_FAST_MS : STALE_SLOW_MS; }
 
-bool batteryWarn(float volts, bool engineRunning) { return volts < (engineRunning ? 13.0f : 12.2f); }
+bool batteryWarn(float volts, bool engineRunning) { return volts < (engineRunning ? 12.0f : 12.2f); }
 bool coolantWarn(float c) { return c > 105.0f; }
 bool rpmWarn(float rpm, float redline) { return rpm >= 0.85f * redline; }
 

@@ -1,5 +1,6 @@
 #include "obd.h"
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 
@@ -11,7 +12,8 @@ constexpr Def DEFS[(int)Pid::COUNT] = {
     {"010C\r", 0x0C, 2}, {"010D\r", 0x0D, 1}, {"0105\r", 0x05, 1}, {"0104\r", 0x04, 1},
     {"010F\r", 0x0F, 1}, {"0111\r", 0x11, 1}, {"ATRV\r", 0, 0},
     {"0149\r", 0x49, 1}, {"014A\r", 0x4A, 1}, {"012F\r", 0x2F, 1}, {"010B\r", 0x0B, 1},
-    {"0110\r", 0x10, 2}, {"0152\r", 0x52, 1}, {"0103\r", 0x03, 1},
+    {"0110\r", 0x10, 2}, {"0152\r", 0x52, 1}, {"0103\r", 0x03, 1}, {"0167\r", 0x67, 2},
+    {"0168\r", 0x68, 2},
 };
 
 bool contains(const char* s, const char* word) { return strstr(s, word) != nullptr; }
@@ -37,6 +39,8 @@ float value(Pid p, const uint8_t* b) {
     case Pid::Map:
     case Pid::FuelSys: return b[0];
     case Pid::Maf: return (256.0f * b[0] + b[1]) / 100.0f;
+    case Pid::CoolantX:
+    case Pid::IntakeX: return (b[0] & 1) ? (float)b[1] - 40.0f : NAN;   // A: sensors present
     default: return 0.0f;
     }
 }
@@ -70,7 +74,7 @@ bool fromLine(const char* line, size_t len, Pid p, float* out) {
     uint8_t b[2];
     if (!reply41(line, len, DEFS[(int)p].pid, DEFS[(int)p].bytes, b)) return false;
     *out = value(p, b);
-    return true;
+    return !std::isnan(*out);                            // a reading without the sensor: no value
 }
 
 // Calls f(line, len) for each '\n'-separated line of raw until it returns true.
