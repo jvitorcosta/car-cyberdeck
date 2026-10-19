@@ -40,6 +40,7 @@ constexpr bool MONTAGE_SOUND_AT_START = false;
 
 TFT_eSPI* s_tft = nullptr;
 carlook::Look s_car = carlook::honda();   // the car that drives (ui/carlook)
+Opts s_opts{carlook::honda(), true};
 bool (*s_online)() = nullptr;
 volatile bool s_active = false;
 
@@ -394,8 +395,9 @@ void task(void*) {
         Serial.println("[bootscene] no memory for the strip buffer: scene skipped");
         runWithoutScene(t0);
     } else {
-        drawSky();
+        if (s_opts.drive) drawSky();                             // no drive: black until the montage
         uint32_t tHero = bootanim::NO_EXIT;
+        bool skipBrake = false;
         int xc = 0, shown = -1;
         uint8_t* jpgWork = nullptr;                              // tjpgd workspace, montage only
         int finaleAt = -1;                                       // montage frame that starts the finale sound
@@ -404,15 +406,21 @@ void task(void*) {
         TickType_t wake = xTaskGetTickCount();
         for (;;) {
             const uint32_t t = millis() - t0;
+            if (!s_opts.drive && tHero == bootanim::NO_EXIT) {
+                if (!s_online()) { vTaskDelayUntil(&wake, pdMS_TO_TICKS(FRAME_MS)); continue; }
+                tHero = t;
+                skipBrake = true;                        // straight to the montage
+            }
             if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, t >= greeting::durationMs(), s_online())) {
                 tHero = t;
                 xc = bootanim::cruiseX(t);
             }
-            const uint32_t u = tHero == bootanim::NO_EXIT ? 0 : t - tHero;
+            const uint32_t u = tHero == bootanim::NO_EXIT ? 0
+                             : t - tHero + (skipBrake ? bootanim::BRAKE_MS : 0);
             const uint32_t f0 = millis();
             const uint8_t e = greeting::level(t);
             int mode;
-            bootterm::events(t, tHero != bootanim::NO_EXIT);
+            if (s_opts.drive) bootterm::events(t, tHero != bootanim::NO_EXIT);
             if (tHero == bootanim::NO_EXIT) {                    // enter + cruise
                 mode = 0;
                 bootterm::drawDirect(*s_tft, t, skyAt);
@@ -493,7 +501,11 @@ void task(void*) {
 
 }  // namespace
 
-void start(TFT_eSPI& tft, bool (*online)()) {
+void start(TFT_eSPI& tft, bool (*online)()) { start(tft, online, Opts{carlook::honda(), true}); }
+
+void start(TFT_eSPI& tft, bool (*online)(), const Opts& o) {
+    s_opts = o;
+    s_car = o.car;
     s_tft = &tft;
     s_online = online;
     s_active = true;
