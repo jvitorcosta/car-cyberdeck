@@ -238,9 +238,8 @@ void spokeTable(float base, uint8_t* out) {
 }
 
 void wheel(int cx, int cy, const uint8_t* spokes, float glow) {
-    static const uint16_t RING[7] = {0, hex(0x141416), hex(0xC9CED4), hex(0x3A3E46), hex(0xC8CCD2),
-                                     hex(0x2B2F36), hex(0x2B2F36)};
-    static const uint16_t SPOKE[3] = {hex(0x2B2F36), hex(0xDFE3E8), hex(0x6A7078)};
+    const uint16_t* RING = s_car.rims->ring;    // the car's rims (ui/carlook)
+    const uint16_t* SPOKE = s_car.rims->spoke;
     for (int dy = -14; dy <= 14; ++dy) {
         const int y = cy + dy;
         if (y < s_y0 || y >= s_y0 + STRIP_H) continue;
