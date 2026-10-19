@@ -111,8 +111,45 @@ void test_near_misses_are_refused() {
     for (const char* c : bad) TEST_ASSERT_FALSE_MESSAGE(obd::allowed(c), c);
 }
 
+void test_new_pids_formulas() {
+    float v = 0;
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::PedalD, "41 49 80\n\n", &v));
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 50.2f, v);
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Fuel, "412FFF", &v));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 100.0f, v);
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Map, "41 0B 23", &v));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 35.0f, v);
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Maf, "41 10 04 D2", &v));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 12.34f, v);
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Ethanol, "7E8 03 41 52 4D", &v));
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 30.2f, v);
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::FuelSys, "41 03 04 00", &v));
+    TEST_ASSERT_EQUAL_FLOAT(4.0f, v);
+    TEST_ASSERT_EQUAL_STRING("0110\r", obd::request(Pid::Maf));
+    TEST_ASSERT_EQUAL_STRING("014A\r", obd::request(Pid::PedalE));
+}
+
+void test_supported_bitmap() {
+    uint32_t bits[4] = {};
+    TEST_ASSERT_TRUE(obd::parseSupported(0, "SEARCHING...\n41 00 BE 1F B8 13\n\n", &bits[0]));
+    TEST_ASSERT_EQUAL_HEX32(0xBE1FB813u, bits[0]);
+    TEST_ASSERT_TRUE(obd::isSupported(bits, 0x01));    // bit 31
+    TEST_ASSERT_FALSE(obd::isSupported(bits, 0x02));
+    TEST_ASSERT_TRUE(obd::isSupported(bits, 0x0C));
+    TEST_ASSERT_TRUE(obd::isSupported(bits, 0x20));    // bit 0: block 1 exists
+    TEST_ASSERT_FALSE(obd::isSupported(bits, 0x49));   // block 2 unread: 0
+    TEST_ASSERT_FALSE(obd::isSupported(bits, 0x00));
+    TEST_ASSERT_FALSE(obd::parseSupported(1, "41 00 BE 1F B8 13", &bits[1]));   // wrong block
+    TEST_ASSERT_FALSE(obd::parseSupported(0, "41 00 BE 1F", &bits[0]));         // cut off
+    TEST_ASSERT_FALSE(obd::parseSupported(0, "NO DATA", &bits[0]));
+    TEST_ASSERT_NULL(obd::supportRequest(4));
+    TEST_ASSERT_EQUAL_STRING("0140\r", obd::supportRequest(2));
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_new_pids_formulas);
+    RUN_TEST(test_supported_bitmap);
     RUN_TEST(test_every_command_the_code_sends_is_allowed);
     RUN_TEST(test_writes_and_other_modes_are_refused);
     RUN_TEST(test_near_misses_are_refused);
