@@ -24,7 +24,7 @@ namespace greeting {
 constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (16-bit signed LE)
 constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_howl.py output rate
 constexpr int CHUNK = 128;               // samples per audiosink::write
-constexpr int TUNE_LEVEL = 50;           // the music box, percent of the clip volume: background
+constexpr int TUNE_LEVEL = 25;           // the music box, percent of the clip volume: background
 
 // Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
@@ -41,9 +41,10 @@ static const Clip OPENER = {EMBED_DATA(data_opener_pcm),
 static_assert(howl::RATE == CLIP_RATE, "the synthesised howl plays at the clip rate");
 static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME, CLIP_RATE};
 #ifdef BOARD_S3
+static const int INTRO_VOLUME = 50;      // percent: the intro video's song, quieter than the greeting
 static const Clip INTRO = {EMBED_DATA(data_intro_pcm),
                            EMBED_SIZE(data_intro_pcm) / 2,
-                           "intro", &audiosink::GREETING_VOLUME, INTRO_RATE};
+                           "intro", &INTRO_VOLUME, INTRO_RATE};
 // A real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none.
 static const Clip WOLF = {EMBED_DATA(data_howl_pcm),
                           EMBED_SIZE(data_howl_pcm) / 2,
