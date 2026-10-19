@@ -40,7 +40,11 @@ Pid Plan::fastExtra(uint32_t nowMs) {
 }
 
 Pid Plan::next(uint32_t nowMs) {
-    if (crank_) return ++crankN_ % 10 == 0 ? Pid::Rpm : Pid::Battery;
+    if (crank_) return crankN_++ % 10 == 0 ? Pid::Rpm : Pid::Battery;
+    if (batteryNext_) {
+        batteryNext_ = false;
+        return Pid::Battery;
+    }
     if (!started_ || nowMs - lastSlowMs_ >= SLOW_MS) {   // a slow value's turn
         started_ = true;
         lastSlowMs_ = nowMs;

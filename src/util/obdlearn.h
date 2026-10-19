@@ -14,13 +14,17 @@ private:
     float lo_, hi_;
 };
 
-// The battery's dip while the engine cranks. feed() every battery reading with whether the engine
-// runs (RPM > 0). value(): the lowest reading before the first running one; NAN until the engine
-// has started, and NAN for the whole power-on when the first reading already had it running (the
-// deck came up after the crank: missed, never a resting voltage shown as the dip).
+// The engine as the link last knew it: Unknown until RPM has answered (or the ECU is known to be
+// silent: Off), then Off (RPM 0 / no ECU) or Running (RPM > 0).
+enum class Engine { Unknown, Off, Running };
+
+// The battery's dip while the engine cranks. feed() every battery reading with the engine's state.
+// value(): the lowest Off reading before the first Running one; NAN until the engine has started,
+// and NAN for the whole power-on when no Off reading came first (the deck came up after the crank:
+// missed, never a resting or charging voltage shown as the dip). Unknown readings don't count.
 class StartDip {
 public:
-    void feed(float volts, bool running);
+    void feed(float volts, Engine engine);
     float value() const { return value_; }
 private:
     bool sawOff_ = false, done_ = false;

@@ -119,8 +119,9 @@ void test_unsupported_slow_pid_is_never_asked() {
 void test_crank_watch_is_mostly_battery() {
     obdplan::Plan plan;
     plan.crankWatch(true);
-    int bat = 0, rpm = 0;
-    for (uint32_t t = 0; t < 2000; t += 100) {
+    TEST_ASSERT_EQUAL_INT((int)Pid::Rpm, (int)plan.next(0));   // first: is the engine running?
+    int bat = 0, rpm = 1;
+    for (uint32_t t = 100; t < 2000; t += 100) {
         const Pid p = plan.next(t);
         bat += p == Pid::Battery;
         rpm += p == Pid::Rpm;
@@ -136,6 +137,18 @@ void test_crank_watch_is_mostly_battery() {
         plan.done(p, Reply::Ok, t);
     }
     TEST_ASSERT_TRUE(other);
+}
+
+// Final review: when the engine starts, the battery's last reading is the crank's; it must be read
+// again at once, not ~14 s later in the slow round (a false "not charging" warning till then).
+void test_battery_right_after_the_engine_starts() {
+    obdplan::Plan plan;
+    plan.crankWatch(true);
+    for (uint32_t t = 0; t < 1000; t += 100) plan.done(plan.next(t), Reply::Ok, t);
+    plan.crankWatch(false);
+    TEST_ASSERT_EQUAL_INT((int)Pid::Battery, (int)plan.next(1000));
+    plan.crankWatch(false);                                    // called every loop: no repeat
+    TEST_ASSERT_FALSE(plan.next(1100) == Pid::Battery && plan.next(1200) == Pid::Battery);
 }
 
 void test_stale_and_warnings() {
@@ -253,6 +266,7 @@ int main() {
     RUN_TEST(test_maf_preferred_map_otherwise);
     RUN_TEST(test_unsupported_slow_pid_is_never_asked);
     RUN_TEST(test_crank_watch_is_mostly_battery);
+    RUN_TEST(test_battery_right_after_the_engine_starts);
     RUN_TEST(test_stale_and_warnings);
     RUN_TEST(test_unsupported_pid_backs_off_then_is_asked_again);
     RUN_TEST(test_every_pid_unsupported_still_gives_a_request);

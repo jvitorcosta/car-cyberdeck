@@ -13,6 +13,10 @@ float airGs(float maf, float mapKpa, float rpm, float intakeC, const Car& c);
 float afr(float ethanolPct);             // stoichiometric for the blend (by mass): 14.7 .. 9.0
 float densityKgL(float ethanolPct);      // blend density: 0.745 .. 0.789
 float litresPerHour(float airGs, float ethanolPct);
+// Coasting fuel cut: the pedal released (else the throttle, when there's no pedal reading), over
+// 1200 RPM and 20 km/h. A fresh fuel-system status (PID 03) only confirms it (bit "4" = open loop:
+// decel fuel cut, but also full-load enrichment, so it can't decide alone); a stale one is ignored.
+bool fuelCut(float pedalPct, float throttlePct, float rpm, float speedKmh, float fuelSys, bool fuelSysFresh);
 
 class Trip {
 public:

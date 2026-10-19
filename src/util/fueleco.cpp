@@ -22,8 +22,8 @@ float airGs(float maf, float mapKpa, float rpm, float intakeC, const Car& c) {
 }
 
 float afr(float ethanolPct) {
-    const float w = ethanolMass(ethanolPct);
-    return 1.0f / (w / AFR_ETHANOL + (1.0f - w) / AFR_GASOLINE);
+    const float w = ethanolMass(ethanolPct);         // kg of air per kg of fuel: linear by mass
+    return w * AFR_ETHANOL + (1.0f - w) * AFR_GASOLINE;
 }
 
 float densityKgL(float ethanolPct) {
@@ -33,6 +33,12 @@ float densityKgL(float ethanolPct) {
 
 float litresPerHour(float airGs, float ethanolPct) {
     return airGs / afr(ethanolPct) / (densityKgL(ethanolPct) * 1000.0f) * 3600.0f;
+}
+
+bool fuelCut(float pedalPct, float throttlePct, float rpm, float speedKmh, float fuelSys, bool fuelSysFresh) {
+    const bool released = !std::isnan(pedalPct) ? pedalPct < 2.0f : throttlePct < 2.0f;   // NAN: false
+    if (!released || !(rpm > 1200.0f) || !(speedKmh > 20.0f)) return false;
+    return !fuelSysFresh || std::isnan(fuelSys) || ((int)fuelSys & 4) != 0;
 }
 
 void Trip::step(uint32_t nowMs, float speedKmh, float air, bool fuelCut, float ethanolPct) {

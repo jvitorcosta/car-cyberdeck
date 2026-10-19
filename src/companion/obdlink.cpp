@@ -65,13 +65,19 @@ static void publish(obd::Pid p, obd::Reply r, float v, obdplan::Link l) {
         const float rpm = latest(Pid::Rpm), speed = latest(Pid::Speed);
         if (p == Pid::PedalD || p == Pid::PedalE) s_view.pedalPct = s_pedal.scale(v);
         if (p == Pid::Throttle) s_view.throttlePct = s_throttle.scale(v);
-        if (p == Pid::Battery) s_dip.feed(v, rpm > 0.0f);
-        if (p == Pid::Rpm && v > 0.0f) s_dip.feed(latest(Pid::Battery), true);   // the start, seen
+        // The engine as known: Unknown until RPM has answered (a battery reading before then may be
+        // the charging voltage after a crank the deck missed), Off with no ECU or RPM 0.
+        const obdlearn::Engine engine = s_view.have[(int)Pid::Rpm]
+                                            ? (rpm > 0.0f ? obdlearn::Engine::Running : obdlearn::Engine::Off)
+                                        : l == obdplan::Link::NoEngine ? obdlearn::Engine::Off
+                                                                        : obdlearn::Engine::Unknown;
+        if (p == Pid::Battery) s_dip.feed(v, engine);
+        if (p == Pid::Rpm && v > 0.0f) s_dip.feed(latest(Pid::Battery), engine);   // the start, seen
         s_view.atStart = s_dip.value();
-        if (s_view.have[(int)Pid::FuelSys])
-            s_view.fuelCut = ((int)s_view.value[(int)Pid::FuelSys] & 4) != 0;
-        else
-            s_view.fuelCut = s_view.pedalPct < 2.0f && rpm > 1200.0f && speed > 20.0f;
+        const bool sysFresh = s_view.have[(int)Pid::FuelSys] &&
+                              millis() - s_view.atMs[(int)Pid::FuelSys] < obdplan::STALE_FAST_MS;
+        s_view.fuelCut = fueleco::fuelCut(s_view.pedalPct, s_view.throttlePct, rpm, speed,
+                                          latest(Pid::FuelSys), sysFresh);
         if (p == Pid::Maf || p == Pid::Map) {             // one trip step per air reading
             const float air = fueleco::airGs(p == Pid::Maf ? v : NAN, latest(Pid::Map), rpm,
                                              latest(Pid::Intake), CAR);

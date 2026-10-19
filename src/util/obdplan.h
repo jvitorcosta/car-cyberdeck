@@ -22,12 +22,17 @@ public:
     obd::Pid next(uint32_t nowMs);
     void done(obd::Pid p, obd::Reply r, uint32_t nowMs);
     void setSupported(const uint32_t bits[4]);
-    // Waiting for the engine to start: only the battery (9 in 10) and RPM, for the crank dip.
-    void crankWatch(bool on) { crank_ = on; }
+    // Waiting for the engine to start: only the battery (9 in 10) and RPM (first, then every 10th),
+    // for the crank dip. Leaving it asks the battery once more straight away (the last reading is
+    // the crank's, not the charging voltage).
+    void crankWatch(bool on) {
+        if (crank_ && !on) batteryNext_ = true;
+        crank_ = on;
+    }
 private:
     bool blocked(obd::Pid p, uint32_t nowMs) const;   // unsupported, or backing off after NO DATA
     obd::Pid fastExtra(uint32_t nowMs);              // pedal / throttle / air in turn; COUNT if none
-    bool started_ = false, crank_ = false;
+    bool started_ = false, crank_ = false, batteryNext_ = false;
     uint8_t slowNext_ = 0, fastStep_ = 0, fastExtra_ = 0, crankN_ = 0;
     uint32_t lastSlowMs_ = 0;
     uint32_t supported_[4] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};

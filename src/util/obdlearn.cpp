@@ -9,9 +9,9 @@ float Range::scale(float raw) {
     return (raw - lo_) * 100.0f / (hi_ - lo_);
 }
 
-void StartDip::feed(float volts, bool running) {
-    if (done_ || std::isnan(volts)) return;
-    if (!running) {
+void StartDip::feed(float volts, Engine engine) {
+    if (done_ || std::isnan(volts) || engine == Engine::Unknown) return;
+    if (engine == Engine::Off) {
         sawOff_ = true;
         if (volts < min_) min_ = volts;
         return;
