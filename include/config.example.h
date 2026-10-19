@@ -41,3 +41,7 @@ static const int WIFI_NETWORK_COUNT = 2;
 // #define OBD_NAME           "OBDII"   // the adapter's exact Bluetooth name (default: any OBD/ELM/V-LINK)
 // #define OBD_PIN            "1234"    // its pairing PIN (1234, 0000 or 8888 on most clones)
 // #define OBD_REDLINE        6500      // the RPM bar's full scale
+// #define OBD_TANK_L         44        // the tank, for "km left" (Honda City)
+// #define OBD_DISPLACEMENT_CC 1497     // the engine, for km/l without a MAF sensor
+// #define OBD_VE             0.85      // its volumetric efficiency (km/l reads high: raise it)
+// #define OBD_ETHANOL_PCT    30        // the fuel's ethanol % when the car doesn't say (E30 pump gasoline)
