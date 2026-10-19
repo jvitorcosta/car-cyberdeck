@@ -73,7 +73,7 @@ WiFi and the Spotify login run underneath every opening, as today.
 ## Error handling
 - **Missing files:** the picker only offers openings the build has (kiss: `intro.bin`; McQueen: `mcqueen.bin`). The Honda opening always works.
 - **No WiFi:** every opening waits for it with the terminal on screen (the car cruises; the kiss holds its last frame), as the car does today.
-- **Memory:** the overlay works inside JPEGDEC's draw callback on the blocks it already has (no new buffer). The McQueen sprite replaces the Honda's in the same slot.
+- **Memory:** the terminal is drawn into a 206 × 60 overlay sprite (~25 KB) that lives only while the video plays (the S3 has heap to spare at that point; it's freed before the boot scene), and composited inside JPEGDEC's draw callback on the blocks it already has. The McQueen sprite is read in place from flash.
 
 ## Testing
 - **Host tests:** the picker (random, never last, skips missing openings, single option), the greeting for each opening, the montage tool's new frame counts and the end-card text (Python), the McQueen packer (Python), and the terminal compositing on one block (pure: a block in, darkened panel and glyph pixels out).
