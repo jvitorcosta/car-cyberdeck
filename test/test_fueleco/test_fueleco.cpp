@@ -1,0 +1,80 @@
+#include <unity.h>
+#include <cmath>
+#include <cstdint>
+#include "../../src/util/fueleco.h"
+
+void setUp() {}
+void tearDown() {}
+
+static const fueleco::Car CITY{1.497f, 0.85f, 44.0f, 30.0f};
+
+void test_blend_for_e30() {
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 12.27f, fueleco::afr(30));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.7582f, fueleco::densityKgL(30));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 14.7f, fueleco::afr(0));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 9.0f, fueleco::afr(100));
+}
+
+void test_speed_density_and_maf() {
+    TEST_ASSERT_FLOAT_WITHIN(0.2f, 12.3f, fueleco::airGs(NAN, 50, 2000, 26.85f, CITY));   // 300 K
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 12.34f, fueleco::airGs(12.34f, 50, 2000, 27, CITY));  // MAF wins
+}
+
+// Review focus 1: a car with neither MAF nor MAP (or no intake temperature).
+void test_no_air_reading_gives_nothing() {
+    TEST_ASSERT_TRUE(std::isnan(fueleco::airGs(NAN, NAN, 2000, 27, CITY)));
+    TEST_ASSERT_TRUE(std::isnan(fueleco::airGs(NAN, 50, 2000, NAN, CITY)));
+    fueleco::Trip t;
+    for (uint32_t ms = 0; ms < 10000; ms += 250) t.step(ms, 80, NAN, false, 30);
+    TEST_ASSERT_TRUE(std::isnan(t.nowKmL()));
+    TEST_ASSERT_TRUE(std::isnan(t.avgKmL()));
+    TEST_ASSERT_TRUE(std::isnan(t.kmLeft(50, CITY)));
+}
+
+void test_steady_cruise() {          // 12.3 g/s at 80 km/h, E30: ~16.8 km/l
+    fueleco::Trip t;
+    for (uint32_t ms = 0; ms <= 200000; ms += 250) t.step(ms, 80, 12.3f, false, 30);
+    TEST_ASSERT_FLOAT_WITHIN(0.3f, 16.8f, t.nowKmL());
+    TEST_ASSERT_FLOAT_WITHIN(0.3f, 16.8f, t.avgKmL());
+    TEST_ASSERT_FLOAT_WITHIN(0.1f, 4.44f, t.km());
+    TEST_ASSERT_FLOAT_WITHIN(5.0f, 0.5f * 44 * 16.8f, t.kmLeft(50, CITY));
+}
+
+void test_fuel_cut_is_free() {
+    fueleco::Trip t;
+    for (uint32_t ms = 0; ms <= 60000; ms += 250) t.step(ms, 80, 12.3f, false, 30);
+    const float before = t.avgKmL();
+    for (uint32_t ms = 60250; ms <= 80000; ms += 250) t.step(ms, 70, 9.0f, true, 30);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 99.9f, t.nowKmL());
+    TEST_ASSERT_GREATER_THAN_FLOAT(before, t.avgKmL());
+}
+
+// Review focus 3: long idle at 0 km/h.
+void test_idle_counts_fuel_not_distance() {
+    fueleco::Trip t;
+    for (uint32_t ms = 0; ms <= 60000; ms += 250) t.step(ms, 0, 2.5f, false, 30);
+    TEST_ASSERT_TRUE(std::isnan(t.nowKmL()));
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, t.km());
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, t.avgKmL());      // fuel burnt, no distance: 0 km/l
+    TEST_ASSERT_TRUE(std::isnan(t.kmLeft(50, CITY)));
+}
+
+// Review focus 4: a long Bluetooth stall, across the millis() wrap.
+void test_gap_is_capped_across_the_wrap() {
+    fueleco::Trip t;
+    t.step(0xFFFFF000u, 100, 15, false, 30);
+    t.step(0x00002000u, 100, 15, false, 30);                 // ~12 s later, across the wrap
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 100.0f * 2 / 3600, t.km());   // counted as 2 s
+}
+
+int main(int, char**) {
+    UNITY_BEGIN();
+    RUN_TEST(test_blend_for_e30);
+    RUN_TEST(test_speed_density_and_maf);
+    RUN_TEST(test_no_air_reading_gives_nothing);
+    RUN_TEST(test_steady_cruise);
+    RUN_TEST(test_fuel_cut_is_free);
+    RUN_TEST(test_idle_counts_fuel_not_distance);
+    RUN_TEST(test_gap_is_capped_across_the_wrap);
+    return UNITY_END();
+}
