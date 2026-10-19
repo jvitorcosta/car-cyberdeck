@@ -108,13 +108,20 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   the screens and buttons. Actions go to the S3 through `companion/link` (POST `/play`,
   `/trip/reset`). Her lines come from `avatarlines` and type out in the message bar
   (`avatarscene`); she sings along by `avatarsing`.
-- **OBD gauges** (`companion/{obdlink,gauges}`, `util/{obd,obdplan}`) — companion only: a task
-  owns `BluetoothSerial` (master), discovers the ELM327 by name, connects with its PIN, sends
-  `ATZ ATE0 ATL0 ATS0 ATSP0`, then asks mode 01 PIDs in `obdplan`'s order (RPM and speed each
-  cycle, the slow values every 2 s, unsupported ones every 30 s) and publishes a snapshot under
-  a lock. `obd` parses replies tolerantly (echo, SEARCHING..., CAN headers, several ECUs) and
-  never sends mode 03/04. The app shows `gauges` while the link is live (5 s hold, `obdplan`),
-  her home otherwise; she says when the car comes and goes.
+- **OBD gauge cluster** (`companion/{obdlink,gauges}`, `util/{obd,obdplan,fueleco,obdlearn}`) —
+  companion only: a task owns `BluetoothSerial` (master), connects to the last adapter (NVS `obd`)
+  or discovers the ELM327 by name, sends `ATZ ATE0 ATL0 ATS0 ATSP0`, scans the supported PIDs
+  (`0100`/`0120`/...; logged), then asks mode 01 PIDs in `obdplan`'s order: RPM, speed and one of
+  pedal / throttle / air (MAF, else MAP) in turn, one slow value (coolant, battery, fuel, intake,
+  ethanol, load, fuel system) every 2 s, unsupported ones never or every 30 s. Until the engine
+  runs it reads the battery ~10 a second for the crank dip (`obdlearn::StartDip`). Each reply is
+  published with what derives from it under a lock: km/l, average and km left (`fueleco`:
+  speed-density or MAF air, the E30 blend's ratio, fuel cut free), pedal/throttle scaled to
+  their learnt travel (`obdlearn::Range`). **Read-only by construction:** `ask()` is the only
+  write to the adapter and refuses whatever `obd::allowed()` doesn't list (mode 01 + one PID,
+  ten adapter setup commands); `obd` parses replies tolerantly (echo, SEARCHING..., CAN headers,
+  several ECUs). The app shows `gauges` (green on black, partial redraws, Zero Two at half size)
+  while the link is live (5 s hold), her home otherwise; she says when the car comes and goes.
 - **Network choice** (`net/wifi`, `util/{roam,follow,deckaddr,netup,hotspotip}`) — config.h
   order (the hotspot first; two tries after a drop from it, `roam`), then a deck stays put. The
   companion reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`), keeps that
@@ -125,9 +132,9 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   `netplan`'s, `pollpace` in `lyricclock`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
   accents,cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
-  avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
+  avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,dacstream,daynight,deckaddr,dexset,follow,fueleco,genre,
   genrebadge,glyphrun,hotspotip,howl,idlesprite,interp,intropick,introclock,jsonflat,linkstatus,loudness,
-  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,obd,obdplan,phonepress,
+  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,obd,obdlearn,obdplan,phonepress,
   pollpace,press,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.
 

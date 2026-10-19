@@ -52,11 +52,18 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
   songs and reacts when you play a sound or reset the trip. The Lyrics, Sounds and Trip screens,
   Howl and trip reset (Vroom once the new deck offers it) are on the companion's own phone page.
   Her portraits come from your own images (`tools/gen_avatar.py`).
-- **OBD gauges (companion, showcase):** with a Bluetooth Classic ELM327 plugged into the car
-  (the Android-style clones, PIN 1234, 0000 or 8888), the companion shows live RPM, speed,
-  coolant, battery, engine load and throttle as Pokémon HP-style bars while the car answers,
-  and gives the screen back to the avatar when it stops. Read-only (no fault codes). Optional
-  `OBD_NAME`, `OBD_PIN` and `OBD_REDLINE` in `src/config.h`.
+- **OBD gauge cluster (companion):** with a Bluetooth Classic ELM327 plugged into the car
+  (the Android-style clones, PIN 1234, 0000 or 8888), the companion turns into a green
+  sports-cluster screen while the car answers: a tach with the speed in it, engine temperature,
+  **fuel** (km/l now, the drive's average, tank % and km left) and **battery** (volts, charging,
+  the dip when the engine cranked), and your pedal against the throttle the engine actually
+  opens. The avatar's home comes back when the car stops. It reconnects to the last adapter at
+  once and logs which values your car supports. Optional `OBD_NAME`, `OBD_PIN`, `OBD_REDLINE`,
+  `OBD_TANK_L`, `OBD_DISPLACEMENT_CC`, `OBD_VE` and `OBD_ETHANOL_PCT` (30: Brazilian pump
+  gasoline) in `src/config.h`.
+  **Read-only, enforced:** every command to the adapter passes one allow-list (live-data requests
+  and the adapter's own setup only); anything else is blocked and logged, and tests prove write,
+  clear and control commands are refused.
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>

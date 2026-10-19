@@ -78,6 +78,13 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Ideas
 
+- **Gear on the gauge cluster** (side task, 2026-10-19; spec 2026-10-19-gauge-cluster): the City's
+  lever (P R N D S) and the CVT's virtual gear (1–7, paddles) aren't standard OBD values; they're
+  broadcast on the CAN bus for the car's own instrument cluster. Record a parked session with the ELM327 listening only
+  (`ATMA` / filtered `ATCRA`, never `ATCSM0`), shifting P → R → N → D → S and the paddles, find the
+  message and byte, then feed the cluster's empty lever row. Those commands join `obd::allowed()`
+  only in that task's own design. Fallback for the virtual gear: RPM ÷ speed matched to the 7 steps.
+
 - **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
   Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
 - **PS3 controller for the avatar menu** (side idea, 2026-10-14): over Bluetooth Classic on the

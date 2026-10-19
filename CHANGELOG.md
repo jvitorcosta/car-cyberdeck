@@ -6,10 +6,15 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
-- OBD gauges on the companion (old deck): over a Bluetooth Classic ELM327 it reads RPM, speed,
-  coolant, engine load, intake air, throttle and battery voltage, and shows them as Pokémon
-  HP-style bars while the car answers; the avatar's home comes back when it stops. Read-only.
-  Optional `OBD_NAME`, `OBD_PIN`, `OBD_REDLINE` in `src/config.h`.
+- OBD gauge cluster on the companion (old deck): over a Bluetooth Classic ELM327, a green
+  cluster screen while the car answers: tach and speed, coolant, fuel (km/l now from the engine's
+  air, the drive's average, tank %, km left; E30 by default, coasting counts as no fuel), battery
+  (volts, charging, the dip at engine start), pedal vs throttle. Zero Two stays small in the
+  corner; her home comes back when the car stops. Reconnects to the last adapter straight away
+  and logs the car's supported values (`[obd] supported: ...`). Read-only, enforced by an
+  allow-list in front of the adapter (`[obd] BLOCKED ...` for anything else). Optional
+  `OBD_NAME`, `OBD_PIN`, `OBD_REDLINE`, `OBD_TANK_L`, `OBD_DISPLACEMENT_CC`, `OBD_VE`,
+  `OBD_ETHANOL_PCT` in `src/config.h`; `-D GAUGE_DEMO` shows the screen without a car.
 - A random boot opening on the S3, never the same as last boot: your intro video with the boot
   log typed over it, the Honda's night drive with "bem vindo moreno", or a pixel Lightning
   McQueen's drive with "eu sou a velocidade" (`tools/gen_mcqueen_sprite.py`, git-ignored; red
