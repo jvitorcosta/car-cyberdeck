@@ -7,6 +7,7 @@
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
 #include "statusscene.h"
+#include "qrcard.h"
 #include "sunset.h"
 #include "labels.h"
 #include "textdraw.h"
@@ -205,23 +206,65 @@ constexpr int SCENE_ROWS = 4;
 static uint16_t s_sceneBuf[statusscene::W * SCENE_ROWS];
 static_assert(statusscene::W * SCENE_ROWS >= 320, "a full row fits");
 
-void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow,
-                      const statusscene::Qr* qr) {
-    const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
-                                   theme::pal().horizon, theme::pal().boxShadow,
-                                   TFT_WHITE, theme::BALL_DARK,
-                                   theme::POKE_RED, TFT_WHITE, theme::BALL_DARK};
-    const statusscene::Pose pose = statusscene::poseAt(animMs, look);
-    constexpr int ROWS = SCENE_ROWS;
+static statusscene::Colors sceneColors() {
+    return {theme::pal().sky, theme::pal().horizon, theme::pal().grass, theme::pal().horizon,
+            theme::pal().boxShadow, TFT_WHITE, theme::BALL_DARK, theme::POKE_RED, TFT_WHITE,
+            theme::BALL_DARK};
+}
+
+// Pushes r of the scene in strips of up to SCENE_ROWS rows (r.w <= statusscene::W).
+static void pushScene(TFT_eSPI& t, const statusscene::Rect& r, const statusscene::Look& look,
+                      const statusscene::Pose& pose) {
+    const statusscene::Colors c = sceneColors();
     uint16_t* buf = s_sceneBuf;
-    for (int y0 = statusscene::Y0; y0 < statusscene::Y0 + statusscene::H; y0 += ROWS) {
-        for (int r = 0; r < ROWS; ++r)
-            for (int x = 0; x < statusscene::W; ++x)
-                buf[r * statusscene::W + x] =
-                    theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c, qr));
-        t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
+    for (int y0 = r.y; y0 < r.y + r.h; y0 += SCENE_ROWS) {
+        const int rows = r.y + r.h - y0 < SCENE_ROWS ? r.y + r.h - y0 : SCENE_ROWS;
+        for (int i = 0; i < rows; ++i)
+            for (int x = 0; x < r.w; ++x)
+                buf[i * r.w + x] = theme::be(statusscene::pixel(r.x + x, y0 + i, look, pose, c));
+        t.pushImage(r.x, y0, r.w, rows, buf);   // pushImage is big-endian
     }
+}
+
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow,
+                      bool whole, const qrcard::Qr* qr) {
+    const statusscene::Pose pose = statusscene::poseAt(animMs, look);
+    statusscene::Rect r{statusscene::X0, statusscene::Y0, statusscene::W, statusscene::H};
+    if (!whole) {
+        r = statusscene::frameRect(look);
+        if (qr) {   // the card stays on top: Pikachu's tail under it isn't repainted
+            const qrcard::Rect b = qrcard::beside({r.x, r.y, r.w, r.h});
+            r = {b.x, b.y, b.w, b.h};
+        }
+    }
+    if (r.w > 0 && r.h > 0) pushScene(t, r, look, pose);
     if (arrow) drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
+}
+
+// The phone link's card (ui/qrcard): a battle box, the phone icon and "REMOTE", the code on its
+// cream panel one module row at a time. Without a code, the scene comes back where it was.
+void drawQrCard(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, const qrcard::Qr* qr) {
+    using namespace qrcard;
+    const int o = qr ? offset(qr->size) : -1;
+    if (!qr || !qr->bits || o < 0) {
+        const Rect& f = FOOTPRINT;
+        pushScene(t, {f.x, f.y, f.w, f.h}, look, statusscene::poseAt(animMs, look));
+        return;
+    }
+    battleBox(t, BOX.x, BOX.y, BOX.w, BOX.h, Tab::Right);
+    drawIcon(t, icons::Icon::Phone, ICON_X, ICON_Y, theme::pal().text, theme::pal().boxFill);
+    shadowText(t, "REMOTE", LABEL_X, LABEL_Y, 2, theme::pal().text, theme::pal().textShadow, TL_DATUM);
+    t.fillRect(PANEL_AT.x, PANEL_AT.y, PANEL_AT.w, PANEL_AT.h, theme::QR_LIGHT);
+    constexpr int M = qrfit::MODULE_PX;
+    const int w = qr->size * M;
+    static_assert(qrfit::modules(qrfit::MAX_VERSION) * qrfit::MODULE_PX * qrfit::MODULE_PX <=
+                  statusscene::W * SCENE_ROWS, "a module row fits the scene buffer");
+    const uint16_t paper = theme::be(theme::QR_LIGHT), ink = theme::be(theme::QR_DARK);
+    for (int my = 0; my < qr->size; ++my) {
+        for (int x = 0; x < w; ++x) s_sceneBuf[x] = qrcard::dark(*qr, x / M, my) ? ink : paper;
+        for (int i = 1; i < M; ++i) memcpy(s_sceneBuf + i * w, s_sceneBuf, w * sizeof s_sceneBuf[0]);
+        t.pushImage(PANEL_AT.x + o, PANEL_AT.y + o + my * M, w, M, s_sceneBuf);
+    }
 }
 
 // Gen-3 "more text" arrow at the dialogue box's bottom right; blinks with the scene.
@@ -322,12 +365,13 @@ static void sunsetBackdrop(TFT_eSPI& t, bool night) {
 }
 
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs, int sound, const statusscene::Qr* qr) {
+                 uint32_t animMs, int sound, const qrcard::Qr* qr) {
     if (look.idle) sunsetBackdrop(t, look.night);
     else background(t);
     topStrip(t);
     drawOfflineText(t, msg, detail, sound);
-    drawOfflineScene(t, look, animMs, sound < 0, qr);   // the music box's screen has no arrow
+    drawOfflineScene(t, look, animMs, sound < 0, true);   // the music box's screen has no arrow
+    if (qr) drawQrCard(t, look, animMs, qr);
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.

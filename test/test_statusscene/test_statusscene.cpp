@@ -209,36 +209,62 @@ void test_sound_button() {
     TEST_ASSERT_FALSE(statusscene::onSoundButton(i.x, statusscene::DLG_Y - 10));   // the scene
 }
 
-// 21x21 test pattern: dark where (x + y) is even, plus the top-left corner always dark.
-static uint8_t QR_BITS[(21 * 21 + 7) / 8];
-static statusscene::Qr testQr() {
-    for (int i = 0; i < 21 * 21; ++i) {
-        int x = i % 21, y = i / 21;
-        if ((x + y) % 2 == 0) QR_BITS[i >> 3] |= (uint8_t)(0x80 >> (i & 7));
-    }
-    return {QR_BITS, 21};
+static bool inside(const statusscene::Rect& r, int x, int y) {
+    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 }
 
-// The phone-remote QR code in the sky left of the waiting figure: Pikachu, or Sonic in front of
-// the sunset; the real link's version 3 still clears him and the skyline's base.
-void test_qr_drawn_with_a_white_quiet_zone_left_of_the_figure() {
-    statusscene::Qr qr = testQr();
-    const int x0 = statusscene::QR_X, y0 = statusscene::QR_Y, q = 4 * 2;   // 4-module quiet zone
-    for (int idle = 0; idle < 2; ++idle) {
-        if (idle) loadIdle(); else idlesprite::parse(nullptr, 0);
-        statusscene::Look l = statusscene::lookFor(Kind::Ok);
-        TEST_ASSERT_EQUAL(idle == 1, l.idle);
-        statusscene::Pose p = statusscene::poseAt(0, l);
-        TEST_ASSERT_EQUAL_HEX16(C.bubble, statusscene::pixel(x0 + 1, y0 + 1, l, p, C, &qr));       // quiet zone
-        TEST_ASSERT_EQUAL_HEX16(C.ink, statusscene::pixel(x0 + q, y0 + q, l, p, C, &qr));          // module (0,0)
-        TEST_ASSERT_EQUAL_HEX16(C.bubble, statusscene::pixel(x0 + q + 2, y0 + q, l, p, C, &qr));   // module (1,0)
-        const uint16_t behind = idle ? sunset::pixel(x0 + 1, y0 + 1, false) : C.sky;
-        TEST_ASSERT_EQUAL_HEX16(behind, statusscene::pixel(x0 + 1, y0 + 1, l, p, C, nullptr));    // no QR
-        const int width = idle ? 32 : status_sprite::width(l.sprite);   // data/idle.bin: 32 px wide
-        const int figureLeft = statusscene::CX - width;
-        const int size3 = (29 + 8) * 2;                                         // the real link's version 3
-        TEST_ASSERT_TRUE(x0 >= statusscene::X0 && x0 + size3 + 2 <= figureLeft);
-        TEST_ASSERT_TRUE(y0 >= statusscene::Y0 && y0 + size3 <= sunset::GROUND_Y);
+// Every pixel that differs between two frames of the scene lies inside frameRect, the only part
+// repainted after the screen appears.
+static void assertChangesInsideFrameRect(const statusscene::Look& l) {
+    const statusscene::Rect r = statusscene::frameRect(l);
+    TEST_ASSERT_TRUE(r.x >= statusscene::X0 && r.y >= statusscene::Y0);
+    TEST_ASSERT_TRUE(r.x + r.w <= statusscene::X0 + statusscene::W);
+    TEST_ASSERT_TRUE(r.y + r.h <= statusscene::Y0 + statusscene::H);
+    const statusscene::Pose p0 = statusscene::poseAt(0, l);
+    for (uint32_t ms = statusscene::FRAME_MS; ms < 10000; ms += statusscene::FRAME_MS / 2) {
+        const statusscene::Pose p = statusscene::poseAt(ms, l);
+        for (int y = statusscene::Y0; y < statusscene::Y0 + statusscene::H; ++y)
+            for (int x = statusscene::X0; x < statusscene::X0 + statusscene::W; ++x)
+                if (statusscene::pixel(x, y, l, p, C) != statusscene::pixel(x, y, l, p0, C))
+                    TEST_ASSERT_TRUE_MESSAGE(inside(r, x, y), "a changing pixel outside frameRect");
+    }
+}
+
+// Sonic: only his box (2x, feet on the sidewalk, he doesn't bob) changes; the rest of the
+// scene, the QR card beside him included, is painted once.
+void test_frame_rect_is_sonics_box() {
+    loadIdle();
+    const statusscene::Look l = statusscene::lookFor(Kind::Ok);
+    const statusscene::Rect r = statusscene::frameRect(l);
+    TEST_ASSERT_EQUAL_INT(statusscene::CX - idlesprite::width(), r.x);
+    TEST_ASSERT_EQUAL_INT(2 * idlesprite::width(), r.w);
+    TEST_ASSERT_EQUAL_INT(statusscene::FEET_Y - 2 * idlesprite::height(), r.y);
+    TEST_ASSERT_EQUAL_INT(2 * idlesprite::height(), r.h);
+    assertChangesInsideFrameRect(l);
+}
+
+// Pikachu (no Sonic file): his box with room for the 2 px bob.
+void test_frame_rect_is_pikachus_box_with_the_bob() {
+    idlesprite::parse(nullptr, 0);
+    const statusscene::Look l = statusscene::lookFor(Kind::Ok);
+    const int w = status_sprite::width(l.sprite), h = status_sprite::height(l.sprite);
+    const statusscene::Rect r = statusscene::frameRect(l);
+    TEST_ASSERT_EQUAL_INT(statusscene::CX - w, r.x);
+    TEST_ASSERT_EQUAL_INT(2 * w, r.w);
+    TEST_ASSERT_EQUAL_INT(statusscene::FEET_Y - 2 * h - 2, r.y);
+    TEST_ASSERT_EQUAL_INT(2 * h + 2, r.h);
+    assertChangesInsideFrameRect(l);
+}
+
+// A bubble or a rolling ball: the whole region, as before.
+void test_frame_rect_is_the_region_with_a_bubble_or_a_ball() {
+    const Kind kinds[] = {Kind::NoWifi, Kind::NoInternet, Kind::SpotifyError, Kind::CertRejected};
+    for (Kind k : kinds) {
+        const statusscene::Rect r = statusscene::frameRect(statusscene::lookFor(k));
+        TEST_ASSERT_EQUAL_INT(statusscene::X0, r.x);
+        TEST_ASSERT_EQUAL_INT(statusscene::Y0, r.y);
+        TEST_ASSERT_EQUAL_INT(statusscene::W, r.w);
+        TEST_ASSERT_EQUAL_INT(statusscene::H, r.h);
     }
 }
 
@@ -258,6 +284,8 @@ int main(int, char**) {
     RUN_TEST(test_redraw_key);
     RUN_TEST(test_sonic_waits_in_front_of_the_sunset);
     RUN_TEST(test_sound_button);
-    RUN_TEST(test_qr_drawn_with_a_white_quiet_zone_left_of_the_figure);
+    RUN_TEST(test_frame_rect_is_sonics_box);
+    RUN_TEST(test_frame_rect_is_pikachus_box_with_the_bob);
+    RUN_TEST(test_frame_rect_is_the_region_with_a_bubble_or_a_ball);
     return UNITY_END();
 }

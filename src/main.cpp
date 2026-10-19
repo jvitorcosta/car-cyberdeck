@@ -260,7 +260,7 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
 // net::deviceIp() allocates a String.
 constexpr int QR_N = qrfit::modules(qrfit::MAX_VERSION);   // modules per side (29)
 static uint8_t s_qrBits[(QR_N * QR_N + 7) / 8];
-static statusscene::Qr s_qr{s_qrBits, 0};
+static qrcard::Qr s_qr{s_qrBits, 0};
 static uint32_t s_qrGen = 0;   // bumped when the code changes: the screen redraws it
 
 static void copyQr(esp_qrcode_handle_t h) {
@@ -277,7 +277,7 @@ static void copyQr(esp_qrcode_handle_t h) {
     s_qr.size = n;
 }
 
-static const statusscene::Qr* phoneQr(bool recheck) {
+static const qrcard::Qr* phoneQr(bool recheck) {
     static char built[96] = "";
     static uint32_t checkedAt = 0;
     if (recheck || millis() - checkedAt >= 5000) {
@@ -307,7 +307,7 @@ static const statusscene::Qr* phoneQr(bool recheck) {
     return s_qr.size ? &s_qr : nullptr;
 }
 #else
-static const statusscene::Qr* phoneQr(bool) { return nullptr; }   // CYD: no flash to spare
+static const qrcard::Qr* phoneQr(bool) { return nullptr; }   // CYD: no flash to spare
 static constexpr uint32_t s_qrGen = 0;
 #endif
 
@@ -449,7 +449,7 @@ void loop() {
         }
         statusscene::Look look = statusscene::lookFor(kind);
         look.night = theme::isNightActive();   // Sonic's sunset turns to night with the palette
-        const statusscene::Qr* qr = mode == 2 ? phoneQr(lastMode != mode) : nullptr;   // in the sky
+        const qrcard::Qr* qr = mode == 2 ? phoneQr(lastMode != mode) : nullptr;   // the card, top left
         snprintf(text, sizeof text, "%s|%s", title, detail);
         if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
             shownAt = millis();
@@ -465,10 +465,15 @@ void loop() {
         } else if (statusscene::frameKey(millis() - shownAt, look) != shownKey ||
                    s_qrGen != shownQrGen) {   // next frame, or the link's QR changed
             const uint32_t t = millis() - shownAt;   // Pokemon bob, bubble, ball; Sonic waiting
-            shownKey = statusscene::frameKey(t, look);
-            shownQrGen = s_qrGen;
-            ui::drawOfflineScene(s_tft, look, t, sound < 0, qr);   // the music box's screen: no arrow
-            if (sound == 1 && detail[0]) ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
+            if (s_qrGen != shownQrGen) {   // the card once more, or the scene back where it was
+                shownQrGen = s_qrGen;
+                ui::drawQrCard(s_tft, look, t, qr);
+            }
+            if (statusscene::frameKey(t, look) != shownKey) {   // only what moves (frameRect)
+                shownKey = statusscene::frameKey(t, look);
+                ui::drawOfflineScene(s_tft, look, t, sound < 0, false, qr);   // music box: no arrow
+                if (sound == 1 && detail[0]) ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
+            }
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
             Serial.printf("[screen] %s / %s\n", title, detail);

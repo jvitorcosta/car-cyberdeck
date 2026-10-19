@@ -32,16 +32,15 @@ struct Colors {
     uint16_t sky, horizon, grass, platform, edge;
     uint16_t bubble, ink, ballRed, ballWhite, ballDark;
 };
-// QR code of the phone-remote link (util/qrfit): modules row-major, MSB first, 1 = dark. Drawn
-// at QR_X/QR_Y, 2 px per module inside a white 4-module quiet zone, in the sky left of Sonic or
-// Pikachu (only the "Spotify is silent" screen passes one).
-struct Qr { const uint8_t* bits; int size; };
-constexpr int QR_X = X0 + 4, QR_Y = Y0 + 4;
-uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c,
-               const Qr* qr = nullptr);
+uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c);
 
 struct Rect { int x, y, w, h; };
 Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail and shadow
+// The part of the scene that changes from frame to frame, all ui::drawOfflineScene repaints
+// after the screen's first paint: the whole region with a bubble or a rolling ball, else only
+// the waiting figure's box (Sonic, or Pikachu with room for his bob), so the phone link's QR
+// card beside him (ui/qrcard) is painted once.
+Rect frameRect(const Look& look);
 
 // The music box's speaker key on "Spotify is silent" (S3): centred on the dialogue box's right
 // end, clear of the title; a tap anywhere on that end toggles it.

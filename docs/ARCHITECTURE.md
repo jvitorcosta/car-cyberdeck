@@ -71,7 +71,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   4 fps, pushed in 4-row strips. On the S3 "Spotify is silent" shows Sonic instead
   (`util/idlesprite`, `data/idle.bin` from `tools/gen_idle_sprite.py`): Sonic 1's waiting
   animation with the game's timing (12 x stand, then the foot tap, 400 ms a frame), from when
-  the screen appears; the scene redraws when his frame or the arrow can change. He waits on a
+  the screen appears; when his frame or the arrow can change only his box is repainted
+  (`statusscene::frameRect`; the Pokémon with a bubble or a ball repaint the region). He waits on a
   sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
@@ -93,7 +94,10 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). On the S3 the "Spotify is silent"
   screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` builds
   `http://<ip>/?k=<token>` from the current address and picks a version ≤ 3), checked when the
-  screen appears and every 5 s, redrawn when the address changes.
+  screen appears and every 5 s. It sits on a Gen-3 battle box at the top left (`ui/qrcard`:
+  phone icon and "REMOTE", 3 px modules on a cream panel, 2-module quiet zone, x 4-127,
+  y 22-149), painted once with the screen and again only when the address changes; without a
+  link the scene is painted back over it.
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with
@@ -120,7 +124,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   without an address" reconnects on the second check in a row (`netup`).
 - **Pure, host-tested modules** (suites under `test/`, one per module except `lyricstatus` in
   `netplan`'s, `pollpace` in `lyricclock`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
-  accents,cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
+  accents,cjkfont,status_sprite,statusscene,qrcard,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
   avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
   genrebadge,glyphrun,hotspotip,howl,idlesprite,interp,intropick,introclock,jsonflat,linkstatus,loudness,

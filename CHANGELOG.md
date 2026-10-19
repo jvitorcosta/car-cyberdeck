@@ -43,10 +43,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ### Changed
 - The "Nothing playing" screen now says **Spotify is silent** (same screen, same timing).
-- The S3's "Spotify is silent" screen shows the phone page's link as a QR code again, in the sky
-  left of Sonic: `http://<deck address>/?k=<REMOTE_TOKEN>` with the address it has now
-  (`172.20.10.10` on the iPhone hotspot, the DHCP one on any other network), redrawn when the
-  address changes. None while offline or without `REMOTE_TOKEN`.
+- The S3's "Spotify is silent" screen shows the phone page's link as a QR code again, left of
+  Sonic in a Gen-3 battle box named **REMOTE** (with a phone icon): 3 px modules (half as big
+  again as before) on the battle boxes' cream, so phones read it from further away.
+  `http://<deck address>/?k=<REMOTE_TOKEN>` with the address it has now (`172.20.10.10` on the
+  iPhone hotspot, the DHCP one on any other network), redrawn when the address changes. None
+  while offline or without `REMOTE_TOKEN`: the sunset shows instead. Sonic's frames now repaint
+  only his own box, not the whole scene.
 - A shorter S3 boot: about 19-21 s from power-on to the deck (measured: McQueen 19.2 s, Honda
   19.3 s, kiss 21.1 s; it was 27-35 s), most of it waiting for WiFi. The car openings start
   driving at once instead of after WiFi connects; the kiss is cut to the walk-in and the kiss
