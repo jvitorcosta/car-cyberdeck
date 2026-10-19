@@ -1,16 +1,16 @@
 #include "bootscene.h"
 #include <Arduino.h>
-#include <WiFi.h>
 #include "tjpgd.h"
 #include <cmath>
 #include <cstdlib>
 #include "car_sprite.h"
+#include "carlook.h"
+#include "bootterm.h"
 #include "montage.h"
 #include "../util/rgb565.h"
 #include "../audio/greeting.h"
 #include "../core/mem.h"
 #include "../util/bootanim.h"
-#include "../util/bios.h"
 #include "../core/embed.h"
 
 EMBED(data_montage_bin);
@@ -29,7 +29,6 @@ static_assert(SKY_H % STRIP_H == 0 && H % STRIP_H == 0, "strips must tile the sc
 constexpr int GROUND_Y = 214;                    // the car's ground line
 constexpr int CAR_TOP = GROUND_Y - 65;           // sprite row 0 (without the bob)
 constexpr uint32_t FRAME_MS = 40;                // 25 fps target while drawing the pixel scene
-constexpr uint32_t TERM_TTL = 3000;              // a terminal line disappears this long after its last change
 constexpr int ROAD_SPEED = 90, FENCE_SPEED = 30;
 constexpr int LAMP_PERIOD = 170, DASH_PERIOD = 48, BAY_PERIOD = 60, CARS_PERIOD = 450;
 constexpr float TAU = 6.28318530718f;            // Arduino.h #defines TWO_PI
@@ -40,10 +39,10 @@ constexpr uint16_t WHITE = 0xFFFF;
 constexpr bool MONTAGE_SOUND_AT_START = false;
 
 TFT_eSPI* s_tft = nullptr;
+carlook::Look s_car = carlook::honda();   // the car that drives (ui/carlook)
+Opts s_opts{carlook::honda(), true};
 bool (*s_online)() = nullptr;
 volatile bool s_active = false;
-const char* volatile s_caption = "";
-volatile uint32_t s_captionGen = 0;
 
 uint16_t* s_buf = nullptr;   // the strip being rendered (byte-swapped, as TFT_eSprite stores it)
 int s_y0 = 0;                // screen y of the strip's first row
@@ -95,9 +94,7 @@ struct Star { int x, y; };
 Star star(int i) { return {(i * 73) % W, (i * 37) % (SKY_H - 6)}; }
 constexpr int STARS = 18;
 constexpr uint16_t STAR = hex(0x96A0BE);
-constexpr int TERM_X = 4, TERM_Y = 4, TERM_ROW = 10;     // the on-board terminal, top left of the sky
-constexpr int TERM_W = (bios::TERM_COLS + 2) * 6 + 2;
-bool starSkipped(const Star& s) { return s.y < TERM_Y + bios::TERM_ROWS * TERM_ROW && s.x < TERM_X + TERM_W; }
+bool starSkipped(const Star& s) { return s.y < bootterm::Y + bootterm::H && s.x < bootterm::X + bootterm::W; }   // under the terminal
 
 // Cruising: sky straight on the display, once (the terminal draws itself on top).
 void drawSky() {
@@ -236,9 +233,8 @@ void spokeTable(float base, uint8_t* out) {
 }
 
 void wheel(int cx, int cy, const uint8_t* spokes, float glow) {
-    static const uint16_t RING[7] = {0, hex(0x141416), hex(0xC9CED4), hex(0x3A3E46), hex(0xC8CCD2),
-                                     hex(0x2B2F36), hex(0x2B2F36)};
-    static const uint16_t SPOKE[3] = {hex(0x2B2F36), hex(0xDFE3E8), hex(0x6A7078)};
+    const uint16_t* RING = s_car.rims->ring;    // the car's rims (ui/carlook)
+    const uint16_t* SPOKE = s_car.rims->spoke;
     for (int dy = -14; dy <= 14; ++dy) {
         const int y = cy + dy;
         if (y < s_y0 || y >= s_y0 + STRIP_H) continue;
@@ -303,11 +299,11 @@ void drawCar(const Car& c) {
     const uint8_t ba = bootanim::beamAlpha(c.e);                      // headlight beam, cool white
     for (int i = 0; i < 90; ++i) {
         const int h = 3 + i * 35 / 100;
-        blendRect(c.x + 200 + i, c.top + 31 - h / 3, 1, h, hex(0xF0F5FF), (uint8_t)(ba * (90 - i) / 90));
+        blendRect(c.x + s_car.headX + i, c.top + s_car.headY - h / 3, 1, h, hex(0xF0F5FF), (uint8_t)(ba * (90 - i) / 90));
     }
-    blendRect(c.x - 4, c.top + 21, 6, 9, hex(0xFF3030), bootanim::tailGlowAlpha(c.e));
+    blendRect(c.x - 4, c.top + s_car.tailY, 6, 9, hex(0xFF3030), bootanim::tailGlowAlpha(c.e));
 
-    int x0 = c.x, x1 = c.x + car_sprite::width(), y0 = c.top, y1 = c.top + car_sprite::height();
+    int x0 = c.x, x1 = c.x + s_car.w, y0 = c.top, y1 = c.top + s_car.h;
     if (bootanim::clip(x0, x1, 0, W) && bootanim::clip(y0, y1, s_y0, s_y0 + STRIP_H)) {
         const uint16_t head = bootanim::headColor(c.e), refl = hex(0xE6EEFF);
         const uint8_t tail = bootanim::tailLevel(c.e);
@@ -317,7 +313,7 @@ void drawCar(const Car& c) {
             for (int x = x0; x < x1; ++x) {
                 uint16_t col;
                 uint8_t kind;
-                if (!car_sprite::pixel(x - c.x, row, &col, &kind)) continue;
+                if (!s_car.pixel(x - c.x, row, &col, &kind)) continue;
                 if (kind == car_sprite::HEAD) col = head;
                 else if (kind == car_sprite::TAIL) col = bootanim::scale565(col, tail);
                 else if (c.lamp && (kind == car_sprite::UPPER || kind == car_sprite::LOWER)) {
@@ -332,9 +328,9 @@ void drawCar(const Car& c) {
     if (s_wheelAng) {                                                  // wheels stay on the road (no bob)
         uint8_t spokes[256];
         spokeTable(c.spoke, spokes);
-        const int wy = CAR_TOP + car_sprite::WHEEL_Y;
-        wheel(c.x + car_sprite::REAR_WHEEL_X, wy, spokes, glow);
-        wheel(c.x + car_sprite::FRONT_WHEEL_X, wy, spokes, glow);
+        const int wy = CAR_TOP + s_car.wheelY;
+        wheel(c.x + s_car.rearX, wy, spokes, glow);
+        wheel(c.x + s_car.frontX, wy, spokes, glow);
     }
 }
 
@@ -364,119 +360,15 @@ void drawJpg(uint8_t* work, const uint8_t* jpg, size_t len) {
     if (jd_prepare(&jd, jpgIn, work, TJPGD_WORKSPACE_SIZE, &src) == JDR_OK) jd_decomp(&jd, jpgOut, 0);
 }
 
-// ---- BIOS colours (util/bios) ----
-constexpr uint16_t BIOS_GREY = hex(0xAAAAAA), BIOS_GREEN = hex(0x55FF55), BIOS_YELLOW = hex(0xFFFF55);
-
-uint16_t biosTone(uint8_t tone) {
-    switch (tone) {
-    case bios::HEADER: return WHITE;
-    case bios::OK: return BIOS_GREEN;
-    case bios::WARN: return BIOS_YELLOW;
-    case bios::PURPLE: return UNDERGLOW;
-    default: return BIOS_GREY;
-    }
-}
-
-// ---- on-board terminal: the BIOS log carried on in the sky during the drive ----
-constexpr uint16_t TERM_TEXT = hex(0x6FBF7F);
-bios::Term s_term;                    // static: keeps ~210 B off the scene task's small stack
-int s_termDrawn[bios::TERM_ROWS];     // characters drawn per row; -1 = redraw
-uint32_t s_termGen = 0;
-
-// Row i's text at t ("> " is drawn apart): returns the typed characters, *v the value column (-1 none).
-int termRow(int i, uint32_t t, char* out, int* v) {
-    const bios::TermLine& r = s_term.rows[i];
-    *v = bios::format(r.label, r.value, out, bios::TERM_COLS + 1, bios::TERM_COLS);
-    return t < r.at ? 0 : bios::typed(t - r.at, (int)strlen(r.label), (int)strlen(out));
-}
-
-// Draws row i through draw(text, x, colour): label + dots in terminal green, the value in its tone.
-template <typename F>
-void termText(int i, uint32_t t, F draw) {
-    if (i >= s_term.n) return;
-    char out[bios::TERM_COLS + 1], part[bios::TERM_COLS + 1];
-    int v;
-    const int n = termRow(i, t, out, &v);
-    draw("> ", TERM_X, TERM_TEXT);
-    const int split = v < 0 || n < v ? n : v;
-    memcpy(part, out, split);
-    part[split] = 0;
-    draw(part, TERM_X + 12, TERM_TEXT);
-    if (v >= 0 && n > v) {
-        memcpy(part, out + v, n - v);
-        part[n - v] = 0;
-        draw(part, TERM_X + 12 + v * 6, biosTone(s_term.rows[i].tone));
-    }
-}
-
-// Cruising: rows straight on the display, redrawn only when they change.
-void termDrawDirect(uint32_t t) {
-    const bool all = s_termGen != s_term.gen;
-    s_termGen = s_term.gen;
-    for (int i = 0; i < bios::TERM_ROWS; ++i) {
-        char out[bios::TERM_COLS + 1];
-        int v;
-        const int n = i < s_term.n ? termRow(i, t, out, &v) : 0;
-        if (!all && n == s_termDrawn[i]) continue;
-        s_termDrawn[i] = n;
-        const int y = TERM_Y + i * TERM_ROW;
-        for (int yy = y; yy < y + 8; ++yy) s_tft->drawFastHLine(0, yy, TERM_X + TERM_W, skyAt(yy));
-        termText(i, t, [&](const char* text, int x, uint16_t c) {
-            s_tft->setTextColor(c);                  // one argument: transparent background
-            s_tft->drawString(text, x, y, 1);
-        });
-    }
-}
-
-// Fade-in/brake: rows rendered into the current strip so they dim with the scene.
-void termIntoStrip(TFT_eSprite& spr, uint32_t t) {
-    for (int i = 0; i < s_term.n; ++i) {
-        const int y = TERM_Y + i * TERM_ROW;
-        if (y >= s_y0 + STRIP_H || y + 8 <= s_y0) continue;
-        termText(i, t, [&](const char* text, int x, uint16_t c) {
-            spr.setTextColor(c);
-            spr.drawString(text, x, y - s_y0, 1);
-        });
-    }
-}
-
-// What the terminal says at t (ms since the scene started): the BIOS script, then the drive's own
-// events. Lines scroll up and expire; WI-FI stays while it is still connecting.
-void termEvents(uint32_t t, bool braking) {
-    static bool online = false, engine = false, greet = false, done = false, parked = false;
-    bios::termScript(s_term, t);
-    if (t >= bios::liveAt() && !online) {
-        if (s_online()) {
-            const String ssid = WiFi.SSID();             // once: no String churn every frame
-            char v[bios::TERM_VAL];
-            const size_t k = ssid.length() < bios::TERM_VAL - 6 ? ssid.length() : bios::TERM_VAL - 6;
-            memcpy(v, ssid.c_str(), k);
-            memcpy(v + k, " [OK]", 6);
-            bios::termSet(s_term, "WI-FI", v, bios::OK, t);
-            online = true;
-        } else {
-            // main.cpp's caption mentions "retrying" once every network has failed (connectAny)
-            bios::termSet(s_term, "WI-FI", strstr(s_caption, "retry") ? "RETRYING..." : "CONNECTING...",
-                          bios::WARN, t, true);
-        }
-    }
-    if (t >= 4800 && !engine) engine = bios::termSet(s_term, "ENGINE", "RUNNING", bios::OK, t);
-    if (t >= 5300 && !greet && t < greeting::durationMs())
-        greet = bios::termSet(s_term, "GREETING", "PLAYING", bios::PURPLE, t);
-    if (greet && !done && t >= greeting::durationMs()) done = bios::termSet(s_term, "GREETING", "DONE", bios::OK, t);
-    if (braking && !parked) parked = bios::termSet(s_term, "PARKING", "BRAKE", bios::OK, t);
-    bios::termExpire(s_term, t, TERM_TTL);
-}
-
 // No strip buffer: caption on black, same exit rule, no animation.
 void runWithoutScene(uint32_t t0) {
-    uint32_t gen = s_captionGen - 1;
+    uint32_t gen = bootterm::captionGen() - 1;
     for (;;) {
-        if (gen != s_captionGen) {
-            gen = s_captionGen;
+        if (gen != bootterm::captionGen()) {
+            gen = bootterm::captionGen();
             s_tft->fillScreen(TFT_BLACK);
             s_tft->setTextColor(TFT_WHITE, TFT_BLACK);
-            s_tft->drawString(s_caption, 10, 10, 2);
+            s_tft->drawString(bootterm::caption(), 10, 10, 2);
         }
         const uint32_t t = millis() - t0;
         if (bootanim::mayExit(t, t >= greeting::durationMs(), s_online())) return;
@@ -487,6 +379,7 @@ void runWithoutScene(uint32_t t0) {
 void task(void*) {
     mem::log("bootscene start");
     const uint32_t t0 = millis();
+    bootterm::begin(s_online);
     montage::parse(EMBED_DATA(data_montage_bin),
                    EMBED_SIZE(data_montage_bin));
     initTrees();
@@ -502,9 +395,9 @@ void task(void*) {
         Serial.println("[bootscene] no memory for the strip buffer: scene skipped");
         runWithoutScene(t0);
     } else {
-        drawSky();
-        for (int& d : s_termDrawn) d = -1;
+        if (s_opts.drive) drawSky();                             // no drive: black until the montage
         uint32_t tHero = bootanim::NO_EXIT;
+        bool skipBrake = false;
         int xc = 0, shown = -1;
         uint8_t* jpgWork = nullptr;                              // tjpgd workspace, montage only
         int finaleAt = -1;                                       // montage frame that starts the finale sound
@@ -513,18 +406,24 @@ void task(void*) {
         TickType_t wake = xTaskGetTickCount();
         for (;;) {
             const uint32_t t = millis() - t0;
+            if (!s_opts.drive && tHero == bootanim::NO_EXIT) {
+                if (!s_online()) { vTaskDelayUntil(&wake, pdMS_TO_TICKS(FRAME_MS)); continue; }
+                tHero = t;
+                skipBrake = true;                        // straight to the montage
+            }
             if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, t >= greeting::durationMs(), s_online())) {
                 tHero = t;
                 xc = bootanim::cruiseX(t);
             }
-            const uint32_t u = tHero == bootanim::NO_EXIT ? 0 : t - tHero;
+            const uint32_t u = tHero == bootanim::NO_EXIT ? 0
+                             : t - tHero + (skipBrake ? bootanim::BRAKE_MS : 0);
             const uint32_t f0 = millis();
             const uint8_t e = greeting::level(t);
             int mode;
-            termEvents(t, tHero != bootanim::NO_EXIT);
+            if (s_opts.drive) bootterm::events(t, tHero != bootanim::NO_EXIT);
             if (tHero == bootanim::NO_EXIT) {                    // enter + cruise
                 mode = 0;
-                termDrawDirect(t);
+                bootterm::drawDirect(*s_tft, t, skyAt);
                 twinkle(t);
                 const Car car = makeCar(t, bootanim::carX(t, bootanim::NO_EXIT), bootanim::bob(t), e);
                 for (int s = 0; s < STRIPS; ++s) {
@@ -542,7 +441,7 @@ void task(void*) {
                     s_y0 = s * STRIP_H;
                     if (s_y0 < SKY_H) {
                         drawSkyIntoStrip(world);
-                        termIntoStrip(spr, t);
+                        bootterm::drawInto(spr, t, 0, s_y0);
                     }
                     drawBackground(world);
                     drawCar(car);
@@ -602,7 +501,11 @@ void task(void*) {
 
 }  // namespace
 
-void start(TFT_eSPI& tft, bool (*online)()) {
+void start(TFT_eSPI& tft, bool (*online)()) { start(tft, online, Opts{carlook::honda(), true}); }
+
+void start(TFT_eSPI& tft, bool (*online)(), const Opts& o) {
+    s_opts = o;
+    s_car = o.car;
     s_tft = &tft;
     s_online = online;
     s_active = true;
@@ -612,10 +515,7 @@ void start(TFT_eSPI& tft, bool (*online)()) {
     }
 }
 
-void setCaption(const char* text) {
-    s_caption = text;
-    s_captionGen = s_captionGen + 1;
-}
+void setCaption(const char* text) { bootterm::setCaption(text); }
 
 bool active() { return s_active; }
 

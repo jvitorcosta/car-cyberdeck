@@ -1,6 +1,8 @@
 #include "statusscene.h"
 #include "status_sprite.h"
 #include "pokeball.h"
+#include "sunset.h"
+#include "../util/idlesprite.h"
 
 namespace statusscene {
 
@@ -12,7 +14,7 @@ Look lookFor(linkstatus::Kind k) {
     case linkstatus::Kind::CertRejected: return {status_sprite::PORYGON, Bubble::Bang, false};    // alarm
     case linkstatus::Kind::Ok:           break;
     }
-    return {status_sprite::PIKACHU, Bubble::None, false};
+    return {status_sprite::PIKACHU, Bubble::None, false, idlesprite::count() > 0};   // Sonic waits
 }
 
 static constexpr int PLAT_Y = 136, PLAT_RX = 60, PLAT_RY = 12;
@@ -25,7 +27,8 @@ Pose poseAt(uint32_t ms, const Look& look) {
     static const int BOB[] = {0, 1, 2, 1};
     Pose p{};
     p.step = (int)(ms / FRAME_MS);
-    p.bob = BOB[p.step & 3];
+    p.bob = look.idle ? 0 : BOB[p.step & 3];   // Sonic stands still; the game animates him
+    if (look.idle) p.idleFrame = idlesprite::frameAt(ms);
     if (look.ball) {
         int pos = p.step % (2 * BALL_STEPS);
         p.ballX = pos < BALL_STEPS ? -BALL_RANGE + pos * BALL_STEP
@@ -66,12 +69,15 @@ static const char* bubbleText(Bubble b, int step) {
     return "";
 }
 
+static int spriteW(const Look& look) { return look.idle ? idlesprite::width() : status_sprite::width(look.sprite); }
+static int spriteH(const Look& look) { return look.idle ? idlesprite::height() : status_sprite::height(look.sprite); }
+
 static int spriteTop(const Look& look, const Pose& pose) {
-    return FEET_Y - 2 * status_sprite::height(look.sprite) - pose.bob;
+    return FEET_Y - 2 * spriteH(look) - pose.bob;
 }
 
 Rect bubbleRect(const Look& look, const Pose& pose) {
-    Rect r{CX + status_sprite::width(look.sprite) - 6, spriteTop(look, pose) - BUBBLE_H + 6,
+    Rect r{CX + spriteW(look) - 6, spriteTop(look, pose) - BUBBLE_H + 6,
            BUBBLE_W, BUBBLE_H};
     if (r.y < Y0) r.y = Y0;
     return r;
@@ -130,36 +136,33 @@ static bool insideEllipse(int dx, int dy, int rx, int ry) {
     return (long)dx * dx * ry * ry + (long)dy * dy * rx * rx <= (long)rx * rx * ry * ry;
 }
 
-static bool qrPixel(int x, int y, const Qr* qr, const Colors& c, uint16_t* out) {
-    if (!qr || !qr->bits || qr->size <= 0) return false;
-    constexpr int PX = 2, QUIET = 4;
-    const int span = (qr->size + 2 * QUIET) * PX;
-    const int dx = x - QR_X, dy = y - QR_Y;
-    if (dx < 0 || dy < 0 || dx >= span || dy >= span) return false;
-    const int mx = dx / PX - QUIET, my = dy / PX - QUIET;
-    *out = c.bubble;                                     // white: quiet zone and light modules
-    if (mx >= 0 && my >= 0 && mx < qr->size && my < qr->size) {
-        const int i = my * qr->size + mx;
-        if ((qr->bits[i >> 3] >> (7 - (i & 7))) & 1) *out = c.ink;
-    }
-    return true;
-}
-
-uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c, const Qr* qr) {
+uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c) {
     uint16_t v;
-    if (qrPixel(x, y, qr, c, &v)) return v;
     if (bubblePixel(x, y, look, pose, c, &v)) return v;
     if (ballPixel(x, y, look, pose, c, &v)) return v;
-    const int w = status_sprite::width(look.sprite);
+    const int w = spriteW(look);
     const int left = CX - w, top = spriteTop(look, pose);
-    if (x >= left && y >= top && status_sprite::pixel(look.sprite, (x - left) / 2, (y - top) / 2, &v))
-        return v;
+    if (x >= left && y >= top) {
+        const int sx = (x - left) / 2, sy = (y - top) / 2;
+        if (look.idle ? idlesprite::pixel(pose.idleFrame, sx, sy, &v) : status_sprite::pixel(look.sprite, sx, sy, &v))
+            return v;
+    }
+    if (look.idle) return sunset::pixel(x, y, look.night);   // no platform: he waits on the sidewalk
     const int dx = x - CX, dy = y - PLAT_Y;
     if (insideEllipse(dx, dy, PLAT_RX, PLAT_RY))
         return insideEllipse(dx, dy, PLAT_RX - 1, PLAT_RY - 1) ? c.platform : c.edge;
     if (y < 118) return c.sky;      // same bands as ui::background()
     if (y < 122) return c.horizon;
     return c.grass;
+}
+
+bool onSoundButton(int x, int y) {
+    return x >= 256 && x < 316 && y >= DLG_Y && y < DLG_Y + DLG_H;
+}
+
+uint32_t frameKey(uint32_t ms, const Look& look) {
+    if (!look.idle) return ms / FRAME_MS;
+    return idlesprite::tickAt(ms) << 1 | ((ms / (2 * FRAME_MS)) & 1);   // arrow: (step >> 1) & 1
 }
 
 }

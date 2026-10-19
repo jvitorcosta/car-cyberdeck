@@ -1,5 +1,6 @@
 """Build data/montage.bin: the boot scene's photo montage from the owner's photos
-(docs/superpowers/specs/2026-10-09-boot-scene-v3-design.md, section 4).
+(docs/superpowers/specs/2026-10-09-boot-scene-v3-design.md, section 4): ~5 s of photos, then the
+end card, the POWERED BY HONDA logo (spec 2026-10-19-random-intro: every boot opening ends with it).
 Run: python tools/gen_montage.py [photo dir]      (default: montage-photos/)
 The photos and data/montage.bin are git-ignored (they show the number plate). Needs ffmpeg.
 
@@ -20,16 +21,19 @@ FPS, XFADE = 10, 3                         # 10 fps, 0.3 s crossfades
 CX, CY = 320, 250                          # where each car's centre lands on the 640x480 canvas
 GRADE = "eq=contrast=1.06:saturation=1.08:gamma=0.97"
 # file, car centre (x, y) and width in a 640-wide copy, target width, frames, push-in per frame, slide
-SHOTS = [("07-right-wide-turning.jpg", 325, 603, 610, 0.95, 18, 0.0015, 0),
-         ("02-front-close.jpg", 282, 655, 556, 0.87, 14, 0.004, -1),
-         ("04-left-closer.jpg", 291, 653, 570, 0.89, 16, 0.004, -1)]
-DETAIL = ("06-headlight-detail.jpg", 290, 28, 0.003)       # plain crop at y, frames, push-in
+SHOTS = [("07-right-wide-turning.jpg", 325, 603, 610, 0.95, 14, 0.0019, 0),
+         ("02-front-close.jpg", 282, 655, 556, 0.87, 11, 0.005, -1),
+         ("04-left-closer.jpg", 291, 653, 570, 0.89, 12, 0.005, -1)]
+DETAIL = ("06-headlight-detail.jpg", 290, 18, 0.0045)       # plain crop at y, frames, push-in
 # Optional end card: this logo (git-ignored with the photos) centred on white with a thin red frame.
 # The last photo fades to white, the logo fades in, holds, then everything fades to black.
 END_LOGO = "honda-logo.png"
 END_LOGO_W, END_BORDER, END_RED = 296, 4, "0xE2001A"
-END_IN, END_HOLD, END_OUT = 6, 20, 6                        # frames (the held frames share one JPEG)
+END_IN, END_HOLD, END_OUT = 4, 16, 5                        # frames (the held frames share one JPEG)
 END_Q = 2      # q 8 left grey specks around the black letters on white (photos hide them)
+# A red caption under the logo; "" = none (the owner's logo art already reads "POWERED by HONDA").
+END_TEXT, END_TEXT_SIZE = "", 15
+END_FONT = "C\\:/Windows/Fonts/arialbd.ttf"                 # ffmpeg drawtext path (Windows)
 
 
 def ffmpeg(args):
@@ -45,6 +49,26 @@ def shot_filter(cx, cy, w, target, n, rate, slide, first):
     return ("scale=640:-1,scale=iw*%.4f:-1,crop=640:480:%d:%d,%s,"
             "zoompan=z='1.0+%s*on':x='%s':y='(ih-ih/zoom)/2':d=%d:s=320x240:fps=%d,vignette=PI/8%s,format=yuv420p"
             % (s, round(-fx), round(-fy), GRADE, rate, x, n, FPS, fade))
+
+
+def photo_frames():
+    """Frames of the photo part: every shot and the detail, minus the crossfade overlaps."""
+    n = [s[5] for s in SHOTS] + [DETAIL[2]]
+    return sum(n) - XFADE * (len(n) - 1)
+
+
+def end_filter(cw, ch, x0, y0, w=1, h=1, text=None):
+    """The end card: the logo (w x h source, cropped cw x ch at x0, y0) on white, the red frame,
+    with a caption (text, default END_TEXT) in the frame's red the logo is raised for it, the fades."""
+    text = END_TEXT if text is None else text
+    flat = "color=white:s=%dx%d[w];[w][0]overlay=shortest=1" % (w, h)
+    caption = ("drawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=%s:x=(w-text_w)/2:y=h-46,"
+               % (END_FONT, text, END_TEXT_SIZE, END_RED)) if text else ""
+    return (flat + ",crop=%d:%d:%d:%d,scale=%d:-1:flags=area[l];[1][l]overlay=(W-w)/2:(H-h)/2-%d,"
+            "drawbox=x=0:y=0:w=320:h=240:color=%s:t=%d,%s"
+            "fade=t=in:s=0:n=%d:color=white,fade=t=out:s=%d:n=%d,format=yuvj420p"
+            % (cw, ch, x0, y0, END_LOGO_W, 16 if text else 6, END_RED, END_BORDER, caption,
+               END_IN, END_IN + END_HOLD, END_OUT - 1))
 
 
 def end_card(photos, tmp):
@@ -67,11 +91,7 @@ def end_card(photos, tmp):
     x0, y0 = cols[0], rows[0]
     n = END_IN + END_HOLD + END_OUT
     ffmpeg(["-i", src, "-f", "lavfi", "-i", "color=white:s=320x240:r=%d" % FPS, "-filter_complex",
-            flat + ",crop=%d:%d:%d:%d,scale=%d:-1:flags=area[l];[1][l]overlay=(W-w)/2:(H-h)/2-6,"
-            "drawbox=x=0:y=0:w=320:h=240:color=%s:t=%d,"
-            "fade=t=in:s=0:n=%d:color=white,fade=t=out:s=%d:n=%d,format=yuvj420p"
-            % (cols[-1] - x0 + 1, rows[-1] - y0 + 1, x0, y0, END_LOGO_W, END_RED, END_BORDER,
-               END_IN, END_IN + END_HOLD, END_OUT - 1),
+            end_filter(cols[-1] - x0 + 1, rows[-1] - y0 + 1, x0, y0, w, h),
             "-frames:v", str(n), "-q:v", str(END_Q), os.path.join(tmp, "e%03d.jpg")])
     return [open(f, "rb").read() for f in sorted(glob.glob(os.path.join(tmp, "e*.jpg")))]
 

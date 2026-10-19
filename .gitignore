@@ -40,3 +40,14 @@ data/intro.bin
 data/intro.pcm
 data/howl.pcm
 data/greeting_alt.pcm
+
+# Sonic waiting sprite: SEGA art fetched locally by tools/gen_idle_sprite.py, never committed
+sonic-sprites/
+data/idle.bin
+# Music-box tunes: your own (tools/gen_tune.py song.mid), never committed; the packed set is built
+data/tunes/
+data/tunes.txt
+*.mid
+# Pixel McQueen (a Disney/Pixar character): the art and the packed sprite stay local
+data/mcqueen.bin
+mcqueen*.png

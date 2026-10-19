@@ -20,6 +20,7 @@ struct State {
     uint32_t uptimeS;     // seconds since power-on (the trip, in a car)
     const char* const* clips;   // sound buttons the remote accepts ("howl", ...)
     int clipCount;
+    const char* tunes;    // the music box's mute button: "" (not on screen), "on", "muted"
     uint32_t trackGen;      // changes on every song
     uint32_t progressMs, durationMs;
     bool playing;

@@ -30,7 +30,7 @@ jobs:
             part: "0x300000"   # huge_app.csv
           - board: s3
             envs: -e s3 -e hwcheck_s3
-            part: "0x800000"   # partitions_s3.csv
+            part: "0xC00000"   # partitions_s3.csv
     steps:
       - uses: actions/checkout@v4
         with:

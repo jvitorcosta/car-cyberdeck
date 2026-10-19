@@ -2,6 +2,9 @@
 #include <cstdint>
 #include "../../src/ui/statusscene.h"
 #include "../../src/ui/status_sprite.h"
+#include "../../src/util/idlesprite.h"
+#include "../../src/ui/sunset.h"
+#include <cstring>
 
 using linkstatus::Kind;
 using statusscene::Bubble;
@@ -129,31 +132,81 @@ void test_bubble_has_room_around_the_text() {
     TEST_ASSERT_TRUE(r.h >= 14 + 2 * 6);
 }
 
-// 21x21 test pattern: dark where (x + y) is even, plus the top-left corner always dark.
-static uint8_t QR_BITS[(21 * 21 + 7) / 8];
-static statusscene::Qr testQr() {
-    for (int i = 0; i < 21 * 21; ++i) {
-        int x = i % 21, y = i / 21;
-        if ((x + y) % 2 == 0) QR_BITS[i >> 3] |= (uint8_t)(0x80 >> (i & 7));
-    }
-    return {QR_BITS, 21};
+// A 4-frame, 2x2 idle sprite: frame f's top-left pixel is opaque (palette f+1), rest clear.
+static uint8_t s_idle[8 + 32 + 4 * 2];
+static void loadIdle() {
+    memcpy(s_idle, "IDL1", 4);
+    s_idle[4] = 4; s_idle[5] = 2; s_idle[6] = 2; s_idle[7] = 0;
+    for (int i = 0; i < 16; ++i) { s_idle[8 + 2 * i] = (uint8_t)(0x40 + i); s_idle[9 + 2 * i] = 0; }
+    memset(s_idle + 40, 0, 8);
+    for (int f = 0; f < 4; ++f) s_idle[40 + f * 2] = (uint8_t)((f + 1) << 4);
+    TEST_ASSERT_TRUE(idlesprite::parse(s_idle, sizeof s_idle));
 }
 
-void test_qr_drawn_with_a_white_quiet_zone_left_of_the_pokemon() {
+// "Nothing playing" shows Sonic waiting when the deck has his file, Pikachu otherwise; every
+// other cause keeps its Pokemon.
+void test_nothing_playing_is_sonic_with_the_file() {
+    idlesprite::parse(nullptr, 0);
+    TEST_ASSERT_FALSE(statusscene::lookFor(Kind::Ok).idle);
+    loadIdle();
+    TEST_ASSERT_TRUE(statusscene::lookFor(Kind::Ok).idle);
+    TEST_ASSERT_FALSE(statusscene::lookFor(Kind::NoWifi).idle);
+}
+
+// He stands at 2x with his feet on the platform, doesn't bob, and his frame follows the game's
+// waiting timeline (frame f's top-left pixel is palette entry f+1).
+void test_sonic_drawn_2x_on_the_platform_following_the_timeline() {
+    loadIdle();
+    const statusscene::Look l = statusscene::lookFor(Kind::Ok);
+    const int left = statusscene::CX - idlesprite::width();
+    const int top = statusscene::FEET_Y - 2 * idlesprite::height();
+    struct { uint32_t ms; int frame; } rows[] = {{0, idlesprite::STAND}, {4800, idlesprite::WAIT2},
+                                                 {5200, idlesprite::WAIT1}, {6800, idlesprite::WAIT3}};
+    for (auto& r : rows) {
+        const statusscene::Pose p = statusscene::poseAt(r.ms, l);
+        TEST_ASSERT_EQUAL_INT(0, p.bob);
+        TEST_ASSERT_EQUAL_HEX16(0x40 + r.frame + 1, statusscene::pixel(left + 1, top + 1, l, p, C));
+        TEST_ASSERT_NOT_EQUAL(0x40 + r.frame + 1, statusscene::pixel(left + 2, top, l, p, C));
+    }
+}
+
+// The scene redraws when its key changes: every FRAME_MS for the Pokemon; for Sonic only when
+// his frame (400 ms) or the dialogue's blinking arrow (500 ms) can change.
+void test_redraw_key() {
+    loadIdle();
+    const statusscene::Look poke = statusscene::lookFor(Kind::NoWifi);
+    TEST_ASSERT_EQUAL_UINT32(3, statusscene::frameKey(3 * statusscene::FRAME_MS, poke));
+    const statusscene::Look sonic = statusscene::lookFor(Kind::Ok);
+    TEST_ASSERT_EQUAL_UINT32(statusscene::frameKey(0, sonic), statusscene::frameKey(399, sonic));
+    TEST_ASSERT_NOT_EQUAL(statusscene::frameKey(399, sonic), statusscene::frameKey(400, sonic));
+    TEST_ASSERT_NOT_EQUAL(statusscene::frameKey(499, sonic), statusscene::frameKey(500, sonic));
+}
+
+// Behind Sonic: the Sunset drive backdrop (no platform; he waits on the sidewalk), in the
+// night palette when the deck is in night mode. The Pokemon keep the battle field.
+void test_sonic_waits_in_front_of_the_sunset() {
+    loadIdle();
     statusscene::Look l = statusscene::lookFor(Kind::Ok);
-    statusscene::Pose p = statusscene::poseAt(0, l);
-    statusscene::Qr qr = testQr();
-    const int x0 = statusscene::QR_X, y0 = statusscene::QR_Y, q = 4 * 2;   // 4-module quiet zone
-    TEST_ASSERT_EQUAL_HEX16(C.bubble, statusscene::pixel(x0 + 1, y0 + 1, l, p, C, &qr));          // quiet zone
-    TEST_ASSERT_EQUAL_HEX16(C.ink, statusscene::pixel(x0 + q, y0 + q, l, p, C, &qr));             // module (0,0)
-    TEST_ASSERT_EQUAL_HEX16(C.bubble, statusscene::pixel(x0 + q + 2, y0 + q, l, p, C, &qr));      // module (1,0)
-    TEST_ASSERT_EQUAL_HEX16(C.sky, statusscene::pixel(x0 + 1, y0 + 1, l, p, C, nullptr));         // no QR: sky
-    const int size = (21 + 8) * 2;
-    const int spriteLeft = statusscene::CX - status_sprite::width(l.sprite);
-    TEST_ASSERT_TRUE(x0 >= statusscene::X0 && x0 + size + 2 <= spriteLeft);   // clear of Pikachu
-    TEST_ASSERT_TRUE(y0 >= statusscene::Y0);
-    const int size3 = (29 + 8) * 2;                                           // the real link's version 3
-    TEST_ASSERT_TRUE(x0 + size3 + 2 <= spriteLeft && y0 + size3 <= 118);      // still in the sky
+    const statusscene::Pose p = statusscene::poseAt(0, l);
+    const int x = statusscene::X0 + 1;
+    TEST_ASSERT_EQUAL_HEX16(sunset::pixel(x, 30, false), statusscene::pixel(x, 30, l, p, C));
+    TEST_ASSERT_EQUAL_HEX16(sunset::pixel(statusscene::CX, 140, false), statusscene::pixel(statusscene::CX, 140, l, p, C));
+    l.night = true;
+    TEST_ASSERT_EQUAL_HEX16(sunset::pixel(x, 30, true), statusscene::pixel(x, 30, l, p, C));
+    statusscene::Look poke = statusscene::lookFor(Kind::NoWifi);
+    poke.night = true;
+    TEST_ASSERT_EQUAL_HEX16(C.sky, statusscene::pixel(x, 30, poke, statusscene::poseAt(0, poke), C));
+}
+
+// The music box's speaker button (S3): drawn at the dialogue box's top right, tapped anywhere
+// on the box's right end; the text stays clear of it.
+void test_sound_button() {
+    const statusscene::Rect i = statusscene::SOUND_ICON;
+    TEST_ASSERT_TRUE(statusscene::onSoundButton(i.x + i.w / 2, i.y + i.h / 2));
+    TEST_ASSERT_TRUE(i.y >= statusscene::DLG_Y + 4 && i.x + i.w <= 4 + 312 - 4);   // inside the box
+    TEST_ASSERT_TRUE(statusscene::onSoundButton(300, statusscene::DLG_Y + statusscene::DLG_H - 6));
+    TEST_ASSERT_FALSE(statusscene::onSoundButton(100, statusscene::DLG_Y + 20));   // the text
+    TEST_ASSERT_FALSE(statusscene::onSoundButton(i.x, statusscene::DLG_Y - 10));   // the scene
 }
 
 int main(int, char**) {
@@ -167,6 +220,10 @@ int main(int, char**) {
     RUN_TEST(test_everything_stays_inside_the_redrawn_region);
     RUN_TEST(test_region_leaves_room_for_the_info_box_and_dialogue);
     RUN_TEST(test_bubble_has_room_around_the_text);
-    RUN_TEST(test_qr_drawn_with_a_white_quiet_zone_left_of_the_pokemon);
+    RUN_TEST(test_nothing_playing_is_sonic_with_the_file);
+    RUN_TEST(test_sonic_drawn_2x_on_the_platform_following_the_timeline);
+    RUN_TEST(test_redraw_key);
+    RUN_TEST(test_sonic_waits_in_front_of_the_sunset);
+    RUN_TEST(test_sound_button);
     return UNITY_END();
 }
