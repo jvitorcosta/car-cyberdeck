@@ -205,7 +205,7 @@ constexpr int SCENE_ROWS = 4;
 static uint16_t s_sceneBuf[statusscene::W * SCENE_ROWS];
 static_assert(statusscene::W * SCENE_ROWS >= 320, "a full row fits");
 
-void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs) {
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow) {
     const statusscene::Colors c = {theme::pal().sky, theme::pal().horizon, theme::pal().grass,
                                    theme::pal().horizon, theme::pal().boxShadow,
                                    TFT_WHITE, theme::BALL_DARK,
@@ -220,7 +220,7 @@ void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animM
                     theme::be(statusscene::pixel(statusscene::X0 + x, y0 + r, look, pose, c));
         t.pushImage(statusscene::X0, y0, statusscene::W, ROWS, buf);   // pushImage is big-endian
     }
-    drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
+    if (arrow) drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
 }
 
 // Gen-3 "more text" arrow at the dialogue box's bottom right; blinks with the scene.
@@ -229,23 +229,65 @@ static void drawMoreArrow(TFT_eSPI& t, bool on) {
     t.fillTriangle(x, y, x + 8, y, x + 4, y + 5, on ? theme::POKE_RED : theme::pal().dlgFill);
 }
 
-// The music box's speaker: a cone, then two sound waves when on or a cross when muted.
-static void drawSoundIcon(TFT_eSPI& t, bool on) {
-    const statusscene::Rect r = statusscene::SOUND_ICON;
-    const uint16_t ink = theme::pal().text;
-    const int cy = r.y + r.h / 2;
-    t.fillRect(r.x, cy - 3, 4, 7, ink);                                  // the magnet
-    t.fillTriangle(r.x + 3, cy, r.x + 10, cy - 8, r.x + 10, cy + 8, ink);  // the cone
-    if (on) {
-        t.drawCircleHelper(r.x + 11, cy, 5, 0x2 | 0x4, ink);             // ")" ...
-        t.drawCircleHelper(r.x + 11, cy, 9, 0x2 | 0x4, ink);             // "))"
-        t.drawCircleHelper(r.x + 12, cy, 9, 0x2 | 0x4, ink);
+// Halfway between two colours: the muted line's softer ink, day and night.
+static uint16_t blend(uint16_t a, uint16_t b) { return ((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1); }
+
+static constexpr int TUNE_Y = statusscene::DLG_Y + 42;          // the second line
+static constexpr int TUNE_TEXT_X = 18 + icons::SIZE + 5;
+static constexpr int TUNE_LINE_W = statusscene::SOUND_ICON.x - 6 - 16;   // stops short of the key
+
+// The note before the tune's name, bobbing 1 px with frame (frame < 0: at rest).
+static void drawTuneNoteAt(TFT_eSPI& t, int frame) {
+    const int dy = frame < 0 ? 0 : (frame & 1) ? 1 : -1;
+    t.fillRect(18, TUNE_Y - 2, icons::SIZE, icons::SIZE + 4, theme::pal().dlgFill);
+    drawIcon(t, icons::Icon::Note, 18, TUNE_Y + dy, theme::pal().note, theme::pal().dlgFill);
+}
+
+void drawTuneNote(TFT_eSPI& t, int frame) { drawTuneNoteAt(t, frame); }
+
+// "Nothing playing"'s second line: ♪ and the tune; muted, the words in a softer ink.
+static void drawTuneLine(TFT_eSPI& t, const char* detail, int sound) {
+    t.fillRect(16, TUNE_Y - 2, TUNE_LINE_W, 20, theme::pal().dlgFill);
+    if (!detail || !detail[0]) return;
+    if (sound == 1) {
+        drawTuneNoteAt(t, -1);
+        shadowText(t, detail, TUNE_TEXT_X, TUNE_Y + 1, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
     } else {
-        for (int d = 0; d < 2; ++d) {                                    // a 2 px cross
-            t.drawLine(r.x + 15 + d, cy - 5, r.x + 23 + d - 1, cy + 5, ink);
-            t.drawLine(r.x + 15 + d, cy + 5, r.x + 23 + d - 1, cy - 5, ink);
+        t.setTextColor(blend(theme::pal().text, theme::pal().dlgFill));
+        t.setTextDatum(TL_DATUM);
+        t.drawString(detail, 18, TUNE_Y + 1, 2);
+    }
+}
+
+// A speaker: magnet and cone, then sound waves (on) or a red cross (muted), centred on cx, cy.
+static void drawSpeaker(TFT_eSPI& t, int cx, int cy, bool on, uint16_t ink) {
+    const int x = cx - 11;
+    t.fillRect(x, cy - 3, 4, 7, ink);
+    t.fillTriangle(x + 3, cy, x + 10, cy - 7, x + 10, cy + 7, ink);
+    if (on) {
+        t.drawCircleHelper(x + 11, cy, 4, 0x2 | 0x4, ink);
+        t.drawCircleHelper(x + 11, cy, 8, 0x2 | 0x4, ink);
+        t.drawCircleHelper(x + 12, cy, 8, 0x2 | 0x4, ink);
+    } else {
+        for (int d = 0; d < 2; ++d) {   // 2 px strokes
+            t.drawLine(x + 14 + d, cy - 4, x + 21 + d, cy + 4, theme::POKE_RED);
+            t.drawLine(x + 14 + d, cy + 4, x + 21 + d, cy - 4, theme::POKE_RED);
         }
     }
+}
+
+// The music box's key: a rounded Gen-3 battle-box button with a drop shadow, darker while a
+// finger is on it.
+void drawSoundButton(TFT_eSPI& t, int sound, bool pressed) {
+    if (sound < 0) return;
+    const statusscene::Rect r = statusscene::SOUND_ICON;
+    const auto& p = theme::pal();
+    t.fillRect(r.x, r.y, r.w + 2, r.h + 2, p.dlgFill);
+    const int o = pressed ? 1 : 0;   // pressed: sinks onto its shadow
+    if (!pressed) t.fillRoundRect(r.x + 2, r.y + 2, r.w, r.h, 6, p.boxShadow);
+    t.fillRoundRect(r.x + o, r.y + o, r.w, r.h, 6, p.boxBorder);
+    t.fillRoundRect(r.x + o + 2, r.y + o + 2, r.w - 4, r.h - 4, 5, pressed ? blend(p.boxFill, p.boxBorder) : p.boxFill);
+    drawSpeaker(t, r.x + o + r.w / 2, r.y + o + r.h / 2, sound == 1, p.text);
 }
 
 void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, int sound) {
@@ -253,11 +295,16 @@ void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, int sound
     dialogueBox(t, 4, y, 312, statusscene::DLG_H);
     const bool two = detail && detail[0];
     shadowText(t, msg, 18, two ? y + 12 : y + 22, 4, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
-    if (two) shadowText(t, detail, 18, y + 42, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
-    if (sound >= 0) drawSoundIcon(t, sound == 1);
+    if (sound >= 0) {
+        drawTuneLine(t, detail, sound);
+        drawSoundButton(t, sound, false);
+    } else if (two) {
+        shadowText(t, detail, 18, y + 42, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+    }
 }
 
-void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
+void drawOfflineDetail(TFT_eSPI& t, const char* detail, int sound) {
+    if (sound >= 0) { drawTuneLine(t, detail, sound); return; }
     const int y = statusscene::DLG_Y + 40;
     t.fillRect(16, y, 276, 20, theme::pal().dlgFill);   // the line only: the countdown doesn't flicker
     shadowText(t, detail, 18, y + 2, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
@@ -279,7 +326,7 @@ void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statuss
     else background(t);
     topStrip(t);
     drawOfflineText(t, msg, detail, sound);
-    drawOfflineScene(t, look, animMs);
+    drawOfflineScene(t, look, animMs, sound < 0);   // the music box's screen has no arrow
 }
 
 // Gen-3 summary-style badge: rounded box in the colour, darker border, white font-1 label.

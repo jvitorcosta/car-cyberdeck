@@ -254,8 +254,9 @@ static void musicBox(bool want) {
 #ifdef BOARD_S3
 // A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on
 // the companion. Touch is read every 20 ms, only while "Nothing playing" is up.
+static press::Press s_soundPress;
 static bool soundTapped() {
-    static press::Press p;
+    press::Press& p = s_soundPress;
     static uint32_t at = 0;
     if (millis() - at < 20) return false;
     at = millis();
@@ -345,9 +346,7 @@ void loop() {
                              : linkstatus::Kind::Ok;
             if (sound == 0) strlcpy(detail, "Tunes muted", sizeof detail);
             else if (sound == 1) {                       // the tune playing, once it has started
-                char name[32];
-                greeting::tuneName(name, sizeof name);
-                if (name[0]) snprintf(detail, sizeof detail, "Music box: %s", name);
+                greeting::tuneName(detail, sizeof detail);
             }
         }
         statusscene::Look look = statusscene::lookFor(kind);
@@ -361,12 +360,13 @@ void loop() {
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
             if (sound == shownSound && strcmp(title, shownTitle) == 0 && detail[0] && shownDetail &&
                 shownDetail[1])
-                ui::drawOfflineDetail(s_tft, detail);
+                ui::drawOfflineDetail(s_tft, detail, sound);
             else ui::drawOfflineText(s_tft, title, detail, sound);   // the button changed too
         } else if (statusscene::frameKey(millis() - shownAt, look) != shownKey) {   // next frame
             const uint32_t t = millis() - shownAt;   // Pokemon bob, bubble, ball; Sonic waiting
             shownKey = statusscene::frameKey(t, look);
-            ui::drawOfflineScene(s_tft, look, t);
+            ui::drawOfflineScene(s_tft, look, t, sound < 0);   // the music box's screen: no arrow
+            if (sound == 1 && detail[0]) ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
             Serial.printf("[screen] %s / %s\n", title, detail);
@@ -374,6 +374,12 @@ void loop() {
             remote::setStatus(title, detail);
             remote::setTunes(sound < 0 ? "" : sound ? "on" : "muted");
         }
+#ifdef BOARD_S3
+        static bool shownPressed = false;   // the key darkens while a finger is on it
+        const bool pressed = sound >= 0 && s_soundPress.pressed() == 1;
+        if (pressed != shownPressed && sound == shownSound) ui::drawSoundButton(s_tft, sound, pressed);
+        shownPressed = pressed;
+#endif
         shownSound = sound;
         strlcpy(shownText, text, sizeof shownText);
         strlcpy(shownTitle, title, sizeof shownTitle);
