@@ -47,7 +47,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Intro video** (`ui/intro`, `util/introclock`, `util/termblend`, S3 only) — the kiss opening,
   on its own task while WiFi connects and the network task logs into Spotify underneath; then
   straight to the montage. The boot terminal types over it: `ui/bootterm` draws into a 206×60
-  sprite, and `termblend` paints it into each decoded JPEG block (glyphs over a 3/8-dark panel,
+  sprite, and `termblend` paints it into each decoded JPEG block (glyphs over a half-bright panel,
   by shifts: a per-channel blend cost 5 ms a frame), so the video never wipes it. If the deck
   isn't online when the clip ends, the last frame holds with `WI-FI ... RETRYING...` until it is
   (`intro::wait()`). `data/intro.bin` (from `tools/gen_intro.py`; `tools/intro_clip.py` writes an

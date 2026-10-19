@@ -49,10 +49,10 @@ void test_block_outside_is_untouched() {
     for (uint16_t v : b) TEST_ASSERT_EQUAL_HEX16(VIDEO, v);
 }
 
-// The panel is 3/8 of the video, by shifts (a per-channel multiply cost 5 ms a frame on the deck).
-void test_shade_is_three_eighths_per_channel() {
-    TEST_ASSERT_EQUAL_HEX16(0x52CA, termblend::shade(0xFFFF));   // R 10/31, G 22/63, B 10/31
-    TEST_ASSERT_EQUAL_HEX16(0x5000, termblend::shade(0xF800));   // red stays red: no bleed
+// The panel is half the video, by a shift (a per-channel multiply cost 5 ms a frame on the deck).
+void test_shade_is_half_per_channel() {
+    TEST_ASSERT_EQUAL_HEX16(0x7BEF, termblend::shade(0xFFFF));   // R 15/31, G 31/63, B 15/31
+    TEST_ASSERT_EQUAL_HEX16(0x7800, termblend::shade(0xF800));   // red stays red: no bleed
     TEST_ASSERT_EQUAL_HEX16(0x0000, termblend::shade(0x0000));
 }
 
@@ -61,6 +61,6 @@ int main(int, char**) {
     RUN_TEST(test_glyph_replaces_and_panel_darkens);
     RUN_TEST(test_block_partly_over_the_panel);
     RUN_TEST(test_block_outside_is_untouched);
-    RUN_TEST(test_shade_is_three_eighths_per_channel);
+    RUN_TEST(test_shade_is_half_per_channel);
     return UNITY_END();
 }
