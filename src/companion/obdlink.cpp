@@ -35,8 +35,14 @@ static void publish(obd::Pid p, obd::Reply r, float v, obdplan::Link l) {
 }
 
 // Sends cmd and reads up to the '>' prompt (or the timeout) into out, '\r' as '\n'. False on
-// timeout with nothing read.
+// timeout with nothing read. The only write to the adapter: obd::allowed() gates it, so nothing
+// but mode 01 and the adapter's own setup can ever reach the car.
 static bool ask(const char* cmd, char* out, size_t n, uint32_t timeoutMs) {
+    if (!obd::allowed(cmd)) {
+        Serial.printf("[obd] BLOCKED %.*s\n", (int)strcspn(cmd ? cmd : "", "\r"), cmd ? cmd : "");
+        out[0] = '\0';
+        return false;
+    }
     while (s_bt.available()) s_bt.read();                 // drop anything left over
     s_bt.print(cmd);
     size_t len = 0;

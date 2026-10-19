@@ -93,6 +93,22 @@ Reply parse(Pid p, const char* raw, float* value) {
     return Reply::Error;
 }
 
+bool allowed(const char* cmd) {
+    if (!cmd) return false;
+    size_t n = strlen(cmd);
+    if (n > 0 && cmd[n - 1] == '\r') --n;                // at most one trailing '\r'
+    if (n == 4 && cmd[0] == '0' && cmd[1] == '1') {      // mode 01, one PID
+        for (size_t i = 2; i < 4; ++i)
+            if (!((cmd[i] >= '0' && cmd[i] <= '9') || (cmd[i] >= 'A' && cmd[i] <= 'F'))) return false;
+        return true;
+    }
+    static const char* const SETUP[] = {"ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATH1", "ATSP0", "ATRV",
+                                        "ATI", "ATDPN"};
+    for (const char* s : SETUP)
+        if (strlen(s) == n && strncmp(cmd, s, n) == 0) return true;
+    return false;
+}
+
 bool looksLikeAdapter(const char* btName) {
     if (!btName || !btName[0]) return false;
     char up[40];
