@@ -128,7 +128,7 @@ built-in defaults.
 | Montage sounds | `gen_greeting.py --opener` / `--finale my.wav` | silent |
 | Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (needs ffmpeg) | no montage |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
-| Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; needs ffmpeg) | none: boots to the night drive |
+| Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; default: the kiss wallpaper's walk-in and kiss, ~13 s; needs ffmpeg). One of the random boot openings | none: the night drive openings only |
 | Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Nothing playing" |
 | Music-box tunes (S3) | `python tools/gen_tune.py song.mid --name "National Park"` → `data/tunes/national_park.txt`, one per song (the melody line; `--track N` if it picks the accompaniment); all of `data/tunes/` loop in random order | two public-domain tunes (`data/tunes_default.txt`) |
 | Wolf howl (S3) | `python tools/gen_howl.py wolf.ogg` → `data/howl.pcm` (cut 13-19.5 s by default, `--start`/`--end`; needs ffmpeg), for example the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) | a synthesised howl |
