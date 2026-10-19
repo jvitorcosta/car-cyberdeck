@@ -1,6 +1,7 @@
-# Freenove FNK0104B, 16 MB flash: one 8 MB app (no OTA), unused spiffs, coredump.
+# Freenove FNK0104B, 16 MB flash: one 12 MB app (no OTA; the boot intro's video and sound are
+# ~4.4 MB), unused spiffs, coredump.
 # Name,   Type, SubType,  Offset,   Size
 nvs,      data, nvs,      0x9000,   0x5000
-factory,  app,  factory,  0x10000,  0x800000
-spiffs,   data, spiffs,   0x810000, 0x7E0000
+factory,  app,  factory,  0x10000,  0xC00000
+spiffs,   data, spiffs,   0xC10000, 0x3E0000
 coredump, data, coredump, 0xFF0000, 0x10000

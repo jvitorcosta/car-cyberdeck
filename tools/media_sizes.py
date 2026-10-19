@@ -16,10 +16,11 @@ SIZES = os.path.join(DATA, "media_sizes.txt")
 # Both decks' media: the CYD's sounds and montage, the S3's intro video and sound, second greeting
 # and wolf howl, the companion's avatar.
 FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin",
-         "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "avatar.bin"]
+         "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "avatar.bin", "idle.bin"]
 MONTAGE_EMPTY = b"MTG1" + (0).to_bytes(2, "little") + (10).to_bytes(2, "little")
 # Stand-ins start with an empty header, so the firmware reads "no clip" / "no avatar" and boots.
-HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "avatar.bin": b"AVT1"}
+HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "avatar.bin": b"AVT1",
+         "idle.bin": b"IDL1"}
 
 
 def record():

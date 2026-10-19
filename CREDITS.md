@@ -26,10 +26,6 @@ CarDeck stands on a lot of other people's work. Thank you.
 [XPT2046_Touchscreen](https://github.com/PaulStoffregen/XPT2046_Touchscreen) (MIT, hardware
 check only), [Unity](https://github.com/ThrowTheSwitch/Unity) (MIT, host tests).
 
-The S3's QR code uses `esp_qrcode`, ESP-IDF's qrcode component shipped in the Arduino-ESP32
-core (Apache-2.0), which is built on Project Nayuki's
-[QR Code generator library](https://www.nayuki.io/page/qr-code-generator-library) (MIT).
-
 ## Files in this repository not covered by the MIT license
 
 The MIT license in [LICENSE](LICENSE) covers the code and the original assets. These
@@ -54,6 +50,15 @@ avatar art (`tools/gen_avatar.py`), the intro clip (`tools/gen_intro.py`), the g
 the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) on
 Wikimedia Commons.
 
+The pixel Lightning McQueen in the S3's boot opening is a fan sprite of a Disney/Pixar
+character (*Cars*), drawn with PixelLab and packed locally by `tools/gen_mcqueen_sprite.py`. It
+lives in the git-ignored `montage-photos/mcqueen.png` and `data/mcqueen.bin`, never distributed here.
+
+Sonic waiting on the S3's "Nothing playing" screen is rebuilt locally by `tools/gen_idle_sprite.py`
+from Sonic the Hedgehog (Mega Drive, 1991) art in the
+[s1disasm](https://github.com/sonicretro/s1disasm) disassembly. The art is © SEGA; it is fetched
+into the git-ignored `sonic-sprites/` and `data/idle.bin`, never distributed here.
+
 ## Inspiration
 
 [intellij-pokemon-progress](https://github.com/kagof/intellij-pokemon-progress).
@@ -61,5 +66,6 @@ Wikimedia Commons.
 ## Trademarks
 
 CarDeck is a personal, non-commercial fan project, not affiliated with or endorsed by
-Spotify, Nintendo, The Pokémon Company, Creatures Inc., GAME FREAK inc. or Honda. Pokémon is a
-trademark of Nintendo; Spotify is a trademark of Spotify AB.
+Spotify, Nintendo, The Pokémon Company, Creatures Inc., GAME FREAK inc., SEGA or Honda. Pokémon
+is a trademark of Nintendo; Sonic the Hedgehog is a trademark of SEGA; Spotify is a trademark of
+Spotify AB.

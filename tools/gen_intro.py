@@ -1,8 +1,9 @@
 """Build data/intro.bin: the new deck (S3)'s boot intro video, from your own clip.
-Run: python tools/gen_intro.py <video> [--seg 11.8-99 --seg 0-3]   (seconds, played in the order
-given; an end past the clip's end = to the end). Default, for the kiss wallpaper: 11.8 s to the end
-(empty wall, her shadow, walk-in, the kiss), then 0-3 s (she turns away, the lipstick print holds).
-A looping wallpaper starts mid-loop: its opening is the end of the kiss, then seconds of print alone.
+Run: python tools/gen_intro.py <video> [--seg 12-99 --seg 0-1.75]   (seconds, played in the order
+given; an end past the clip's end = to the end). Default, for the kiss wallpaper: the walk-in and
+the kiss, ~13 s: 12 s to the end (her shadow, the walk-in, the kiss), then 0-1.75 s (the kiss lands:
+the lipstick print on the wall). A looping wallpaper starts mid-loop: its opening is the end of the
+kiss. It is one of the S3's random boot openings; the boot terminal types over it.
 The clip, data/intro.bin and data/intro.pcm are git-ignored. Needs ffmpeg.
 
 Format: the montage's "MTG1" (ui/montage): u16 count, u16 fps, count x (u32 offset, u32 size),
@@ -24,9 +25,9 @@ OUT = os.path.join(ROOT, "data", "intro.bin")
 OUT_PCM = os.path.join(ROOT, "data", "intro.pcm")
 FPS = 20
 RATE = 48000               # sound sample rate (the S3's ES8311 has a 48 kHz clock row)
-MAX_BYTES = 4_000_000      # the S3 has an 8 MB app partition; keep the video under ~4 MB
+MAX_BYTES = 4_000_000      # the S3 has a 12 MB app partition; keep the video under ~4 MB
 QUALITY = 2                # ffmpeg -q:v (2 best .. 31 worst); raised automatically to fit
-DEFAULT_SEGMENTS = [(11.8, 99.0), (0.0, 3.0)]
+DEFAULT_SEGMENTS = [(12.0, 99.0), (0.0, 1.75)]
 
 
 def segment(text):

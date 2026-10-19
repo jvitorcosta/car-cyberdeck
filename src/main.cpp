@@ -16,19 +16,28 @@
 #include "ui/backlight.h"
 #include "ui/bootscene.h"
 #include "ui/intro.h"
+#include "util/idlesprite.h"
+#include "core/embed.h"
+#ifdef BOARD_S3
+EMBED(data_idle_bin);   // Sonic waiting on "Nothing playing" (tools/gen_idle_sprite.py), else empty
+#endif
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
 #include "util/linkstatus.h"
 #include "net/remote.h"
-#include "util/qrfit.h"
-#ifdef BOARD_S3
-#include <qrcode.h>
-#endif
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
 #include "util/netplan.h"
+#include "util/idlewait.h"
+#include "util/press.h"
+#ifdef BOARD_S3
+#include "board/s3/touch_ft6336.h"
+#include <Preferences.h>
+#include "util/intropick.h"
+#include "ui/carlook.h"
+#endif
 #include "images/art.h"
 #include "images/walksprite.h"
 #include "images/cache.h"
@@ -102,6 +111,25 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
     s_notesDance = out.dance;
 }
 
+#ifdef BOARD_S3
+// This boot's opening (util/intropick): random, never last boot's (NVS "boot"/"last"), only
+// from what the build has. -D INTRO_FORCE=\"kiss\" (or honda, mcqueen) forces one for testing.
+static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen) {
+    Preferences p;
+    p.begin("boot", false);
+    const int last = p.getInt("last", -1);
+    int o = -1;
+#ifdef INTRO_FORCE
+    o = intropick::forced(intropick::parse(INTRO_FORCE), haveKiss, haveMcQueen);
+#endif
+    if (o < 0) o = intropick::pick(esp_random(), last, haveKiss, haveMcQueen);
+    p.putInt("last", o);
+    p.end();
+    Serial.printf("[boot] opening: %s\n", intropick::name((intropick::Opening)o));
+    return (intropick::Opening)o;
+}
+#endif
+
 void setup() {
     Serial.begin(115200);
     delay(200);
@@ -129,6 +157,9 @@ void setup() {
 #endif
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1); s_tft.fillScreen(TFT_BLACK);
     backlight::begin();
+#ifdef BOARD_S3
+    touchft::begin();   // the music box's speaker button
+#endif
     if (!spclient::hasToken()) {
         // The token comes from a PC (Spotify only redirects to loopback addresses), so the
         // deck can't do anything without one.
@@ -140,31 +171,46 @@ void setup() {
         for (;;) delay(1000);
     }
 #ifdef BOARD_S3
-    // The intro video (ui/intro, with its sound, if a clip was built) plays first, on its own task, while
-    // WiFi connects and the network task logs into Spotify underneath; then the greeting and the
-    // night drive. The S3 has heap to spare (~230 KB largest block), so the login and polls run
+    // One random opening (pickOpening): the kiss video (ui/intro, its own task, the boot terminal
+    // over it), or the night drive with the Honda or McQueen and their greeting; all of them end
+    // in the photo montage. WiFi connects and the network task logs into Spotify underneath. The S3 has heap to spare (~230 KB largest block), so the login and polls run
     // under the scenes (the network task's late-WiFi path: spclient::begin + netclock::begin).
     // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
     // soon as the first poll lands. (Logging in here left the scene's faded last frame, i.e. a
     // black screen, up for as long as a slow hotspot took.)
-    intro::start(s_tft);
+    Serial.println(idlesprite::parse(EMBED_DATA(data_idle_bin), EMBED_SIZE(data_idle_bin))
+                       ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
+    carlook::Look mcqueen;
+    const bool haveMcQueen = carlook::mcqueen(&mcqueen);
+    const intropick::Opening opening = pickOpening(intro::available(), haveMcQueen);
+    greeting::choose(intropick::greetingFor(opening));
+    const bootscene::Opts opts{opening == intropick::MCQUEEN ? mcqueen : carlook::honda(),
+                               opening != intropick::KISS};
+    if (opening == intropick::KISS) {
+        intro::start(s_tft, net::isOnline);
+    } else {                              // the drive covers the WiFi connect (the screen'd be black)
+        greeting::play();
+        bootscene::start(s_tft, net::isOnline, opts);
+    }
     const bool wifi = net::connectAny();
     if (wifi) {
         mem::log("boot+wifi");
         netclock::begin();                // the clock (night palette) right away, not after login
         nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
-    }
-    intro::wait();                        // the display is free for the night drive
-    greeting::play();                     // waits for the intro's sound to finish (one output)
-    bootscene::start(s_tft, net::isOnline);
-    if (wifi) {
-        bootscene::setCaption("Connecting to Spotify...");
-        bootscene::waitDone();            // the display is ours again
     } else {
-        // The scene keeps running; the network task retries and the car leaves once WiFi is up.
+        // The network task retries WiFi underneath; the terminal says RETRYING... (the kiss holds
+        // its last frame, the car cruises) until it's up. Started before intro::wait(), which
+        // waits for WiFi.
         bootscene::setCaption("WiFi not found - retrying...");
         nettask::start(false, nullptr);
     }
+    if (opening == intropick::KISS) {
+        intro::wait();                    // over, and online (the last frame holds till then)
+        greeting::play();                 // no greeting: waits for the intro's sound (one output)
+        bootscene::start(s_tft, net::isOnline, opts);   // straight to the montage
+    }
+    if (wifi) bootscene::setCaption("Connecting to Spotify...");
+    bootscene::waitDone();                // the display is ours again
 #else
     greeting::play();          // boot sound plays while WiFi connects
     // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
@@ -202,53 +248,57 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
     return k;
 }
 
+
+// The S3's music box loops while "Nothing playing" is up, and stops (a short fade) as it goes.
+// It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
+// starts with the same margin as a phone howl, stops when memory runs low, and then tries again
+// at most once a minute.
+static void musicBox(bool want) {
 #ifdef BOARD_S3
-// The phone-remote link as a QR code for the "Nothing playing" screen (esp_qrcode, built into
-// the core). Rebuilt when the link changes (another network, another address), checked at most
-// every 5 s: net::deviceIp() allocates a String.
-constexpr int QR_N = qrfit::modules(qrfit::MAX_VERSION);   // modules per side (29)
-static uint8_t s_qrBits[(QR_N * QR_N + 7) / 8];
-static statusscene::Qr s_qr{s_qrBits, 0};
-
-static void copyQr(esp_qrcode_handle_t h) {
-    const int n = esp_qrcode_get_size(h);
-    s_qr.size = 0;
-    if (n > QR_N) return;
-    memset(s_qrBits, 0, sizeof s_qrBits);
-    for (int y = 0; y < n; ++y)
-        for (int x = 0; x < n; ++x)
-            if (esp_qrcode_get_module(h, x, y)) {
-                const int i = y * n + x;
-                s_qrBits[i >> 3] |= (uint8_t)(0x80 >> (i & 7));
-            }
-    s_qr.size = n;
-}
-
-static const statusscene::Qr* phoneQr() {
-    static char built[96] = "";
-    static uint32_t checkedAt = 0;
-    static bool first = true;
-    if (first || millis() - checkedAt >= 5000) {
-        first = false;
-        checkedAt = millis();
-        char url[96];
-        if (!remote::link(url, sizeof url) || !qrfit::version(strlen(url))) {
-            built[0] = '\0';
-            s_qr.size = 0;
-        } else if (strcmp(url, built) != 0) {
-            strlcpy(built, url, sizeof built);
-            esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
-            cfg.display_func = copyQr;
-            cfg.max_qrcode_version = qrfit::MAX_VERSION;
-            cfg.qrcode_ecc_level = ESP_QRCODE_ECC_LOW;
-            s_qr.size = 0;
-            esp_qrcode_generate(&cfg, url);
-        }
+    constexpr uint32_t RETRY_MS = 60000;
+    static uint32_t gaveUpAt = 0;
+    static bool gaveUp = false;
+    if (!want) {
+        if (greeting::tunesPlaying()) greeting::stopTunes();
+        gaveUp = false;
+        return;
     }
-    return s_qr.size ? &s_qr : nullptr;
-}
+    if (greeting::tunesPlaying()) {
+        if (mem::byteLargest() < netplan::TLS_NEED + 4000) {
+            Serial.printf("[tunes] low memory (largest %u): stopping\n", (unsigned)mem::byteLargest());
+            greeting::stopTunes();
+            gaveUp = true;
+            gaveUpAt = millis();
+        }
+        return;
+    }
+    if (gaveUp && millis() - gaveUpAt < RETRY_MS) return;
+    if (greeting::playing()) return;   // a howl, or the last tune still fading: next pass
+    if (mem::byteLargest() < netplan::TLS_NEED + 12000) {
+        gaveUp = true;
+        gaveUpAt = millis();
+        return;
+    }
+    gaveUp = false;
+    greeting::playTunes();
 #else
-static const statusscene::Qr* phoneQr() { return nullptr; }   // CYD: no flash to spare
+    (void)want;
+#endif
+}
+
+#ifdef BOARD_S3
+// A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on
+// the companion. Touch is read every 20 ms, only while "Nothing playing" is up.
+static press::Press s_soundPress;
+static bool soundTapped() {
+    press::Press& p = s_soundPress;
+    static uint32_t at = 0;
+    if (millis() - at < 20) return false;
+    at = millis();
+    int x = 0, y = 0;
+    const bool down = touchft::read(&x, &y);
+    return p.update(down, down && statusscene::onSoundButton(x, y) ? 1 : 0, false, millis()) == 1;
+}
 #endif
 
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
@@ -290,11 +340,16 @@ void loop() {
     view.progressMs = interp::currentProgressMs(st.progressMs, st.durationMs, st.isPlaying,
                                                 millis() - st.lastPollMs);
 
-    // Screen mode: deck when playing/paused; a status screen when offline or stopped.
+    // Screen mode: deck when playing (or paused under 30 s); a status screen when offline, when
+    // Spotify has nothing, or when the song has stayed paused 30 s (util/idlewait).
+    static idlewait::Clock idle;
+    const bool idleNow = idle.update(st.status == PlaybackStatus::Paused,
+                                     st.status == PlaybackStatus::Stopped, millis());
     int mode = 0;   // 0 = deck, 1 = offline, 2 = nothing playing
     if (!net::isOnline() || st.status == PlaybackStatus::Offline ||
         netplan::stale(millis(), st.lastPollOkMs, STALE_MS)) mode = 1;
-    else if (st.status == PlaybackStatus::Stopped) mode = 2;
+    else if (idleNow) mode = 2;
+    musicBox(mode == 2 && !greeting::tunesMuted());
 
     static int lastMode = -1;
     static uint32_t shownGen = 0;
@@ -304,9 +359,19 @@ void loop() {
     if (mode != 0) {
         static char shownText[80] = "", shownTitle[24] = "";
         static char title[24], detail[48];
-        static uint32_t textAt = 0, frameAt = 0;
+        static uint32_t textAt = 0, shownAt = 0, shownKey = 0;   // shownAt: the screen appeared
         static linkstatus::Kind kind = linkstatus::Kind::Ok, shownKind = linkstatus::Kind::Ok;
+        static int shownSound = -2;
         char text[80];   // title|detail: 24 + 1 + 48
+#ifdef BOARD_S3
+        if (mode == 2 && soundTapped()) {   // the speaker button: mute or unmute, shown at once
+            greeting::setTunesMuted(!greeting::tunesMuted());
+            textAt = 0;
+        }
+        const int sound = mode == 2 ? (greeting::tunesMuted() ? 0 : 1) : -1;   // the button
+#else
+        const int sound = -1;
+#endif
         // Re-read the cause at most once a second: net::ssid() allocates a String.
         if (lastMode != mode || millis() - textAt >= 1000) {
             textAt = millis();
@@ -314,24 +379,43 @@ void loop() {
             detail[0] = '\0';
             kind = mode == 1 ? offlineText(st, title, sizeof title, detail, sizeof detail)
                              : linkstatus::Kind::Ok;
+            if (sound == 0) strlcpy(detail, "Tunes muted", sizeof detail);
+            else if (sound == 1) {                       // the tune playing, once it has started
+                greeting::tuneName(detail, sizeof detail);
+            }
         }
-        const statusscene::Look look = statusscene::lookFor(kind);
+        statusscene::Look look = statusscene::lookFor(kind);
+        look.night = theme::isNightActive();   // Sonic's sunset turns to night with the palette
         snprintf(text, sizeof text, "%s|%s", title, detail);
         if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
-            ui::drawOffline(s_tft, title, detail, look, millis(), mode == 2 ? phoneQr() : nullptr);
-            frameAt = millis();
-        } else if (strcmp(text, shownText) != 0) {      // same screen, new text (countdown)
+            shownAt = millis();
+            shownKey = statusscene::frameKey(0, look);
+            ui::drawOffline(s_tft, title, detail, look, 0, sound);
+        } else if (strcmp(text, shownText) != 0 || sound != shownSound) {   // new text (countdown, tune)
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
-            if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
-                ui::drawOfflineDetail(s_tft, detail);
-            else ui::drawOfflineText(s_tft, title, detail);
-        } else if (millis() - frameAt >= statusscene::FRAME_MS) {   // Pokemon bob, bubble, ball
-            frameAt = millis();
-            ui::drawOfflineScene(s_tft, look, frameAt, mode == 2 ? phoneQr() : nullptr);
+            if (sound == shownSound && strcmp(title, shownTitle) == 0 && detail[0] && shownDetail &&
+                shownDetail[1])
+                ui::drawOfflineDetail(s_tft, detail, sound);
+            else ui::drawOfflineText(s_tft, title, detail, sound);   // the button changed too
+        } else if (statusscene::frameKey(millis() - shownAt, look) != shownKey) {   // next frame
+            const uint32_t t = millis() - shownAt;   // Pokemon bob, bubble, ball; Sonic waiting
+            shownKey = statusscene::frameKey(t, look);
+            ui::drawOfflineScene(s_tft, look, t, sound < 0);   // the music box's screen: no arrow
+            if (sound == 1 && detail[0]) ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
             Serial.printf("[screen] %s / %s\n", title, detail);
-        if (lastMode != mode || strcmp(text, shownText) != 0) remote::setStatus(title, detail);
+        if (lastMode != mode || strcmp(text, shownText) != 0 || sound != shownSound) {
+            remote::setStatus(title, detail);
+            remote::setTunes(sound < 0 ? "" : sound ? "on" : "muted");
+        }
+#ifdef BOARD_S3
+        static bool shownPressed = false;   // the key darkens while a finger is on it
+        const bool pressed = sound >= 0 && s_soundPress.pressed() == 1;
+        if (pressed != shownPressed && sound == shownSound) ui::drawSoundButton(s_tft, sound, pressed);
+        shownPressed = pressed;
+#endif
+        shownSound = sound;
         strlcpy(shownText, text, sizeof shownText);
         strlcpy(shownTitle, title, sizeof shownTitle);
         shownKind = kind;
@@ -340,7 +424,10 @@ void loop() {
         // Full deck redraw: immediately on track change (text + Pokemon name; art, lyric
         // and walker fill in as the network task delivers them), or back from a status screen.
         bool newTrack = st.trackGen != shownGen;
-        if (lastMode != 0) remote::setStatus("", "");   // the phone page: no status, the song
+        if (lastMode != 0) {   // the phone page: no status, the song
+            remote::setStatus("", "");
+            remote::setTunes("");
+        }
         lastMode = 0;
         if (newTrack) {
             shownGenre = genre::NONE;

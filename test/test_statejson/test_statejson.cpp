@@ -36,7 +36,7 @@ void test_writes_the_whole_state() {
     size_t n = statejson::write(sample(), out, sizeof out);
     TEST_ASSERT_EQUAL_STRING(
         "{\"track\":\"Highway Song\",\"artist\":\"The Band\",\"status\":\"\",\"detail\":\"\","
-        "\"wifi\":\"iPhone\",\"rssi\":-52,\"uptime\":754,\"clips\":[\"howl\"],"
+        "\"wifi\":\"iPhone\",\"rssi\":-52,\"uptime\":754,\"clips\":[\"howl\"],\"tunes\":\"\","
         "\"trackGen\":7,\"progressMs\":61000,\"durationMs\":200000,\"playing\":true,\"tripS\":2220,"
         "\"lyricKind\":\"synced\",\"line\":\"first made-up line\",\"next\":\"second made-up line\","
         "\"lineStartMs\":59000,\"nextStartMs\":64000}",
@@ -109,8 +109,18 @@ void test_too_small_buffer_gives_an_empty_string_not_half_json() {
     TEST_ASSERT_EQUAL_STRING("", out);
 }
 
+// The music box's state for the phone's mute button: "" (not on screen), "on" or "muted".
+void test_tunes_state() {
+    statejson::State s = sample();
+    s.tunes = "muted";
+    char out[768];
+    statejson::write(s, out, sizeof out);
+    TEST_ASSERT_NOT_NULL(strstr(out, "\"tunes\":\"muted\""));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_tunes_state);
     RUN_TEST(test_writes_the_whole_state);
     RUN_TEST(test_the_largest_state_fits_max_json);
     RUN_TEST(test_lyric_kind_names);

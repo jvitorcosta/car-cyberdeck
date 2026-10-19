@@ -37,17 +37,22 @@ background:#101820;color:#f8f8d8;font:17px system-ui,sans-serif}
 .now{background:#1c2834;border-radius:18px;padding:18px}.now small{opacity:.6;letter-spacing:.08em}
 #t{font-size:22px;font-weight:700;margin-top:6px;overflow-wrap:anywhere}#a{opacity:.8;margin-top:2px}
 .st{background:#3a2a10;color:#f8d890;border-radius:14px;padding:12px 16px}
-#btns{display:grid;gap:14px}button{font:700 26px system-ui,sans-serif;padding:24px;border:0;
+#btns{display:grid;gap:14px}#tb{margin-top:14px;background:#3a4a6a;color:#f0f0f0}button{font:700 26px system-ui,sans-serif;padding:24px;border:0;
 border-radius:18px;background:#e8a020;color:#101820}button:active{transform:scale(.97)}
 #s{min-height:1.4em;text-align:center;margin:0}footer{margin-top:auto;opacity:.5;font-size:14px;text-align:center}
 </style></head><body>
 <div class="now"><small>NOW PLAYING</small><div id="t">...</div><div id="a"></div></div>
-<div class="st" id="st" hidden></div><div id="btns"></div><p id="s"></p><footer id="f"></footer>
+<div class="st" id="st" hidden></div><div id="btns"></div><button id="tb" hidden></button><p id="s"></p><footer id="f"></footer>
 <script>
 const k=new URLSearchParams(location.search).get('k')||'',$=i=>document.getElementById(i);
 const NAMES={howl:'\u{1F43A} Howl'};
 const say={202:'Playing!',403:'Wrong key',409:'Busy: a sound is playing',429:'Wait a moment',503:'Deck is low on memory, try again'};
-let shown='';
+let shown='',tunes='';
+$('tb').onclick=async()=>{const m=tunes==='on'?1:0;$('tb').disabled=true;try{
+const r=await fetch('/tunes?mute='+m+'&k='+encodeURIComponent(k),{method:'POST'});
+if(r.ok){tunes=m?'muted':'on';tb()}else $('s').textContent=say[r.status]||('Error '+r.status)}
+catch(e){$('s').textContent='Deck not reachable'}$('tb').disabled=false};
+function tb(){$('tb').hidden=!tunes;$('tb').textContent=tunes==='on'?'\u{1F507} Mute tunes':'\u{1F50A} Unmute tunes'}
 async function play(c){$('s').textContent='...';try{
 const r=await fetch('/play?clip='+c+'&k='+encodeURIComponent(k),{method:'POST'});
 $('s').textContent=say[r.status]||('Error '+r.status)}catch(e){$('s').textContent='Deck not reachable'}}
@@ -57,7 +62,7 @@ if(r.status==403){$('st').hidden=false;$('st').textContent='Wrong key: open the 
 const d=await r.json();$('t').textContent=d.track||'Nothing playing';$('a').textContent=d.artist||'';
 $('st').hidden=!d.status;$('st').textContent=d.status+(d.detail?' — '+d.detail:'');
 $('f').textContent=d.wifi+' · '+d.rssi+' dBm · on for '+dur(d.uptime);
-const c=d.clips.join();if(c!==shown){shown=c;$('btns').innerHTML='';for(const n of d.clips){
+tunes=d.tunes||'';tb();const c=d.clips.join();if(c!==shown){shown=c;$('btns').innerHTML='';for(const n of d.clips){
 const b=document.createElement('button');b.textContent=NAMES[n]||n;b.onclick=()=>play(n);$('btns').appendChild(b)}}
 }catch(e){$('st').hidden=false;$('st').textContent='Deck not reachable'}}
 poll();setInterval(poll,5000);
@@ -68,8 +73,14 @@ poll();setInterval(poll,5000);
 // Status screen text, set by the UI loop (main.cpp), read by this task for /state.
 static portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 static tripclock::Clock s_trip(0);   // power-on = the car started; reset by POST /trip/reset (this task only)
-static char s_title[24] = "", s_detail[48] = "";
+static char s_title[24] = "", s_detail[48] = "", s_tunes[8] = "";
 static const char* const CLIPS[] = {"howl"};
+
+void setTunes(const char* state) {
+    portENTER_CRITICAL(&s_mux);
+    strlcpy(s_tunes, state ? state : "", sizeof s_tunes);
+    portEXIT_CRITICAL(&s_mux);
+}
 
 void setStatus(const char* title, const char* detail) {
     portENTER_CRITICAL(&s_mux);
@@ -78,22 +89,17 @@ void setStatus(const char* title, const char* detail) {
     portEXIT_CRITICAL(&s_mux);
 }
 
-bool link(char* out, size_t n) {
-    if (!s_gate.enabled() || !net::isOnline()) return false;
-    snprintf(out, n, "http://%s/?k=%s", net::deviceIp().c_str(), REMOTE_TOKEN);
-    return true;
-}
-
 static void handleState() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)
     static char out[statejson::MAX_JSON];   // 768 B overflowed with a long title and lyric lines
     static shared::LyricPair lp;   // static: two 160-byte lines, off this task's stack
     shared::snapshot(st);
-    char title[sizeof s_title], detail[sizeof s_detail];
+    char title[sizeof s_title], detail[sizeof s_detail], tunes[sizeof s_tunes];
     portENTER_CRITICAL(&s_mux);
     memcpy(title, s_title, sizeof title);
     memcpy(detail, s_detail, sizeof detail);
+    memcpy(tunes, s_tunes, sizeof tunes);
     portEXIT_CRITICAL(&s_mux);
     const String ssid = net::ssid();
     const uint32_t now = millis();
@@ -103,7 +109,7 @@ static void handleState() {
     statejson::State s{};
     s.track = st.trackName; s.artist = st.artist; s.title = title; s.detail = detail;
     s.ssid = ssid.c_str(); s.rssi = (int)WiFi.RSSI(); s.uptimeS = now / 1000;
-    s.clips = CLIPS; s.clipCount = (int)(sizeof CLIPS / sizeof CLIPS[0]);
+    s.clips = CLIPS; s.clipCount = (int)(sizeof CLIPS / sizeof CLIPS[0]); s.tunes = tunes;
     s.trackGen = st.trackGen; s.progressMs = pos; s.durationMs = st.durationMs;
     s.playing = st.isPlaying; s.tripS = s_trip.seconds(now);
     s.lyricKind = statejson::lyricKindName(lp.status);
@@ -161,6 +167,11 @@ void begin(bool (*hold)()) {
     });
     s_server->on("/play", HTTP_POST, handlePlay);
     s_server->on("/state", HTTP_GET, handleState);
+    s_server->on("/tunes", HTTP_POST, [] {
+        if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+        greeting::setTunesMuted(s_server->arg("mute") == "1");   // the UI loop stops or starts it
+        s_server->send(204);
+    });
     s_server->on("/trip/reset", HTTP_POST, [] {
         if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
         s_trip.reset(millis());

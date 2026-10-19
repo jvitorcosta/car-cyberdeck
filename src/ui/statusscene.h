@@ -7,7 +7,9 @@
 // pixel's colour, ui::drawOfflineScene pushes the region in small strips (no big buffer).
 namespace statusscene {
 enum class Bubble : uint8_t { None, Question, Dots, Zzz, Bang };
-struct Look { int sprite; Bubble bubble; bool ball; };
+// idle: Sonic waiting (util/idlesprite) instead of the sprite: "Nothing playing" with his file,
+// in front of the Sunset drive (ui/sunset); night: its night palette (the caller sets it).
+struct Look { int sprite; Bubble bubble; bool ball; bool idle = false; bool night = false; };
 // Ok = "Nothing playing" (Pikachu, no bubble).
 Look lookFor(linkstatus::Kind k);
 
@@ -19,21 +21,24 @@ constexpr int CX = 160;              // sprite and platform centre
 constexpr int FEET_Y = 132;          // sprite's bottom edge at rest
 constexpr uint32_t FRAME_MS = 250;   // 4 fps: gentle, and cheap on the UI loop
 
-struct Pose { int bob; int step; int ballX; int ballFrame; };   // bob: px up; ballX: from centre
+struct Pose { int bob; int step; int ballX; int ballFrame; int idleFrame; };   // bob: px up; ballX: from centre
+// ms: time since the screen appeared (Sonic's waiting animation starts over with it).
 Pose poseAt(uint32_t ms, const Look& look);
+// The scene needs redrawing when this changes: each FRAME_MS for the Pokemon; for Sonic only
+// when his frame (every 400 ms) or the dialogue box's blinking arrow (every 500 ms) can change.
+uint32_t frameKey(uint32_t ms, const Look& look);
 
 struct Colors {
     uint16_t sky, horizon, grass, platform, edge;
     uint16_t bubble, ink, ballRed, ballWhite, ballDark;
 };
-// QR code of the phone-remote link (util/qrfit): modules row-major, MSB first, 1 = dark. Drawn
-// at QR_X/QR_Y, 2 px per module inside a white 4-module quiet zone, in the sky left of the
-// Pokemon (only the "Nothing playing" screen passes one).
-struct Qr { const uint8_t* bits; int size; };
-constexpr int QR_X = X0 + 4, QR_Y = Y0 + 4;
-uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c,
-               const Qr* qr = nullptr);
+uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c);
 
 struct Rect { int x, y, w, h; };
 Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail and shadow
+
+// The music box's speaker key on "Nothing playing" (S3): centred on the dialogue box's right
+// end, clear of the title; a tap anywhere on that end toggles it.
+constexpr Rect SOUND_ICON = {262, DLG_Y + 16, 44, 36};
+bool onSoundButton(int x, int y);
 }

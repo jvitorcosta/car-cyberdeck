@@ -16,3 +16,8 @@ if not os.path.isfile(pcm):
     with open(pcm, "wb") as f:      # one silent sample: the build cannot embed an empty file
         f.write(bytes(2))
     print("intro_clip: no data/intro.pcm, the intro plays silently")
+idle = os.path.join(env.subst("$PROJECT_DIR"), "data", "idle.bin")  # noqa: F821
+if not os.path.isfile(idle):
+    with open(idle, "wb") as f:      # "IDL1", 0 frames: util/idlesprite reads it as none
+        f.write(b"IDL1" + bytes(4))
+    print("intro_clip: no data/idle.bin, Pikachu stays on Nothing playing")
