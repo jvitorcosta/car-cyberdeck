@@ -18,7 +18,8 @@ const char* request(Pid p);          // the command, ending in '\r'
 // raw: everything the adapter sent before its '>' prompt. *value is touched only on Ok.
 Reply parse(Pid p, const char* raw, float* value);
 // The supported-PID scan: block 0..3 asks 0100/0120/0140/0160 (nullptr past 3); parseSupported
-// reads the 4 bytes after "41 <block*20h>" (bit 31 = PID block*20h + 1); isSupported looks a PID
+// reads the 4 bytes after "41 <block*20h>" (bit 31 = PID block*20h + 1), ORed over every ECU's
+// line (engine and transmission both answer); isSupported looks a PID
 // (01..80h) up in the four blocks read.
 const char* supportRequest(int block);
 bool parseSupported(int block, const char* raw, uint32_t* bits);

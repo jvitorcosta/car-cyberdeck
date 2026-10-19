@@ -89,6 +89,16 @@ void test_inbox_drops_what_does_not_fit_and_clears() {
     TEST_ASSERT_EQUAL_CHAR('z', c);
 }
 
+// Some adapters advertise no name, only their serial service: recognise them by it.
+void test_serial_services_are_recognised() {
+    TEST_ASSERT_TRUE(obdble::serialService(0xFFF0));
+    TEST_ASSERT_TRUE(obdble::serialService(0xFFE0));
+    TEST_ASSERT_TRUE(obdble::serialService(0x18F0));
+    TEST_ASSERT_FALSE(obdble::serialService(0x180A));    // device information
+    TEST_ASSERT_FALSE(obdble::serialService(0xFE95));    // a phone/dashcam's vendor service
+    TEST_ASSERT_FALSE(obdble::serialService(0));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_fff0_clone);
@@ -98,5 +108,6 @@ int main(int, char**) {
     RUN_TEST(test_nothing_usable);
     RUN_TEST(test_inbox_keeps_order_across_chunks);
     RUN_TEST(test_inbox_drops_what_does_not_fit_and_clears);
+    RUN_TEST(test_serial_services_are_recognised);
     return UNITY_END();
 }

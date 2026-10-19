@@ -111,6 +111,15 @@ static bool popByte(char* c) {
     return got;
 }
 
+// raw on one line for the log ('\n' as '|'), at most 80 characters.
+static void logRaw(const char* what, const char* raw) {
+    char line[81];
+    size_t i = 0;
+    for (; raw[i] && i < sizeof line - 1; ++i) line[i] = raw[i] == '\n' ? '|' : raw[i];
+    line[i] = '\0';
+    Serial.printf("[obd] %s -> \"%s\"\n", what, line);
+}
+
 static bool linkUp() { return s_client && s_client->isConnected() && s_tx; }
 
 // Sends cmd and reads up to the '>' prompt (or the timeout) into out, '\r' as '\n'. False on
@@ -139,7 +148,10 @@ static bool ask(const char* cmd, char* out, size_t n, uint32_t timeoutMs) {
     return len > 0;
 }
 
-// Scans for BLE devices and picks the adapter; logs every named device seen.
+static uint16_t uuid16(const NimBLEUUID& u);
+
+// Scans for BLE devices and picks the adapter (an adapter-like name, or a clone's serial service
+// advertised); logs every named or serial-service device seen.
 static bool findAdapter(NimBLEAddress* addr, char* name, size_t n) {
     NimBLEScan* scan = NimBLEDevice::getScan();
     scan->setActiveScan(true);                            // names often come in the scan response
@@ -148,16 +160,20 @@ static bool findAdapter(NimBLEAddress* addr, char* name, size_t n) {
     for (int i = 0; i < found.getCount() && !match; ++i) {
         NimBLEAdvertisedDevice d = found.getDevice(i);
         const std::string nm = d.getName();
-        if (nm.empty()) continue;
-        Serial.printf("[obd] seen \"%s\"\n", nm.c_str());
+        bool serial = false;                              // advertises a clone's serial service
+        for (int k = 0; k < (int)d.getServiceUUIDCount(); ++k)
+            serial |= obdble::serialService(uuid16(d.getServiceUUID(k)));
+        if (nm.empty() && !serial) continue;
+        Serial.printf("[obd] seen \"%s\" %s%s\n", nm.c_str(), d.getAddress().toString().c_str(),
+                      serial ? " (serial service)" : "");
 #ifdef OBD_NAME
         match = nm == OBD_NAME;
 #else
-        match = obd::looksLikeAdapter(nm.c_str());
+        match = obd::looksLikeAdapter(nm.c_str()) || serial;
 #endif
         if (match) {
             *addr = d.getAddress();
-            strlcpy(name, nm.c_str(), n);
+            strlcpy(name, nm.empty() ? "OBD (no name)" : nm.c_str(), n);
         }
     }
     scan->clearResults();
@@ -193,9 +209,15 @@ static uint16_t uuid16(const NimBLEUUID& u) {
 
 // Connects, finds the serial characteristics (logged, for unknown clones) and subscribes.
 static bool openLink(const NimBLEAddress& addr) {
-    if (!s_client) s_client = NimBLEDevice::createClient();
+    if (!s_client) {
+        s_client = NimBLEDevice::createClient();
+        s_client->setConnectTimeout(5);                   // seconds; the default 30 stalls every retry
+    }
     s_tx = nullptr;
-    if (!s_client->connect(addr)) return false;
+    if (!s_client->connect(addr)) {
+        Serial.println("[obd] ble connect failed");
+        return false;
+    }
     std::vector<obdble::Char> chars;
     std::vector<NimBLERemoteCharacteristic*> refs;
     std::vector<NimBLERemoteService*>* svcs = s_client->getServices(true);
@@ -219,6 +241,7 @@ static bool openLink(const NimBLEAddress& addr) {
     }
     NimBLERemoteCharacteristic* rx = refs[pk.notify];
     if (!rx->subscribe(rx->canNotify(), onNotify)) {
+        Serial.println("[obd] ble subscribe failed");
         s_client->disconnect();
         return false;
     }
@@ -251,8 +274,9 @@ static bool scan(uint32_t bits[4]) {
     for (int b = 0; b < 4; ++b) bits[b] = 0;
     char raw[96];
     for (int b = 0; b < 4; ++b) {
-        if (!ask(obd::supportRequest(b), raw, sizeof raw, b == 0 ? 5000 : 1000) ||
-            !obd::parseSupported(b, raw, &bits[b])) {
+        const bool got = ask(obd::supportRequest(b), raw, sizeof raw, b == 0 ? 5000 : 2000);
+        logRaw(obd::supportRequest(b), got ? raw : "(timeout)");
+        if (!got || !obd::parseSupported(b, raw, &bits[b])) {
             if (b == 0) return false;
             for (int k = b; k < 4; ++k) bits[k] = 0xFFFFFFFFu;   // a lost block: ask, NO DATA backs off
             break;
@@ -317,6 +341,7 @@ static void task(void*) {
             first = false;
             float v = 0.0f;
             const obd::Reply r = got ? obd::parse(p, raw, &v) : obd::Reply::Error;
+            if (r == obd::Reply::Error) logRaw(obd::request(p), got ? raw : "(timeout)");
             plan.done(p, r, millis());
             const obdplan::Link l = health.reply(p, r);
             publish(p, r, v, l);

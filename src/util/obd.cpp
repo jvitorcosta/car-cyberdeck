@@ -123,12 +123,18 @@ const char* supportRequest(int block) {
 
 bool parseSupported(int block, const char* raw, uint32_t* bits) {
     if (!raw || block < 0 || block > 3) return false;
-    uint8_t b[4];
-    if (!anyLine(raw, [&](const char* line, size_t len) {
-            return reply41(line, len, (uint8_t)(block * 0x20), 4, b);
-        }))
-        return false;
-    *bits = (uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3];
+    uint32_t all = 0;                                    // every ECU answers with its own line: OR them
+    bool any = false;
+    anyLine(raw, [&](const char* line, size_t len) {
+        uint8_t b[4];
+        if (reply41(line, len, (uint8_t)(block * 0x20), 4, b)) {
+            all |= (uint32_t)b[0] << 24 | (uint32_t)b[1] << 16 | (uint32_t)b[2] << 8 | b[3];
+            any = true;
+        }
+        return false;                                    // keep reading the other lines
+    });
+    if (!any) return false;
+    *bits = all;
     return true;
 }
 

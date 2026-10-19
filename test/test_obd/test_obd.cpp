@@ -146,8 +146,19 @@ void test_supported_bitmap() {
     TEST_ASSERT_EQUAL_STRING("0140\r", obd::supportRequest(2));
 }
 
+// The car test (2026-10-19): the engine and transmission ECUs both answer 0100, one line each; the
+// first line alone missed coolant and intake. The supported set is every ECU's, ORed.
+void test_supported_bitmap_from_every_ecu() {
+    uint32_t bits = 0;
+    TEST_ASSERT_TRUE(obd::parseSupported(0, "41 00 88 18 00 13\n41 00 BE 3E B8 11\n", &bits));
+    TEST_ASSERT_EQUAL_HEX32(0x88180013u | 0xBE3EB811u, bits);
+    TEST_ASSERT_TRUE(obd::parseSupported(0, "4100BE3EB811\n4100\n", &bits));   // a cut line: skipped
+    TEST_ASSERT_EQUAL_HEX32(0xBE3EB811u, bits);
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_supported_bitmap_from_every_ecu);
     RUN_TEST(test_new_pids_formulas);
     RUN_TEST(test_supported_bitmap);
     RUN_TEST(test_every_command_the_code_sends_is_allowed);

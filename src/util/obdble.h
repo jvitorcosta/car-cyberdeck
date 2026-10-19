@@ -13,6 +13,9 @@ struct Pick { int write = -1, notify = -1; };   // indices into the list; -1: no
 // FFF0, then FFE0, then 18F0, then any other service, the first with both a notify/indicate and a
 // write characteristic (the same one may do both).
 Pick pick(const Char* chars, int n);
+// A 16-bit service UUID the clones use for the serial stream (FFF0, FFE0, 18F0): an advertised one
+// marks an adapter even when it sends no name.
+bool serialService(uint16_t uuid);
 
 // Bytes from the adapter's notifications, in order, read one by one up to the '>' prompt. A push
 // that doesn't fit is cut (a runaway reply, never a normal one). Not thread-safe: the link guards it.
