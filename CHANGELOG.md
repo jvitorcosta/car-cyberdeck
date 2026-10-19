@@ -11,9 +11,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   McQueen's drive with "eu sou a velocidade" (`tools/gen_mcqueen_sprite.py`, git-ignored; red
   rims). All of them end in the photo montage and the POWERED BY HONDA card.
   `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`) forces one for testing.
-- A music box on the S3's "Nothing playing" screen: soft plucked tunes loop in random order until
-  the song comes back. Make your own from MIDI with `tools/gen_tune.py` (`data/tunes/`,
-  git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
+- A music box on the S3's "Nothing playing" screen: soft plucked tunes (5 % of the clips'
+  volume) loop in random order until the song comes back. Make your own from MIDI with
+  `tools/gen_tune.py` (`data/tunes/`, git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
 - Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.
   She sings along with synced lyrics, greets you, remarks on new songs (at most every 5 min) and
   reacts to Howl and trip reset. The Lyrics, Sounds and Trip screens open from the companion's

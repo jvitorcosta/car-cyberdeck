@@ -25,7 +25,7 @@ namespace greeting {
 constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (16-bit signed LE)
 constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_howl.py output rate
 constexpr int CHUNK = 128;               // samples per audiosink::write
-constexpr int TUNE_LEVEL = 10;           // the music box, percent of the clip volume: background
+constexpr int TUNE_LEVEL = 5;            // the music box, percent of the clip volume: background
 
 // Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.

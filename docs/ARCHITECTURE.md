@@ -78,8 +78,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Nothing
   playing" shows when Spotify has nothing, or once the song has stayed paused 30 s. On the S3 a
   music box then loops `data/tunes.txt` (packed by `tools/tune_clip.py` from `data/tunes/*.txt`,
-  git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at a tenth of the clip volume, synthesised in a
-  4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
+  git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at 5 % of the clip volume (`TUNE_LEVEL`),
+  synthesised in a 4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
   screen goes, starts only with the howl's TLS margin, stops when the largest block nears
   `TLS_NEED`, and retries at most once a minute. `tools/gen_tune.py` makes tunes from MIDI.
 - **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`,
