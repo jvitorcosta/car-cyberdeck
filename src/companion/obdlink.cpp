@@ -1,19 +1,20 @@
 #include "obdlink.h"
 #include <Arduino.h>
-#include <BluetoothSerial.h>
+#include <NimBLEDevice.h>
 #include <Preferences.h>
+#include <esp_bt.h>
+#include <vector>
 #include <cmath>
 #include <cstring>
 #include "../config.h"
 #include "../core/mem.h"
 #include "../util/fueleco.h"
+#include "../util/obdble.h"
 #include "../util/obdlearn.h"
 
-#ifndef OBD_PIN
-#define OBD_PIN "1234"          // the clones ship with 1234, 0000 or 8888
-#endif
-// OBD_NAME (optional): the adapter's exact Bluetooth name; unset = the first device whose name
-// looks like one (obd::looksLikeAdapter).
+// The adapter is a Bluetooth Low Energy one (the owner's "OBDBLE", 2026-10-19): the ELM327's serial
+// stream over one GATT service (util/obdble picks it). OBD_NAME (optional): its exact name; unset =
+// the first device whose name looks like one (obd::looksLikeAdapter).
 // The car, for km/l and km left (spec 2026-10-19-gauge-cluster): the Honda City 1.5 L flex, its
 // 44 L tank, a volumetric efficiency for speed-density, and the ethanol % when the car doesn't
 // report it (Brazilian pump gasoline: E30).
@@ -33,8 +34,12 @@
 namespace obdlink {
 static SemaphoreHandle_t s_lock = nullptr;
 static View s_view{};
-static BluetoothSerial s_bt;
-constexpr uint32_t RECONNECT_MS = 30000, DISCOVER_MS = 10000;
+constexpr uint32_t RECONNECT_MS = 30000, SCAN_S = 5;
+static NimBLEClient* s_client = nullptr;
+static NimBLERemoteCharacteristic* s_tx = nullptr;   // commands to the adapter (write)
+static bool s_txResponse = true;                      // write with response (no write-without)
+static obdble::Inbox s_inbox;                         // replies, filled by notifications
+static portMUX_TYPE s_inboxMux = portMUX_INITIALIZER_UNLOCKED;
 static const fueleco::Car CAR{OBD_DISPLACEMENT_CC / 1000.0f, (float)OBD_VE, (float)OBD_TANK_L,
                               (float)OBD_ETHANOL_PCT};
 
@@ -92,6 +97,22 @@ static void publish(obd::Pid p, obd::Reply r, float v, obdplan::Link l) {
     xSemaphoreGive(s_lock);
 }
 
+// Notifications from the adapter (NimBLE's host task): appended to the inbox.
+static void onNotify(NimBLERemoteCharacteristic*, uint8_t* data, size_t len, bool) {
+    portENTER_CRITICAL(&s_inboxMux);
+    s_inbox.push(data, len);
+    portEXIT_CRITICAL(&s_inboxMux);
+}
+
+static bool popByte(char* c) {
+    portENTER_CRITICAL(&s_inboxMux);
+    const bool got = s_inbox.pop(c);
+    portEXIT_CRITICAL(&s_inboxMux);
+    return got;
+}
+
+static bool linkUp() { return s_client && s_client->isConnected() && s_tx; }
+
 // Sends cmd and reads up to the '>' prompt (or the timeout) into out, '\r' as '\n'. False on
 // timeout with nothing read. The only write to the adapter: obd::allowed() gates it, so nothing
 // but mode 01 and the adapter's own setup can ever reach the car.
@@ -101,61 +122,114 @@ static bool ask(const char* cmd, char* out, size_t n, uint32_t timeoutMs) {
         out[0] = '\0';
         return false;
     }
-    while (s_bt.available()) s_bt.read();                 // drop anything left over
-    s_bt.print(cmd);
+    if (!linkUp()) { out[0] = '\0'; return false; }
+    portENTER_CRITICAL(&s_inboxMux);
+    s_inbox.clear();                                      // drop anything left over
+    portEXIT_CRITICAL(&s_inboxMux);
+    s_tx->writeValue((const uint8_t*)cmd, strlen(cmd), s_txResponse);
     size_t len = 0;
     const uint32_t t0 = millis();
     while (millis() - t0 < timeoutMs) {
-        if (!s_bt.available()) { delay(2); continue; }
-        const int c = s_bt.read();
+        char c;
+        if (!popByte(&c)) { delay(2); continue; }
         if (c == '>') { out[len] = '\0'; return true; }
-        if (len + 1 < n) out[len++] = c == '\r' ? '\n' : (char)c;
+        if (len + 1 < n) out[len++] = c == '\r' ? '\n' : c;
     }
     out[len] = '\0';
     return len > 0;
 }
 
-// Discovers nearby Bluetooth devices and picks the adapter; logs every name seen.
-static bool findAdapter(BTAddress* addr, char* name, size_t n) {
-    BTScanResults* found = s_bt.discover(DISCOVER_MS);
-    if (!found) return false;
-    for (int i = 0; i < found->getCount(); ++i) {
-        BTAdvertisedDevice* d = found->getDevice(i);
-        const std::string nm = d->getName();
+// Scans for BLE devices and picks the adapter; logs every named device seen.
+static bool findAdapter(NimBLEAddress* addr, char* name, size_t n) {
+    NimBLEScan* scan = NimBLEDevice::getScan();
+    scan->setActiveScan(true);                            // names often come in the scan response
+    NimBLEScanResults found = scan->start(SCAN_S, false);
+    bool match = false;
+    for (int i = 0; i < found.getCount() && !match; ++i) {
+        NimBLEAdvertisedDevice d = found.getDevice(i);
+        const std::string nm = d.getName();
+        if (nm.empty()) continue;
         Serial.printf("[obd] seen \"%s\"\n", nm.c_str());
 #ifdef OBD_NAME
-        const bool match = nm == OBD_NAME;
+        match = nm == OBD_NAME;
 #else
-        const bool match = obd::looksLikeAdapter(nm.c_str());
+        match = obd::looksLikeAdapter(nm.c_str());
 #endif
         if (match) {
-            *addr = d->getAddress();
+            *addr = d.getAddress();
             strlcpy(name, nm.c_str(), n);
-            return true;
         }
     }
-    return false;
+    scan->clearResults();
+    return match;
 }
 
 // The last adapter that answered (NVS "obd"): connected to straight away at the next boot.
-static bool remembered(BTAddress* addr, char* name, size_t n) {
+static bool remembered(NimBLEAddress* addr, char* name, size_t n) {
     Preferences p;
-    if (!p.begin("obd", true)) return false;
-    const String a = p.getString("addr", ""), nm = p.getString("name", "");
+    if (!p.begin("obd", false)) return false;             // read-write: creates it, no NOT_FOUND
+    const String a = p.getString("ble", ""), nm = p.getString("name", "");
+    const uint8_t type = p.getUChar("bletype", 0);
     p.end();
     if (a.isEmpty()) return false;
-    *addr = BTAddress(a);
+    *addr = NimBLEAddress(std::string(a.c_str()), type);
     strlcpy(name, nm.c_str(), n);
     return true;
 }
 
-static void remember(const BTAddress& addr, const char* name) {
+static void remember(const NimBLEAddress& addr, const char* name) {
     Preferences p;
     if (!p.begin("obd", false)) return;
-    const String a = addr.toString();
-    if (p.getString("addr", "") != a) p.putString("addr", a);   // no flash write when unchanged
+    const String a = addr.toString().c_str();
+    if (p.getString("ble", "") != a) p.putString("ble", a);   // no flash write when unchanged
+    if (p.getUChar("bletype", 0xFF) != addr.getType()) p.putUChar("bletype", addr.getType());
     if (p.getString("name", "") != name) p.putString("name", name);
     p.end();
+}
+
+static uint16_t uuid16(const NimBLEUUID& u) {
+    return u.bitSize() == 16 ? u.getNative()->u16.value : 0;
+}
+
+// Connects, finds the serial characteristics (logged, for unknown clones) and subscribes.
+static bool openLink(const NimBLEAddress& addr) {
+    if (!s_client) s_client = NimBLEDevice::createClient();
+    s_tx = nullptr;
+    if (!s_client->connect(addr)) return false;
+    std::vector<obdble::Char> chars;
+    std::vector<NimBLERemoteCharacteristic*> refs;
+    std::vector<NimBLERemoteService*>* svcs = s_client->getServices(true);
+    for (NimBLERemoteService* svc : *svcs) {
+        std::vector<NimBLERemoteCharacteristic*>* cs = svc->getCharacteristics(true);
+        for (NimBLERemoteCharacteristic* c : *cs) {
+            chars.push_back({uuid16(svc->getUUID()), uuid16(c->getUUID()), c->canWrite(),
+                             c->canWriteNoResponse(), c->canNotify(), c->canIndicate()});
+            refs.push_back(c);
+            Serial.printf("[obd] ble %s/%s%s%s%s%s\n", svc->getUUID().toString().c_str(),
+                          c->getUUID().toString().c_str(), c->canWrite() ? " w" : "",
+                          c->canWriteNoResponse() ? " wn" : "", c->canNotify() ? " n" : "",
+                          c->canIndicate() ? " i" : "");
+        }
+    }
+    const obdble::Pick pk = obdble::pick(chars.data(), (int)chars.size());
+    if (pk.write < 0 || pk.notify < 0) {
+        Serial.println("[obd] no serial service on this device");
+        s_client->disconnect();
+        return false;
+    }
+    NimBLERemoteCharacteristic* rx = refs[pk.notify];
+    if (!rx->subscribe(rx->canNotify(), onNotify)) {
+        s_client->disconnect();
+        return false;
+    }
+    s_tx = refs[pk.write];
+    s_txResponse = !s_tx->canWriteNoResponse();
+    return true;
+}
+
+static void closeLink() {
+    s_tx = nullptr;
+    if (s_client && s_client->isConnected()) s_client->disconnect();
 }
 
 static bool init() {
@@ -194,21 +268,21 @@ static bool scan(uint32_t bits[4]) {
     return true;
 }
 
-// Connects to the remembered adapter, else discovers one. False: none answered this round.
+// Connects to the remembered adapter, else scans for one. False: none answered this round.
 static bool connectAdapter(char* name, size_t n) {
-    BTAddress addr;
+    NimBLEAddress addr;
     if (remembered(&addr, name, n)) {
         setLink(obdplan::Link::Connecting);
         Serial.printf("[obd] connecting to %s (remembered)\n", name);
-        if (s_bt.connect(addr) && init()) { remember(addr, name); return true; }
-        s_bt.disconnect();
+        if (openLink(addr) && init()) { remember(addr, name); return true; }
+        closeLink();
     }
     setLink(obdplan::Link::Off);
     if (!findAdapter(&addr, name, n)) return false;
     setLink(obdplan::Link::Connecting);
     Serial.printf("[obd] connecting to %s\n", name);
-    if (s_bt.connect(addr) && init()) { remember(addr, name); return true; }
-    s_bt.disconnect();
+    if (openLink(addr) && init()) { remember(addr, name); return true; }
+    closeLink();
     Serial.println("[obd] connect failed");
     return false;
 }
@@ -233,7 +307,7 @@ static void task(void*) {
             Serial.println("[obd] supported: unknown");
         }
         bool first = true;                                // the first PID may say SEARCHING... for seconds
-        while (s_bt.connected()) {
+        while (linkUp()) {
             // Until the engine runs: the battery ~10 a second (its crank dip) and RPM now and then.
             const float rpm = latest(obd::Pid::Rpm);
             plan.crankWatch(health.state() == obdplan::Link::NoEngine || !(rpm > 0.0f));
@@ -249,7 +323,7 @@ static void task(void*) {
             if (health.lost()) { Serial.println("[obd] adapter stopped answering"); break; }
             if (l == obdplan::Link::NoEngine) delay(100);  // no ECU: pace the battery reads
         }
-        s_bt.disconnect();
+        closeLink();
         Serial.println("[obd] disconnected");
         delay(2000);
     }
@@ -260,11 +334,9 @@ void start() {
     s_view.link = obdplan::Link::Off;
     s_view.kmlNow = s_view.kmlAvg = s_view.kmLeft = NAN;
     s_view.pedalPct = s_view.throttlePct = s_view.atStart = NAN;
-    if (!s_bt.begin("cardeck-obd", true) || !s_bt.setPin(OBD_PIN)) {
-        Serial.println("[obd] Bluetooth didn't start: no gauges");
-        return;
-    }
-    mem::log("bt on");
+    esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT);   // BLE only: classic's RAM back to the heap
+    NimBLEDevice::init("cardeck-obd");
+    mem::log("ble on");
     xTaskCreatePinnedToCore(task, "obd", 6144, nullptr, 1, nullptr, 0);
 }
 
