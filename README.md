@@ -28,9 +28,10 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
 - **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, optionally
-  followed by a montage of your own photos. On the S3 your own intro video plays first, with its
-  sound, while WiFi connects and Spotify logs in underneath; the boot sound is picked at random
-  between two clips when you build a second one.
+  followed by a montage of your own photos. On the S3 each boot picks one opening at random,
+  never last boot's: your intro video with the log typed over it, the Honda's drive with its
+  greeting, or a pixel McQueen's drive with the second greeting. All of them end in the montage
+  and its logo card, while WiFi connects and Spotify logs in underneath.
 - **Built for a car:** never freezes on a slow link, retries a late hotspot in the background,
   and recovers on its own.
 - **Status screens that say why:** no WiFi, no internet or Spotify trouble, each with its own
@@ -124,9 +125,10 @@ built-in defaults.
 | What | How | Default |
 |---|---|---|
 | Boot sound | `python tools/gen_greeting.py my.wav` → `data/greeting.pcm` (up to 13 s) | a synthesized chime |
-| Second boot sound (S3) | `gen_greeting.py --alt my.wav` → `data/greeting_alt.pcm`, picked at random each boot | the boot sound only |
+| Second boot sound (S3) | `gen_greeting.py --alt my.wav` → `data/greeting_alt.pcm`, McQueen's opening | McQueen plays the boot sound |
 | Montage sounds | `gen_greeting.py --opener` / `--finale my.wav` | silent |
-| Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (needs ffmpeg) | no montage |
+| Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (~5 s of photos; needs ffmpeg) | no montage |
+| Pixel McQueen (S3) | a 200 × 66 side view facing right, then `python tools/gen_mcqueen_sprite.py mcqueen.png` → `data/mcqueen.bin` (`--wheels`, `--head`, `--tail` set the anchors) | two openings: the kiss and the Honda |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
 | Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; default: the kiss wallpaper's walk-in and kiss, ~13 s; needs ffmpeg). One of the random boot openings | none: the night drive openings only |
 | Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Nothing playing" |

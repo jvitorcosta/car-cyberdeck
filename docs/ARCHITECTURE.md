@@ -36,18 +36,32 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   16 kHz, played at 32 kHz: IDF 4.4 DAC mode mis-clocks below ~20 kHz) streamed by I2S0 to
   the built-in DAC on GPIO 26 at 30 % volume, noise-shaped down to the DAC's 8 bits, in a
   one-shot task that frees the driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
-  The S3 plays it through the ES8311 after the intro and picks between `data/greeting.pcm` and
-  `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`) at random each boot (`util/greetpick`).
-- **Intro video** (`ui/intro`, `util/introclock`, S3 only) — plays first at boot, on its own task,
-  while WiFi connects and the network task logs into Spotify underneath; then the greeting and
-  the night drive. `data/intro.bin` (from `tools/gen_intro.py`; `tools/intro_clip.py` writes an
+  The S3 plays it through the ES8311, and the boot opening picks the clip: the Honda's drive
+  plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
+  the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
+- **Boot opening** (`util/intropick`, S3 only) — `setup()` picks one of three openings each boot:
+  the kiss video, the Honda's night drive or McQueen's. Random, never last boot's (NVS
+  `boot`/`last`), and only from what the build has (the clip, `data/mcqueen.bin`); the Honda is
+  always there. `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`) forces one for testing. The car
+  openings start their drive before WiFi connects; every opening ends in the montage.
+- **Intro video** (`ui/intro`, `util/introclock`, `util/termblend`, S3 only) — the kiss opening,
+  on its own task while WiFi connects and the network task logs into Spotify underneath; then
+  straight to the montage. The boot terminal types over it: `ui/bootterm` draws into a 206×60
+  sprite, and `termblend` paints it into each decoded JPEG block (glyphs over a 3/8-dark panel,
+  by shifts: a per-channel blend cost 5 ms a frame), so the video never wipes it. If the deck
+  isn't online when the clip ends, the last frame holds with `WI-FI ... RETRYING...` until it is
+  (`intro::wait()`). `data/intro.bin` (from `tools/gen_intro.py`; `tools/intro_clip.py` writes an
   empty one that turns it off) holds 320×240 baseline JPEG frames in the montage's container, 20
   fps, with `data/intro.pcm` (48 kHz mono) as its sound. Frames are decoded with JPEGDEC and
   pushed without DMA (~50 ms a frame: `initDMA()` left every later draw black); `introclock`
   picks the frame by time, so late frames are skipped instead of slowing the clip. If the task
   can't start, the deck skips the intro.
-- **Boot scene** (`ui/bootscene`, `ui/car_sprite`, `ui/montage`, `util/bootanim`,
-  `util/loudness`) — own task at boot; cruising: sky drawn once, y 72–239 re-rendered through one
+- **Boot scene** (`ui/bootscene`, `ui/bootterm`, `ui/carlook`, `ui/car_sprite`, `util/carbin`,
+  `ui/montage`, `util/bootanim`, `util/loudness`) — own task at boot. The car is a `carlook::Look`:
+  the committed Honda, or McQueen from the git-ignored `data/mcqueen.bin` ("CAR1": size, wheel and
+  light anchors, kinds and RGB565, from `tools/gen_mcqueen_sprite.py`), each with its own rims.
+  `bootterm` is the on-board terminal (the BIOS log) shared with the intro. Without a drive (the
+  kiss) the scene waits for WiFi and starts at the montage. Cruising: sky drawn once, y 72–239 re-rendered through one
   320×24 strip (15 KB, freed before the montage); brake: whole-screen fade; montage: JPEG frames
   from the embedded `data/montage.bin` decoded straight to the display (~10 fps); drive ~15 fps (67 ms/frame). `setup()`
   waits for it; `loop()` and the late-WiFi path wait while active.
@@ -102,12 +116,12 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   without an address" reconnects on the second check in a row (`netup`).
 - **Pure, host-tested modules** (suites under `test/`, one per module except `lyricstatus` in
   `netplan`'s, `pollpace` in `lyricclock`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
-  accents,cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,car_sprite,montage}`,
+  accents,cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
-  avatarscene,avatarsing,bios,bootanim,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
-  genrebadge,glyphrun,greetpick,hotspotip,howl,idlesprite,interp,introclock,jsonflat,linkstatus,loudness,
+  avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
+  genrebadge,glyphrun,hotspotip,howl,idlesprite,interp,intropick,introclock,jsonflat,linkstatus,loudness,
   lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
-  pollpace,press,readguard,remotegate,rgb565,roam,statejson,stateparse,text,touchguard,
+  pollpace,press,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.
 
 ## Layers

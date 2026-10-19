@@ -6,6 +6,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
+- A random boot opening on the S3, never the same as last boot: your intro video with the boot
+  log typed over it, the Honda's night drive with "bem vindo moreno", or a pixel Lightning
+  McQueen's drive with "eu sou a velocidade" (`tools/gen_mcqueen_sprite.py`, git-ignored; red
+  rims). All of them end in the photo montage and the POWERED BY HONDA card.
+  `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`) forces one for testing.
 - A music box on the S3's "Nothing playing" screen: soft plucked tunes loop in random order until
   the song comes back. Make your own from MIDI with `tools/gen_tune.py` (`data/tunes/`,
   git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
@@ -16,10 +21,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   from your own images via `tools/gen_avatar.py` (`avatar-photos/`, git-ignored); without one
   the companion shows the lyrics as before. The companion now sends Howl and trip reset to the
   new deck.
-- Boot intro video on the S3: your own clip (`tools/gen_intro.py`, git-ignored) plays first with
-  its sound, 20 fps / 48 kHz, while WiFi connects and Spotify logs in underneath; then the
-  greeting and the night drive. `--seg START-END` cuts play in the order given.
-- A second boot greeting on the S3, picked at random each boot (`tools/gen_greeting.py --alt`).
+- Boot intro video on the S3: your own clip (`tools/gen_intro.py`, git-ignored), one of the
+  random boot openings, with its sound, 20 fps / 48 kHz, while WiFi connects and Spotify logs in
+  underneath; then the montage. `--seg START-END` cuts play in the order given.
+- A second boot greeting on the S3 (`tools/gen_greeting.py --alt`): McQueen's opening plays it.
 - The S3's Howl plays a real wolf recording when one is built (`tools/gen_howl.py`, e.g. the
   public-domain "Wolf howls.ogg" from Wikimedia Commons); otherwise the synthesised howl.
 - Phone remote (proof of concept): `http://cardeck.local/?k=<REMOTE_TOKEN>` (`cardeck-cyd.local`
@@ -37,6 +42,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- A shorter S3 boot: about 19-21 s from power-on to the deck (measured: McQueen 19.2 s, Honda
+  19.3 s, kiss 21.1 s; it was 27-35 s), most of it waiting for WiFi. The car openings start
+  driving at once instead of after WiFi connects; the kiss is cut to the walk-in and the kiss
+  (~13 s, was 23 s); the photo montage is ~5 s (was ~7.5 s) and the end card ~2.5 s.
+- Without WiFi, the kiss holds its last frame with `WI-FI ... RETRYING...` until the hotspot is
+  back; the drives keep cruising as before.
 - A paused song keeps the deck for 30 s before "Nothing playing" shows (it used to show only
   when Spotify had nothing at all).
 - On the S3, "Nothing playing" shows Sonic waiting (Sonic 1's foot tap, with the game's timing)
