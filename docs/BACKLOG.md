@@ -78,6 +78,13 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Ideas
 
+- **Fuel level on the gauge cluster** (2026-10-19): the City answers "not supported" for PID 2F on all
+  three ECUs, so FUEL % and KM LEFT show `--`. Options: (1) if Car Scanner shows fuel level, it
+  uses a Honda-specific read request: allow exactly that one read in `obd::allowed()` (owner's OK
+  needed); (2) the cluster's CAN broadcast, found in the gear side task's listen-only session;
+  (3) estimate: "filled up" on the phone page, then subtract the MAF-measured fuel burnt, kept in NVS.
+  The owner checks Car Scanner first.
+
 - **Gear on the gauge cluster** (side task, 2026-10-19; spec 2026-10-19-gauge-cluster): the City's
   lever (P R N D S) and the CVT's virtual gear (1–7, paddles) aren't standard OBD values; they're
   broadcast on the CAN bus for the car's own instrument cluster. Record a parked session with the ELM327 listening only
