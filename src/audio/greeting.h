@@ -1,12 +1,16 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
+#include "../util/intropick.h"
 // The deck's sound clips (boot greeting, montage opener and finale, the S3's intro sound, howl):
 // embedded 16-bit mono PCM played on the board's audio output (audio/sink.h: the CYD's DAC on
 // its SPEAK connector, the S3's ES8311 codec). Each plays in its own short-lived task, one at a
 // time, so boot carries on while it plays; the task frees the audio driver and itself when done.
 namespace greeting {
-void play();                    // S3: the original or data/greeting_alt.pcm, at random (util/greetpick)
+void play();                    // this boot's greeting (choose())
+// This boot's greeting, from the S3's opening (util/intropick): MAIN (data/greeting.pcm), ALT
+// (data/greeting_alt.pcm) or NONE (play() does nothing, durationMs() is 0). MAIN unless called.
+void choose(intropick::Greeting g);
 uint32_t durationMs();          // this boot's greeting's length
 uint8_t level(uint32_t ms);     // clip loudness 0-255 over 20 ms at `ms`; 0 past the end. Ignores VOLUME.
 // Finale (data/finale.pcm, git-ignored, may be empty): played by the boot scene so it ends with

@@ -6,7 +6,7 @@
 #include "sink.h"
 #include "../util/loudness.h"
 #include "../util/howl.h"
-#include "../util/greetpick.h"
+#include "../util/intropick.h"
 #include "../util/musicbox.h"
 #include "../core/embed.h"
 
@@ -60,19 +60,19 @@ static const Clip GREETING_ALT = {EMBED_DATA(data_greeting_alt_pcm),
 static bool present(const Clip& c) { return c.samples > 1; }
 static uint32_t lengthMs(const Clip& c) { return (uint32_t)((uint64_t)c.samples * 1000 / c.rate); }
 
-static const Clip* pickGreeting() {
-#ifdef BOARD_S3
-    return greetpick::pick(esp_random(), present(GREETING_ALT)) ? &GREETING_ALT : &GREETING;
-#else
-    return &GREETING;
-#endif
-}
+// This boot's greeting (main.cpp chooses it from the opening before play()); MAIN by default.
+static intropick::Greeting s_choice = intropick::MAIN;
+static const Clip SILENT = {nullptr, 0, "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
 
-// This boot's greeting, picked once (a function-local static: initialised once, thread-safe):
-// play(), durationMs() and level() (the boot scene's timing and car lights) must agree on it.
+void choose(intropick::Greeting g) { s_choice = g; }
+
+// The clip play(), durationMs() and level() agree on (the boot scene's timing and car lights).
 static const Clip& greetingClip() {
-    static const Clip* const c = pickGreeting();
-    return *c;
+    if (s_choice == intropick::NONE) return SILENT;
+#ifdef BOARD_S3
+    if (s_choice == intropick::ALT && present(GREETING_ALT)) return GREETING_ALT;
+#endif
+    return GREETING;
 }
 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
@@ -128,7 +128,10 @@ static void start(const Clip* c, const char* name) {
     }
 }
 
-void play() { start(&greetingClip(), "greeting"); }
+void play() {
+    if (s_choice == intropick::NONE) return;   // the kiss video has its own sound
+    start(&greetingClip(), "greeting");
+}
 
 static std::atomic<bool> s_tunes{false};      // the music box's task is alive
 static std::atomic<bool> s_tunesStop{false};
