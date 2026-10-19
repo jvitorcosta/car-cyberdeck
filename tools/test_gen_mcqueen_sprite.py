@@ -48,5 +48,13 @@ class Pack(unittest.TestCase):
         self.assertEqual(gm.rgb565(255, 255, 255), 0xFFFF)
 
 
+class Defaults(unittest.TestCase):
+    # The anchors measured on the approved art (2026-10-19), so a plain re-run packs him right.
+    def test_defaults_are_mcqueens_anchors(self):
+        a = gm.parse_args(["mcqueen.png"])
+        self.assertEqual((a.wheels, a.beam, a.tail_glow), ((45, 138, 51), (189, 36), 35))
+        self.assertEqual((a.head, a.tail, a.shoulder), ((166, 34, 174, 37), (11, 36, 14, 44), 30))
+
+
 if __name__ == "__main__":
     unittest.main()

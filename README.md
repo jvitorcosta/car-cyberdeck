@@ -128,7 +128,7 @@ built-in defaults.
 | Second boot sound (S3) | `gen_greeting.py --alt my.wav` → `data/greeting_alt.pcm`, McQueen's opening | McQueen plays the boot sound |
 | Montage sounds | `gen_greeting.py --opener` / `--finale my.wav` | silent |
 | Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (~5 s of photos; needs ffmpeg) | no montage |
-| Pixel McQueen (S3) | a 200 × 66 side view facing right, then `python tools/gen_mcqueen_sprite.py mcqueen.png` → `data/mcqueen.bin` (`--wheels`, `--head`, `--tail` set the anchors) | two openings: the kiss and the Honda |
+| Pixel McQueen (S3) | a 200 × 66 side view facing right, then `python tools/gen_mcqueen_sprite.py montage-photos/mcqueen.png` → `data/mcqueen.bin` (the defaults fit the approved art; new art sets `--wheels`, `--head`, `--tail`, `--beam`) | two openings: the kiss and the Honda |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
 | Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; default: the kiss wallpaper's walk-in and kiss, ~13 s; needs ffmpeg). One of the random boot openings | none: the night drive openings only |
 | Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Nothing playing" |

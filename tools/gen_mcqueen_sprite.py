@@ -1,10 +1,11 @@
 # tools/gen_mcqueen_sprite.py
 """Build data/mcqueen.bin: the boot scene's pixel Lightning McQueen (S3 opening C), from a PNG.
-Run: python tools/gen_mcqueen_sprite.py <mcqueen.png> [--shoulder 30] [--head 186,24,199,36]
-                                       [--tail 0,18,5,30] [--wheels 46,160,52] [--beam 200,31] [--tail-glow 21]
+Run: python tools/gen_mcqueen_sprite.py montage-photos/mcqueen.png [--shoulder 30] [--head 166,34,174,37]
+                       [--tail 11,36,14,44] [--wheels 45,138,51] [--beam 189,36] [--tail-glow 35]
 
-The PNG is a 200 x 66 side view facing right, transparent background, wheels left out (the
-scene draws them so they spin, at --wheels). A fan sprite of a Disney/Pixar character: the PNG
+The PNG is a 200 x 66 side view facing right, transparent background. The defaults are the
+anchors measured on the approved art (PixelLab, 2026-10-19: 180 x 66 at x 10, its painted tyres
+under the scene's spinning wheels at --wheels); new art needs its own. A fan sprite of a Disney/Pixar character: the PNG
 and data/mcqueen.bin are git-ignored. Standard library only. Format "CAR1": util/carbin.h.
 """
 import argparse
@@ -54,16 +55,20 @@ def box(s):
     return tuple(int(v) for v in s.split(","))
 
 
-def main():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("png")
     ap.add_argument("--shoulder", type=int, default=30)
-    ap.add_argument("--head", type=box, default=(186, 24, 199, 36))
-    ap.add_argument("--tail", type=box, default=(0, 18, 5, 30))
-    ap.add_argument("--wheels", type=box, default=(46, 160, 52))
-    ap.add_argument("--beam", type=box, default=(200, 31))
-    ap.add_argument("--tail-glow", type=int, default=21)
-    a = ap.parse_args()
+    ap.add_argument("--head", type=box, default=(166, 34, 174, 37))      # his headlight decal
+    ap.add_argument("--tail", type=box, default=(11, 36, 14, 44))
+    ap.add_argument("--wheels", type=box, default=(45, 138, 51))         # rear x, front x, y
+    ap.add_argument("--beam", type=box, default=(189, 36))               # the nose
+    ap.add_argument("--tail-glow", type=int, default=35)
+    return ap.parse_args(argv)
+
+
+def main():
+    a = parse_args()
     w, h, rows = decode_png(open(a.png, "rb").read())
     if (w, h) != (W, H):
         sys.exit("gen_mcqueen_sprite: the PNG must be %d x %d (it is %d x %d)" % (W, H, w, h))
