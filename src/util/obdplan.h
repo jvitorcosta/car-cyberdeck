@@ -69,9 +69,5 @@ private:
     uint32_t lastLiveMs_ = 0;
 };
 
-enum class Band : uint8_t { Cold, Ok, Warn, Hot };
-Band rpmBand(float rpm, float redline);   // Ok < 70 % <= Warn < 90 % <= Hot
-Band coolantBand(float c);                // Cold < 60 C, Ok <= 105 C, else Hot
-Band batteryBand(float v);                // Hot < 11.8 V, Warn < 12.2 V, else Ok
 float frac(float v, float lo, float hi);  // clamped to 0..1; 0 for an empty range
 }

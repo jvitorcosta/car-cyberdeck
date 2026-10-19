@@ -93,12 +93,6 @@ bool Hold::update(bool live, uint32_t nowMs) {
     return shown_;
 }
 
-Band rpmBand(float rpm, float redline) {
-    const float f = frac(rpm, 0.0f, redline);
-    return f < 0.7f ? Band::Ok : f < 0.9f ? Band::Warn : Band::Hot;
-}
-Band coolantBand(float c) { return c < 60.0f ? Band::Cold : c <= 105.0f ? Band::Ok : Band::Hot; }
-Band batteryBand(float v) { return v < 11.8f ? Band::Hot : v < 12.2f ? Band::Warn : Band::Ok; }
 
 uint32_t staleAfterMs(Pid p) { return isFast(p) ? STALE_FAST_MS : STALE_SLOW_MS; }
 

@@ -5,7 +5,6 @@
 
 using obd::Pid;
 using obd::Reply;
-using obdplan::Band;
 using obdplan::Link;
 
 void setUp() {}
@@ -240,17 +239,7 @@ void test_hold_shows_at_once_and_leaves_after_5_s_off() {
     TEST_ASSERT_FALSE(hold.update(false, live + obdplan::HOLD_MS + 1));
 }
 
-void test_colour_bands_at_their_edges() {
-    TEST_ASSERT_EQUAL_INT((int)Band::Ok, (int)obdplan::rpmBand(4500, 6500));     // 69 %
-    TEST_ASSERT_EQUAL_INT((int)Band::Warn, (int)obdplan::rpmBand(4600, 6500));   // 71 %
-    TEST_ASSERT_EQUAL_INT((int)Band::Warn, (int)obdplan::rpmBand(5800, 6500));   // 89 %
-    TEST_ASSERT_EQUAL_INT((int)Band::Hot, (int)obdplan::rpmBand(5900, 6500));    // 91 %
-    TEST_ASSERT_EQUAL_INT((int)Band::Cold, (int)obdplan::coolantBand(59.9f));
-    TEST_ASSERT_EQUAL_INT((int)Band::Ok, (int)obdplan::coolantBand(105.0f));
-    TEST_ASSERT_EQUAL_INT((int)Band::Hot, (int)obdplan::coolantBand(105.1f));
-    TEST_ASSERT_EQUAL_INT((int)Band::Hot, (int)obdplan::batteryBand(11.79f));
-    TEST_ASSERT_EQUAL_INT((int)Band::Warn, (int)obdplan::batteryBand(12.19f));
-    TEST_ASSERT_EQUAL_INT((int)Band::Ok, (int)obdplan::batteryBand(12.2f));
+void test_frac_clamps() {
     TEST_ASSERT_EQUAL_FLOAT(0.0f, obdplan::frac(-5, 0, 100));
     TEST_ASSERT_EQUAL_FLOAT(1.0f, obdplan::frac(150, 0, 100));
     TEST_ASSERT_EQUAL_FLOAT(0.0f, obdplan::frac(5, 10, 10));   // empty range: no division by 0
@@ -271,6 +260,6 @@ int main() {
     RUN_TEST(test_ignition_off_never_reads_as_live);
     RUN_TEST(test_rpm_is_never_backed_off);
     RUN_TEST(test_hold_shows_at_once_and_leaves_after_5_s_off);
-    RUN_TEST(test_colour_bands_at_their_edges);
+    RUN_TEST(test_frac_clamps);
     return UNITY_END();
 }

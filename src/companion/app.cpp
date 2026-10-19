@@ -31,6 +31,28 @@ static bool s_vroom = false;                          // the new deck offers VRO
 static bool s_waiting = false;                        // an action is on its way to the deck
 static press::Press s_press;
 static obdplan::Hold s_obdHold;   // gauges on screen (util/obdplan: shown at once, gone 5 s after)
+
+#ifdef GAUGE_DEMO
+// -D GAUGE_DEMO: the gauge cluster with fixed values and no car, to see the screen on the desk.
+static void gaugeDemo(obdlink::View& car, uint32_t now) {
+    using obd::Pid;
+    const struct { Pid p; float v; } VALUES[] = {{Pid::Rpm, 3850}, {Pid::Speed, 87}, {Pid::Coolant, 89},
+                                                 {Pid::Fuel, 61}, {Pid::Battery, 14.1f}, {Pid::Maf, 12.3f},
+                                                 {Pid::PedalD, 52}, {Pid::Throttle, 38}};
+    car.link = obdplan::Link::Live;
+    for (const auto& x : VALUES) {
+        car.value[(int)x.p] = x.v;
+        car.have[(int)x.p] = true;
+        car.atMs[(int)x.p] = now;
+    }
+    car.kmlNow = 13.8f;
+    car.kmlAvg = 11.9f;
+    car.kmLeft = 320;
+    car.pedalPct = 62;
+    car.throttlePct = 41;
+    car.atStart = 10.4f;
+}
+#endif
 static bool s_gauges = false;     // as drawn
 
 // Moves to screen s and repaints it whole.
@@ -149,10 +171,9 @@ void loop() {
         if (night != theme::isNightActive()) {
             theme::setNight(night);
             backlight::set(night);
-            if (s_gauges) {                       // repaint the gauges in the new palette
-                s_tft.fillRect(0, 0, 320, menunav::BAR.y - 2, theme::pal().top);
-                gauges::invalidate();
-                screens::invalidate();
+            if (s_gauges) {
+                // the gauges are green day and night: nothing to repaint (the screen it left
+                // repaints in the new palette on return)
             } else if (avatarview::on()) enter(s_screen);
             else {
                 s_tft.fillScreen(theme::pal().top);
@@ -170,14 +191,16 @@ void loop() {
     }
     obdlink::View car;
     obdlink::snapshot(car);
+#ifdef GAUGE_DEMO
+    gaugeDemo(car, now);
+#endif
     const bool showGauges = s_obdHold.update(car.link == obdplan::Link::Live, now);
     if (showGauges != s_gauges) {                 // the car came or went
         s_gauges = showGauges;
         if (s_gauges) {
-            s_tft.fillRect(0, 0, 320, menunav::BAR.y - 2, theme::pal().top);
-            avatarview::place(0, 0, 0);           // she leaves the screen, her bar stays
+            s_tft.fillScreen(TFT_BLACK);          // the cluster owns the whole screen
+            avatarview::place(4, 4, avatarview::HALF);   // she stays, small and still, top left
             gauges::invalidate();
-            screens::invalidate();
             avatarview::say(avatarlines::Event::CarOn, v, now);
         } else {
             enter(s_screen);                      // back to the screen it left
@@ -187,9 +210,8 @@ void loop() {
     if (s_gauges) {
         fire(phone::take());                      // the phone still works; screens apply on return
         handleResult(v, now);
-        const char* line = avatarview::update(s_tft, v, now);
+        avatarview::update(s_tft, v, now);        // her portrait; no message bar on the cluster
         gauges::draw(s_tft, car, now);
-        screens::bar(s_tft, line ? line : "Live from the car");
         delay(20);
         return;
     }

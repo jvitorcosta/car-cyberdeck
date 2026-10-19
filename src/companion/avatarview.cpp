@@ -46,7 +46,20 @@ void place(int x, int y, int scale) {
 // (the embedded file need not be 2-byte aligned); then her name tag, once.
 static void show(TFT_eSPI& t, int e, int f) {
     constexpr int N = avatarbin::SIDE;
+    if (s_scale == HALF) e = f = 0;                  // still: her first frame
     if (s_scale == 0 || (e == s_entry && f == s_frame)) return;
+    if (s_scale == HALF) {                           // every other pixel of every other row
+        const uint8_t* px = EMBED_DATA(data_avatar_bin) + avatarbin::frameOffset(s_info, 0, 0);
+        static uint16_t src[N], half[N / 2];
+        for (int y = 0; y < N; y += 2) {
+            memcpy(src, px + (size_t)y * N * 2, N * 2);
+            for (int x = 0; x < N / 2; ++x) half[x] = src[2 * x];
+            t.pushImage(s_x, s_y + y / 2, N / 2, 1, half);
+        }
+        s_entry = s_frame = 0;
+        s_tag = true;                                // no name tag at this size
+        return;
+    }
     const uint8_t* px = EMBED_DATA(data_avatar_bin) + avatarbin::frameOffset(s_info, e, f);
     static uint16_t src[N], row[2 * N];
     for (int y = 0; y < N; ++y) {
