@@ -20,9 +20,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   McQueen's drive with "eu sou a velocidade" (`tools/gen_mcqueen_sprite.py`, git-ignored; red
   rims). All of them end in the photo montage and the POWERED BY HONDA card.
   `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`) forces one for testing.
-- A music box on the S3's "Nothing playing" screen: soft plucked tunes loop in random order until
-  the song comes back. Make your own from MIDI with `tools/gen_tune.py` (`data/tunes/`,
-  git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
+- A music box on the S3's "Nothing playing" screen: soft plucked tunes (5 % of the clips'
+  volume) loop in random order until the song comes back. Make your own from MIDI with
+  `tools/gen_tune.py` (`data/tunes/`, git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
 - Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.
   She sings along with synced lyrics, greets you, remarks on new songs (at most every 5 min) and
   reacts to Howl and trip reset. The Lyrics, Sounds and Trip screens open from the companion's
@@ -51,6 +51,14 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- The "Nothing playing" screen now says **Waiting for a song...** (same screen, same timing).
+- The S3's "Waiting for a song..." screen shows the phone page's link as a QR code again, left of
+  Sonic in a Gen-3 battle box named **REMOTE** (with a phone icon): 3 px modules (half as big
+  again as before) on the battle boxes' cream, so phones read it from further away.
+  `http://<deck address>/?k=<REMOTE_TOKEN>` with the address it has now (`172.20.10.10` on the
+  iPhone hotspot, the DHCP one on any other network), redrawn when the address changes. None
+  while offline or without `REMOTE_TOKEN`: the sunset shows instead. Sonic's frames now repaint
+  only his own box, not the whole scene.
 - A shorter S3 boot: about 19-21 s from power-on to the deck (measured: McQueen 19.2 s, Honda
   19.3 s, kiss 21.1 s; it was 27-35 s), most of it waiting for WiFi. The car openings start
   driving at once instead of after WiFi connects; the kiss is cut to the walk-in and the kiss
@@ -60,10 +68,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - A paused song keeps the deck for 30 s before "Nothing playing" shows (it used to show only
   when Spotify had nothing at all).
 - On the S3, "Nothing playing" shows Sonic waiting (Sonic 1's foot tap, with the game's timing)
-  instead of Pikachu when you build his sprite (`tools/gen_idle_sprite.py`, git-ignored), and no
-  longer shows a QR code. He waits on a city sidewalk at sunset: banded sky, striped low sun,
-  skyline with lit windows, street lamps and the road; at night a navy sky with stars and a
-  crescent moon, and more windows lit.
+  instead of Pikachu when you build his sprite (`tools/gen_idle_sprite.py`, git-ignored). He
+  waits on a city sidewalk at sunset: banded sky, striped low sun, skyline with lit windows,
+  street lamps and the road; at night a navy sky with stars and a crescent moon, and more
+  windows lit.
 - The S3's app partition is 12 MB (was 8 MB; taken from the unused storage area of its 16 MB
   flash), and the boot intro plays its whole clip in story order (`gen_intro.py`'s default cut:
   11.8 s to the end, then 0-11.8 s). Flash the S3 once with `pio run -e s3 -t upload` to write the

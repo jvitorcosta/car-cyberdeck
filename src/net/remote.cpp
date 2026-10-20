@@ -6,6 +6,7 @@
 #include "wifi.h"
 #include "../audio/greeting.h"
 #include "../util/remotegate.h"
+#include "../util/qrfit.h"
 #include "../util/netplan.h"
 #include "../core/mem.h"
 #include "../core/shared.h"
@@ -87,6 +88,11 @@ void setStatus(const char* title, const char* detail) {
     strlcpy(s_title, title ? title : "", sizeof s_title);
     strlcpy(s_detail, detail ? detail : "", sizeof s_detail);
     portEXIT_CRITICAL(&s_mux);
+}
+
+bool link(char* out, size_t n) {
+    if (!s_gate.enabled() || !net::isOnline()) { if (n) out[0] = '\0'; return false; }
+    return qrfit::link(net::deviceIp().c_str(), REMOTE_TOKEN, out, n);
 }
 
 static void handleState() {

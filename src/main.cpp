@@ -19,13 +19,17 @@
 #include "util/idlesprite.h"
 #include "core/embed.h"
 #ifdef BOARD_S3
-EMBED(data_idle_bin);   // Sonic waiting on "Nothing playing" (tools/gen_idle_sprite.py), else empty
+EMBED(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_sprite.py), else empty
 #endif
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
 #include "util/linkstatus.h"
 #include "net/remote.h"
+#include "util/qrfit.h"
+#ifdef BOARD_S3
+#include <qrcode.h>
+#endif
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
@@ -248,8 +252,67 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
     return k;
 }
 
+#ifdef BOARD_S3
+// The phone-remote link as a QR code for the "Waiting for a song..." screen (esp_qrcode, built into
+// the core), from the deck's current address: 172.20.10.10 on the iPhone hotspot, the DHCP one
+// elsewhere. Rebuilt when the link changes (another network, a reconnect, the hotspot address
+// pinned after DHCP), checked when the screen appears and then at most every 5 s:
+// net::deviceIp() allocates a String.
+constexpr int QR_N = qrfit::modules(qrfit::MAX_VERSION);   // modules per side (29)
+static uint8_t s_qrBits[(QR_N * QR_N + 7) / 8];
+static qrcard::Qr s_qr{s_qrBits, 0};
+static uint32_t s_qrGen = 0;   // bumped when the code changes: the screen redraws it
 
-// The S3's music box loops while "Nothing playing" is up, and stops (a short fade) as it goes.
+static void copyQr(esp_qrcode_handle_t h) {
+    const int n = esp_qrcode_get_size(h);
+    s_qr.size = 0;
+    if (n > QR_N) return;
+    memset(s_qrBits, 0, sizeof s_qrBits);
+    for (int y = 0; y < n; ++y)
+        for (int x = 0; x < n; ++x)
+            if (esp_qrcode_get_module(h, x, y)) {
+                const int i = y * n + x;
+                s_qrBits[i >> 3] |= (uint8_t)(0x80 >> (i & 7));
+            }
+    s_qr.size = n;
+}
+
+static const qrcard::Qr* phoneQr(bool recheck) {
+    static char built[96] = "";
+    static uint32_t checkedAt = 0;
+    if (recheck || millis() - checkedAt >= 5000) {
+        checkedAt = millis();
+        char url[96];
+        if (!remote::link(url, sizeof url)) {
+            if (built[0]) {
+                Serial.println("[qr] none (remote off or offline)");
+                ++s_qrGen;
+            }
+            built[0] = '\0';
+            s_qr.size = 0;
+        } else if (strcmp(url, built) != 0) {
+            strlcpy(built, url, sizeof built);
+            esp_qrcode_config_t cfg = ESP_QRCODE_CONFIG_DEFAULT();
+            cfg.display_func = copyQr;
+            cfg.max_qrcode_version = qrfit::MAX_VERSION;
+            cfg.qrcode_ecc_level = ESP_QRCODE_ECC_LOW;
+            s_qr.size = 0;
+            esp_qrcode_generate(&cfg, url);
+            ++s_qrGen;
+            const char* key = strstr(url, "?k=");                  // the key stays off the log
+            Serial.printf("[qr] %.*s?k=<REMOTE_TOKEN> (%d modules)\n",
+                          key ? (int)(key - url) : (int)strlen(url), url, s_qr.size);
+        }
+    }
+    return s_qr.size ? &s_qr : nullptr;
+}
+#else
+static const qrcard::Qr* phoneQr(bool) { return nullptr; }   // CYD: no flash to spare
+static constexpr uint32_t s_qrGen = 0;
+#endif
+
+// The S3's music box loops while "Waiting for a song..." is up, and stops (a short fade) as it
+// goes.
 // It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
 // starts with the same margin as a phone howl, stops when memory runs low, and then tries again
 // at most once a minute.
@@ -288,7 +351,7 @@ static void musicBox(bool want) {
 
 #ifdef BOARD_S3
 // A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on
-// the companion. Touch is read every 20 ms, only while "Nothing playing" is up.
+// the companion. Touch is read every 20 ms, only while "Waiting for a song..." is up.
 static press::Press s_soundPress;
 static bool soundTapped() {
     press::Press& p = s_soundPress;
@@ -362,6 +425,7 @@ void loop() {
         static uint32_t textAt = 0, shownAt = 0, shownKey = 0;   // shownAt: the screen appeared
         static linkstatus::Kind kind = linkstatus::Kind::Ok, shownKind = linkstatus::Kind::Ok;
         static int shownSound = -2;
+        static uint32_t shownQrGen = 0;   // the phone link's QR on screen (s_qrGen)
         char text[80];   // title|detail: 24 + 1 + 48
 #ifdef BOARD_S3
         if (mode == 2 && soundTapped()) {   // the speaker button: mute or unmute, shown at once
@@ -375,7 +439,7 @@ void loop() {
         // Re-read the cause at most once a second: net::ssid() allocates a String.
         if (lastMode != mode || millis() - textAt >= 1000) {
             textAt = millis();
-            strlcpy(title, "Nothing playing", sizeof title);
+            strlcpy(title, "Waiting for a song...", sizeof title);
             detail[0] = '\0';
             kind = mode == 1 ? offlineText(st, title, sizeof title, detail, sizeof detail)
                              : linkstatus::Kind::Ok;
@@ -386,22 +450,31 @@ void loop() {
         }
         statusscene::Look look = statusscene::lookFor(kind);
         look.night = theme::isNightActive();   // Sonic's sunset turns to night with the palette
+        const qrcard::Qr* qr = mode == 2 ? phoneQr(lastMode != mode) : nullptr;   // the card, top left
         snprintf(text, sizeof text, "%s|%s", title, detail);
         if (lastMode != mode || kind != shownKind) {   // new screen: everything, once
             shownAt = millis();
             shownKey = statusscene::frameKey(0, look);
-            ui::drawOffline(s_tft, title, detail, look, 0, sound);
+            shownQrGen = s_qrGen;
+            ui::drawOffline(s_tft, title, detail, look, 0, sound, qr);
         } else if (strcmp(text, shownText) != 0 || sound != shownSound) {   // new text (countdown, tune)
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
             if (sound == shownSound && strcmp(title, shownTitle) == 0 && detail[0] && shownDetail &&
                 shownDetail[1])
                 ui::drawOfflineDetail(s_tft, detail, sound);
             else ui::drawOfflineText(s_tft, title, detail, sound);   // the button changed too
-        } else if (statusscene::frameKey(millis() - shownAt, look) != shownKey) {   // next frame
+        } else if (statusscene::frameKey(millis() - shownAt, look) != shownKey ||
+                   s_qrGen != shownQrGen) {   // next frame, or the link's QR changed
             const uint32_t t = millis() - shownAt;   // Pokemon bob, bubble, ball; Sonic waiting
-            shownKey = statusscene::frameKey(t, look);
-            ui::drawOfflineScene(s_tft, look, t, sound < 0);   // the music box's screen: no arrow
-            if (sound == 1 && detail[0]) ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
+            if (s_qrGen != shownQrGen) {   // the card once more, or the scene back where it was
+                shownQrGen = s_qrGen;
+                ui::drawQrCard(s_tft, look, t, qr);
+            }
+            if (statusscene::frameKey(t, look) != shownKey) {   // only what moves (frameRect)
+                shownKey = statusscene::frameKey(t, look);
+                ui::drawOfflineScene(s_tft, look, t, sound < 0, false, qr);   // music box: no arrow
+                if (sound == 1 && detail[0]) ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
+            }
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
             Serial.printf("[screen] %s / %s\n", title, detail);

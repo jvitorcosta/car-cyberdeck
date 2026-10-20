@@ -4,6 +4,10 @@
 
 namespace ctxcache {
 
+bool fromAlbum(const char* uri) {
+    return !uri || !uri[0] || strncmp(uri, "spotify:album:", 14) == 0;
+}
+
 bool Cache::needsLookup(const char* uri, uint32_t nowMs) const {
     if (!uri) uri = "";
     if (!stored_ || strncmp(uri_, uri, sizeof(uri_) - 1) != 0) return true;

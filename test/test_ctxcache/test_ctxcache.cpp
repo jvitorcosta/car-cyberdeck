@@ -32,8 +32,22 @@ void test_null_uri_is_treated_as_empty() {
     TEST_ASSERT_FALSE(c.needsLookup("", 5));
     TEST_ASSERT_FALSE(c.needsLookup(nullptr, 5));
 }
+// The owner (2026-10-20): playing from an album (or a search result, which has no context) left
+// "From:" empty; the album's lookup returns the whole album and failed. The song's own album name
+// is shown instead, with no lookup.
+void test_album_and_no_context_use_the_songs_album() {
+    TEST_ASSERT_TRUE(ctxcache::fromAlbum("spotify:album:4aawyAB9vmqN3uQ7FjRGTy"));
+    TEST_ASSERT_TRUE(ctxcache::fromAlbum(""));
+    TEST_ASSERT_TRUE(ctxcache::fromAlbum(nullptr));
+    TEST_ASSERT_FALSE(ctxcache::fromAlbum("spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"));
+    TEST_ASSERT_FALSE(ctxcache::fromAlbum("spotify:artist:0OdUWJ0sBjDrqHygGUXeCF"));
+    TEST_ASSERT_FALSE(ctxcache::fromAlbum("spotify:collection"));
+    TEST_ASSERT_FALSE(ctxcache::fromAlbum("spotify:albumx:1"));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_album_and_no_context_use_the_songs_album);
     RUN_TEST(test_new_uri_needs_lookup);
     RUN_TEST(test_successful_lookup_is_kept);
     RUN_TEST(test_failed_lookup_retries_after_backoff);

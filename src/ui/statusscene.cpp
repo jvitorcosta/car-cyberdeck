@@ -160,6 +160,13 @@ bool onSoundButton(int x, int y) {
     return x >= 256 && x < 316 && y >= DLG_Y && y < DLG_Y + DLG_H;
 }
 
+Rect frameRect(const Look& look) {
+    if (look.ball || look.bubble != Bubble::None) return {X0, Y0, W, H};
+    const int w = spriteW(look), h = spriteH(look);
+    const int bob = look.idle ? 0 : 2;   // BOB's highest step
+    return {CX - w, FEET_Y - 2 * h - bob, 2 * w, 2 * h + bob};
+}
+
 uint32_t frameKey(uint32_t ms, const Look& look) {
     if (!look.idle) return ms / FRAME_MS;
     return idlesprite::tickAt(ms) << 1 | ((ms / (2 * FRAME_MS)) & 1);   // arrow: (step >> 1) & 1
