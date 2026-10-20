@@ -20,6 +20,9 @@ constexpr uint16_t EXP_BLUE    = rgb(0x40, 0xC8, 0xF8);
 constexpr uint16_t CD_SILVER   = rgb(0xC0, 0xC0, 0xC8);
 // Poke Ball outline: today's dark grey in both modes (the text colour turns cream at night).
 constexpr uint16_t BALL_DARK   = rgb(0x40, 0x40, 0x40);
+// The phone link's QR code (ui/qrcard), day and night: battle-box cream and navy, ~10:1.
+constexpr uint16_t QR_LIGHT    = rgb(0xF8, 0xF8, 0xD8);
+constexpr uint16_t QR_DARK     = rgb(0x0E, 0x12, 0x18);
 
 // Colours that change between day and night mode (18:00-06:00 local time, see util/daynight).
 // DAY is the original Gen-3 battle look; NIGHT the "Moonlit battle" one (spec 2026-10-08).

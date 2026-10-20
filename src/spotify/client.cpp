@@ -200,12 +200,18 @@ void poll(AppState& st) {
         // context changed, leaving "playlist" in the header).
         static ctxcache::Cache cache;
         static char cachedName[64] = "";
-        if (cache.needsLookup(st.context, millis())) {
-            bool ok = resolveContext(st.context, cachedName, sizeof(cachedName));
-            cache.store(st.context, ok, millis());
-            Serial.printf("[spotify] context: %s%s\n", cachedName, ok ? "" : " (lookup failed, will retry)");
+        if (ctxcache::fromAlbum(st.context)) {
+            // from an album, or no context (a song from search): the song's own album name,
+            // no lookup (the album endpoint's whole track list was too big to parse)
+            txt::copy(st.context, st.album, sizeof(st.context));
+        } else {
+            if (cache.needsLookup(st.context, millis())) {
+                bool ok = resolveContext(st.context, cachedName, sizeof(cachedName));
+                cache.store(st.context, ok, millis());
+                Serial.printf("[spotify] context: %s%s\n", cachedName, ok ? "" : " (lookup failed, will retry)");
+            }
+            txt::copy(st.context, cachedName, sizeof(st.context));
         }
-        txt::copy(st.context, cachedName, sizeof(st.context));
     } else if (code == 204) {
         // currently-playing sometimes says 204 for minutes while the phone plays; /me/player
         // still knows (util/nowplaying). Ask it before showing "Nothing playing".

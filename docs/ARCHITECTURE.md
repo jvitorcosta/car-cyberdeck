@@ -68,28 +68,36 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
   Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
   certificate) plus a bundled Pokémon per cause on the battle platform with a speech bubble,
-  4 fps, pushed in 4-row strips. On the S3 "Nothing playing" shows Sonic instead
+  4 fps, pushed in 4-row strips. On the S3 "Waiting for a song..." shows Sonic instead
   (`util/idlesprite`, `data/idle.bin` from `tools/gen_idle_sprite.py`): Sonic 1's waiting
   animation with the game's timing (12 x stand, then the foot tap, 400 ms a frame), from when
-  the screen appears; the scene redraws when his frame or the arrow can change. He waits on a
+  the screen appears; when his frame or the arrow can change only his box is repainted
+  (`statusscene::frameRect`; the Pokémon with a bubble or a ball repaint the region). He waits on a
   sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
-- **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Nothing
-  playing" shows when Spotify has nothing, or once the song has stayed paused 30 s. On the S3 a
+- **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Waiting for
+  a song..." shows when Spotify has nothing, or once the song has stayed paused 30 s. On the S3 a
   music box then loops `data/tunes.txt` (packed by `tools/tune_clip.py` from `data/tunes/*.txt`,
-  git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at a tenth of the clip volume, synthesised in a
-  4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
+  git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at 5 % of the clip volume (`TUNE_LEVEL`),
+  synthesised in a 4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
   screen goes, starts only with the howl's TLS margin, stops when the largest block nears
   `TLS_NEED`, and retries at most once a minute. `tools/gen_tune.py` makes tunes from MIDI.
-- **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
+- **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`,
+  `util/qrfit`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
   mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority
   task, never the UI loop. It reads `GET /state` every 5 s (now playing, the deck's status,
   network, the sound buttons) and has a Home Screen icon (`GET /icon.png`, public). `POST
   /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. On the S3 the
   howl is the real recording in `data/howl.pcm` (`tools/gen_howl.py`, 48 kHz) when the build has
   one; otherwise, and always on the CYD, it is synthesised while it plays (`audio/greeting`).
-  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`).
+  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). On the S3 the "Waiting for a
+  song..." screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` builds
+  `http://<ip>/?k=<token>` from the current address and picks a version ≤ 3), checked when the
+  screen appears and every 5 s. It sits on a Gen-3 battle box at the top left (`ui/qrcard`:
+  phone icon and "REMOTE", 3 px modules on a cream panel, 2-module quiet zone, x 4-127,
+  y 22-149), painted once with the screen and again only when the address changes; without a
+  link the scene is painted back over it.
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with
@@ -116,12 +124,12 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   without an address" reconnects on the second check in a row (`netup`).
 - **Pure, host-tested modules** (suites under `test/`, one per module except `lyricstatus` in
   `netplan`'s, `pollpace` in `lyricclock`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
-  accents,cjkfont,status_sprite,statusscene,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
+  accents,cjkfont,status_sprite,statusscene,qrcard,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
   avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
   genrebadge,glyphrun,hotspotip,howl,idlesprite,interp,intropick,introclock,jsonflat,linkstatus,loudness,
   lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
-  pollpace,press,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
+  pollpace,press,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.
 
 ## Layers
