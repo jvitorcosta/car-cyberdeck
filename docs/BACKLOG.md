@@ -4,6 +4,14 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **Gauge cluster in the car** (works over Bluetooth Classic, 2026-10-19): compare RPM, speed,
+  coolant (from 67), volts and km/l with the City's own cluster (km/l ~14-18 at a steady
+  80 km/h); AT START caught when waiting ~5 s at key-on; readable at a glance. The adapter must
+  be free: phone Bluetooth off, and after a lost link a replug may be needed (the deck now
+  restarts its Bluetooth after a failed connect, `811a022`; reconnect not yet seen working).
+- **Idle-screen QR on the hotspot**: seen on the home WiFi only (`http://192.168.100.13/...`);
+  check it shows and scans `http://172.20.10.10/?k=...` on the iPhone hotspot, day and night.
+
 - **Old deck touch layer is faulty** (2026-10-14): one constant press (raw x=0, y~3977) under
   both the companion and `hwcheck`, stylus taps never register. The avatar menu is driven from
   the phone; touch stays in code (with the stuck-press guard) for a working board.
@@ -22,6 +30,13 @@ Open items, not scheduled. Newest decisions first within each section.
   unplugging the S3 and recovery within ~5 s, and that `[mem]` stays stable over 10 min.
 
 ## Investigate
+
+- **Stuck on "Nothing playing" / TLS -76** (first 2026-10-14, still on 2026-10-19/20): the S3
+  logs `ssl_client ... (-76) UNKNOWN ERROR CODE` (MBEDTLS recv failed) after most polls. Usually
+  harmless (polls still finish), but once, after ~21 min uptime, every request failed while the
+  phone played: stuck on "Nothing playing" until a reboot. Not root-caused; logging (204 vs
+  non-track type) was added. Next: reproduce with a long capture and the port closed (see the
+  HWCDC serial stall note), correlate with `[mem]`.
 
 - **Dropped WiFi receive buffers.** The WiFi driver can't get a ~1.5 KB buffer (caps 0x1800)
   and drops the frame; TCP resends it and every request still succeeds, but each drop adds
@@ -57,6 +72,34 @@ Open items, not scheduled. Newest decisions first within each section.
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
 
+## Gauge cluster polish (deferred minors, final review 2026-10-19)
+
+- `obd::allowed()` accepts a command without its trailing `\r` (never sent; harmless joins):
+  require exactly one.
+- The RPM line's box (`SUB`, 14 px) is 2 px shorter than font 2: a sliver of the inverted warning
+  can linger below it.
+- The supported-PID scan runs once per connection: a silent ECU at key-on loses the
+  `[obd] supported:` line (rescan on the first Live reply).
+- Pedal/throttle learning never narrows: a pedal resting above ~17 % raw never counts as
+  released for the fuel-cut fallback (the City reports FuelSys, so it rarely matters).
+- No stack high-water log for the 6 KB OBD task after the scan (measured ~3.4 KB free).
+- `ATSP0`'s automatic search may probe other protocols first (read-only; `ATSP6` would avoid it
+  but isn't allow-listed).
+
+## Boot opening polish (deferred minors, final review 2026-10-19)
+
+- `main.cpp`: the kiss path's `greeting::play()` comment claims a wait that the NONE greeting
+  doesn't do.
+- The montage's opener can queue ~0.1 s behind the intro sound's tail (the kiss log showed the
+  intro sound on time).
+- `termblend::composite` forms an out-of-block pointer when a block doesn't overlap the panel
+  horizontally (never dereferenced); an early return is also cheaper.
+- `carbin` accepts any car height though the scene assumes 66 px (only the tool enforces it).
+- Stale comments: bootscene.h "a silver Honda", intro.h "before everything else", bootscene.cpp
+  "black until the montage", an overlong line in main.cpp.
+- If the intro task can't be created (out of memory), the kiss waits for WiFi on a black screen
+  without the terminal.
+
 ## Parked: SD card cache (not used)
 
 Decided 2026-10-07: the deck runs without a card. The cache code stays; with no card every
@@ -73,6 +116,10 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Accepted as is
 
+- Phone page on the home WiFi (diagnosed 2026-10-19): the router isolates the 2.4 GHz clients
+  ("Cecilia", 192.168.100.1, the ISP's fibre box), so no device can reach the deck there (ping
+  fails, no ARP). Not a firmware fault; turn off AP/client isolation in the router to use it at
+  home. The car has only the hotspot, where it works.
 - Backlight stays at full brightness (decided 2026-10-07): no auto-dim from the CYD light
   sensor (GPIO 34), even though it was suggested for night glare.
 
@@ -92,7 +139,7 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   message and byte, then feed the cluster's empty lever row. Those commands join `obd::allowed()`
   only in that task's own design. Fallback for the virtual gear: RPM ÷ speed matched to the 7 steps.
 
-- **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
+- **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map); the
   Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
 - **PS3 controller for the avatar menu** (side idea, 2026-10-14): over Bluetooth Classic on the
   CYD (the S3 has BLE only), library `esp32-ps3`; one-time pairing with SixaxisPairTool;
@@ -109,9 +156,10 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   has its own screen. Plan: `docs/superpowers/plans/2026-10-13-companion-screen.md`.
 - **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
   extra: retro map"): gets its own plan.
-- **OBD2 car info, next** (gauges built 2026-10-15 as a showcase on the companion, Bluetooth
-  Classic ELM327): fault codes (read, then clear with a confirm), a CAR button on the phone
-  page, trip logging, BLE / WiFi adapters.
+- **OBD, next** (the gauge cluster is built, `feat/obd`): a check-engine warning (stored-code
+  count from mode 01 PID 01, read-only); reading the codes themselves needs mode 03 in the
+  allow-list (owner's OK; clearing codes stays out: the deck never writes to the car); a CAR
+  button on the phone page; trip logging; fuel level and gear (above).
 
 - **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
   skip/pause through the deck, a screen flash. After the hotspot check above.
@@ -129,6 +177,7 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
   (lyricstatus::Status::None / Instrumental) now reports that final state.
 - Car power: brownout behaviour on noisy USB during engine start (`[boot] reset reason`
   now says "brownout" if it happens).
-- Touch controls (play/pause/skip). The unused groundwork (Spotify play/next/prev/volume
-  calls, button widgets) was removed in the 2026-10-08 cleanup; see git history.
+- Touch controls (play/pause/skip) on the S3, whose touch works (the music box's speaker key,
+  `board/s3/touch_ft6336`). The old groundwork (Spotify play/next/prev/volume calls, button
+  widgets) was removed in the 2026-10-08 cleanup; see git history.
 - Korean / emoji / Cyrillic lyrics (render blank today; spec non-goal).
