@@ -31,12 +31,12 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Investigate
 
-- **Stuck on "Nothing playing" / TLS -76** (first 2026-10-14, still on 2026-10-19/20): the S3
-  logs `ssl_client ... (-76) UNKNOWN ERROR CODE` (MBEDTLS recv failed) after most polls. Usually
-  harmless (polls still finish), but once, after ~21 min uptime, every request failed while the
-  phone played: stuck on "Nothing playing" until a reboot. Not root-caused; logging (204 vs
-  non-track type) was added. Next: reproduce with a long capture and the port closed (see the
-  HWCDC serial stall note), correlate with `[mem]`.
+- **Stuck on "Nothing playing" / TLS -76** (seen once, 2026-10-14; the owner hasn't seen it
+  since, 2026-10-20): once, after ~21 min uptime, every request failed while the phone played,
+  stuck on "Nothing playing" until a reboot. The S3 still logs `ssl_client ... (-76) UNKNOWN
+  ERROR CODE` (MBEDTLS recv failed) after most polls, but those polls finish (~1 s) and the deck
+  works. Not root-caused; logging (204 vs non-track type) was added. If it comes back: a long
+  capture during a drive with the port closed (see the HWCDC serial stall note), with `[mem]`.
 
 - **Dropped WiFi receive buffers.** The WiFi driver can't get a ~1.5 KB buffer (caps 0x1800)
   and drops the frame; TCP resends it and every request still succeeds, but each drop adds
