@@ -22,7 +22,7 @@ constexpr uint16_t HI = hex(0x41FF6A), MID = hex(0x1D8A3A), DARK = hex(0x0E4A1F)
 constexpr int CX = 160, CY = 126, R_OUT = 102, R_IN = 86, A0 = 90, A1 = 270;
 constexpr float WARN_FROM = 0.85f;                // the top zone, as obdplan::rpmWarn
 struct Box { int x, y, w, h; };
-constexpr Box SPEED{108, 60, 104, 52}, SUB{90, 112, 140, 14}, TEMP{254, 14, 62, 26};
+constexpr Box SPEED{108, 60, 104, 52}, SUB{90, 112, 140, 18}, TEMP{254, 14, 62, 26};
 constexpr Box FUEL{4, 138, 152, 56}, BATT{164, 138, 152, 56};
 constexpr int BAR_X = 62, BAR_W = 220, BAR_H = 10, PEDAL_Y = 203, THROTTLE_Y = 221;
 

@@ -1,8 +1,9 @@
 #pragma once
 #include <TFT_eSPI.h>
 #include "carlook.h"
-// Boot scene: a silver Honda City drives along a night road while the greeting plays and WiFi
-// connects (docs/superpowers/specs/2026-10-09-boot-scene-design.md). Runs in its own task; while
+// Boot scene: a car (the Honda, or on the S3 the pixel McQueen) drives along a night road while the
+// greeting plays and WiFi connects, then the photo montage; or, for the kiss opening, the montage
+// alone (docs/superpowers/specs/2026-10-09-boot-scene-design.md, 2026-10-19-random-intro-design.md). Runs in its own task; while
 // active() it is the only code drawing on the display.
 namespace bootscene {
 // Starts the scene task. `online` is polled each frame: the car leaves once it has been shown

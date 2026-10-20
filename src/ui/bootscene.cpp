@@ -395,7 +395,7 @@ void task(void*) {
         Serial.println("[bootscene] no memory for the strip buffer: scene skipped");
         runWithoutScene(t0);
     } else {
-        if (s_opts.drive) drawSky();                             // no drive: black until the montage
+        if (s_opts.drive) drawSky();                             // no drive: the intro's last frame stays
         uint32_t tHero = bootanim::NO_EXIT;
         bool skipBrake = false;
         int xc = 0, shown = -1;

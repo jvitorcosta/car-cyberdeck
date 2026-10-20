@@ -151,7 +151,8 @@ bool isSupported(const uint32_t bits[4], uint8_t pid) {
 bool allowed(const char* cmd) {
     if (!cmd) return false;
     size_t n = strlen(cmd);
-    if (n > 0 && cmd[n - 1] == '\r') --n;                // at most one trailing '\r'
+    if (n == 0 || cmd[n - 1] != '\r') return false;      // exactly one trailing '\r' (without it the
+    --n;                                                 // ELM would join it to the next command)
     if (n == 4 && cmd[0] == '0' && cmd[1] == '1') {      // mode 01, one PID
         for (size_t i = 2; i < 4; ++i)
             if (!((cmd[i] >= '0' && cmd[i] <= '9') || (cmd[i] >= 'A' && cmd[i] <= 'F'))) return false;

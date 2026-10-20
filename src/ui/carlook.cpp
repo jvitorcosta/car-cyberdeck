@@ -32,6 +32,7 @@ static bool mcPixel(int x, int y, uint16_t* c, uint8_t* k) { return carbin::pixe
 bool mcqueen(Look* out) {
 #ifdef BOARD_S3
     if (!carbin::parse(EMBED_DATA(data_mcqueen_bin), EMBED_SIZE(data_mcqueen_bin), &s_mc)) return false;
+    if (s_mc.h != car_sprite::height()) return false;   // the scene's road assumes the Honda's 66 px
     *out = {s_mc.w, s_mc.h, s_mc.rearX, s_mc.frontX, s_mc.wheelY, s_mc.headX, s_mc.headY, s_mc.tailY, mcPixel, &RED};
     return true;
 #else

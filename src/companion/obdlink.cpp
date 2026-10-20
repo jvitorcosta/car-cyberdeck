@@ -454,14 +454,18 @@ static void task(void*) {
         obdplan::Plan plan;
         obdplan::Health health;
         uint32_t bits[4];
-        if (scan(bits)) {
+        // The supported PIDs. A car that doesn't answer yet (key just turned) gets scanned again on
+        // its first live reply, so the [obd] supported: line (the car's recon) isn't lost.
+        auto doScan = [&]() {
+            if (!scan(bits)) return false;
             plan.setSupported(bits);
             xSemaphoreTake(s_lock, portMAX_DELAY);
             memcpy(s_view.supported, bits, sizeof bits);
             xSemaphoreGive(s_lock);
-        } else {
-            Serial.println("[obd] supported: unknown");
-        }
+            return true;
+        };
+        bool scanned = doScan();
+        if (!scanned) Serial.println("[obd] supported: unknown (asked again when the car answers)");
         bool first = true;                                // the first PID may say SEARCHING... for seconds
         while (linkUp()) {
             // Until the engine runs: the battery ~10 a second (its crank dip) and RPM now and then.
@@ -477,6 +481,7 @@ static void task(void*) {
             plan.done(p, r, millis());
             const obdplan::Link l = health.reply(p, r);
             publish(p, r, v, l);
+            if (!scanned && l == obdplan::Link::Live) scanned = doScan() || true;   // once
             if (health.lost()) { Serial.println("[obd] adapter stopped answering"); break; }
             if (l == obdplan::Link::NoEngine) delay(100);  // no ECU: pace the battery reads
         }

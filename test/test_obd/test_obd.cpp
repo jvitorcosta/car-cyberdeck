@@ -93,7 +93,7 @@ void test_adapter_names() {
 // The read-only gate (spec 2026-10-19 "Read-only guarantee"): only mode 01 and the adapter's own setup.
 void test_every_command_the_code_sends_is_allowed() {
     for (int i = 0; i < (int)Pid::COUNT; ++i) TEST_ASSERT_TRUE(obd::allowed(obd::request((Pid)i)));
-    const char* setup[] = {"ATZ\r", "ATE0\r", "ATL0\r", "ATS0\r", "ATSP0\r", "ATRV\r", "ATI", "ATDPN\r",
+    const char* setup[] = {"ATZ\r", "ATE0\r", "ATL0\r", "ATS0\r", "ATSP0\r", "ATRV\r", "ATI\r", "ATDPN\r",
                            "ATH0\r", "ATH1\r", "0100\r", "0120\r", "0140\r", "0160\r"};
     for (const char* c : setup) TEST_ASSERT_TRUE_MESSAGE(obd::allowed(c), c);
 }
@@ -107,7 +107,8 @@ void test_writes_and_other_modes_are_refused() {
 
 void test_near_misses_are_refused() {
     const char* bad[] = {"010c\r", "01 0C\r", "010C\r04\r", "010C\r\r", "01AB0\r", "01G0\r", "ATRV1\r",
-                         "atz\r", "ATZ ", "\r"};
+                         "atz\r", "ATZ ", "\r",
+                         "010C", "ATZ", "ATI"};   // no '\r': the ELM would join it to the next command
     for (const char* c : bad) TEST_ASSERT_FALSE_MESSAGE(obd::allowed(c), c);
 }
 

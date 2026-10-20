@@ -177,7 +177,8 @@ void setup() {
 #ifdef BOARD_S3
     // One random opening (pickOpening): the kiss video (ui/intro, its own task, the boot terminal
     // over it), or the night drive with the Honda or McQueen and their greeting; all of them end
-    // in the photo montage. WiFi connects and the network task logs into Spotify underneath. The S3 has heap to spare (~230 KB largest block), so the login and polls run
+    // in the photo montage. WiFi connects and the network task logs into Spotify underneath. The S3
+    // has heap to spare (~230 KB largest block), so the login and polls run
     // under the scenes (the network task's late-WiFi path: spclient::begin + netclock::begin).
     // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
     // soon as the first poll lands. (Logging in here left the scene's faded last frame, i.e. a
@@ -210,7 +211,8 @@ void setup() {
     }
     if (opening == intropick::KISS) {
         intro::wait();                    // over, and online (the last frame holds till then)
-        greeting::play();                 // no greeting: waits for the intro's sound (one output)
+        greeting::play();                 // no greeting for the kiss: returns at once (the intro's
+                                          // sound and the montage's share one output, guarded inside)
         bootscene::start(s_tft, net::isOnline, opts);   // straight to the montage
     }
     if (wifi) bootscene::setCaption("Connecting to Spotify...");

@@ -61,45 +61,6 @@ Open items, not scheduled. Newest decisions first within each section.
 - Retry-After costs one extra request per 429 (`spclient::fetchRetryAfter`) because
   SpotifyArduino skips the headers; `tools/patch_spotify_lib.py` could capture it instead.
 
-## Lyrics polish (deferred minors, final review 2026-10-08)
-
-- Search can never match a track whose duration is 0 (lyrics wouldn't advance anyway: the
-  position is clamped to the duration).
-- `test_all_messages_fit_two_lines` checks bytes, not rendered pixel width (worst case: "...").
-
-## Genre badge polish (deferred minors, final review 2026-10-08)
-
-- Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
-  and "network errors are not cached" (device code in nettask).
-
-## Gauge cluster polish (deferred minors, final review 2026-10-19)
-
-- `obd::allowed()` accepts a command without its trailing `\r` (never sent; harmless joins):
-  require exactly one.
-- The RPM line's box (`SUB`, 14 px) is 2 px shorter than font 2: a sliver of the inverted warning
-  can linger below it.
-- The supported-PID scan runs once per connection: a silent ECU at key-on loses the
-  `[obd] supported:` line (rescan on the first Live reply).
-- Pedal/throttle learning never narrows: a pedal resting above ~17 % raw never counts as
-  released for the fuel-cut fallback (the City reports FuelSys, so it rarely matters).
-- No stack high-water log for the 6 KB OBD task after the scan (measured ~3.4 KB free).
-- `ATSP0`'s automatic search may probe other protocols first (read-only; `ATSP6` would avoid it
-  but isn't allow-listed).
-
-## Boot opening polish (deferred minors, final review 2026-10-19)
-
-- `main.cpp`: the kiss path's `greeting::play()` comment claims a wait that the NONE greeting
-  doesn't do.
-- The montage's opener can queue ~0.1 s behind the intro sound's tail (the kiss log showed the
-  intro sound on time).
-- `termblend::composite` forms an out-of-block pointer when a block doesn't overlap the panel
-  horizontally (never dereferenced); an early return is also cheaper.
-- `carbin` accepts any car height though the scene assumes 66 px (only the tool enforces it).
-- Stale comments: bootscene.h "a silver Honda", intro.h "before everything else", bootscene.cpp
-  "black until the montage", an overlong line in main.cpp.
-- If the intro task can't be created (out of memory), the kiss waits for WiFi on a black screen
-  without the terminal.
-
 ## Parked: SD card cache (not used)
 
 Decided 2026-10-07: the deck runs without a card. The cache code stays; with no card every
@@ -116,6 +77,17 @@ call is a no-op and the walker is downloaded each time (~25 KB/song, usually pre
 
 ## Accepted as is
 
+- Small items from the reviews, kept as they are (polish pass 2026-10-20; the rest was fixed):
+  - Gauge cluster: pedal/throttle learning never narrows (the City reports its fuel-system
+    status, so the pedal fallback rarely decides); `ATSP0`'s automatic protocol search
+    (read-only; `ATSP6` would need a new allow-list entry). The OBD task's stack: 3.4 KB free
+    after the scan, measured in the car.
+  - Boot opening: the montage's first sound can queue ~0.1 s behind the intro's tail (measured on
+    time); without memory for the intro task, the kiss waits for WiFi on a black screen (only
+    out of memory).
+  - Lyrics: a track with duration 0 never matches (it wouldn't advance anyway); the two-line
+    message test counts bytes, not pixels (worst case: "...").
+  - Genre badge: no test per badge colour (cosmetic; the answer and cache rules are tested).
 - Phone page on the home WiFi (diagnosed 2026-10-19): the router isolates the 2.4 GHz clients
   ("Cecilia", 192.168.100.1, the ISP's fibre box), so no device can reach the deck there (ping
   fails, no ARP). Not a firmware fault; turn off AP/client isolation in the router to use it at
