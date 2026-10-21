@@ -44,6 +44,18 @@ For the commands used most, one shortcut each skips the "what?" step. Same as ab
 steps 1-2, with the phrase in the URL, e.g. `...&text=purple`, named **Purple lights**: "Hey Siri,
 purple lights". Likewise "Lights off", "Lights dimmer".
 
+## Which language, and the name
+
+Tested on 2026-10-21 with the shortcut named **Cyberpunk** ("Lights" was taken by HomeKit, and
+English Siri misheard "Luzes"):
+
+- **"Hey Siri, run Cyberpunk"**: Siri itself asks "What's the text?" and transcribes in *Siri's*
+  language, ignoring Dictate Text's setting. With Siri in English, "roxo" arrived as "Who";
+  "Purple" and "Red 50%" worked. So with Siri, say the English words.
+- **Started without Siri** (tap, Back Tap, Action Button): Dictate Text uses its own language,
+  so Portuguese works ("Roxo" arrived as "Roxo").
+- "run" before the name helps Siri treat it as a shortcut.
+
 ## Notes
 
 - The iPhone's Bluetooth must be off for the deck to hold the LED controllers, but the hotspot is
