@@ -8,12 +8,8 @@ Open items, not scheduled. Newest decisions first within each section.
   both the companion and `hwcheck`, stylus taps never register. The avatar menu is driven from
   the phone; touch stays in code (with the stuck-press guard) for a working board.
 
-- **Phone remote on the CYD**: Howl from Safari on the iPhone hotspot works on the S3
-  (2026-10-13: page from 172.20.10.1, howl played in 2.4 s). Not yet tried on the CYD. The
-  planned refusal below ~32 KB largest heap block is the 503 guard in `net/remote`; watch
-  `[mem]` on the CYD while howling during a track change.
-- **Animated status screens**: seen on the S3 (Spotify busy + countdown); not yet on the CYD,
-  and the no-WiFi / no-internet / certificate screens only from host renders.
+- **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
+  no-internet / certificate screens only from host renders.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
@@ -27,8 +23,9 @@ Open items, not scheduled. Newest decisions first within each section.
   and drops the frame; TCP resends it and every request still succeeds, but each drop adds
   latency. Rate varies a lot by network and song: 1 800-4 900 in 5 min on the iPhone hotspot
   (2026-10-08). Findings: it happens during every TLS request, plain polls included, not only
-  around track changes; only one TLS session is ever open (SpotifyArduino closes its client
-  after each call, the steps run one at a time); even 218 B allocations fail, so the heap is
+  around track changes; only one TLS session was open at a time then (the old Spotify library
+  closed its client after each call; since 2026-10-21 the Spotify connection stays open, so
+  re-measure on the S3); even 218 B allocations fail, so the heap is
   momentarily empty while a TLS session (~40 KB) is open on ~65 KB free. The levers left are
   build-time settings fixed in the precompiled Arduino core (mbedTLS 16 KB input buffer, lwIP
   TCP window, WiFi RX buffer count): they need the arduino-as-ESP-IDF-component build.
@@ -40,11 +37,9 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Spotify rate limit
 
-- Running `cyd` (the CYD's own Spotify build) next to the S3 shares one Spotify app, so both
-  share its rate limit (both were blocked for ~2 h on 2026-10-13). A second app for the CYD
-  would split it. The companion (`cyd_companion`) has no Spotify client and doesn't count.
-- Retry-After costs one extra request per 429 (`spclient::fetchRetryAfter`) because
-  SpotifyArduino skips the headers; `tools/patch_spotify_lib.py` could capture it instead.
+- One Spotify app is shared by every deck that runs a Spotify client: running the CYD's old
+  standalone build next to the S3 got both blocked for ~2 h on 2026-10-13. That build is retired
+  (2026-10-21); the companion (`cyd_companion`) has no Spotify client and doesn't count.
 
 ## Lyrics polish (deferred minors, final review 2026-10-08)
 
@@ -57,19 +52,11 @@ Open items, not scheduled. Newest decisions first within each section.
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
 
-## Parked: SD card cache (not used)
+## SD card cache (removed 2026-10-21)
 
-Decided 2026-10-07: the deck runs without a card. The cache code stays; with no card every
-call is a no-op and the walker is downloaded each time (~25 KB/song, usually prefetched).
-
-- What a card would add: walk sheets (`/pmd/<dex>.xml|.png`) and fallback sprites
-  (`/sprites/<dex>.png`) load in ~0.2 s on repeat songs, with no download. Album art and
-  lyrics are never cached.
-- Never verified: SD (VSPI) alongside the display (moved to HSPI in `2b75c40`), cache hits,
-  and corrupt-file eviction.
-- To test: build with `PLATFORMIO_BUILD_FLAGS=-DSD_CACHE` (without it the card is never
-  mounted), FAT32 card in, power-cycle, look for `[cache] SD ready`, replay songs and compare
-  `[net] walk` times; check `/pmd` and `/sprites` on a PC.
+The parked SD cache for walk sheets and sprites was removed; it is in git history up to
+`0ba409b`. If repeat songs ever need it, the S3's SDMMC slot (pins in `include/pins.h`) is
+the place to add it.
 
 ## Accepted as is
 

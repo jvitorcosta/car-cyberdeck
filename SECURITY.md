@@ -16,8 +16,8 @@ instead, with steps to reproduce and the board and version (first serial line,
   passwords.
 - The refresh token is obtained on a PC with `tools/spotify_auth.py`, because Spotify only
   allows plain-`http` redirects to the loopback address.
-- The Spotify library would print the token request (secret included) on every refresh;
-  `tools/patch_spotify_lib.py` turns that off before every build.
+- The Spotify client (`src/spotify/client.cpp`) never logs the token request, the access token
+  or the secret.
 
 ## Known limitations
 

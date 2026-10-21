@@ -85,6 +85,12 @@ void test_png_fits() {
     };
     for (const auto& c : cases) TEST_ASSERT_EQUAL(c.fits, pngFits(c.width, c.pixelType, c.bpp));
 }
+// The S3 build raises the buffer to 4128 B: RGBA sheets up to 512 px wide (Doublade's is 320).
+void test_png_fits_s3_buffer() {
+    TEST_ASSERT_TRUE(pngFits(320, 6, 8, 4128));
+    TEST_ASSERT_TRUE(pngFits(512, 6, 8, 4128));    // pitch 2048 -> 4128
+    TEST_ASSERT_FALSE(pngFits(513, 6, 8, 4128));
+}
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_box_union);
@@ -97,5 +103,6 @@ int main(int, char**) {
     RUN_TEST(test_frame_at_cycles);
     RUN_TEST(test_frame_at_degenerate);
     RUN_TEST(test_png_fits);
+    RUN_TEST(test_png_fits_s3_buffer);
     return UNITY_END();
 }

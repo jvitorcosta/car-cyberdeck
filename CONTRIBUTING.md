@@ -26,7 +26,7 @@ approach before you spend time on it.
 | `src/core/` | network task, shared state, memory accounting |
 | `src/ui/` | everything drawn on the display |
 | `src/util/` | pure logic, no Arduino: parsers, timing, layout; tested on the PC |
-| `src/board/cyd/`, `src/board/s3/` | board-specific code; pins in `include/pins.h` |
+| `src/board/s3/`, `src/board/cyd/` | board-specific code (the deck; the companion); pins in `include/pins.h` |
 | `test/` | one Unity suite per pure module |
 | `tools/` | generators for bundled data, test runners, session analysis |
 | `docs/` | architecture, history, backlog and design records |
@@ -54,8 +54,8 @@ Every change to logic comes with a test, written first. Firmware logic goes in a
 
 ## On the device
 
-RAM is the constraint that matters: the CYD has no PSRAM and a TLS session needs ~40 KB in one
-block. For anything that allocates or adds a request, include a serial capture:
+RAM is the constraint that matters: a TLS session needs ~40 KB in one block of internal RAM, and
+the companion (CYD) has no PSRAM. For anything that allocates or adds a request, include a serial capture:
 
 ```sh
 python tools/capture_serial.py <port> 600 session.log
@@ -63,9 +63,8 @@ python tools/analyze_session.py session.log
 ```
 
 and mention the `[mem]` lines (free and largest block) before and after your change. Keep each
-deck's app partition (`cyd`, `cyd_companion`, `s3`) under 97 % and the S3's media pack under
-95 % of its partition (CI enforces both, counting your media's real sizes from
-`data/media_sizes.txt`).
+app partition (`s3`, `cyd_companion`) under 97 % and the S3's media pack under 95 % of its
+partition (CI enforces both, counting your media's real sizes from `data/media_sizes.txt`).
 
 ## Commits and pull requests
 

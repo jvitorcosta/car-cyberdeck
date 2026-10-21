@@ -11,9 +11,13 @@
 namespace walk {
 constexpr int BAND_H     = 32;      // walk band height in the status box
 constexpr int MAX_W      = 64;      // widest frame kept
-constexpr int CAP_BYTES  = 10240;   // per slot: RGB565 + 1-byte mask/px; 2 slots, heap-tight
 constexpr int MAX_FRAMES = 16;
-constexpr int SCRATCH    = 12288;   // one download buffer for XML / sheet / sprite (begin()); larger sheets fall back
+// Per slot: RGB565 + 1-byte mask per pixel, room for every frame at the largest size (PSRAM, so
+// no frame is dropped to fit; it was 10 KB in internal RAM).
+constexpr int CAP_BYTES  = MAX_FRAMES * MAX_W * BAND_H * 3;
+// One download buffer for XML / sheet / sprite (begin(), PSRAM); larger sheets fall back. It was
+// 12 KB in internal RAM and sent 17 KB sheets to the fallback sprite (2026-10-21).
+constexpr int SCRATCH    = 64 * 1024;
 
 struct Info { bool ready; bool pmd; int w, h, frames; };
 

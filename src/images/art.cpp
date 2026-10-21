@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <WiFiClient.h>
 #include "../net/http_config.h"
+#include "../core/mem.h"
 #include "tjpgd.h"
 #include "../util/artmap.h"
 #include "../util/rgb565.h"
@@ -16,7 +17,7 @@ static uint32_t s_deadline = 0;
 static artmap::Map s_map;
 
 bool begin() {
-    if (!s_bmp) s_bmp = (uint16_t*)malloc(W * H * 2);
+    if (!s_bmp) s_bmp = (uint16_t*)mem::bigAlloc(W * H * 2);   // PSRAM: TLS keeps internal RAM
     if (!s_work) s_work = (uint8_t*)malloc(TJPGD_WORKSPACE_SIZE);
     if (s_bmp) memset(s_bmp, 0, W * H * 2);
     bool ok = s_bmp && s_work;
