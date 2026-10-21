@@ -98,6 +98,7 @@ static void publish(obd::Pid p, obd::Reply r, float v, obdplan::Link l) {
             s_trip.step(millis(), speed, air, s_view.fuelCut, eth);
             s_view.kmlNow = s_trip.nowKmL();
             s_view.kmlAvg = s_trip.avgKmL();
+            s_view.tripKm = s_trip.km();
         }
         s_view.kmLeft = s_trip.kmLeft(latest(Pid::Fuel), CAR);
     }

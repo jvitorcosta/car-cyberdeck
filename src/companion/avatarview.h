@@ -10,6 +10,7 @@ namespace avatarview {
 // none. Logs "[avatar] ...".
 bool begin();
 bool on();
+bool warning();                            // her current line is a car warning (CoolantHot ...)
 void invalidate();                         // repaint her (and her name tag) on the next update
 // Where the current screen shows her: top-left corner and scale (1 = 92x92, 2 = 184x184,
 // HALF = 46x46, still: her first frame, no name tag (the gauge cluster); 0 = not on this

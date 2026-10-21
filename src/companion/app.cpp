@@ -1,21 +1,31 @@
 // Companion screen (env cyd_companion): the CYD beside the S3. With an avatar (data/avatar.bin)
 // she is the home screen and the menu (LYRICS / SOUNDS / TRIP, touch); without one it shows the
-// lyrics big, as before. It reads the S3's GET /state over the hotspot.
+// lyrics big, as before. It reads the S3's GET /state over the hotspot. With the car there (the
+// OBD adapter live) it's the gauge cluster with a lyric strip while moving, her lyrics with a
+// gauge strip when stopped, or the view pinned on the phone.
 // Specs: docs/superpowers/specs/2026-10-13-companion-screen-design.md,
-//        docs/superpowers/specs/2026-10-14-avatar-home-design.md
+//        docs/superpowers/specs/2026-10-14-avatar-home-design.md,
+//        docs/superpowers/specs/2026-10-21-companion-drive-design.md
 #include <Arduino.h>
+#include <Preferences.h>
 #include <TFT_eSPI.h>
+#include <cmath>
 #include "../board/board.h"
 #include "../net/wifi.h"
 #include "../net/clock.h"
 #include "../ui/backlight.h"
 #include "../ui/theme.h"
+#include "../util/carstatus.h"
+#include "../util/carwarn.h"
 #include "../util/daynight.h"
+#include "../util/driveview.h"
+#include "../util/lyricclock.h"
 #include "../util/menunav.h"
 #include "../util/obdplan.h"
 #include "../util/press.h"
 #include "../util/version.h"
 #include "avatarview.h"
+#include "carstrip.h"
 #include "dashboard.h"
 #include "link.h"
 #include "gauges.h"
@@ -30,7 +40,27 @@ static menunav::Button s_cursor = menunav::Lyrics;   // last menu choice (the â–
 static bool s_vroom = false;                          // the new deck offers VROOM (as drawn)
 static bool s_waiting = false;                        // an action is on its way to the deck
 static press::Press s_press;
-static obdplan::Hold s_obdHold;   // gauges on screen (util/obdplan: shown at once, gone 5 s after)
+static obdplan::Hold s_obdHold;   // the car is there (util/obdplan: at once, gone 5 s after)
+static driveview::Pin s_pin = driveview::Pin::Auto;   // the view pinned on the phone (NVS)
+static driveview::Mode s_mode;
+static driveview::Show s_show = driveview::Show::Menu;  // as drawn
+static carwarn::Watch s_warn;
+
+// The pinned view survives power-off (NVS "companion"/"pin").
+static void loadPin() {
+    Preferences p;
+    if (!p.begin("companion", false)) return;            // read-write: creates it, no NOT_FOUND
+    const uint8_t v = p.getUChar("pin", 0);
+    p.end();
+    if (v <= (uint8_t)driveview::Pin::Lyrics) s_pin = (driveview::Pin)v;
+}
+
+static void savePin() {
+    Preferences p;
+    if (!p.begin("companion", false)) return;
+    p.putUChar("pin", (uint8_t)s_pin);
+    p.end();
+}
 
 #ifdef GAUGE_DEMO
 // -D GAUGE_DEMO: the gauge cluster with fixed values and no car, to see the screen on the desk.
@@ -48,16 +78,16 @@ static void gaugeDemo(obdlink::View& car, uint32_t now) {
     car.kmlNow = 13.8f;
     car.kmlAvg = 11.9f;
     car.kmLeft = 320;
+    car.tripKm = 42.6f;
     car.pedalPct = 62;
     car.throttlePct = 41;
     car.atStart = 10.4f;
 }
 #endif
-static bool s_gauges = false;     // as drawn
 
 // Moves to screen s and repaints it whole.
 static void enter(menunav::Screen s) {
-    if (s_gauges) { s_screen = s; return; }       // the gauges own the screen; s shows on return
+    if (s_show != driveview::Show::Menu) { s_screen = s; return; }   // the car's view; s shows on return
     s_screen = s;
     screens::draw(s_tft, s, s_vroom, s_cursor);
     if (s == menunav::Screen::Home) avatarview::place(68, 8, 2);      // centred, 184x184
@@ -76,7 +106,7 @@ static bool findBtn(menunav::Button id, menunav::Btn* out) {
 }
 
 static void redrawButton(menunav::Button id, bool pressed, float fill) {
-    if (s_gauges) return;                         // the gauges own the screen (e.g. a phone RESET)
+    if (s_show != driveview::Show::Menu) return;  // the car's view owns the screen (e.g. a phone RESET)
     menunav::Btn b;
     if (id != menunav::None && findBtn(id, &b))
         screens::button(s_tft, b, pressed, fill,
@@ -139,6 +169,74 @@ static void handleResult(const decklink::View& v, uint32_t now) {
     avatarview::say(ev, v, now);
 }
 
+// The stopped view whole: her lyrics screen under the gauge strip, her line in the message bar.
+static void paintStopped() {
+    s_tft.fillScreen(theme::pal().top);
+    screens::invalidate();
+    avatarview::place(4, gauges::TOP_H + 4, 1);
+    avatarview::invalidate();
+    dashboard::setTop(gauges::TOP_H);
+    dashboard::invalidate();
+    gauges::invalidateTop();
+}
+
+// Paints view `to` whole: the car came or went, moved off or stopped, or the pin changed. She
+// greets the car, and on leaving tells the ignition (CarOff) from a dropped adapter link.
+static void show(driveview::Show to, const decklink::View& v, obdplan::Link link, uint32_t now) {
+    const driveview::Show from = s_show;
+    s_show = to;
+    switch (to) {
+    case driveview::Show::Cluster:
+        s_tft.fillScreen(TFT_BLACK);              // the cluster owns the whole screen
+        avatarview::place(carstrip::PORTRAIT_X, gauges::STRIP_Y + 1, avatarview::HALF);
+        avatarview::invalidate();
+        gauges::invalidate();
+        carstrip::invalidate();
+        break;
+    case driveview::Show::Stopped:
+        paintStopped();
+        break;
+    case driveview::Show::Menu:
+        dashboard::setTop(0);
+        enter(s_screen);                          // back to the screen it left
+        avatarview::say(link == obdplan::Link::Off || link == obdplan::Link::Connecting
+                            ? avatarlines::Event::AdapterLost : avatarlines::Event::CarOff, v, now);
+        return;
+    }
+    if (from == driveview::Show::Menu) avatarview::say(avatarlines::Event::CarOn, v, now);
+}
+
+// The cluster's warnings, said by her once each (util/carwarn).
+static void carWarnings(const obdlink::View& car, const decklink::View& v, uint32_t now) {
+    const float c = obdlink::freshValue(car, obd::Pid::Coolant, now);
+    const float volts = obdlink::freshValue(car, obd::Pid::Battery, now);
+    const float rpm = obdlink::freshValue(car, obd::Pid::Rpm, now);
+    const bool hot = !std::isnan(c) && obdplan::coolantWarn(c);
+    const bool low = !std::isnan(volts) && obdplan::batteryWarn(volts, rpm > 0.0f);
+    const carwarn::Warn w = s_warn.update(hot, low, now);
+    if (w == carwarn::Warn::CoolantHot) avatarview::say(avatarlines::Event::CoolantHot, v, now);
+    else if (w == carwarn::Warn::BatteryLow) avatarview::say(avatarlines::Event::BatteryLow, v, now);
+}
+
+// What the phone page's GET /status says, twice a second.
+static void publishStatus(const obdlink::View& car, const decklink::View& v, const char* herLine,
+                          uint32_t now) {
+    static uint32_t last = 0;
+    if (now - last < 500) return;
+    last = now;
+    const char* link = car.link == obdplan::Link::Live         ? "live"
+                       : car.link == obdplan::Link::NoEngine   ? "noengine"
+                       : car.link == obdplan::Link::Connecting ? "connecting" : "off";
+    const float kmh = obdlink::freshValue(car, obd::Pid::Speed, now);
+    const char* line = herLine;
+    if (!line && v.polledAtMs) line = lyricclock::pick(v.deck, now - v.polledAtMs).big;
+    static char json[carstatus::MAX_JSON];
+    carstatus::write({link, std::isnan(kmh) ? -1 : (int)(kmh + 0.5f), driveview::name(s_pin),
+                      driveview::name(s_show), line},
+                     json, sizeof json);
+    phone::setStatus(json);
+}
+
 void setup() {
     Serial.begin(115200);
     board::begin();
@@ -153,6 +251,7 @@ void setup() {
     decklink::start();
     obdlink::start();           // Bluetooth to the ELM327 (its own task); gauges when it answers
     if (avatarview::begin()) {
+        loadPin();
         touch::begin();
         phone::begin();
         enter(menunav::Screen::Home);
@@ -171,9 +270,11 @@ void loop() {
         if (night != theme::isNightActive()) {
             theme::setNight(night);
             backlight::set(night);
-            if (s_gauges) {
+            if (s_show == driveview::Show::Cluster) {
                 // the gauges are green day and night: nothing to repaint (the screen it left
                 // repaints in the new palette on return)
+            } else if (s_show == driveview::Show::Stopped) {
+                paintStopped();
             } else if (avatarview::on()) enter(s_screen);
             else {
                 s_tft.fillScreen(theme::pal().top);
@@ -194,24 +295,32 @@ void loop() {
 #ifdef GAUGE_DEMO
     gaugeDemo(car, now);
 #endif
-    const bool showGauges = s_obdHold.update(car.link == obdplan::Link::Live, now);
-    if (showGauges != s_gauges) {                 // the car came or went
-        s_gauges = showGauges;
-        if (s_gauges) {
-            s_tft.fillScreen(TFT_BLACK);          // the cluster owns the whole screen
-            avatarview::place(4, 4, avatarview::HALF);   // she stays, small and still, top left
-            gauges::invalidate();
-            avatarview::say(avatarlines::Event::CarOn, v, now);
-        } else {
-            enter(s_screen);                      // back to the screen it left
-            avatarview::say(avatarlines::Event::CarOff, v, now);
-        }
+    driveview::Pin picked;
+    if (phone::takePin(&picked) && picked != s_pin) {
+        s_pin = picked;
+        savePin();
+        Serial.printf("[companion] view: %s\n", driveview::name(s_pin));
     }
-    if (s_gauges) {
+    const bool carShown = s_obdHold.update(car.link == obdplan::Link::Live, now);
+    const driveview::Show want =
+        s_mode.update(s_pin, carShown, obdlink::freshValue(car, obd::Pid::Speed, now), now);
+    if (want != s_show) show(want, v, car.link, now);   // the car came or went, moved or stopped
+    if (s_show != driveview::Show::Menu) {
         fire(phone::take());                      // the phone still works; screens apply on return
         handleResult(v, now);
-        avatarview::update(s_tft, v, now);        // her portrait; no message bar on the cluster
-        gauges::draw(s_tft, car, now);
+        carWarnings(car, v, now);
+        const char* line = avatarview::update(s_tft, v, now);
+        if (s_show == driveview::Show::Cluster) {
+            gauges::draw(s_tft, car, now);
+            carstrip::draw(s_tft, v, line, avatarview::warning(), now);
+        } else {
+            gauges::drawTop(s_tft, car, now);
+            dashboard::draw(s_tft, v, now);
+            screens::bar(s_tft, line ? line
+                                : s_waiting ? "..."
+                                            : menunav::idleText(menunav::Screen::Lyrics, v.deckOk, v.wrongKey));
+        }
+        publishStatus(car, v, line, now);
         delay(20);
         return;
     }
@@ -227,5 +336,6 @@ void loop() {
     if (s_screen == menunav::Screen::Trip && v.polledAtMs)       // ticks locally between polls
         screens::tripTime(s_tft, v.deck.tripS + (now - v.polledAtMs) / 1000);
     screens::bar(s_tft, line ? line : s_waiting ? "..." : menunav::idleText(s_screen, v.deckOk, v.wrongKey));
+    publishStatus(car, v, line, now);
     delay(20);
 }

@@ -128,8 +128,13 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   their learnt travel (`obdlearn::Range`). **Read-only by construction:** `ask()` is the only
   write to the adapter and refuses whatever `obd::allowed()` doesn't list (mode 01 + one PID,
   ten adapter setup commands); `obd` parses replies tolerantly (echo, SEARCHING..., CAN headers,
-  several ECUs). The app shows `gauges` (green on black, partial redraws, Zero Two at half size)
-  while the link is live (5 s hold), her home otherwise; she says when the car comes and goes.
+  several ECUs). While the link is live (5 s hold) the app picks a view with `util/driveview`
+  (spec 2026-10-21-companion-drive): moving, `gauges` (green on black, partial redraws, a TRIP
+  panel) over `carstrip` (Zero Two at half size beside the current lyric or her line); stopped
+  3 s, her Lyrics screen under `gauges::drawTop`'s strip; or the view pinned on the phone (NVS
+  `companion`). She says when the car comes and goes (a dropped adapter apart from the
+  ignition) and the cluster's warnings once each (`util/carwarn`). Her home otherwise. The phone
+  page reads `GET /status` (`util/carstatus`) and pins the view with `POST /view`.
 - **Network choice** (`net/wifi`, `util/{roam,follow,deckaddr,netup,hotspotip}`) — config.h
   order (the hotspot first; two tries after a drop from it, `roam`), then a deck stays put. The
   companion reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`), keeps that

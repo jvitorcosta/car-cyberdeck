@@ -8,4 +8,5 @@
 namespace dashboard {
 void draw(TFT_eSPI& t, const decklink::View& v, uint32_t nowMs);
 void invalidate();   // the next draw repaints everything (night mode switch)
+void setTop(int y);  // the lyric area starts at y (0; the stopped view's gauge strip: gauges::TOP_H)
 }

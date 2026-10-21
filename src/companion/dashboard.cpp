@@ -11,8 +11,10 @@
 namespace dashboard {
 static constexpr int W = 320, H = 240;
 static char s_big[160] = "\x01", s_small[160] = "\x01", s_status[64] = "\x01";
+static int s_top = 0;   // the lyric area starts here (the stopped view's gauge strip is above)
 
 void invalidate() { s_big[0] = s_small[0] = s_status[0] = '\x01'; }
+void setTop(int y) { s_top = y; }
 
 // Big line in the column [x0, W): font 2 at 2x over up to two rows when the whole line fits,
 // else at 1x over two rows (glyphrun::wrapTwo, "..." if even that is too long). Centred.
@@ -60,11 +62,11 @@ static void lyrics(TFT_eSPI& t, const char* big, const char* small) {
     txt::copy(s_big, big, sizeof s_big);
     txt::copy(s_small, small, sizeof s_small);
     const int x0 = avatarview::on() ? 104 : 0;   // she keeps the left side
-    t.fillRect(x0, 0, W - x0, avatarview::on() ? menunav::BAR.y - 2 : H - 22, theme::pal().top);
-    bigLine(t, big, x0, 92);
+    t.fillRect(x0, s_top, W - x0, (avatarview::on() ? menunav::BAR.y - 2 : H - 22) - s_top, theme::pal().top);
+    bigLine(t, big, x0, 92 + s_top / 2);
     if (small[0])
-        ui::drawText(t, small, x0 + (W - x0) / 2, 168, theme::pal().iconOff, TFT_BLACK, MC_DATUM,
-                     W - x0 - 16);
+        ui::drawText(t, small, x0 + (W - x0) / 2, 168 + s_top / 2, theme::pal().iconOff, TFT_BLACK,
+                     MC_DATUM, W - x0 - 16);
 }
 
 void draw(TFT_eSPI& t, const decklink::View& v, uint32_t nowMs) {

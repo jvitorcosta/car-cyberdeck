@@ -4,6 +4,13 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **Companion drive screens** (built 2026-10-21, spec 2026-10-21-companion-drive): only seen
+  compiled. In the car: the lyric strip readable on the cluster; the switch to the lyrics after
+  ~3 s at a red light and back on pulling away (no flicker in stop-and-go); her car-on line in
+  the strip; the TRIP panel's km against the car's trip meter. On the phone: the status box
+  updates and DRIVE / LYRICS / AUTO pin the view (kept after a power cycle). Desk check first
+  with `-D GAUGE_DEMO` (the cluster; the demo's speed never stops, so pin LYRICS for the other).
+
 - **Gauge cluster in the car** (works over Bluetooth Classic, 2026-10-19): compare RPM, speed,
   coolant (from 67), volts and km/l with the City's own cluster (km/l ~14-18 at a steady
   80 km/h); AT START caught when waiting ~5 s at key-on; readable at a glance. The adapter must

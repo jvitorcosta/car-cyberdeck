@@ -16,6 +16,7 @@ static int s_x = 0, s_y = 0, s_scale = 0;        // where the current screen sho
 static int s_entry = -1, s_frame = -1;           // on screen (-1: repaint)
 static bool s_tag = false;
 static bool s_talking = false;                    // her own line is up
+static bool s_warning = false;                    // ... and it's a car warning
 static uint32_t s_t0 = 0;
 static int s_lineEntry = 0;
 static char s_text[avatarlines::TEXT_CAP], s_typed[avatarlines::TEXT_CAP];
@@ -32,6 +33,7 @@ bool begin() {
 }
 
 bool on() { return s_info.moods > 0; }
+bool warning() { return s_talking && s_warning; }
 void invalidate() { s_entry = s_frame = -1; s_tag = false; }
 
 void place(int x, int y, int scale) {
@@ -99,6 +101,8 @@ void say(avatarlines::Event ev, const decklink::View& v, uint32_t now) {
     strlcpy(s_text, out.text, sizeof s_text);
     s_t0 = now;
     s_talking = true;
+    s_warning = ev == avatarlines::Event::CoolantHot || ev == avatarlines::Event::BatteryLow ||
+                ev == avatarlines::Event::AdapterLost;
     Serial.printf("[avatar] says: %s\n", out.text);
 }
 

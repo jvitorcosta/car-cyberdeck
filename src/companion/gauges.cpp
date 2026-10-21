@@ -24,12 +24,13 @@ constexpr float WARN_FROM = 0.85f;                // the top zone, as obdplan::r
 struct Box { int x, y, w, h; };
 constexpr Box SPEED{108, 60, 104, 52}, SUB{90, 112, 140, 18}, TEMP{254, 14, 62, 26};
 constexpr Box FUEL{4, 138, 152, 56}, BATT{164, 138, 152, 56};
-constexpr int BAR_X = 62, BAR_W = 220, BAR_H = 10, PEDAL_Y = 203, THROTTLE_Y = 221;
+// The stopped view's strip over the lyrics: speed, coolant, volts, trip (font 2).
+constexpr Box TOP_KMH{4, 2, 76, 16}, TOP_TEMP{84, 2, 60, 16}, TOP_VOLTS{150, 2, 70, 16}, TOP_TRIP{224, 2, 92, 16};
 
-enum Field { F_SPEED, F_SUB, F_TEMP, F_FUELPCT, F_KML, F_FUELLINE, F_VOLTS, F_CHARGING, F_BATTLINE,
-             F_PEDAL, F_THROTTLE, F_ARC, F_COUNT };
+enum Field { F_SPEED, F_SUB, F_TEMP, F_TRIPHEAD, F_KML, F_FUELLINE, F_VOLTS, F_CHARGING, F_BATTLINE,
+             F_ARC, F_TOP_KMH, F_TOP_TEMP, F_TOP_VOLTS, F_TOP_TRIP, F_COUNT };
 char s_shown[F_COUNT][48];                // what each field last drew (style char + text)
-bool s_full = true;
+bool s_full = true, s_topFull = true;
 
 bool fresh(const obdlink::View& v, Pid p, uint32_t now) {
     return v.have[(int)p] && now - v.atMs[(int)p] < obdplan::staleAfterMs(p);
@@ -82,26 +83,21 @@ void arc(TFT_eSPI& t, float rpm, bool stale) {
     if (z < A1) t.drawArc(CX, CY, R_OUT, R_IN, z, A1, MID, BLACK, false);
 }
 
-void bar(TFT_eSPI& t, Field f, int y, float pct, bool stale) {
-    char s[8];
-    num(s, sizeof s, pct, 0);
-    if (!changed(f, s, stale ? 's' : 'n')) return;
-    const int fill = std::isnan(pct) ? 0 : (int)(obdplan::frac(pct, 0.0f, 100.0f) * BAR_W + 0.5f);
-    t.fillRect(BAR_X, y, fill, BAR_H, stale ? MID : HI);
-    t.fillRect(BAR_X + fill, y, BAR_W - fill, BAR_H, DARK);
-    put(t, Box{BAR_X + BAR_W + 4, y, 316 - BAR_X - BAR_W - 4, BAR_H}, s, stale ? 's' : 'n', TR_DATUM, 1);
+// "42.6 KM  0:38": the trip's distance and time (power-on = the ignition, so one drive).
+void tripText(char* out, size_t n, float km, uint32_t nowMs) {
+    const uint32_t min = nowMs / 60000;
+    char d[12];
+    num(d, sizeof d, km, 1);
+    snprintf(out, n, "%s KM  %lu:%02lu", d, (unsigned long)(min / 60), (unsigned long)(min % 60));
 }
 
 void statics(TFT_eSPI& t) {
     label(t, "TEMP", 272, 4);
     t.drawRect(FUEL.x, FUEL.y, FUEL.w, FUEL.h, MID);
     t.drawRect(BATT.x, BATT.y, BATT.w, BATT.h, MID);
-    label(t, "FUEL", FUEL.x + 5, FUEL.y + 4);
     label(t, "KM/L", FUEL.x + 92, FUEL.y + 30);
     label(t, "BATTERY", BATT.x + 5, BATT.y + 4);
     label(t, "VOLTS", BATT.x + 80, BATT.y + 30);
-    label(t, "PEDAL", 6, PEDAL_Y + 1);
-    label(t, "THROTTLE", 6, THROTTLE_Y + 1);
 }
 }
 
@@ -133,17 +129,22 @@ void draw(TFT_eSPI& t, const obdlink::View& v, uint32_t now) {
     const char tempStyle = !std::isnan(c) && obdplan::coolantWarn(c) ? 'w' : fresh(v, Pid::Coolant, now) ? 'n' : 's';
     if (changed(F_TEMP, s, tempStyle)) put(t, TEMP, s, tempStyle, TR_DATUM, 4);
 
-    // FUEL: tank %, km/l now (big), average and km left.
+    // TRIP: distance and time, km/l now (big), the average (and tank %, km left when the car has them).
+    char trip[32];
+    tripText(trip, sizeof trip, v.tripKm, now);
+    snprintf(s, sizeof s, "TRIP %s", trip);
+    if (changed(F_TRIPHEAD, s, 's')) put(t, Box{FUEL.x + 4, FUEL.y + 3, FUEL.w - 8, 9}, s, 's', TL_DATUM, 1);
     const bool airFresh = fresh(v, Pid::Maf, now) || fresh(v, Pid::Map, now);
-    num(a, sizeof a, val(v, Pid::Fuel), 0);
-    snprintf(s, sizeof s, std::isnan(val(v, Pid::Fuel)) ? "%s" : "%s%%", a);
-    const char pctStyle = fresh(v, Pid::Fuel, now) ? 'n' : 's';
-    if (changed(F_FUELPCT, s, pctStyle)) put(t, Box{FUEL.x + 100, FUEL.y + 3, 48, 9}, s, pctStyle, TR_DATUM, 1);
     num(s, sizeof s, v.kmlNow, 1);
     if (changed(F_KML, s, airFresh ? 'n' : 's')) put(t, Box{FUEL.x + 5, FUEL.y + 15, 84, 26}, s, airFresh ? 'n' : 's', TL_DATUM, 4);
     num(a, sizeof a, v.kmlAvg, 1);
-    num(b, sizeof b, v.kmLeft, 0);
-    snprintf(s, sizeof s, "AVG %s  %s KM LEFT", a, b);
+    const float fuel = val(v, Pid::Fuel);
+    if (std::isnan(fuel)) {
+        snprintf(s, sizeof s, "AVG %s", a);
+    } else {
+        num(b, sizeof b, v.kmLeft, 0);
+        snprintf(s, sizeof s, "AVG %s  %.0f%%  %s KM", a, (double)fuel, b);
+    }
     if (changed(F_FUELLINE, s, 'n')) put(t, Box{FUEL.x + 5, FUEL.y + 44, FUEL.w - 10, 9}, s, 'n', TL_DATUM, 1);
 
     // BATTERY: volts (big), charging, the dip at engine start.
@@ -158,9 +159,35 @@ void draw(TFT_eSPI& t, const obdlink::View& v, uint32_t now) {
     num(a, sizeof a, v.atStart, 1);
     snprintf(s, sizeof s, std::isnan(v.atStart) ? "AT START %s" : "AT START %s V", a);
     if (changed(F_BATTLINE, s, 'n')) put(t, Box{BATT.x + 5, BATT.y + 44, BATT.w - 10, 9}, s, 'n', TL_DATUM, 1);
+}
 
-    // Pedal vs throttle, both scaled to their learnt travel.
-    bar(t, F_PEDAL, PEDAL_Y, v.pedalPct, !(fresh(v, Pid::PedalD, now) || fresh(v, Pid::PedalE, now)));
-    bar(t, F_THROTTLE, THROTTLE_Y, v.throttlePct, !fresh(v, Pid::Throttle, now));
+void invalidateTop() { s_topFull = true; }
+
+void drawTop(TFT_eSPI& t, const obdlink::View& v, uint32_t now) {
+    if (s_topFull) {
+        t.fillRect(0, 0, 320, 20, BLACK);
+        for (int f = F_TOP_KMH; f <= F_TOP_TRIP; ++f) s_shown[f][0] = '\0';
+        s_topFull = false;
+    }
+    char s[32], a[12];
+    num(a, sizeof a, val(v, Pid::Speed), 0);
+    snprintf(s, sizeof s, "%s KM/H", a);
+    const char kmhStyle = fresh(v, Pid::Speed, now) ? 'n' : 's';
+    if (changed(F_TOP_KMH, s, kmhStyle)) put(t, TOP_KMH, s, kmhStyle, TL_DATUM, 2);
+    const float c = val(v, Pid::Coolant);
+    num(a, sizeof a, c, 0);
+    snprintf(s, sizeof s, std::isnan(c) ? "%s" : "%sC", a);
+    const char tempStyle = !std::isnan(c) && obdplan::coolantWarn(c) ? 'w' : fresh(v, Pid::Coolant, now) ? 'n' : 's';
+    if (changed(F_TOP_TEMP, s, tempStyle)) put(t, TOP_TEMP, s, tempStyle, TC_DATUM, 2);
+    const float volts = val(v, Pid::Battery);
+    const bool running = fresh(v, Pid::Rpm, now) && val(v, Pid::Rpm) > 0.0f;
+    num(a, sizeof a, volts, 1);
+    snprintf(s, sizeof s, std::isnan(volts) ? "%s" : "%sV", a);
+    const char voltStyle = !std::isnan(volts) && obdplan::batteryWarn(volts, running) ? 'w'
+                           : fresh(v, Pid::Battery, now)                               ? 'n' : 's';
+    if (changed(F_TOP_VOLTS, s, voltStyle)) put(t, TOP_VOLTS, s, voltStyle, TC_DATUM, 2);
+    num(a, sizeof a, v.tripKm, 1);
+    snprintf(s, sizeof s, "TRIP %s", a);
+    if (changed(F_TOP_TRIP, s, 's')) put(t, TOP_TRIP, s, 's', TR_DATUM, 2);
 }
 }
