@@ -94,7 +94,8 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
    boots, with the default chime, and logs `[media] none`.
 
    **Updates over WiFi (S3):** with `REMOTE_TOKEN` set and the PC on the deck's network (home
-   WiFi, or the PC joined to the iPhone hotspot with `--upload-port 172.20.10.10`), run
+   WiFi on its 2.4 GHz band, see [Two decks](#two-decks); or the PC joined to the iPhone
+   hotspot with `--upload-port 172.20.10.10`), run
    `pio run -e s3_ota -t upload`. The deck shows the upload's progress and restarts into the
    new firmware; an interrupted upload never boots. If the new firmware crashes 3 boots in a
    row before it has run a minute with a good poll, the deck goes back to the previous one
