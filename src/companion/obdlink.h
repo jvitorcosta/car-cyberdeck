@@ -2,9 +2,9 @@
 #include <cstdint>
 #include "../util/obd.h"
 #include "../util/obdplan.h"
-// The old deck's link to an ELM327 over Bluetooth Low Energy (NimBLE, util/obdble): finds the
-// adapter, sets it up, asks the gauges' values in obdplan's order and publishes them. Its own
-// task (a Bluetooth connect blocks for seconds). Spec: docs/superpowers/specs/2026-10-15-obd-gauges-design.md
+// The old deck's link to an ELM327 over Bluetooth Classic (SPP; -D OBD_BLE for BLE through NimBLE,
+// util/obdble): finds the adapter, sets it up, asks the gauges' values in obdplan's order and
+// publishes them. Its own task (a Bluetooth connect blocks for seconds). Spec: docs/superpowers/specs/2026-10-15-obd-gauges-design.md
 namespace obdlink {
 struct View {
     obdplan::Link link;

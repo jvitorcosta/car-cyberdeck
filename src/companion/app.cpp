@@ -183,14 +183,14 @@ void loop() {
     }
     decklink::View v;
     decklink::snapshot(v);
-    const uint32_t now = millis();
+    obdlink::View car;
+    obdlink::snapshot(car);
+    const uint32_t now = millis();                // after the snapshots: no reading is newer
     if (!avatarview::on()) {                      // no avatar: lyrics only, touch ignored
         dashboard::draw(s_tft, v, now);
         delay(20);
         return;
     }
-    obdlink::View car;
-    obdlink::snapshot(car);
 #ifdef GAUGE_DEMO
     gaugeDemo(car, now);
 #endif

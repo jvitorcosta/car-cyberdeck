@@ -30,6 +30,9 @@ bool isSupported(const uint32_t bits[4], uint8_t pid);
 // ATL0, ATS0, ATH0, ATH1, ATSP0, ATRV, ATI, ATDPN), each ending in exactly one '\r'. Anything
 // else, any other mode, header or monitor command, lower case, spacing or a second command, is false.
 bool allowed(const char* cmd);
+// The adapter's answer to one of its setup commands is a real one: ATZ's banner ("ELM...", or
+// "OK" on some clones), "OK" for the rest. A cut-off banner or a "?" is not.
+bool setupOk(const char* cmd, const char* raw);
 // A Bluetooth name that is probably an ELM327 (OBD, ELM, V-LINK / VLINK, any case).
 bool looksLikeAdapter(const char* btName);
 }

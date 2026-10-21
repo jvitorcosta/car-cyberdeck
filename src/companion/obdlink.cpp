@@ -387,8 +387,8 @@ static bool init() {
     char raw[64];
     for (const char* c : CMDS) {
         const uint32_t wait = c[2] == 'Z' ? 4000 : 3000;
-        bool ok = ask(c, raw, sizeof raw, wait);
-        if (!ok) ok = ask(c, raw, sizeof raw, wait);
+        bool ok = ask(c, raw, sizeof raw, wait) && obd::setupOk(c, raw);
+        if (!ok) ok = ask(c, raw, sizeof raw, wait) && obd::setupOk(c, raw);
         if (!ok) {
             logRaw(c, raw[0] ? raw : "(no answer)");
             return false;
@@ -485,7 +485,9 @@ static void task(void*) {
             if (health.lost()) { Serial.println("[obd] adapter stopped answering"); break; }
             if (l == obdplan::Link::NoEngine) delay(100);  // no ECU: pace the battery reads
         }
+        setLink(obdplan::Link::Off);                      // not Live through the close and the wait
         closeLink();
+        s_late = false;                                   // that link's late reply never comes
         Serial.println("[obd] disconnected");
         delay(2000);
     }

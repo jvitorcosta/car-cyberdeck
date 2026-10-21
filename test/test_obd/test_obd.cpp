@@ -86,6 +86,18 @@ void test_battery_voltage_forms() {
     }
 }
 
+// The setup checks the adapter's answer, not just that it said something.
+void test_setup_replies() {
+    TEST_ASSERT_TRUE(obd::setupOk("ATZ\r", "\n\nELM327 v1.5\n"));
+    TEST_ASSERT_TRUE(obd::setupOk("ATZ\r", "ATZ\nELM327 v2.1"));
+    TEST_ASSERT_TRUE(obd::setupOk("ATE0\r", "ATE0\nOK"));
+    TEST_ASSERT_TRUE(obd::setupOk("ATSP0\r", "OK"));
+    TEST_ASSERT_FALSE(obd::setupOk("ATSP0\r", "?"));
+    TEST_ASSERT_FALSE(obd::setupOk("ATZ\r", "v1."));
+    TEST_ASSERT_FALSE(obd::setupOk("ATL0\r", ""));
+    TEST_ASSERT_FALSE(obd::setupOk(nullptr, "OK"));
+}
+
 void test_adapter_names() {
     const char* yes[] = {"OBDII", "OBD2", "obd-ii", "V-LINK", "ELM327", "Android-Vlink", "IOS-Vlink"};
     const char* no[] = {"JBL Flip 5", "iPhone", "", nullptr};
@@ -187,6 +199,7 @@ int main() {
     RUN_TEST(test_what_clones_wrap_around_a_reply);
     RUN_TEST(test_errors_never_give_a_number);
     RUN_TEST(test_battery_voltage_forms);
+    RUN_TEST(test_setup_replies);
     RUN_TEST(test_adapter_names);
     return UNITY_END();
 }

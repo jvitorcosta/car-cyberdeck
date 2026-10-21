@@ -169,6 +169,12 @@ bool allowed(const char* cmd) {
     return false;
 }
 
+bool setupOk(const char* cmd, const char* raw) {
+    if (!cmd || !raw) return false;
+    if (strncmp(cmd, "ATZ", 3) == 0) return contains(raw, "ELM") || contains(raw, "OK");
+    return contains(raw, "OK");
+}
+
 bool looksLikeAdapter(const char* btName) {
     if (!btName || !btName[0]) return false;
     char up[40];
