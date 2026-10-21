@@ -8,12 +8,8 @@ Open items, not scheduled. Newest decisions first within each section.
   both the companion and `hwcheck`, stylus taps never register. The avatar menu is driven from
   the phone; touch stays in code (with the stuck-press guard) for a working board.
 
-- **Phone remote on the CYD**: Howl from Safari on the iPhone hotspot works on the S3
-  (2026-10-13: page from 172.20.10.1, howl played in 2.4 s). Not yet tried on the CYD. The
-  planned refusal below ~32 KB largest heap block is the 503 guard in `net/remote`; watch
-  `[mem]` on the CYD while howling during a track change.
-- **Animated status screens**: seen on the S3 (Spotify busy + countdown); not yet on the CYD,
-  and the no-WiFi / no-internet / certificate screens only from host renders.
+- **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
+  no-internet / certificate screens only from host renders.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
@@ -40,9 +36,9 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Spotify rate limit
 
-- Running `cyd` (the CYD's own Spotify build) next to the S3 shares one Spotify app, so both
-  share its rate limit (both were blocked for ~2 h on 2026-10-13). A second app for the CYD
-  would split it. The companion (`cyd_companion`) has no Spotify client and doesn't count.
+- One Spotify app is shared by every deck that runs a Spotify client: running the CYD's old
+  standalone build next to the S3 got both blocked for ~2 h on 2026-10-13. That build is retired
+  (2026-10-21); the companion (`cyd_companion`) has no Spotify client and doesn't count.
 - Retry-After costs one extra request per 429 (`spclient::fetchRetryAfter`) because
   SpotifyArduino skips the headers; `tools/patch_spotify_lib.py` could capture it instead.
 

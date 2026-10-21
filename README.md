@@ -40,13 +40,13 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
   sidewalk at sunset (at night: stars, a crescent moon, more windows lit), and a music box
   plays softly until the song comes back. A paused song keeps the deck for 30 s first.
 - **Phone remote:** set `REMOTE_TOKEN` in `src/config.h` and open
-  `http://cardeck.local/?k=<token>` (`cardeck-cyd.local` on the CYD; see [Two decks](#two-decks))
+  `http://cardeck.local/?k=<token>` (see [Two decks](#two-decks))
   on a phone on the same network: what's playing, the deck's status and a Howl button. Add it
-  to the Home Screen for a full-screen app with its own icon. On the S3 the "Waiting for a song..."
+  to the Home Screen for a full-screen app with its own icon. The "Waiting for a song..."
   screen shows the link as a QR code in a Gen-3 battle box named REMOTE, built from the deck's
   current address (`172.20.10.10` on the iPhone hotspot, the DHCP one elsewhere), and Howl plays a real wolf recording when you
-  build one (otherwise, and always on the CYD, a synthesised howl).
-- **Companion screen:** a second (CYD) deck beside the S3 shows the current lyric line big,
+  build one (otherwise a synthesised howl).
+- **Companion screen:** a Cheap Yellow Display (CYD) beside the S3 shows the current lyric line big,
   with the next one dimmed underneath. It reads the S3 over the hotspot and has no Spotify
   client of its own (build target `cyd_companion`).
 - **Avatar (companion):** a character of your choice becomes the companion's home screen, drawn
@@ -63,11 +63,11 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 
 | Board | Build target | Notes |
 |---|---|---|
-| ESP32-2432S028R "Cheap Yellow Display" (CYD) | `cyd` | ESP32, no PSRAM. Optional speaker on the 2-pin SPEAK connector. |
-| Freenove FNK0104B, ESP32-S3 2.8" | `s3` | 8 MB PSRAM, 16 MB flash, ES8311 codec and speaker. |
-| A second CYD, as a companion screen | `cyd_companion` | Optional. Reads the S3's `/state`; needs the S3 with `REMOTE_TOKEN` set. |
+| Freenove FNK0104B, ESP32-S3 2.8" | `s3` | The deck. 8 MB PSRAM, 16 MB flash, ES8311 codec and speaker. |
+| ESP32-2432S028R "Cheap Yellow Display" (CYD) | `cyd_companion` | Optional companion screen. ESP32, no PSRAM. Reads the S3's `/state`; needs the S3 with `REMOTE_TOKEN` set. |
 
-Both are 320×240 ILI9341 boards and run the same code. You also need a USB car charger
+Both are 320×240 ILI9341 boards. The CYD's standalone deck build (`cyd`) was retired on
+2026-10-21; it is in git history up to `d4d0a67`. You also need a USB car charger
 (5 V, 2 A recommended) and a phone with a 2.4 GHz hotspot (on iPhone, turn on
 **Maximize Compatibility**). The microSD slot isn't used: the SD cache is parked because it
 competes with TLS for RAM.
@@ -84,32 +84,31 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
    in order: put the phone hotspot **first** (see [Two decks](#two-decks)).
 3. **Authorize:** run `python tools/spotify_auth.py`. It opens the browser and writes a refresh
    token into `src/config.h`.
-4. **Flash:** `pio run -e cyd -t upload` (or `-e s3`). Add `--upload-port <port>` if needed;
+4. **Flash:** `pio run -e s3 -t upload`. Add `--upload-port <port>` if needed;
    `pio device list` shows the ports.
 5. **Play a song** on any Spotify device. The serial log is at 115200 baud:
    `pio device monitor`.
 
-To check a new board without WiFi or Spotify, flash `hwcheck` (CYD) or `hwcheck_s3` (S3): it
+To check a new board without WiFi or Spotify, flash `hwcheck_s3` (S3) or `hwcheck` (CYD): it
 tests the display, colours, backlight and audio.
 
 **Companion screen (optional):** set the same `REMOTE_TOKEN` on both decks and
 `COMPANION_DECK` to the S3's address (`172.20.10.10`, its fixed address on the iPhone hotspot),
-then flash the second CYD with `pio run -e cyd_companion -t upload`. It shows
+then flash the CYD with `pio run -e cyd_companion -t upload`. It shows
 **Looking for the deck...** until it reaches the S3, and **Wrong key** if the tokens differ.
 With an avatar file (see Make it yours) the companion serves its own menu remote at
 `http://172.20.10.11/?k=<REMOTE_TOKEN>` (its fixed hotspot address).
 
 ## Two decks
 
-The new deck (S3) and the old one (a CYD, as the companion or on its own) are meant to share the
+The deck (S3) and the companion (a CYD) are meant to share the
 iPhone hotspot. There each takes a fixed address, so a Home Screen bookmark never breaks (unless
 something already answers there); on any other network they use DHCP and mDNS names.
 
 | Deck | Build target | On the iPhone hotspot | mDNS name (other networks) | Phone page |
 |---|---|---|---|---|
-| New deck (S3) | `s3` | `172.20.10.10` | `cardeck.local` | `http://172.20.10.10/?k=<REMOTE_TOKEN>` |
-| Old deck as the companion | `cyd_companion` | `172.20.10.11` | `cardeck-companion.local` | `http://172.20.10.11/?k=<REMOTE_TOKEN>` (with an avatar) |
-| Old deck on its own | `cyd` | `172.20.10.11` | `cardeck-cyd.local` | `http://172.20.10.11/?k=<REMOTE_TOKEN>` |
+| Deck (S3) | `s3` | `172.20.10.10` | `cardeck.local` | `http://172.20.10.10/?k=<REMOTE_TOKEN>` |
+| Companion (CYD) | `cyd_companion` | `172.20.10.11` | `cardeck-companion.local` | `http://172.20.10.11/?k=<REMOTE_TOKEN>` (with an avatar) |
 
 - **The hotspot goes first in `WIFI_NETWORKS`.** It gets two tries after a drop, and the fixed
   addresses are pinned only on an iPhone hotspot. A deck stays on the network it joined; off the
@@ -160,11 +159,11 @@ so a skipped song's art never lands on the next one. Everything is sized to fit 
 
 ```sh
 powershell -ExecutionPolicy Bypass -File tools\run_tests.ps1   # host unit tests (Unity, g++)
-pio run -e cyd -e s3                                            # both firmwares
+pio run -e s3 -e cyd_companion                                  # deck and companion
 ```
 
-CI builds both boards, the companion and both hardware checks, enforces the flash budget
-(`cyd`, `cyd_companion`, `s3`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
+CI builds the deck, the companion and both hardware checks, enforces the flash budget
+(`s3`, `cyd_companion`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
 the media tool tests (`python -m unittest discover -s tools -p "test_gen_*.py"`). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup, test rules and commit style.
 
@@ -173,7 +172,7 @@ the media tool tests (`python -m unittest discover -s tools -p "test_gen_*.py"`)
 [Semantic versioning](https://semver.org), released as git tags `vMAJOR.MINOR.PATCH`; changes
 are listed in [CHANGELOG.md](CHANGELOG.md). Each build reads its version from git
 (`tools/version.py`) and shows it on the boot screen and in the first serial line,
-`[boot] cardeck v1.0.0 (cyd)`. Builds past a tag or with local edits say so: `1.0.0+3.gabc1234`.
+`[boot] cardeck v1.0.0 (s3)`. Builds past a tag or with local edits say so: `1.0.0+3.gabc1234`.
 
 - **major:** an update needs action, such as new wiring, a new partition table, or a changed
   `config.h` format.

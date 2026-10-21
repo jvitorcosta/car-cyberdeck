@@ -104,6 +104,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   deck failed every Spotify lookup for ~40 s. Online now means connected with an address, so it
   reconnects within ~5-10 s.
 
+### Removed
+- The CYD's standalone deck build (`cyd`): the S3 is the deck and the CYD stays as its companion
+  screen (`cyd_companion`) and keeps its hardware check (`hwcheck`). Gone with it: the CYD's DAC
+  audio path (`board/cyd/sink_dac`, `util/dacstream`) and its branches in `main.cpp` and
+  `audio/greeting`. The last commit with it is `d4d0a67`.
+
 ## [1.1.0] - 2026-10-13
 
 ### Added

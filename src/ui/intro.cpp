@@ -5,7 +5,6 @@
 #include "../util/introclock.h"
 #include "../audio/greeting.h"
 
-#ifdef BOARD_S3
 #include <FS.h>
 using fs::File;            // JPEGDEC.h names the global File, which this core's FS.h may not export
 #include <JPEGDEC.h>
@@ -14,10 +13,8 @@ using fs::File;            // JPEGDEC.h names the global File, which this core's
 #include "../util/rgb565.h"
 #include "../util/termblend.h"
 EMBED(data_intro_bin);
-#endif
 
 namespace intro {
-#ifdef BOARD_S3
 static TFT_eSPI* s_tft = nullptr;
 static std::atomic<bool> s_playing{false};   // set here, cleared by the intro task
 
@@ -136,10 +133,4 @@ bool playing() { return s_playing; }
 void wait() {
     while (s_playing) delay(20);
 }
-#else
-void start(TFT_eSPI&, bool (*)()) {}
-bool available() { return false; }
-bool playing() { return false; }
-void wait() {}
-#endif
 }

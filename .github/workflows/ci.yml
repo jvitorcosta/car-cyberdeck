@@ -23,10 +23,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # each board's deck and its hardware check (and the CYD's companion build); part = app
-          # partition size (platformio.ini)
-          - board: cyd
-            envs: -e cyd -e cyd_companion -e hwcheck
+          # each board's firmware and its hardware check; part = app partition size (platformio.ini)
+          - board: cyd_companion
+            envs: -e cyd_companion -e hwcheck
             part: "0x300000"   # huge_app.csv
           - board: s3
             envs: -e s3 -e hwcheck_s3
@@ -56,9 +55,6 @@ jobs:
         run: pio run ${{ matrix.envs }}
       - name: Flash size check
         run: python tools/check_flash.py .pio/build/${{ matrix.board }}/firmware.bin ${{ matrix.part }} 97
-      - name: Flash size check (companion)
-        if: matrix.board == 'cyd'
-        run: python tools/check_flash.py .pio/build/cyd_companion/firmware.bin ${{ matrix.part }} 97
 
   host-tests:
     name: Host unit tests (Unity + g++, sanitizers, 64- and 32-bit)
