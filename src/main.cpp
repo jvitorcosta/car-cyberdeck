@@ -42,10 +42,10 @@ EMBED(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_spri
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 
-// Task watchdog: 30 s instead of the default 5 s. SpotifyArduino's response loops spin
-// (yield() never lets the lower-priority idle task run) and on a reset TLS connection one spun
-// ~11 s on core 0, so the idle task missed the 5 s watchdog and the board rebooted
-// (the "unexplained rst:0xc"). A genuine hang still reboots, after 30 s.
+// Task watchdog: 30 s instead of the default 5 s. It was raised for SpotifyArduino's spinning
+// response loops (one spun ~11 s on a reset TLS connection: the "unexplained rst:0xc"); that
+// library is gone, but a TLS handshake plus reads can still take 8 + 8 s on a weak hotspot.
+// A genuine hang still reboots, after 30 s.
 static const uint32_t TASK_WDT_S = 30;
 
 static const char* resetReason() {

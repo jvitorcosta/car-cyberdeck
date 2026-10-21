@@ -42,6 +42,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- The deck asks Spotify once per poll (`/v1/me/player`: song, progress and device together)
+  instead of two endpoints, on a connection kept open between polls instead of a new TLS
+  handshake each time. A 429's wait comes with the answer (no extra request), a revoked access
+  token is refreshed and the request retried at once, and the podcast and ad cases no longer
+  read uninitialised fields. The SpotifyArduino library and `tools/patch_spotify_lib.py` are
+  gone (own client in `spotify/client`, `util/playerjson`, `util/jsonpath`).
 - The "Nothing playing" screen now says **Waiting for a song...** (same screen, same timing).
 - The S3's "Waiting for a song..." screen shows the phone page's link as a QR code again, left of
   Sonic in a Gen-3 battle box named **REMOTE** (with a phone icon): 3 px modules (half as big
@@ -86,6 +92,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   greeting sizes in its flash check, and runs the media tool tests.
 
 ### Fixed
+- Right after boot, a song playing on the phone no longer shows as **Waiting for a song...**
+  when Spotify's currently-playing endpoint wrongly answered "nothing playing": the deck now
+  reads `/me/player`, which knows.
 - The S3 froze its network task ("No internet", stale songs) while plugged into a PC with no
   serial monitor open: a USB serial write with a 0 ms timeout waits forever in this core. Writes
   now give up after 1 ms.

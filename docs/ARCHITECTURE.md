@@ -5,7 +5,7 @@ does every download and decode. See [HISTORY.md](HISTORY.md) for why it is built
 
 ```
 core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main.cpp)
-  Spotify poll 4 s / player 12 s (429: Retry-After)      snapshot AppState every frame
+  Spotify /me/player 4 s, kept-open conn (429 wait)     snapshot AppState every frame
   per track, one step at a time (util/netplan):           redraw deck on new track generation
     art -> lyrics -> genre -> walker -> prefetch          take art / lyrics / genre / walker
   results tagged with trackGen                            animate: walker 8 fps, CD 6 fps, HP 4 fps
@@ -20,6 +20,13 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Shared state** — one FreeRTOS mutex; `AppState` snapshots plus a mailbox whose results
   carry the track generation they were fetched for, so a quickly skipped song's art or
   lyrics are dropped instead of shown on the next one.
+- **Spotify** (`spotify/client`, `util/playerjson`, `util/jsonpath`) — one `GET /v1/me/player`
+  per poll gives the song, its progress and the device (volume, shuffle, repeat). The
+  connection to `api.spotify.com` stays open between polls (one TLS handshake, not one per
+  request); a stale one is retried once on a fresh connection, a 401 refreshes the access token
+  and retries. A 429's `Retry-After` comes from the same answer. The body lands in a 16 KB
+  PSRAM buffer and is read by dotted paths (`item.album.images.1.url`). The playlist name is a
+  second request on the same connection, once per context (`util/ctxcache`).
 - **Walker** (`images/walksprite`) — PMD SpriteCollab walk cycle (Right-facing row) cropped
   to a shared bounding box and fitted to a 32 px band. Two slots: the UI reads the active
   one while the network task loads the next song's walker into the staged one. Fallback:
@@ -127,7 +134,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
   avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,daynight,deckaddr,dexset,follow,genre,
   genrebadge,glyphrun,hotspotip,howl,idlesprite,interp,intropick,introclock,jsonflat,linkstatus,loudness,
-  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
+  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,phonepress,playerjson,jsonpath,
   pollpace,press,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.
 
