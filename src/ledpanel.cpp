@@ -109,12 +109,12 @@ static void linkTask(void*) {
 
 // ---- Screen (320x240 landscape) ----
 
-static constexpr int HEAD_H = 72;                           // y 0..71
-static constexpr int PWR_X = 280, PWR_Y = 36, PWR_R = 28;   // power button, in the header
-static constexpr int ZONE_Y = 76, ZONE_H = 26;              // y 76..101
-static constexpr int STRIP_Y = 108, STRIP_H = 64;           // y 108..171
-static constexpr int SW_X0 = 4, SW_STEP = 45, SW_W = 42;
-static constexpr int BOT_Y = 182, BOT_H = 54;               // y 182..235
+static constexpr int HEAD_H = 58;                           // y 0..57
+static constexpr int PWR_X = 284, PWR_Y = 29, PWR_R = 25;   // power button, in the header
+static constexpr int ZONE_Y = 62, ZONE_H = 26;              // y 62..87
+static constexpr int STRIP_Y = 94, STRIP_H = 88;            // y 94..181: the biggest targets
+static constexpr int SW_X0 = 4, SW_STEP = 45, SW_W = 43;
+static constexpr int BOT_Y = 188, BOT_H = 48;               // y 188..235
 static constexpr int MINUS_X = 4, PLUS_X = 260, STEP_W = 56;
 static constexpr int BARS_X = 66, BAR_STEP = 19, BAR_W = 15;
 
@@ -150,10 +150,10 @@ static void drawHeader() {
     tft.fillRect(0, 0, 320, HEAD_H, bg);
     tft.setTextDatum(TL_DATUM);
     tft.setTextColor(ink, bg);
-    tft.drawString(lit ? s.name : "Lights off", 14, 12, 4);
+    tft.drawString(lit ? s.name : "Lights off", 14, 6, 4);
     char sub[32];
     snprintf(sub, sizeof(sub), "%s  -  %u%%", zones[target], intensity);
-    tft.drawString(sub, 14, 44, 2);
+    tft.drawString(sub, 14, 36, 2);
     drawPower();
 }
 
@@ -207,7 +207,7 @@ static void drawBars() {
     const int litBars = (intensity + 5) / 10;
     tft.fillRect(BARS_X - 2, BOT_Y, 10 * BAR_STEP + 2, BOT_H, TFT_BLACK);
     for (int k = 0; k < 10; k++) {
-        const int h = 16 + k * 4;
+        const int h = 12 + k * 4;  // 12..48 px, the row's height
         tft.fillRoundRect(BARS_X + k * BAR_STEP, BOT_Y + BOT_H - h, BAR_W, h, 3,
                           k < litBars ? on : tft.color565(42, 42, 42));
     }
