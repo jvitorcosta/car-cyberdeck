@@ -8,7 +8,10 @@ constexpr size_t TEXT_CAP = 160;
 constexpr uint32_t GAP_MS = 5UL * 60 * 1000;   // at most one track remark per 5 min
 constexpr uint32_t ODDS = 3;                    // then 1 in ODDS track changes
 // Boot / Track follow the gap and odds rules; the reactions (Howl ... Unreachable) always speak.
-enum class Event : uint8_t { Boot, Track, Howl, Vroom, TripReset, Busy, Unreachable, CarOn, CarOff };
+// CoolantHot / BatteryLow: the gauge cluster's warnings (util/carwarn); AdapterLost: the OBD link
+// dropped (not the ignition: that's CarOff).
+enum class Event : uint8_t { Boot, Track, Howl, Vroom, TripReset, Busy, Unreachable, CarOn, CarOff,
+                             CoolantHot, BatteryLow, AdapterLost };
 struct In {
     Event event;
     bool spokeBefore;       // she has had a scene since boot
@@ -33,8 +36,9 @@ struct Line {
     uint8_t mood;
     const char* text;
 };
-constexpr int BOOT_N = 3, TRACK_N = 12, REACT_N = 7;
+constexpr int BOOT_N = 3, TRACK_N = 12, REACT_N = 10;
 extern const Line BOOT[BOOT_N];
 extern const Line TRACK[TRACK_N];
-extern const Line REACT[REACT_N];   // Howl, Vroom, TripReset, Busy, Unreachable, CarOn, CarOff
+// Howl, Vroom, TripReset, Busy, Unreachable, CarOn, CarOff, CoolantHot, BatteryLow, AdapterLost
+extern const Line REACT[REACT_N];
 }

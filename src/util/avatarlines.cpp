@@ -34,6 +34,9 @@ const Line REACT[REACT_N] = {
     {Smug, "I can't reach the deck, darling."},
     {Happy, "Car connected, darling! Let's see what she can do~"},
     {Talk, "The car's asleep~"},
+    {Talk, "Engine's running hot, darling. Pull over when you can."},
+    {Talk, "The battery's low, darling. Have it checked soon."},
+    {Smug, "I lost the car's adapter, darling."},
 };
 
 // Appends len bytes of s at out[o], whole UTF-8 characters only; false once one doesn't fit.
