@@ -114,29 +114,39 @@ static constexpr int BAR_Y = 180, BAR_H = 56;
 static constexpr int MINUS_X = 0, PLUS_X = 264, BTN_W = 56;
 static constexpr int BAR_X = 62, BAR_W = 196;
 
-static void drawTabs() {
+// Pressed feedback: whatever is under the finger turns yellow (tabs, -/+) or sinks inside a yellow
+// ring (colours) until it is released, so a press that registered is always visible.
+static constexpr uint16_t PRESSED = TFT_YELLOW;
+
+static void drawTab(int i, bool pressed = false) {
     static const char* names[] = {"BOTH", "INSIDE", "OUTSIDE"};
+    const bool sel = target == static_cast<Target>(i);
+    const uint16_t bg = pressed ? PRESSED : sel ? TFT_WHITE : TFT_DARKGREY;
+    const int x = i * 107 + 2;
     tft.setTextDatum(MC_DATUM);
-    for (int i = 0; i < 3; i++) {
-        const bool sel = target == static_cast<Target>(i);
-        const uint16_t bg = sel ? TFT_WHITE : TFT_DARKGREY;
-        const int x = i * 107 + 2;
-        tft.fillRoundRect(x, 2, 103, TAB_H - 4, 6, bg);
-        tft.setTextColor(sel ? TFT_BLACK : TFT_WHITE, bg);
-        tft.drawString(names[i], x + 51, TAB_H / 2, 2);
-        if (i > 0) tft.fillCircle(x + 92, TAB_H / 2, 4, linkUp(controllers[i - 1]) ? TFT_GREEN : TFT_RED);
-    }
+    tft.fillRoundRect(x, 2, 103, TAB_H - 4, 6, bg);
+    tft.setTextColor(sel || pressed ? TFT_BLACK : TFT_WHITE, bg);
+    tft.drawString(names[i], x + 51, TAB_H / 2, 2);
+    if (i > 0) tft.fillCircle(x + 92, TAB_H / 2, 4, linkUp(controllers[i - 1]) ? TFT_GREEN : TFT_RED);
 }
 
-static void drawCell(int i) {
+static void drawTabs() {
+    for (int i = 0; i < 3; i++) drawTab(i);
+}
+
+static void drawCell(int i, bool pressed = false) {
     const int x = (i % 4) * CELL_W, y = GRID_Y + (i / 4) * CELL_H;
     const bool off = i == OFF_CELL;
     const uint16_t bg = off ? TFT_BLACK : tft.color565(SWATCHES[i].r, SWATCHES[i].g, SWATCHES[i].b);
     const bool sel = off ? !lit : (lit && i == swatch);
+    const int inset = pressed ? 7 : 3;  // pressed: the colour shrinks inside the ring
     tft.fillRect(x, y, CELL_W, CELL_H, TFT_BLACK);
-    tft.fillRoundRect(x + 3, y + 3, CELL_W - 6, CELL_H - 6, 8, bg);
-    if (sel) {  // a thick ring marks what the lights show now
-        for (int k = 0; k < 3; k++) tft.drawRoundRect(x + 3 + k, y + 3 + k, CELL_W - 6 - 2 * k, CELL_H - 6 - 2 * k, 8, TFT_WHITE);
+    tft.fillRoundRect(x + inset, y + inset, CELL_W - 2 * inset, CELL_H - 2 * inset, 8, bg);
+    if (pressed || sel) {  // a thick ring: yellow under the finger, white for what the lights show
+        for (int k = 0; k < 3; k++) {
+            tft.drawRoundRect(x + 1 + k, y + 1 + k, CELL_W - 2 - 2 * k, CELL_H - 2 - 2 * k, 9,
+                              pressed ? PRESSED : TFT_WHITE);
+        }
     } else if (off) {
         tft.drawRoundRect(x + 3, y + 3, CELL_W - 6, CELL_H - 6, 8, TFT_DARKGREY);
     }
@@ -151,13 +161,18 @@ static void drawGrid() {
     for (int i = 0; i <= OFF_CELL; i++) drawCell(i);
 }
 
-static void drawIntensity() {
+static void drawStepButton(int x, bool pressed = false) {
+    const uint16_t bg = pressed ? PRESSED : TFT_DARKGREY;
     tft.setTextDatum(MC_DATUM);
-    for (int x : {MINUS_X, PLUS_X}) {
-        tft.fillRoundRect(x + 2, BAR_Y + 2, BTN_W - 4, BAR_H - 4, 8, TFT_DARKGREY);
-        tft.setTextColor(TFT_WHITE, TFT_DARKGREY);
-        tft.drawString(x == MINUS_X ? "-" : "+", x + BTN_W / 2, BAR_Y + BAR_H / 2, 4);
-    }
+    tft.fillRoundRect(x + 2, BAR_Y + 2, BTN_W - 4, BAR_H - 4, 8, bg);
+    tft.setTextColor(pressed ? TFT_BLACK : TFT_WHITE, bg);
+    tft.drawString(x == MINUS_X ? "-" : "+", x + BTN_W / 2, BAR_Y + BAR_H / 2, 4);
+}
+
+static void drawIntensity() {
+    drawStepButton(MINUS_X);
+    drawStepButton(PLUS_X);
+    tft.setTextDatum(MC_DATUM);
     const Swatch& s = SWATCHES[swatch];
     const uint16_t fill = tft.color565(elkcmd::dim(s.r, intensity), elkcmd::dim(s.g, intensity),
                                        elkcmd::dim(s.b, intensity));
@@ -190,12 +205,26 @@ static void setIntensity(int pct) {
     lastSend = millis();
 }
 
+// The button held down right now (drawn pressed until release); the bar has no pressed look, its
+// fill follows the finger instead.
+enum PressKind { NONE, TAB, CELL, STEP };
+static PressKind pressKind = NONE;
+static int pressIdx = 0;
+
+static void drawPress(bool pressed) {
+    if (pressKind == TAB) drawTab(pressIdx, pressed);
+    else if (pressKind == CELL) drawCell(pressIdx, pressed);
+    else if (pressKind == STEP) drawStepButton(pressIdx, pressed);
+}
+
 static void onTouch(int x, int y, bool fresh) {
     if (y < TAB_H) {
         if (!fresh) return;
         target = static_cast<Target>(x / 107 > 2 ? 2 : x / 107);
         drawTabs();
         save();
+        pressKind = TAB;
+        pressIdx = target;
     } else if (y >= GRID_Y && y < GRID_Y + 2 * CELL_H) {
         if (!fresh) return;
         const int cell = ((y - GRID_Y) / CELL_H) * 4 + (x / CELL_W > 3 ? 3 : x / CELL_W);
@@ -209,16 +238,25 @@ static void onTouch(int x, int y, bool fresh) {
         drawGrid();
         drawIntensity();
         save();
+        pressKind = CELL;
+        pressIdx = cell;
     } else if (y >= BAR_Y) {
         if (x < MINUS_X + BTN_W) {
-            if (fresh) setIntensity(intensity - 10);
+            if (!fresh) return;
+            setIntensity(intensity - 10);
+            pressKind = STEP;
+            pressIdx = MINUS_X;
         } else if (x >= PLUS_X) {
-            if (fresh) setIntensity(intensity + 10);
+            if (!fresh) return;
+            setIntensity(intensity + 10);
+            pressKind = STEP;
+            pressIdx = PLUS_X;
         } else if (fresh || millis() - lastSend > 80) {  // drag: one update per 80 ms
             setIntensity((x - BAR_X) * 100 / BAR_W);
         }
         if (fresh) save();
     }
+    if (fresh) drawPress(true);
 }
 
 void setup() {
@@ -250,6 +288,10 @@ void loop() {
     // The panel reports a phantom press at power-up (raw x=0): ignore the first second.
     const bool down = touch::read(&x, &y) && millis() > 1000;
     if (down) onTouch(x, y, !wasDown);
+    if (!down && wasDown) {  // released: back to the normal look
+        drawPress(false);
+        pressKind = NONE;
+    }
     wasDown = down;
 
     // A controller that just came up gets the current state, so it matches the screen.
