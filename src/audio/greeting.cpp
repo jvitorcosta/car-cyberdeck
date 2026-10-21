@@ -13,12 +13,10 @@
 EMBED(data_greeting_pcm);
 EMBED(data_finale_pcm);
 EMBED(data_opener_pcm);
-#ifdef BOARD_S3
 EMBED(data_intro_pcm);
 EMBED(data_howl_pcm);
 EMBED(data_greeting_alt_pcm);
 EMBED(data_tunes_txt);
-#endif
 
 namespace greeting {
 
@@ -27,7 +25,6 @@ constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_how
 constexpr int CHUNK = 128;               // samples per audiosink::write
 constexpr int TUNE_LEVEL = 5;            // the music box, percent of the clip volume: background
 
-// Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
 static const Clip GREETING = {EMBED_DATA(data_greeting_pcm),
@@ -41,7 +38,6 @@ static const Clip OPENER = {EMBED_DATA(data_opener_pcm),
                             "opener", &audiosink::GREETING_VOLUME, CLIP_RATE};
 static_assert(howl::RATE == CLIP_RATE, "the synthesised howl plays at the clip rate");
 static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME, CLIP_RATE};
-#ifdef BOARD_S3
 static const int INTRO_VOLUME = 50;      // percent: the intro video's song, quieter than the greeting
 static const Clip INTRO = {EMBED_DATA(data_intro_pcm),
                            EMBED_SIZE(data_intro_pcm) / 2,
@@ -54,7 +50,6 @@ static const Clip WOLF = {EMBED_DATA(data_howl_pcm),
 static const Clip GREETING_ALT = {EMBED_DATA(data_greeting_alt_pcm),
                                   EMBED_SIZE(data_greeting_alt_pcm) / 2,
                                   "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
-#endif
 
 // An optional clip the build may lack: the pre-build scripts write one silent sample instead.
 static bool present(const Clip& c) { return c.samples > 1; }
@@ -69,9 +64,7 @@ void choose(intropick::Greeting g) { s_choice = g; }
 // The clip play(), durationMs() and level() agree on (the boot scene's timing and car lights).
 static const Clip& greetingClip() {
     if (s_choice == intropick::NONE) return SILENT;
-#ifdef BOARD_S3
     if (s_choice == intropick::ALT && present(GREETING_ALT)) return GREETING_ALT;
-#endif
     return GREETING;
 }
 
@@ -138,13 +131,12 @@ static std::atomic<bool> s_tunesStop{false};
 static portMUX_TYPE s_nameMux = portMUX_INITIALIZER_UNLOCKED;
 static char s_tuneName[32] = "";                // the tune playing (tuneTask writes, any task reads)
 
-[[maybe_unused]] static void setTuneName(const char* s) {   // tuneTask: S3 only
+static void setTuneName(const char* s) {
     portENTER_CRITICAL(&s_nameMux);
     strlcpy(s_tuneName, s, sizeof s_tuneName);
     portEXIT_CRITICAL(&s_nameMux);
 }
 
-#ifdef BOARD_S3
 static_assert(musicbox::RATE == CLIP_RATE, "the music box plays at the clip rate");
 
 // Like task(), but the music box never ends by itself: it plays until stopTunes() and its fade.
@@ -180,10 +172,8 @@ static void tuneTask(void*) {
     s_playing.fetch_sub(1);
     vTaskDelete(nullptr);
 }
-#endif
 
 void playTunes() {
-#ifdef BOARD_S3
     if (s_tunes.load()) return;
     if (!s_output) s_output = xSemaphoreCreateMutex();
     s_tunesStop.store(false);
@@ -194,7 +184,6 @@ void playTunes() {
         s_playing.fetch_sub(1);
         Serial.println("[tunes] no memory for its task");
     }
-#endif
 }
 
 void stopTunes() { s_tunesStop.store(true); }
@@ -208,7 +197,6 @@ void tuneName(char* out, size_t n) {
     portEXIT_CRITICAL(&s_nameMux);
 }
 
-#ifdef BOARD_S3
 // Loaded once, on first use (a function-local static: thread-safe), then kept in RAM.
 static std::atomic<bool>& muted() {
     static std::atomic<bool> m{[] {
@@ -220,42 +208,29 @@ static std::atomic<bool>& muted() {
     }()};
     return m;
 }
-#endif
 
 void setTunesMuted(bool m) {
-#ifdef BOARD_S3
     if (muted().exchange(m) == m) return;
     Preferences p;
     p.begin("tunes", false);
     p.putBool("muted", m);
     p.end();
     Serial.printf("[tunes] %s\n", m ? "muted" : "unmuted");
-#else
-    (void)m;
-#endif
 }
 
 bool tunesMuted() {
-#ifdef BOARD_S3
     return muted().load();
-#else
-    return false;
-#endif
 }
 
 void playHowl() {
-#ifdef BOARD_S3
     if (present(WOLF)) { start(&WOLF, "howl"); return; }
-#endif
     start(&HOWL, "howl");
 }
 
 void playFinale() { if (present(FINALE)) start(&FINALE, "finale"); }
 
 void playIntro() {
-#ifdef BOARD_S3
     if (present(INTRO)) start(&INTRO, "intro");
-#endif
 }
 
 void playOpener() { if (present(OPENER)) start(&OPENER, "opener"); }

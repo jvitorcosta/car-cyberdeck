@@ -33,18 +33,17 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Night mode** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
   (SNTP; `TIMEZONE` in `src/config.h`, daylight saving included): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
 - **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
-  16 kHz, played at 32 kHz: IDF 4.4 DAC mode mis-clocks below ~20 kHz) streamed by I2S0 to
-  the built-in DAC on GPIO 26 at 30 % volume, noise-shaped down to the DAC's 8 bits, in a
-  one-shot task that frees the driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
-  The S3 plays it through the ES8311, and the boot opening picks the clip: the Honda's drive
+  16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task that frees the
+  driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
+  The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
-- **Boot opening** (`util/intropick`, S3 only) — `setup()` picks one of three openings each boot:
+- **Boot opening** (`util/intropick`) — `setup()` picks one of three openings each boot:
   the kiss video, the Honda's night drive or McQueen's. Random, never last boot's (NVS
   `boot`/`last`), and only from what the build has (the clip, `data/mcqueen.bin`); the Honda is
   always there. `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`) forces one for testing. The car
   openings start their drive before WiFi connects; every opening ends in the montage.
-- **Intro video** (`ui/intro`, `util/introclock`, `util/termblend`, S3 only) — the kiss opening,
+- **Intro video** (`ui/intro`, `util/introclock`, `util/termblend`) — the kiss opening,
   on its own task while WiFi connects and the network task logs into Spotify underneath; then
   straight to the montage. The boot terminal types over it: `ui/bootterm` draws into a 206×60
   sprite, and `termblend` paints it into each decoded JPEG block (glyphs over a half-bright panel,
@@ -68,7 +67,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 - **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
   Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
   certificate) plus a bundled Pokémon per cause on the battle platform with a speech bubble,
-  4 fps, pushed in 4-row strips. On the S3 "Waiting for a song..." shows Sonic instead
+  4 fps, pushed in 4-row strips. "Waiting for a song..." shows Sonic instead
   (`util/idlesprite`, `data/idle.bin` from `tools/gen_idle_sprite.py`): Sonic 1's waiting
   animation with the game's timing (12 x stand, then the foot tap, 400 ms a frame), from when
   the screen appears; when his frame or the arrow can change only his box is repainted
@@ -77,7 +76,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
 - **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Waiting for
-  a song..." shows when Spotify has nothing, or once the song has stayed paused 30 s. On the S3 a
+  a song..." shows when Spotify has nothing, or once the song has stayed paused 30 s. A
   music box then loops `data/tunes.txt` (packed by `tools/tune_clip.py` from `data/tunes/*.txt`,
   git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at 5 % of the clip volume (`TUNE_LEVEL`),
   synthesised in a 4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
@@ -88,10 +87,10 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority
   task, never the UI loop. It reads `GET /state` every 5 s (now playing, the deck's status,
   network, the sound buttons) and has a Home Screen icon (`GET /icon.png`, public). `POST
-  /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. On the S3 the
+  /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. The
   howl is the real recording in `data/howl.pcm` (`tools/gen_howl.py`, 48 kHz) when the build has
-  one; otherwise, and always on the CYD, it is synthesised while it plays (`audio/greeting`).
-  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). On the S3 the "Waiting for a
+  one; otherwise it is synthesised while it plays (`audio/greeting`).
+  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). The "Waiting for a
   song..." screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` builds
   `http://<ip>/?k=<token>` from the current address and picks a version ≤ 3), checked when the
   screen appears and every 5 s. It sits on a Gen-3 battle box at the top left (`ui/qrcard`:
@@ -126,7 +125,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   `netplan`'s, `pollpace` in `lyricclock`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
   accents,cjkfont,status_sprite,statusscene,qrcard,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
   `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
-  avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,dacstream,daynight,deckaddr,dexset,follow,genre,
+  avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,daynight,deckaddr,dexset,follow,genre,
   genrebadge,glyphrun,hotspotip,howl,idlesprite,interp,intropick,introclock,jsonflat,linkstatus,loudness,
   lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,nowplaying,phonepress,
   pollpace,press,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
@@ -134,7 +133,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 
 ## Layers
 
-- `src/board/cyd/`, `src/board/s3/` — everything board-specific (display bus, audio path,
-  backlight); pins in `include/pins.h`. The rest of the code is shared.
+- `src/board/s3/` (the deck), `src/board/cyd/` (the companion) — everything board-specific
+  (display bus, audio path, backlight); pins in `include/pins.h`. The CYD's standalone deck build
+  was retired on 2026-10-21 (git history up to `d4d0a67`).
 - `src/util/`, `src/core/`, `src/images/` never include `src/ui/`; `src/util/` has no Arduino
   dependency, so it builds and tests on a PC.

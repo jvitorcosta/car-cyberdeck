@@ -2,7 +2,7 @@
 
 ## How it was tested
 - [ ] Host tests pass (`tools\run_tests.ps1`)
-- [ ] Built for both boards (`pio run -e cyd -e s3`)
+- [ ] Built the deck and the companion (`pio run -e s3 -e cyd_companion`)
 - [ ] Ran on a board: <!-- which one, and the relevant [mem] / [net] log lines -->
 
 ## Checklist

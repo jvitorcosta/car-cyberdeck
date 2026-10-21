@@ -33,7 +33,6 @@ static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB 
 static genre::Cache s_genres;   // last 32 artists' badges: repeats cost no request
 static uint32_t s_failsAtOk = 0;   // mem::failTotal() at the last good poll
 static bool s_spotifyReady = false;   // WiFi + spclient::begin() done
-static bool (*s_holdTls)() = nullptr;   // true while TLS must wait for heap (see start())
 static int s_prefetchDex = 0;      // dex whose walker sits in the staged slot
 static uint32_t s_t0 = 0;
 
@@ -156,14 +155,12 @@ static void run(void*) {
     uint32_t lastPoll = 0, lastPlayer = 0;
     bool first = true;
     for (;;) {
-        if (!s_spotifyReady) {                 // WiFi wasn't up at boot: keep trying
+        if (!s_spotifyReady) {                 // log in once WiFi is up (setup's, or a late hotspot)
             if (net::isOnline() || net::connectAny()) {
-                // The boot scene leaves once WiFi is up; let it free its strip before TLS needs heap.
-                while (s_holdTls && s_holdTls()) vTaskDelay(pdMS_TO_TICKS(100));
                 spclient::begin();
                 netclock::begin();
                 s_spotifyReady = true;
-                mem::log("late wifi");
+                mem::log("spotify login");
             } else {
                 vTaskDelay(pdMS_TO_TICKS(WIFI_RETRY_MS));
                 continue;
@@ -238,9 +235,7 @@ static void run(void*) {
 // Stack: 10 KB (was 16 KB; the 6 KB went back to the heap, which album-art and TLS buffers
 // were short of). Lowest free seen ~3.7 KB, i.e. ~6.3 KB used by TLS + JSON + the lyrics
 // reader ([mem] stackfree=, README "Design & performance history" item 12).
-void start(bool spotifyReady, bool (*holdTls)()) {
-    s_spotifyReady = spotifyReady;
-    s_holdTls = holdTls;
+void start() {
     xTaskCreatePinnedToCore(run, "net", 10240, nullptr, 1, nullptr, 0);
 }
 

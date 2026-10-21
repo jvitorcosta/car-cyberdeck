@@ -15,5 +15,5 @@ struct Look {
     const Rims* rims;
 };
 Look honda();
-bool mcqueen(Look* out);   // false without a valid data/mcqueen.bin (always on the CYD)
+bool mcqueen(Look* out);   // false without a valid data/mcqueen.bin (always in host tests)
 }

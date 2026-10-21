@@ -1,7 +1,7 @@
 // Standalone hardware-check sketch (NOT part of the firmware).
 // Build/flash with:  .devtools\pio.ps1 run -e hwcheck -t upload
 // Proves: display init, colors, landscape orientation, backlight, and touch.
-// Excluded from the cyd firmware build via build_src_filter.
+// Its own env (hwcheck); the companion build leaves it out via build_src_filter.
 #include <Arduino.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
