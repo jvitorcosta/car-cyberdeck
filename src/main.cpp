@@ -26,6 +26,8 @@ MEDIA_DECL(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle
 #include "util/daynight.h"
 #include "util/linkstatus.h"
 #include "net/remote.h"
+#include "net/ota.h"
+#include "ui/otascreen.h"
 #include "util/qrfit.h"
 #ifdef BOARD_S3
 #include <qrcode.h>
@@ -143,6 +145,7 @@ void setup() {
     Serial.printf("[boot] cardeck v%s (cyd)\n", FW_VERSION);
 #endif
     Serial.printf("[boot] reset reason: %s\n", resetReason());
+    ota::checkBoot();   // may boot the other app slot (net/ota)
     board::begin();
     esp_task_wdt_init(TASK_WDT_S, true);   // reconfigures the already-running watchdog
     mem::installFailHook();
@@ -240,6 +243,7 @@ void setup() {
     nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
 #endif
     remote::begin(bootscene::active);
+    ota::begin(bootscene::active);
 }
 
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
@@ -414,9 +418,19 @@ void loop() {
     if (!net::isOnline() || st.status == PlaybackStatus::Offline ||
         netplan::stale(millis(), st.lastPollOkMs, STALE_MS)) mode = 1;
     else if (idleNow) mode = 2;
+    static int lastMode = -1;
+    if (ota::active()) {   // an update over WiFi: its progress, nothing else (net/ota)
+        static int shownPct = -1;
+        const int pct = ota::progress();
+        if (lastMode != -2 || pct != shownPct) ui::drawUpdate(s_tft, pct, lastMode != -2);
+        shownPct = pct;
+        lastMode = -2;     // no screen's mode: the one it covered comes back in full
+        delay(20);
+        return;
+    }
+    if (lastMode == -2) lastMode = -1;
     musicBox(mode == 2 && !greeting::tunesMuted());
 
-    static int lastMode = -1;
     static uint32_t shownGen = 0;
     static bool walkerOn = false;
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen

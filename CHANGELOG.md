@@ -6,6 +6,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
+- Firmware updates over WiFi on the S3: `pio run -e s3_ota -t upload` from a PC on the deck's
+  network (password `REMOTE_TOKEN`; off without it). The deck shows the progress in a battle
+  box, pauses Spotify polls and the music box meanwhile, and goes back to the previous firmware
+  when the new one crashes 3 boots in a row before proving itself (60 s and a good poll).
 - A random boot opening on the S3, never the same as last boot: your intro video with the boot
   log typed over it, the Honda's night drive with "bem vindo moreno", or a pixel Lightning
   McQueen's drive with "eu sou a velocidade" (`tools/gen_mcqueen_sprite.py`, git-ignored; red
