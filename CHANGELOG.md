@@ -123,6 +123,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   screen (`cyd_companion`) and keeps its hardware check (`hwcheck`). Gone with it: the CYD's DAC
   audio path (`board/cyd/sink_dac`, `util/dacstream`) and its branches in `main.cpp` and
   `audio/greeting`. The last commit with it is `d4d0a67`.
+- The parked SD card cache (`images/cache`, `-DSD_CACHE`): the S3 never mounted a card and the
+  companion doesn't fetch sprites, so it was never used. Walk sheets and sprites are downloaded
+  (and prefetched) as before. The last commit with it is `0ba409b`.
 
 ## [1.1.0] - 2026-10-13
 

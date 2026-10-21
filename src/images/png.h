@@ -14,9 +14,7 @@ bool acquire();      // false: no heap for the decoder right now (try again late
 void release();
 PNG& decoder();
 
-// PokeAPI sprite bytes for dex `dex` into the caller's buffer: SD cache if present, else HTTPS
-// download of `url` (saved to the cache). *fromCache tells the caller where they came from.
-bool loadSpriteInto(int dex, const char* url, uint8_t* buf, size_t cap, size_t* outLen,
-                    bool* fromCache);
+// PokeAPI sprite bytes from `url` (HTTPS) into the caller's buffer.
+bool loadSpriteInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen);
 
 }

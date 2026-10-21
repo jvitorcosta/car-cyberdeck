@@ -2,7 +2,6 @@
 #include <Arduino.h>
 #include "../core/mem.h"
 #include "png.h"
-#include "cache.h"
 #include "fetch.h"
 #include "../util/animdata.h"
 #include "../util/walkanim.h"
@@ -158,15 +157,11 @@ static Res decodeRegion(uint8_t* data, size_t n, int rowY0, int rowH, int frameW
 // ---------------------------------------------------------------- PMD sheet
 static constexpr int DIR_RIGHT = 2;          // PMD row order: Down, DownRight, Right, ...
 
-// Cache-or-download into the scratch buffer (NUL-terminated).
+// Download into the scratch buffer (NUL-terminated).
 // partial: the beginning is enough (AnimData.xml: Walk is anim index 0, near the top).
-static bool getCached(const String& path, const String& url, size_t* n, int* code,
-                      bool partial = false) {
+static bool get(const String& url, size_t* n, int* code, bool partial = false) {
     *code = 0;
-    if (cache::readInto(path, s_scratch, SCRATCH, n)) return true;
-    if (!fetch::httpsGetInto(url.c_str(), s_scratch, SCRATCH, n, code, partial)) return false;
-    cache::savePath(path, s_scratch, *n);
-    return true;
+    return fetch::httpsGetInto(url.c_str(), s_scratch, SCRATCH, n, code, partial);
 }
 
 // Pokemon whose PMD sheet can never work this boot (missing, no Walk anim, too big,
@@ -187,23 +182,20 @@ bool loadPmd(int dex) {
     char base[96];
     snprintf(base, sizeof(base),
              "https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/%04d/", dex);
-    String xmlPath = "/pmd/" + String(dex) + ".xml";
-    String pngPath = "/pmd/" + String(dex) + ".png";
 
     size_t n = 0; int code = 0;
-    if (!getCached(xmlPath, String(base) + "AnimData.xml", &n, &code, true)) {
+    if (!get(String(base) + "AnimData.xml", &n, &code, true)) {
         if (code == 404) s_noPmd.add(dex);
         Serial.printf("[walk] fallback (xml http %d)\n", code);
         return false;
     }
     animdata::WalkAnim a = animdata::parseWalk((const char*)s_scratch);   // scratch is free after this
     if (!a.ok) {
-        cache::removePath(xmlPath);
         s_noPmd.add(dex);
         Serial.println("[walk] fallback (no Walk anim)");
         return false;
     }
-    if (!getCached(pngPath, String(base) + "Walk-Anim.png", &n, &code)) {
+    if (!get(String(base) + "Walk-Anim.png", &n, &code)) {
         if (code == 404 || code == 413) s_noPmd.add(dex);
         Serial.printf("[walk] fallback (png http %d or > %d B)\n", code, SCRATCH);
         return false;
@@ -211,12 +203,9 @@ bool loadPmd(int dex) {
     Res r = decodeRegion(s_scratch, n, DIR_RIGHT * a.frameH, a.frameH, a.frameW, a.frames, true);
     if (r == Res::NoMemory) return false;                  // nothing wrong with the sheet: retry later
     if (r != Res::Ok) {                                    // slot stays not-ready (cleared on entry)
-        if (r == Res::Corrupt) {   // corrupt: drop the cache so the next play re-downloads
-            cache::removePath(xmlPath);
-            cache::removePath(pngPath);
-        } else {
-            s_noPmd.add(dex);      // unsupported: the same sheet will fail the same way
-        }
+        // unsupported: the same sheet will fail the same way. Corrupt (a damaged download) may
+        // work next time.
+        if (r != Res::Corrupt) s_noPmd.add(dex);
         Serial.printf("[walk] fallback (sheet %s)\n", r == Res::Corrupt ? "corrupt" : "unsupported");
         return false;
     }
@@ -236,15 +225,13 @@ bool loadFallback(const char* spriteUrl, int dex) {
     s_dex[s_slot] = 0;
     if (!s_pool[s_slot] || !s_scratch) return false;
     size_t n = 0;
-    bool fromCache = false;
-    if (!img::loadSpriteInto(dex, spriteUrl, s_scratch, SCRATCH, &n, &fromCache)) {
+    if (!img::loadSpriteInto(spriteUrl, s_scratch, SCRATCH, &n)) {
         Serial.println("[walk] no sprite");
         return false;
     }
     Res r = decodeRegion(s_scratch, n, 0, 0, 0, 1, false);
     if (r == Res::NoMemory) return false;
     if (r != Res::Ok) {
-        if (r == Res::Corrupt && fromCache) cache::removePath(cache::spritePath(dex));
         Serial.printf("[walk] no walker (sprite %s)\n", r == Res::Corrupt ? "corrupt" : "unsupported");
         return false;
     }

@@ -1,7 +1,6 @@
 #include "png.h"
 #include <new>
 #include "../core/mem.h"
-#include "cache.h"
 #include "fetch.h"
 
 namespace img {
@@ -25,13 +24,8 @@ void release() {
 
 PNG& decoder() { return *s_png; }
 
-bool loadSpriteInto(int dex, const char* url, uint8_t* buf, size_t cap, size_t* outLen,
-                    bool* fromCache) {
-    *fromCache = cache::readInto(cache::spritePath(dex), buf, cap, outLen);
-    if (*fromCache) return true;
-    if (!fetch::httpsGetInto(url, buf, cap, outLen)) return false;
-    cache::save(dex, buf, *outLen);
-    return true;
+bool loadSpriteInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen) {
+    return fetch::httpsGetInto(url, buf, cap, outLen);
 }
 
 }

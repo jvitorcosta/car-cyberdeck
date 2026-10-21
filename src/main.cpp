@@ -38,7 +38,6 @@ EMBED(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_spri
 #include "ui/carlook.h"
 #include "images/art.h"
 #include "images/walksprite.h"
-#include "images/cache.h"
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 
@@ -62,7 +61,7 @@ static const char* resetReason() {
     }
 }
 
-// UI loop (core 1): draws only. All network/SD work runs in core/nettask on core 0 and
+// UI loop (core 1): draws only. All network work runs in core/nettask on core 0 and
 // arrives through core/shared (README "Design & performance history").
 static TFT_eSPI s_tft = TFT_eSPI();
 
@@ -144,9 +143,6 @@ void setup() {
         Serial.printf("[cjk] ranges=%d glyph(U+3042)=%s w=%d\n", ui::cjk().rangeCount(),
                       ok ? "ok" : "missing", w);
     }
-#ifdef SD_CACHE   // parked: a mounted card costs the RAM TLS needs (docs/BACKLOG.md)
-    cache::begin();
-#endif
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1); s_tft.fillScreen(TFT_BLACK);
     backlight::begin();
     touchft::begin();   // the music box's speaker button

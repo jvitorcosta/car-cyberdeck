@@ -32,12 +32,6 @@ static const int TOUCH_IRQ  = 36;
 static const int TOUCH_RAW_X0 = 200, TOUCH_RAW_X1 = 3900;
 static const int TOUCH_RAW_Y0 = 200, TOUCH_RAW_Y1 = 3900;
 
-// SD card (VSPI)
-static const int SD_CS   = 5;
-static const int SD_SCK  = 18;
-static const int SD_MISO = 19;
-static const int SD_MOSI = 23;
-
 // Backlight
 static const int PIN_BL = 21;
 
