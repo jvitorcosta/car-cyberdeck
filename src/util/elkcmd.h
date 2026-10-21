@@ -20,11 +20,13 @@ inline Frame power(Variant v, bool on) {
 }
 
 // Intensity by scaling the colour itself (0..100 %): the colour command is the one proven on the
-// car's controllers. A channel that is on never rounds down to 0, so a dim colour keeps its hue.
+// car's controllers. The scale is perceptual (pct squared, close to the eye's gamma): LED PWM at
+// half duty already looks ~75 % bright, so linear steps would bunch up at the top. A channel that
+// is on never rounds down to 0, so a dim colour keeps its hue.
 inline uint8_t dim(uint8_t channel, uint8_t pct) {
     if (pct >= 100) return channel;
     if (channel == 0 || pct == 0) return 0;
-    const unsigned v = (channel * pct + 50) / 100;
+    const unsigned v = (channel * pct * pct + 5000) / 10000;
     return static_cast<uint8_t>(v == 0 ? 1 : v);
 }
 }

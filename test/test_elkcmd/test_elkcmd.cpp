@@ -20,10 +20,10 @@ void test_power_frames_match_what_worked_in_the_car() {
     expectFrame(on0, elkcmd::power(elkcmd::V0, true));
     expectFrame(off1, elkcmd::power(elkcmd::V1, false));
 }
-void test_dim_scales_and_rounds() {
+void test_dim_follows_a_perceptual_curve() {
     TEST_ASSERT_EQUAL_UINT8(255, elkcmd::dim(255, 100));
-    TEST_ASSERT_EQUAL_UINT8(128, elkcmd::dim(255, 50));
-    TEST_ASSERT_EQUAL_UINT8(26, elkcmd::dim(255, 10));
+    TEST_ASSERT_EQUAL_UINT8(64, elkcmd::dim(255, 50));   // half the look, a quarter of the PWM
+    TEST_ASSERT_EQUAL_UINT8(3, elkcmd::dim(255, 10));
     TEST_ASSERT_EQUAL_UINT8(0, elkcmd::dim(255, 0));
 }
 void test_dim_keeps_a_lit_channel_lit() {
@@ -35,7 +35,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_color_frames_in_both_variants);
     RUN_TEST(test_power_frames_match_what_worked_in_the_car);
-    RUN_TEST(test_dim_scales_and_rounds);
+    RUN_TEST(test_dim_follows_a_perceptual_curve);
     RUN_TEST(test_dim_keeps_a_lit_channel_lit);
     return UNITY_END();
 }
