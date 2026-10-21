@@ -31,7 +31,7 @@ static netplan::Health s_health;   // pause optional work / restart when polls k
 static netplan::WalkRetry s_walkRetry;       // PNG decoder didn't fit: retry after the polls
 static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB hiccups
 static genre::Cache s_genres;   // last 32 artists' badges: repeats cost no request
-static uint32_t s_failsAtOk = 0;   // mem::failTotal() at the last good poll
+static uint32_t s_failsAtOk = 0;   // mem::bigFailTotal() at the last good poll
 static bool s_spotifyReady = false;   // WiFi + spclient::begin() done
 static bool (*s_holdTls)() = nullptr;   // true while TLS must wait for heap (see start())
 static int s_prefetchDex = 0;      // dex whose walker sits in the staged slot
@@ -188,11 +188,10 @@ static void run(void*) {
                 Serial.printf("[net] poll every %lus (HTTP %d)\n",
                               (unsigned long)(s_backoff.interval() / 1000), s_st.lastPollCode);
             bool ok = s_st.status != PlaybackStatus::Offline;
-            if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::failTotal(); }
-            // Restart only helps a starved heap: allocations failed since the last good poll,
-            // or no block big enough for TLS. A dead zone or a 401/429 is not that.
-            bool starved = s_st.lastPollCode != 429 &&   // rate limited: a reboot only asks again
-                           (mem::failTotal() != s_failsAtOk || mem::byteLargest() < netplan::TLS_NEED);
+            if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::bigFailTotal(); }
+            // Restart only helps a starved heap. A dead zone or a 401/429 is not that.
+            bool starved = netplan::starved(s_st.lastPollCode, mem::bigFailTotal() != s_failsAtOk,
+                                            (unsigned)mem::byteLargest());
             if (!ok) {
                 mem::log("poll failed");
                 net::diagnose(s_st.lastPollCode, s_st.lastPollOkMs ? millis() - s_st.lastPollOkMs : 0);

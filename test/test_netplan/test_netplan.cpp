@@ -110,6 +110,15 @@ void test_health_restart_after_180s_when_memory_starved() {
     TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, true, true, 1000 + 179000));
     TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, true, true, 1000 + 180000));
 }
+// Memory evidence for the restart: a big failed allocation or no block for TLS. A revoked
+// token (401) or a Spotify outage on a healthy heap must not become a reboot every 3 min.
+void test_starved_needs_memory_evidence() {
+    TEST_ASSERT_FALSE(netplan::starved(401, false, netplan::TLS_NEED));
+    TEST_ASSERT_FALSE(netplan::starved(503, false, 40000));
+    TEST_ASSERT_TRUE(netplan::starved(-1, true, 40000));
+    TEST_ASSERT_TRUE(netplan::starved(-1, false, netplan::TLS_NEED - 1));
+    TEST_ASSERT_FALSE(netplan::starved(429, true, 1000));                // rate limited: never
+}
 // The restart clock spans millis() wrapping (every ~49.7 days of uptime).
 void test_health_restart_clock_survives_millis_wrap() {
     netplan::Health h;
@@ -306,6 +315,7 @@ int main(int, char**) {
     RUN_TEST(test_can_run_gates_on_largest_block);
     RUN_TEST(test_health_two_failures_pause_optional_until_success);
     RUN_TEST(test_health_restart_after_180s_when_memory_starved);
+    RUN_TEST(test_starved_needs_memory_evidence);
     RUN_TEST(test_health_restart_clock_survives_millis_wrap);
     RUN_TEST(test_health_dead_zone_without_memory_evidence_never_restarts);
     RUN_TEST(test_health_wifi_down_backstop_after_15_min);

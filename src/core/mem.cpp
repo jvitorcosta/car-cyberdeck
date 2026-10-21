@@ -13,7 +13,7 @@ static const uint32_t CAPS = MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL;
 // The hook runs on either core, possibly with the flash cache off, so it lives in IRAM and
 // only does atomic adds and plain stores (the old `x = x + 1` could lose counts).
 static uint32_t s_fails = 0;
-static uint32_t s_failTotal = 0;
+static uint32_t s_bigFailTotal = 0;   // failures of BIG_FAIL bytes or more, since boot
 static volatile uint32_t s_lastSize = 0;
 static volatile uint32_t s_lastCaps = 0;
 
@@ -35,12 +35,12 @@ void log(const char* where) {
 
 static void IRAM_ATTR onAllocFail(size_t size, uint32_t caps, const char*) {
     __atomic_fetch_add(&s_fails, 1u, __ATOMIC_RELAXED);
-    __atomic_fetch_add(&s_failTotal, 1u, __ATOMIC_RELAXED);
+    if (size >= BIG_FAIL) __atomic_fetch_add(&s_bigFailTotal, 1u, __ATOMIC_RELAXED);
     s_lastSize = (uint32_t)size;
     s_lastCaps = caps;
 }
 
-uint32_t failTotal() { return __atomic_load_n(&s_failTotal, __ATOMIC_RELAXED); }
+uint32_t bigFailTotal() { return __atomic_load_n(&s_bigFailTotal, __ATOMIC_RELAXED); }
 
 void installFailHook() { heap_caps_register_failed_alloc_callback(onAllocFail); }
 

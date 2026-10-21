@@ -72,8 +72,8 @@ int parseRetryAfter(const char* v);
 // Self-healing ladder. A heap so fragmented that TLS can't allocate never recovered by itself
 // (README "Design & performance history"), so:
 //  - 2 failed polls in a row with WiFi up -> pause the optional downloads;
-//  - restart only on memory evidence (memStarved: failed allocations since the last good poll,
-//    or the largest block below TLS_NEED) after 180 s without a good poll — a dead zone or a
+//  - restart only on memory evidence (memStarved, see starved() below) after 180 s without a
+//    good poll — a dead zone or a
 //    401/429 can't be fixed by rebooting, and must not become a reboot loop;
 //  - WiFi down for 15 min straight -> restart (backstop if the WiFi driver can't come back).
 class Health {
@@ -129,6 +129,13 @@ void done(Work& w, Step s);
 // 16.7 KB input buffer plus ~3 KB per handshake, so TLS steps wait below TLS_NEED. Walker
 // downloads use the fixed scratch buffer, so they need no more than that. Art is plain HTTP.
 constexpr unsigned TLS_NEED = 20000;
+
+// Health's memory evidence: big allocations failed since the last good poll (mem::BIG_FAIL;
+// the WiFi driver's small ones fail on nearly every request and don't count), or no block
+// large enough for TLS. Never on a 429: a reboot only asks again.
+inline bool starved(int pollCode, bool bigFailsSinceOk, unsigned largest) {
+    return pollCode != 429 && (bigFailsSinceOk || largest < TLS_NEED);
+}
 constexpr unsigned ART_NEED = 6000;    // plain-HTTP art: socket + tjpgd chunks only
 bool canRun(Step s, unsigned largest);
 
