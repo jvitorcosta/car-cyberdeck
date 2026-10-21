@@ -28,7 +28,9 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   PSRAM buffer and is read by dotted paths (`item.album.images.1.url`). The playlist name is a
   second request on the same connection, once per context (`util/ctxcache`).
 - **Walker** (`images/walksprite`) — PMD SpriteCollab walk cycle (Right-facing row) cropped
-  to a shared bounding box and fitted to a 32 px band. Two slots: the UI reads the active
+  to a shared bounding box and fitted to a 32 px band. Its slots, the 64 KB download scratch,
+  the PNG decoder and the album-art bitmap live in PSRAM (`mem::bigAlloc`), leaving internal
+  RAM to mbedTLS and the WiFi driver. Two slots: the UI reads the active
   one while the network task loads the next song's walker into the staged one. Fallback:
   the PokeAPI sprite with a bob/flip fake walk.
 - **Pokémon** — random #1–1025 from a bundled Pokédex (`pokemon/dex`, generated).

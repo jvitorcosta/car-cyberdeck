@@ -509,7 +509,8 @@ void start(TFT_eSPI& tft, bool (*online)(), const Opts& o) {
     s_tft = &tft;
     s_online = online;
     s_active = true;
-    if (xTaskCreatePinnedToCore(task, "bootscene", 4096, nullptr, 1, nullptr, 1) != pdPASS) {
+    // 6 KB: 4 KB left 1.8 KB free at "bootscene end" (2026-10-21 serial session).
+    if (xTaskCreatePinnedToCore(task, "bootscene", 6144, nullptr, 1, nullptr, 1) != pdPASS) {
         s_active = false;                   // waitDone() and the net task would wait forever
         Serial.println("[bootscene] no memory for its task: scene skipped");
     }

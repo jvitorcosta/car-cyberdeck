@@ -44,4 +44,9 @@ uint32_t failTotal() { return __atomic_load_n(&s_failTotal, __ATOMIC_RELAXED); }
 
 void installFailHook() { heap_caps_register_failed_alloc_callback(onAllocFail); }
 
+void* bigAlloc(size_t n) {
+    void* p = heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return p ? p : malloc(n);
+}
+
 }
