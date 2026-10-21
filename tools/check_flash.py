@@ -1,4 +1,4 @@
-"""Fail when a firmware image fills too much of its app partition.
+"""Fail when a firmware image (or the S3's media pack) fills too much of its partition.
 
   python tools/check_flash.py <firmware.bin> <partition size, e.g. 0x300000> [max percent, default 97]
 

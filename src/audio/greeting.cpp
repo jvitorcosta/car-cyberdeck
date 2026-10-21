@@ -8,15 +8,18 @@
 #include "../util/howl.h"
 #include "../util/intropick.h"
 #include "../util/musicbox.h"
-#include "../core/embed.h"
+#include "../core/media.h"
 
-EMBED(data_greeting_pcm);
-EMBED(data_finale_pcm);
-EMBED(data_opener_pcm);
-EMBED(data_intro_pcm);
-EMBED(data_howl_pcm);
-EMBED(data_greeting_alt_pcm);
-EMBED(data_tunes_txt);
+MEDIA_DECL(data_greeting_pcm);
+MEDIA_DECL(data_finale_pcm);
+MEDIA_DECL(data_opener_pcm);
+MEDIA_DECL(data_intro_pcm);
+MEDIA_DECL(data_howl_pcm);
+MEDIA_DECL(data_greeting_alt_pcm);
+MEDIA_DECL(data_tunes_txt);
+// In the app, so a deck with an empty media partition still boots with sound.
+EMBED(data_greeting_default_pcm);
+EMBED(data_tunes_default_txt);
 
 namespace greeting {
 
@@ -27,29 +30,44 @@ constexpr int TUNE_LEVEL = 5;            // the music box, percent of the clip v
 
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
-static const Clip GREETING = {EMBED_DATA(data_greeting_pcm),
-                              EMBED_SIZE(data_greeting_pcm) / 2,
-                              "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
-static const Clip FINALE = {EMBED_DATA(data_finale_pcm),
-                            EMBED_SIZE(data_finale_pcm) / 2,
-                            "finale", &audiosink::FINALE_VOLUME, CLIP_RATE};
-static const Clip OPENER = {EMBED_DATA(data_opener_pcm),
-                            EMBED_SIZE(data_opener_pcm) / 2,
-                            "opener", &audiosink::GREETING_VOLUME, CLIP_RATE};
+static Clip clip(media::Blob b, const char* name, const int* volume, int rate) {
+    return {b.data, b.size / 2, name, volume, rate};
+}
+static const int INTRO_VOLUME = 50;      // percent: the intro video's song, quieter than the greeting
 static_assert(howl::RATE == CLIP_RATE, "the synthesised howl plays at the clip rate");
 static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME, CLIP_RATE};
-static const int INTRO_VOLUME = 50;      // percent: the intro video's song, quieter than the greeting
-static const Clip INTRO = {EMBED_DATA(data_intro_pcm),
-                           EMBED_SIZE(data_intro_pcm) / 2,
-                           "intro", &INTRO_VOLUME, INTRO_RATE};
-// A real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none.
-static const Clip WOLF = {EMBED_DATA(data_howl_pcm),
-                          EMBED_SIZE(data_howl_pcm) / 2,
-                          "howl", &audiosink::GREETING_VOLUME, INTRO_RATE};
-// The second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot.
-static const Clip GREETING_ALT = {EMBED_DATA(data_greeting_alt_pcm),
-                                  EMBED_SIZE(data_greeting_alt_pcm) / 2,
-                                  "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE};
+
+struct Clips {
+    Clip greeting, finale, opener;
+    Clip intro;
+    Clip wolf;           // a real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none
+    Clip greetingAlt;    // the second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot
+};
+
+// Looked up once, on first use (a function-local static: thread-safe).
+static const Clips& clips() {
+    static const Clips c = [] {
+        Clips k;
+        media::Blob g = MEDIA(data_greeting_pcm, "greeting.pcm");
+        if (g.size <= 2) g = {EMBED_DATA(data_greeting_default_pcm), EMBED_SIZE(data_greeting_default_pcm)};
+        k.greeting = clip(g, "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE);
+        k.finale = clip(MEDIA(data_finale_pcm, "finale.pcm"), "finale", &audiosink::FINALE_VOLUME, CLIP_RATE);
+        k.opener = clip(MEDIA(data_opener_pcm, "opener.pcm"), "opener", &audiosink::GREETING_VOLUME, CLIP_RATE);
+        k.intro = clip(MEDIA(data_intro_pcm, "intro.pcm"), "intro", &INTRO_VOLUME, INTRO_RATE);
+        k.wolf = clip(MEDIA(data_howl_pcm, "howl.pcm"), "howl", &audiosink::GREETING_VOLUME, INTRO_RATE);
+        k.greetingAlt = clip(MEDIA(data_greeting_alt_pcm, "greeting_alt.pcm"), "greeting",
+                             &audiosink::GREETING_VOLUME, CLIP_RATE);
+        return k;
+    }();
+    return c;
+}
+
+// The music box's tune set: yours, else the public-domain fallback.
+static media::Blob tunesText() {
+    media::Blob t = MEDIA(data_tunes_txt, "tunes.txt");
+    if (!t.size) t = {EMBED_DATA(data_tunes_default_txt), EMBED_SIZE(data_tunes_default_txt)};
+    return t;
+}
 
 // An optional clip the build may lack: the pre-build scripts write one silent sample instead.
 static bool present(const Clip& c) { return c.samples > 1; }
@@ -64,8 +82,8 @@ void choose(intropick::Greeting g) { s_choice = g; }
 // The clip play(), durationMs() and level() agree on (the boot scene's timing and car lights).
 static const Clip& greetingClip() {
     if (s_choice == intropick::NONE) return SILENT;
-    if (s_choice == intropick::ALT && present(GREETING_ALT)) return GREETING_ALT;
-    return GREETING;
+    if (s_choice == intropick::ALT && present(clips().greetingAlt)) return clips().greetingAlt;
+    return clips().greeting;
 }
 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
@@ -143,8 +161,8 @@ static_assert(musicbox::RATE == CLIP_RATE, "the music box plays at the clip rate
 static void tuneTask(void*) {
     xSemaphoreTake(s_output, portMAX_DELAY);
     if (!s_tunesStop.load() && audiosink::open(CLIP_RATE)) {
-        musicbox::Player box((const char*)EMBED_DATA(data_tunes_txt), EMBED_SIZE(data_tunes_txt),
-                             esp_random());
+        const media::Blob text = tunesText();
+        musicbox::Player box((const char*)text.data, text.size, esp_random());
         char name[32] = "";
         int shown = -1;
         int16_t buf[CHUNK];
@@ -153,8 +171,7 @@ static void tuneTask(void*) {
             if (s_tunesStop.load()) box.stop();
             if (box.tune() != shown) {
                 shown = box.tune();
-                tunes::name((const char*)EMBED_DATA(data_tunes_txt), EMBED_SIZE(data_tunes_txt), shown,
-                            name, sizeof name);
+                tunes::name((const char*)text.data, text.size, shown, name, sizeof name);
                 Serial.printf("[tunes] %s\n", name);
                 setTuneName(name);
             }
@@ -223,25 +240,25 @@ bool tunesMuted() {
 }
 
 void playHowl() {
-    if (present(WOLF)) { start(&WOLF, "howl"); return; }
+    if (present(clips().wolf)) { start(&clips().wolf, "howl"); return; }
     start(&HOWL, "howl");
 }
 
-void playFinale() { if (present(FINALE)) start(&FINALE, "finale"); }
+void playFinale() { if (present(clips().finale)) start(&clips().finale, "finale"); }
 
 void playIntro() {
-    if (present(INTRO)) start(&INTRO, "intro");
+    if (present(clips().intro)) start(&clips().intro, "intro");
 }
 
-void playOpener() { if (present(OPENER)) start(&OPENER, "opener"); }
+void playOpener() { if (present(clips().opener)) start(&clips().opener, "opener"); }
 
-uint32_t openerMs() { return present(OPENER) ? lengthMs(OPENER) : 0; }
+uint32_t openerMs() { return present(clips().opener) ? lengthMs(clips().opener) : 0; }
 
 uint32_t durationMs() { return lengthMs(greetingClip()); }
 
 bool playing() { return s_playing.load() > 0; }
 
-uint32_t finaleMs() { return present(FINALE) ? lengthMs(FINALE) : 0; }
+uint32_t finaleMs() { return present(clips().finale) ? lengthMs(clips().finale) : 0; }
 
 uint8_t level(uint32_t ms) {
     const Clip& c = greetingClip();

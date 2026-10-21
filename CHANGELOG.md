@@ -42,6 +42,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- The S3's media (intro video and sounds, montage, howl, Sonic, McQueen, tunes, CJK font) move
+  out of the app into their own 9.9 MB flash partition: `pio run -e s3 -t uploadmedia` packs
+  `data/` (`tools/pack_media.py`) and flashes it. The app shrinks from 8.1 MB to ~1.3 MB, so a
+  code change flashes that much. The new partition table has two 3 MB app slots for OTA; an S3
+  flashed before needs one USB `upload` plus `uploadmedia` (README Quick start).
 - The S3 keeps its big buffers in PSRAM (album art, both walker slots, the walk-sheet download
   buffer, the PNG decoder): about 50 KB more internal RAM for TLS and WiFi all the time, and 45 KB
   more during a walker decode. The download buffer grew from 12 KB to 64 KB, so large walk

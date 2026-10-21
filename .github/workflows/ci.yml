@@ -29,7 +29,7 @@ jobs:
             part: "0x300000"   # huge_app.csv
           - board: s3
             envs: -e s3 -e hwcheck_s3
-            part: "0xC00000"   # partitions_s3.csv
+            part: "0x300000"   # partitions_s3.csv (one OTA slot)
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +55,11 @@ jobs:
         run: pio run ${{ matrix.envs }}
       - name: Flash size check
         run: python tools/check_flash.py .pio/build/${{ matrix.board }}/firmware.bin ${{ matrix.part }} 97
+      - name: Media pack size check (the S3's media partition)
+        if: matrix.board == 's3'
+        run: |
+          python tools/pack_media.py .pio/media.bin
+          python tools/check_flash.py .pio/media.bin 0x9E0000 95
 
   host-tests:
     name: Host unit tests (Unity + g++, sanitizers, 64- and 32-bit)
@@ -78,8 +83,8 @@ jobs:
       - name: Run all suites (64-bit, ASan + UBSan)
         shell: pwsh
         run: ./tools/run_tests.ps1
-      - name: Media tool tests (tools/test_gen_*.py, standard library only)
-        run: python -m unittest discover -s tools -p "test_gen_*.py"
+      - name: Media tool tests (tools/test_*.py, standard library only)
+        run: python -m unittest discover -s tools -p "test_*.py"
       - name: Run all suites (32-bit like the ESP32's size_t, sanitizers off)
         shell: pwsh
         env:
