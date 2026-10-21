@@ -126,8 +126,10 @@ static void handleState() {
 }
 
 static void handlePlay() {
-    if (s_server->arg("clip") != "howl") { s_server->send(404, "text/plain", "unknown clip"); return; }
     const String key = s_server->arg("k");
+    // The key first (remotegate.h): without it, no answer tells clip names or the deck's memory.
+    if (!s_gate.keyOk(key.c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    if (s_server->arg("clip") != "howl") { s_server->send(404, "text/plain", "unknown clip"); return; }
     // A howl starts the audio driver and a 3 KB task: never at the cost of Spotify's TLS.
     if (mem::byteLargest() < netplan::TLS_NEED + 12000) {
         s_server->send(503, "text/plain", "low memory");
