@@ -5,7 +5,8 @@
 //   strip:  red, orange, pink, purple, blue, green, white
 //   bottom: intensity  -  [10 rising bars, tap or drag]  +
 // The iPhone's Bluetooth must be off (Settings): each controller takes one connection at a time.
-// Colour, intensity, power and zone survive a reboot (NVS).
+// Colour, intensity, power and zone survive a reboot (NVS). Touch is the pen on a resistive panel;
+// its calibration screen runs on first boot, or with BOOT held (at power-up, or 2 s any time).
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #include <NimBLEDevice.h>
@@ -222,6 +223,94 @@ static void drawAll() {
     drawStep(PLUS_X);
 }
 
+// ---- Touch calibration: tap five crosses with the pen, fit, keep it in NVS ("touch"/"hom") ----
+// Runs on first boot, when BOOT is held at power-up, or when BOOT is held for 2 s.
+
+static constexpr int PIN_BOOT = 0;
+static constexpr int N_TARGET = 5;
+static const int CAL_SX[N_TARGET] = {24, 296, 296, 24, 160};
+static const int CAL_SY[N_TARGET] = {24, 24, 216, 216, 120};
+
+static void drawTarget(int x, int y, uint16_t c) {
+    tft.drawFastHLine(x - 14, y, 29, c);
+    tft.drawFastVLine(x, y - 14, 29, c);
+    tft.drawCircle(x, y, 8, c);
+}
+
+// One pen tap: waits for the panel to read released, then averages the press's readings.
+static void waitTap(int* rx, int* ry) {
+    int x, y;
+    for (uint32_t freeSince = millis(); millis() - freeSince < 150;) {
+        if (touch::readRaw(&x, &y)) freeSince = millis();
+        delay(5);
+    }
+    for (;;) {
+        while (!touch::readRaw(&x, &y)) delay(5);
+        delay(60);  // let the pen settle
+        long sx = 0, sy = 0;
+        int n = 0;
+        for (uint32_t t0 = millis(); millis() - t0 < 250 && touch::readRaw(&x, &y); n++) {
+            sx += x;
+            sy += y;
+            delay(10);
+        }
+        if (n >= 5) {
+            *rx = static_cast<int>(sx / n);
+            *ry = static_cast<int>(sy / n);
+            return;
+        }
+    }
+}
+
+static void calibrate() {
+    for (;;) {
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextDatum(MC_DATUM);
+        tft.setTextColor(TFT_WHITE, TFT_BLACK);
+        tft.drawString("Touch calibration", 160, 82, 4);
+        tft.drawString("Tap each cross with the pen", 160, 160, 2);
+        int rx[N_TARGET], ry[N_TARGET];
+        for (int i = 0; i < N_TARGET; i++) {
+            drawTarget(CAL_SX[i], CAL_SY[i], TFT_RED);
+            waitTap(&rx[i], &ry[i]);
+            drawTarget(CAL_SX[i], CAL_SY[i], TFT_GREEN);
+            Serial.printf("[cal] target %d,%d <- raw %d,%d\n", CAL_SX[i], CAL_SY[i], rx[i], ry[i]);
+        }
+        // The four corners fit the map exactly; the centre tap checks it. Pen taps on this panel
+        // scatter ~10 px, so 25 px still means "hit the cross".
+        touchcal::Homography k;
+        const bool ok = touchcal::fit(rx, ry, CAL_SX, CAL_SY, &k);
+        const int err = ok ? touchcal::error(k, rx[4], ry[4], CAL_SX[4], CAL_SY[4]) : 999;
+        Serial.printf("[cal] fit %s, centre off by %d px\n", ok ? "ok" : "failed", err);
+        if (ok && err <= 25) {
+            Preferences p;
+            p.begin("touch", false);
+            p.putBytes("hom", &k, sizeof(k));
+            p.end();
+            touch::setCalibration(k);
+            tft.fillScreen(TFT_BLACK);
+            tft.setTextColor(TFT_GREEN, TFT_BLACK);
+            tft.drawString("Calibrated", 160, 120, 4);
+            delay(800);
+            return;
+        }
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+        tft.drawString("Missed a cross - again", 160, 120, 4);
+        delay(1500);
+    }
+}
+
+static bool loadCalibration() {
+    Preferences p;
+    p.begin("touch", true);
+    touchcal::Homography k;
+    const bool ok = p.getBytesLength("hom") == sizeof(k) && p.getBytes("hom", &k, sizeof(k)) == sizeof(k);
+    p.end();
+    if (ok) touch::setCalibration(k);
+    return ok;
+}
+
 // ---- Input ----
 
 static void save() {
@@ -324,6 +413,8 @@ void setup() {
     target = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
     lit = prefs.getBool("lit", true);
 
+    pinMode(PIN_BOOT, INPUT_PULLUP);
+    if (!loadCalibration() || digitalRead(PIN_BOOT) == LOW) calibrate();
     drawAll();
     NimBLEDevice::init("");
     xTaskCreatePinnedToCore(linkTask, "leds-link", 4096, nullptr, 1, nullptr, 0);
@@ -340,6 +431,19 @@ void loop() {
         pressKind = NONE;
     }
     wasDown = down;
+
+    // BOOT held for 2 s: calibrate the touch again.
+    static uint32_t bootSince = 0;
+    if (digitalRead(PIN_BOOT) == LOW) {
+        if (bootSince == 0) bootSince = millis();
+        else if (millis() - bootSince > 2000) {
+            calibrate();
+            drawAll();
+            bootSince = 0;
+        }
+    } else {
+        bootSince = 0;
+    }
 
     // A controller that just came up gets the current state, so it matches the screen.
     static bool shown[N_CTRL] = {};
