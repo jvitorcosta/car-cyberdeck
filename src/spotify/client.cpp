@@ -219,12 +219,16 @@ void poll(AppState& st) {
         s_pdPlaying = false;
         const bool haveTrack = st.trackName[0] != '\0';
         const int pc = haveTrack ? s_sp->getPlayerDetails(onPlayerCheck, SPOTIFY_MARKET) : 0;
-        if (nowplaying::on204(pc, s_pdPlaying, haveTrack) == nowplaying::On204::KeepTrack) {
+        const nowplaying::On204 says = nowplaying::on204(pc, s_pdPlaying, haveTrack);
+        if (says == nowplaying::On204::KeepTrack) {
             if (lastCode != 204) Serial.println("[spotify] poll 204 but /me/player says playing: keeping the song");
             st.isPlaying = true;
             st.progressMs = (uint32_t)s_pdProgress;
             st.lastPollMs = millis();
             st.status = PlaybackStatus::Playing;
+        } else if (says == nowplaying::On204::Unknown) {
+            // Logged every time: these are rare, and the code is what tells TLS from a timeout.
+            Serial.printf("[spotify] poll 204 and /me/player failed (%d): keeping the song\n", pc);
         } else {
             if (lastCode != 204) Serial.println("[spotify] poll 204: Spotify says nothing is playing");
             st.status = PlaybackStatus::Stopped;
