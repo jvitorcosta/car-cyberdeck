@@ -94,8 +94,9 @@ void checkBoot() {
         Serial.printf("[ota] rollback to %s failed: its image does not verify\n", other->label);
         return;
     }
-    Serial.printf("[ota] rolled back: %u crashes in a row, booting %s (%s)\n", (unsigned)s_crashes,
-                  other->label, desc.version);
+    // The build's date: Arduino builds leave desc.version at the IDF version.
+    Serial.printf("[ota] rolled back: %u crashes in a row, booting %s (built %s %s)\n",
+                  (unsigned)s_crashes, other->label, desc.date, desc.time);
     s_crashes = 0;
     s_rolledBack = bootguard::MAGIC;
     delay(100);

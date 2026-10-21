@@ -52,7 +52,7 @@ static const uint32_t TASK_WDT_S = 30;
 static const char* resetReason() {
     switch (esp_reset_reason()) {
         case ESP_RST_POWERON:  return "power-on";
-        case ESP_RST_SW:       return "software (self-heal restart)";
+        case ESP_RST_SW:       return "software (self-heal, update or rollback)";
         case ESP_RST_PANIC:    return "panic";
         case ESP_RST_INT_WDT:  return "interrupt watchdog";
         case ESP_RST_TASK_WDT: return "task watchdog";
