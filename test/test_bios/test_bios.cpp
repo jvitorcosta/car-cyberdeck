@@ -97,6 +97,18 @@ void test_script_lines_fit_the_terminal() {
     }
 }
 
+// A plain terminal line (value "") types its label alone, with no dot leader.
+void test_term_format_plain_line_has_no_leader() {
+    Term term = {};
+    termSet(term, "Detecting occupants...", "", 0, 0);
+    termSet(term, "ENGINE", "RUNNING", 0, 0);
+    char out[TERM_COLS + 1];
+    TEST_ASSERT_EQUAL_INT(-1, termFormat(term.rows[0], out));
+    TEST_ASSERT_EQUAL_STRING("Detecting occupants...", out);
+    TEST_ASSERT_EQUAL_INT(TERM_COLS - 7, termFormat(term.rows[1], out));
+    TEST_ASSERT_EQUAL_STRING("RUNNING", out + TERM_COLS - 7);
+}
+
 void test_term_script_feeds_due_lines_once() {
     Term term = {};
     termScript(term, 0);
@@ -194,5 +206,6 @@ int main() {
     RUN_TEST(test_plain_script_line_has_no_value);
     RUN_TEST(test_term_expire_keeps_fresh_and_pending_lines);
     RUN_TEST(test_term_update_restarts_the_expiry_clock);
+    RUN_TEST(test_term_format_plain_line_has_no_leader);
     return UNITY_END();
 }

@@ -38,7 +38,7 @@ bool s_wifi = false, s_engine = false, s_greet = false, s_done = false, s_parked
 // Row i's text at t ("> " is drawn apart): returns the typed characters, *v the value column (-1 none).
 int termRow(int i, uint32_t t, char* out, int* v) {
     const bios::TermLine& r = s_term.rows[i];
-    *v = bios::format(r.label, r.value, out, bios::TERM_COLS + 1, bios::TERM_COLS);
+    *v = bios::termFormat(r, out);
     return t < r.at ? 0 : bios::typed(t - r.at, (int)strlen(r.label), (int)strlen(out));
 }
 

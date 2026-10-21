@@ -51,4 +51,6 @@ bool termSet(Term& term, const char* label, const char* value, uint8_t tone, uin
 void termScript(Term& term, uint32_t t);           // feeds script lines due by t, each once (not the live one)
 uint32_t liveAt();                                 // when the script's live (WI-FI) line is due
 void termExpire(Term& term, uint32_t t, uint32_t ttl);   // drops lines unchanged for ttl (not pending)
+// format() for a terminal line (out: TERM_COLS + 1): a plain line ("" value) is just its label.
+int termFormat(const TermLine& r, char* out);
 }
