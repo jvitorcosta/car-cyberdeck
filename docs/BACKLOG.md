@@ -4,9 +4,11 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
-- **Old deck touch layer is faulty** (2026-10-14): one constant press (raw x=0, y~3977) under
-  both the companion and `hwcheck`, stylus taps never register. The avatar menu is driven from
-  the phone; touch stays in code (with the stuck-press guard) for a working board.
+- **Old deck touch works with the pen** (2026-10-21; was "faulty" on 2026-10-14): at rest the
+  panel reads a press at raw x=0 (y~4000, z~600), which tripped the stuck-press guard for good.
+  `companion/touch` now treats raw x < 100 as released, and `TOUCH_RAW_*` were recalibrated from
+  pen taps (x 532..3477, y 590..3513). Taps register under `ledpanel`; the companion's own
+  touch menu hasn't been retried yet.
 
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
