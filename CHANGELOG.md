@@ -46,6 +46,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- Both decks wait longer for the iPhone hotspot at boot (three 8 s tries, time to unlock the
+  phone) before falling back to another network, and a deck on the fallback moves to the hotspot
+  once a minute's scan finds it. Before, a hotspot that wasn't advertising yet lost to the home
+  WiFi and the deck stayed there.
 - The S3's media (intro video and sounds, montage, howl, Sonic, McQueen, tunes, CJK font) move
   out of the app into their own 9.9 MB flash partition: `pio run -e s3 -t uploadmedia` packs
   `data/` (`tools/pack_media.py`) and flashes it. The app shrinks from 8.1 MB to ~1.3 MB, so a
