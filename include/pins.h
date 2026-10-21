@@ -19,7 +19,7 @@ static const int AMP_ON = 0;                        // LOW plays (verified with 
 // SD card (SDMMC 4-bit), unused for now: CLK 38, CMD 40, D0 39, D1 41, D2 48, D3 47.
 
 #elif defined(BOARD_CYD)
-// ESP32-2432S028R "Cheap Yellow Display".
+// ESP32-2432S028R "Cheap Yellow Display": the companion screen (and its hwcheck).
 // Touch (XPT2046) — SEPARATE SPI bus (HSPI); only hwcheck uses it.
 static const int TOUCH_SCLK = 25;
 static const int TOUCH_MISO = 39;
@@ -31,12 +31,6 @@ static const int TOUCH_IRQ  = 36;
 // to flip an axis.
 static const int TOUCH_RAW_X0 = 200, TOUCH_RAW_X1 = 3900;
 static const int TOUCH_RAW_Y0 = 200, TOUCH_RAW_Y1 = 3900;
-
-// SD card (VSPI)
-static const int SD_CS   = 5;
-static const int SD_SCK  = 18;
-static const int SD_MISO = 19;
-static const int SD_MOSI = 23;
 
 // Backlight
 static const int PIN_BL = 21;

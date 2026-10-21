@@ -16,11 +16,11 @@ static int s_lastIndex = -1;      // the one before a drop (two tries when it wa
 constexpr uint32_t CONNECT_TRY_MS = 8000;   // per network in connectAny()
 constexpr uint32_t CHECK_MS = 5000;         // loop(): reconnect check period
 // Fixed address on the iPhone hotspot (util/hotspotip): 172.20.10.10 for the S3, .11 for the
-// CYD, so a Home Screen bookmark of http://172.20.10.10/ keeps working.
-#ifdef BOARD_S3
-constexpr uint8_t HOTSPOT_OCTET = DECK_HOTSPOT_OCTET;
+// companion, so a Home Screen bookmark of http://172.20.10.10/ keeps working.
+#ifdef CARDECK_COMPANION
+constexpr uint8_t HOTSPOT_OCTET = COMPANION_HOTSPOT_OCTET;
 #else
-constexpr uint8_t HOTSPOT_OCTET = CYD_HOTSPOT_OCTET;
+constexpr uint8_t HOTSPOT_OCTET = DECK_HOTSPOT_OCTET;
 #endif
 
 static void onPingReply(esp_ping_handle_t, void* arg) { *(volatile bool*)arg = true; }

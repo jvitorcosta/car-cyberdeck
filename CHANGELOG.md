@@ -51,6 +51,16 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   `data/` (`tools/pack_media.py`) and flashes it. The app shrinks from 8.1 MB to ~1.3 MB, so a
   code change flashes that much. The new partition table has two 3 MB app slots for OTA; an S3
   flashed before needs one USB `upload` plus `uploadmedia` (README Quick start).
+- The S3 keeps its big buffers in PSRAM (album art, both walker slots, the walk-sheet download
+  buffer, the PNG decoder): about 50 KB more internal RAM for TLS and WiFi all the time, and 45 KB
+  more during a walker decode. The download buffer grew from 12 KB to 64 KB, so large walk
+  sheets no longer fall back to the still sprite, and walkers keep all their frames.
+- The deck asks Spotify once per poll (`/v1/me/player`: song, progress and device together)
+  instead of two endpoints, on a connection kept open between polls instead of a new TLS
+  handshake each time. A 429's wait comes with the answer (no extra request), a revoked access
+  token is refreshed and the request retried at once, and the podcast and ad cases no longer
+  read uninitialised fields. The SpotifyArduino library and `tools/patch_spotify_lib.py` are
+  gone (own client in `spotify/client`, `util/playerjson`, `util/jsonpath`).
 - The "Nothing playing" screen now says **Waiting for a song...** (same screen, same timing).
 - The S3's "Waiting for a song..." screen shows the phone page's link as a QR code again, left of
   Sonic in a Gen-3 battle box named **REMOTE** (with a phone icon): 3 px modules (half as big
@@ -95,6 +105,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   greeting sizes in its flash check, and runs the media tool tests.
 
 ### Fixed
+- Pokémon whose walk sheet is 320 px wide (Doublade) walk again instead of showing the still
+  sprite: the S3's PNG decoder buffer now fits RGBA sheets up to 512 px.
+- The boot scene's task had 1.8 KB of stack left at its end; it now has 6 KB instead of 4 KB.
+- Right after boot, a song playing on the phone no longer shows as **Waiting for a song...**
+  when Spotify's currently-playing endpoint wrongly answered "nothing playing": the deck now
+  reads `/me/player`, which knows.
 - The S3 froze its network task ("No internet", stale songs) while plugged into a PC with no
   serial monitor open: a USB serial write with a 0 ms timeout waits forever in this core. Writes
   now give up after 1 ms.
@@ -112,6 +128,15 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - After a hotspot reconnect the WiFi driver could report "connected" with no address, and the
   deck failed every Spotify lookup for ~40 s. Online now means connected with an address, so it
   reconnects within ~5-10 s.
+
+### Removed
+- The CYD's standalone deck build (`cyd`): the S3 is the deck and the CYD stays as its companion
+  screen (`cyd_companion`) and keeps its hardware check (`hwcheck`). Gone with it: the CYD's DAC
+  audio path (`board/cyd/sink_dac`, `util/dacstream`) and its branches in `main.cpp` and
+  `audio/greeting`. The last commit with it is `d4d0a67`.
+- The parked SD card cache (`images/cache`, `-DSD_CACHE`): the S3 never mounted a card and the
+  companion doesn't fetch sprites, so it was never used. Walk sheets and sprites are downloaded
+  (and prefetched) as before. The last commit with it is `0ba409b`.
 
 ## [1.1.0] - 2026-10-13
 

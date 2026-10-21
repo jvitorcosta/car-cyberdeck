@@ -1,5 +1,4 @@
 #include "ota.h"
-#ifdef BOARD_S3
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <Preferences.h>
@@ -127,12 +126,3 @@ void onGoodPoll() {
     Serial.printf("[ota] this firmware is good (%s)\n", id);
 }
 }
-#else
-namespace ota {
-void checkBoot() {}
-void begin(bool (*)()) {}
-bool active() { return false; }
-int progress() { return -1; }
-void onGoodPoll() {}
-}
-#endif

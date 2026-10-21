@@ -1,5 +1,5 @@
 #pragma once
-// Firmware updates over WiFi, pushed from the PC (S3 only; on the CYD every call is a no-op):
+// Firmware updates over WiFi, pushed from the PC:
 //   pio run -e s3_ota -t upload
 // ArduinoOTA on port 3232, password REMOTE_TOKEN; off when REMOTE_TOKEN is empty, like the phone
 // remote. Never pulled from the internet: the firmware carries the Spotify secrets (config.h).

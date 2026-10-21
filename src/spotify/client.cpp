@@ -1,112 +1,169 @@
 #include "client.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
+#include <esp_heap_caps.h>
 #include "../net/http_config.h"
-#include <ArduinoJson.h>
-#include <SpotifyArduino.h>
 #include "../config.h"
 #include "../util/ctxcache.h"
-#include "../util/nowplaying.h"
+#include "../util/jsonpath.h"
+#include "../util/playerjson.h"
 #include "../util/text.h"
 #include "../util/netplan.h"
-#include "../core/mem.h"
 
+// Spotify Web API client: one request per poll (GET /v1/me/player: the song, its progress and the
+// device) on a connection kept open between polls, so a poll costs a request instead of a TLS
+// handshake (~1.5 s and ~40 KB of heap churn each). Replaces SpotifyArduino, which opened a new
+// connection per call, kept a second access token, dropped the response headers (Retry-After
+// cost another request) and left fields uninitialised for ads.
 namespace spclient {
-static WiFiClientSecure s_client;
-static SpotifyArduino* s_sp = nullptr;
-static AppState* s_target = nullptr;
 
-static void copyStr(char* dst, const char* src, size_t n) {
-    if (!src) { dst[0] = '\0'; return; }
-    txt::copy(dst, src, n);
-}
+constexpr const char* API = "https://api.spotify.com";
+// market: relinked songs and no available_markets lists (they were most of the body);
+// additional_types: podcasts as items, not nulls.
+constexpr const char* PLAYER_PATH = "/v1/me/player?market=" SPOTIFY_MARKET "&additional_types=episode";
+constexpr size_t BODY_MAX = 16 * 1024;   // a /me/player answer is ~4 KB
+constexpr uint32_t TOKEN_MARGIN_S = 300; // refresh this long before Spotify's expiry
 
-static void onPlaying(CurrentlyPlaying cp) {
-    AppState& st = *s_target;
-    // Ads (free accounts) and unknown items: SpotifyArduino leaves trackName, trackUri,
-    // artists, albumName and the images uninitialised (it only fills them for track/episode),
-    // so none of them may be read. Show the "Nothing playing" screen until music resumes; the
-    // last song's fields stay as they were, so no new track is detected for the ad.
-    if (cp.currentlyPlayingType != track && cp.currentlyPlayingType != episode) {
-        static uint32_t lastLog = 0;
-        if (millis() - lastLog > 30000) {
-            lastLog = millis();
-            Serial.printf("[spotify] poll 200 but not a track/episode (type %d, playing %d)\n",
-                          (int)cp.currentlyPlayingType, (int)cp.isPlaying);
-        }
-        st.isPlaying = cp.isPlaying;
-        st.lastPollMs = millis();
-        st.status = PlaybackStatus::Stopped;
-        return;
+static WiFiClientSecure s_api;           // api.spotify.com, kept open between requests
+static HTTPClient s_http;
+// "Bearer xxx" (~250 chars today). A fixed buffer, not a heap String: the String's block (~270 B,
+// kept for the whole session) landed between two ~17.7 KB free blocks and capped the largest free
+// block at ~17-22 KB instead of ~35 KB, below TLS_NEED (heap dump, 2026-10-08).
+static char s_auth[512] = "";
+static uint32_t s_tokenExpiry = 0;
+static char* s_body = nullptr;           // the last answer's body, NUL-terminated (PSRAM)
+static size_t s_bodyLen = 0;
+
+// HTTPClient::writeToStream target: copies the body into s_body (chunked or not), and keeps
+// accepting bytes past BODY_MAX (dropped, flagged) so the connection is read to its end and
+// stays usable.
+class BodySink : public Stream {
+public:
+    bool overflow = false;
+    void reset() { s_bodyLen = 0; overflow = false; if (s_body) s_body[0] = '\0'; }
+    size_t write(uint8_t c) override { return write(&c, 1); }
+    size_t write(const uint8_t* b, size_t n) override {
+        if (!s_body) return n;
+        size_t room = BODY_MAX - 1 - s_bodyLen;
+        size_t k = n < room ? n : room;
+        if (k < n) overflow = true;
+        memcpy(s_body + s_bodyLen, b, k);
+        s_bodyLen += k;
+        s_body[s_bodyLen] = '\0';
+        return n;
     }
-    // Store ORIGINAL (UTF-8) names so LRCLIB lyric matching works for accented
-    // titles; accents are folded to ASCII at display time instead.
-    copyStr(st.trackName, cp.trackName, sizeof(st.trackName));
-    txt::copyId(cp.trackUri, st.trackUri, sizeof(st.trackUri));   // long local-file URIs stay distinct
-    copyStr(st.artist, cp.numArtists > 0 ? cp.artists[0].artistName : nullptr, sizeof(st.artist));
-    copyStr(st.album, cp.albumName, sizeof(st.album));
-    // choose the ~300px image (index 1 is usually 300px; fall back to 0)
-    const char* art = cp.numImages > 1 ? cp.albumImages[1].url : (cp.numImages > 0 ? cp.albumImages[0].url : nullptr);
-    copyStr(st.albumArtUrl, art, sizeof(st.albumArtUrl));
-    copyStr(st.context, cp.contextUri, sizeof(st.context)); // raw URI; poll() resolves the name
-    st.progressMs = cp.progressMs;
-    st.durationMs = cp.durationMs;
-    st.isPlaying  = cp.isPlaying;
-    st.lastPollMs = millis();
-    st.status = cp.isPlaying ? PlaybackStatus::Playing : PlaybackStatus::Paused;
+    int available() override { return 0; }
+    int read() override { return -1; }
+    int peek() override { return -1; }
+    void flush() override {}
+};
+static BodySink s_sink;
+
+// Reads a 200's body into s_body. False when it was cut off or too big.
+static bool readBody(HTTPClient& h) {
+    s_sink.reset();
+    if (!s_body) return false;
+    const int n = h.writeToStream(&s_sink);
+    if (n < 0 || s_sink.overflow) {
+        Serial.printf("[spotify] body %s (%d)\n", s_sink.overflow ? "too big" : "cut off", n);
+        return false;
+    }
+    return true;
 }
 
 bool hasToken() { return SPOTIFY_REFRESH_TOKEN[0] != '\0'; }
 
-void begin() {
-    netcfg::spotify(s_client);
-    s_client.setTimeout(8);            // seconds: TCP connect/read (default 30 s)
-    // NOTE: SpotifyArduino's ctor calls setRefreshToken(), which reads its _refreshToken
-    // member before initializing it. Heap `new` leaves that member as garbage (not NULL),
-    // so its `strlen(_refreshToken)` dereferences garbage and crashes. A function-local
-    // static has zero-initialized storage, so _refreshToken starts as NULL -> safe.
-    static SpotifyArduino instance(s_client, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN);
-    s_sp = &instance;
-    if (s_sp->refreshAccessToken()) Serial.println("[spotify] access token OK");
-    else if (!netcfg::certRejected(s_client, "accounts.spotify.com"))
-        Serial.println("[spotify] refreshAccessToken FAILED");
-}
-
-// --- Context (playlist/album/artist) name resolution ------------------------
-// getCurrentlyPlaying only returns the context URI; the Web API needs a separate
-// authorized call for the playlist name. We keep our own access token (refreshed
-// from the refresh token) for these lookups and cache the last resolved name.
-// "Bearer xxx" (~250 chars today). A fixed buffer, not a heap String: the String's block
-// (~270 B, kept for the whole session) landed between two ~17.7 KB free blocks and capped the
-// largest free block at ~17-22 KB instead of ~35 KB, below TLS_NEED (heap dump, 2026-10-08).
-static char s_accessToken[512] = "";
-static uint32_t s_tokenExpiry = 0;
-
-static bool ensureAccessToken() {
-    if (s_accessToken[0] && (int32_t)(s_tokenExpiry - millis()) > 0) return true;
-    const char* rt = SPOTIFY_REFRESH_TOKEN;   // PC-obtained (tools/spotify_auth.py)
-    if (!rt[0]) return false;
+// A new access token from the refresh token (tools/spotify_auth.py). Returns the HTTP status of
+// accounts.spotify.com (200 = token stored; < 0 = no answer).
+static int refreshToken() {
     WiFiClientSecure c;
     netcfg::spotify(c);
     HTTPClient https;
     https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
-    if (!https.begin(c, "https://accounts.spotify.com/api/token")) return false;
+    https.setReuse(false);
+    if (!https.begin(c, "https://accounts.spotify.com/api/token")) return -1;
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    String body = "grant_type=refresh_token&refresh_token=" + String(rt) +
+    String body = "grant_type=refresh_token&refresh_token=" + String(SPOTIFY_REFRESH_TOKEN) +
                   "&client_id=" + SPOTIFY_CLIENT_ID +
                   "&client_secret=" + SPOTIFY_CLIENT_SECRET;
     int rc = https.POST(body);
-    if (rc != 200) { netcfg::certRejected(c, "accounts.spotify.com"); https.end(); return false; }
-    JsonDocument doc;
-    DeserializationError e = deserializeJson(doc, https.getString());
-    https.end();
-    if (e || !doc["access_token"].is<const char*>()) return false;
-    if (!txt::concat(s_accessToken, sizeof(s_accessToken), "Bearer ", doc["access_token"].as<const char*>())) {
-        Serial.println("[spotify] access token too long for its buffer");
-        return false;
+    if (rc < 0) netcfg::certRejected(c, "accounts.spotify.com");
+    if (rc == 200) {
+        char token[400];
+        long expiresS = 3600;
+        if (!readBody(https) || !jsonpath::str(s_body, "access_token", token, sizeof token)) {
+            rc = -1;
+        } else if (!txt::concat(s_auth, sizeof(s_auth), "Bearer ", token)) {
+            Serial.println("[spotify] access token too long for its buffer");
+            rc = -1;
+        } else {
+            jsonpath::num(s_body, "expires_in", &expiresS);
+            if (expiresS < 2 * (long)TOKEN_MARGIN_S) expiresS = 2 * TOKEN_MARGIN_S;
+            s_tokenExpiry = millis() + (uint32_t)(expiresS - TOKEN_MARGIN_S) * 1000;
+        }
     }
-    s_tokenExpiry = millis() + 50UL * 60 * 1000;   // tokens last ~1h
-    return true;
+    https.end();
+    Serial.printf("[spotify] access token %s (HTTP %d)\n", rc == 200 ? "OK" : "FAILED", rc);
+    return rc;
+}
+
+static bool tokenFresh() { return s_auth[0] && (int32_t)(s_tokenExpiry - millis()) > 0; }
+
+// GET API + path with the access token, on the kept-open connection. Returns the HTTP status
+// (< 0: no answer; a failed token refresh answers with its own status). A 200's body is in
+// s_body; a 429's Retry-After (seconds) in *retryAfterS, else -1.
+static int apiGet(const char* path, int* retryAfterS = nullptr) {
+    if (retryAfterS) *retryAfterS = -1;
+    if (!s_body) return -1;
+    if (!tokenFresh()) {
+        int rc = refreshToken();
+        if (rc != 200) return rc;
+    }
+    char url[256];
+    snprintf(url, sizeof url, "%s%s", API, path);
+    static const char* KEYS[] = {"Retry-After"};
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        const bool reused = s_api.connected();
+        if (!s_http.begin(s_api, url)) return -1;
+        s_http.addHeader("Authorization", s_auth);
+        s_http.collectHeaders(KEYS, 1);
+        int rc = s_http.GET();
+        if (rc < 0 && reused && attempt == 0) {      // the kept connection had gone stale: once more
+            s_http.end();
+            s_api.stop();
+            continue;
+        }
+        if (rc == 401 && attempt == 0) {             // token revoked or expired early
+            s_http.end();
+            s_api.stop();
+            const int t = refreshToken();
+            if (t != 200) return t;
+            continue;
+        }
+        if (rc < 0) netcfg::certRejected(s_api, "api.spotify.com");
+        bool keep = rc == 200 || rc == 204;          // bodies we read to the end (or none)
+        if (rc == 200 && !readBody(s_http)) { rc = -1; keep = false; }
+        if (rc == 429 && retryAfterS) *retryAfterS = netplan::parseRetryAfter(s_http.header("Retry-After").c_str());
+        s_http.end();
+        if (!keep) s_api.stop();                     // unread error bodies would poison the next answer
+        return rc;
+    }
+    return -1;
+}
+
+void begin() {
+    netcfg::spotify(s_api);
+    s_api.setTimeout(8);               // seconds: TCP connect/read (default 30 s)
+    s_http.setReuse(true);
+    s_http.setTimeout(netcfg::HTTP_TIMEOUT_MS);
+    s_http.setUserAgent(netcfg::USER_AGENT);
+    if (!s_body) {
+        s_body = (char*)heap_caps_malloc(BODY_MAX, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_body) s_body = (char*)malloc(BODY_MAX);
+        if (s_body) s_body[0] = '\0';
+        else Serial.println("[spotify] no memory for the answer buffer");
+    }
+    refreshToken();
 }
 
 // uri like "spotify:playlist:ID" / ":album:" / ":artist:". Returns false when the lookup
@@ -114,143 +171,95 @@ static bool ensureAccessToken() {
 // ("playlist") as a placeholder. 403/404 (private or deleted playlist) are final.
 static bool resolveContext(const char* uri, char* out, size_t n) {
     out[0] = '\0';
-    if (!uri || !uri[0]) { txt::copy(out, "-", n); return true; }
-    String u = uri;
-    int p1 = u.indexOf(':'), p2 = u.indexOf(':', p1 + 1);
-    if (p1 < 0 || p2 < 0) { txt::copy(out, "-", n); return true; }
-    String type = u.substring(p1 + 1, p2), id = u.substring(p2 + 1);
-
-    const char* endpoint = nullptr;
-    if (type == "playlist") endpoint = "playlists";
-    else if (type == "album") endpoint = "albums";
-    else if (type == "artist") endpoint = "artists";
-    txt::copy(out, type.c_str(), n);   // placeholder until resolved
-    if (!endpoint) return true;                            // e.g. "collection": nothing to look up
-    if (!ensureAccessToken()) return false;
-    WiFiClientSecure c;
-    netcfg::spotify(c);
-    HTTPClient https;
-    https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
-    String url = "https://api.spotify.com/v1/" + String(endpoint) + "/" + id + "?fields=name";
-    if (!https.begin(c, url)) return false;
-    https.addHeader("Authorization", s_accessToken);
-    int rc = https.GET();
-    if (rc < 0) netcfg::certRejected(c, "api.spotify.com");
-    // 401: the cached access token was revoked or expired early. Expire it now so the next
-    // lookup refreshes it, instead of failing until the 50-minute expiry.
-    if (rc == 401) s_tokenExpiry = millis();
-    bool ok = rc == 403 || rc == 404;
-    if (rc == 200) {
-        JsonDocument d;
-        if (!deserializeJson(d, https.getString()) && d["name"].is<const char*>()) {
-            txt::copy(out, d["name"], n);          // raw; folded at display time
-            ok = true;
-        }
-    }
-    https.end();
-    return ok;
+    const char* p1 = uri ? strchr(uri, ':') : nullptr;
+    const char* p2 = p1 ? strchr(p1 + 1, ':') : nullptr;
+    if (!p2) { txt::copy(out, "-", n); return true; }
+    char type[16];
+    txt::copy(type, p1 + 1, (size_t)(p2 - p1) < sizeof type ? (size_t)(p2 - p1) : sizeof type);
+    const char* endpoint = strcmp(type, "playlist") == 0 ? "playlists"
+                         : strcmp(type, "album") == 0    ? "albums"
+                         : strcmp(type, "artist") == 0   ? "artists" : nullptr;
+    txt::copy(out, type, n);                   // placeholder until resolved
+    if (!endpoint) return true;                // e.g. "collection": nothing to look up
+    char path[160];
+    snprintf(path, sizeof path, "/v1/%s/%s?fields=name", endpoint, p2 + 1);
+    const int rc = apiGet(path);
+    if (rc == 200 && jsonpath::str(s_body, "name", out, n)) return true;   // raw; folded at display time
+    if (rc == 200) txt::copy(out, type, n);
+    return rc == 403 || rc == 404;
 }
 
-// After a 429: how long Spotify asks us to wait (Retry-After, seconds), or -1. SpotifyArduino
-// discards the response headers, so this asks once more with our own token and keeps only
-// that header. Skipped when the heap can't hold another TLS session (the back-off then just
-// doubles), and called once per episode by poll().
-static int fetchRetryAfter() {
-    if (mem::byteLargest() < netplan::TLS_NEED) return -1;
-    if (!ensureAccessToken()) return -1;
-    WiFiClientSecure c;
-    netcfg::spotify(c);
-    HTTPClient https;
-    https.setTimeout(netcfg::HTTP_TIMEOUT_MS);
-    if (!https.begin(c, "https://api.spotify.com/v1/me/player/currently-playing")) return -1;
-    https.addHeader("Authorization", s_accessToken);
-    const char* keys[] = {"Retry-After"};
-    https.collectHeaders(keys, 1);
-    int rc = https.GET();
-    int s = rc == 429 ? netplan::parseRetryAfter(https.header("Retry-After").c_str()) : -1;
-    https.end();
-    Serial.printf("[spotify] Retry-After: %d s (HTTP %d)\n", s, rc);
-    return s;
-}
-
-// /me/player's playing flag and position, for a 204 from currently-playing (poll()).
-static bool s_pdPlaying = false;
-static long s_pdProgress = 0;
-static void onPlayerCheck(PlayerDetails pd) {
-    s_pdPlaying = pd.isPlaying;
-    s_pdProgress = pd.progressMs;
-}
+static void copyStr(char* dst, const char* src, size_t n) { txt::copy(dst, src, n); }
 
 void poll(AppState& st) {
-    if (!s_sp) return;
-    s_target = &st;
-    const int lastCode = st.lastPollCode;
-    int code = s_sp->getCurrentlyPlaying(onPlaying, SPOTIFY_MARKET);
+    if (!s_body) return;
+    int retryAfter = -1;
+    const int code = apiGet(PLAYER_PATH, &retryAfter);
     st.lastPollCode = code;
     st.certRejected = false;
-    // Ask how long once per episode: on the first 429, and again only after waiting a time
-    // Spotify gave. A missing or failed answer is not retried on every 60 s poll.
-    const bool askWait = code == 429 && (lastCode != 429 || st.retryAfterS > 0);
-    st.retryAfterS = askWait ? fetchRetryAfter() : -1;
-    if (code == 200) {
-        // st.context holds the raw context URI (set in onPlaying). Resolve it to
-        // a human name once per context change (cached), done here — never inside
-        // the getCurrentlyPlaying callback (no nested HTTPS during its parse).
-        // A failed lookup is retried after ctxcache::RETRY_MS (it used to stick until the
-        // context changed, leaving "playlist" in the header).
-        static ctxcache::Cache cache;
-        static char cachedName[64] = "";
-        if (ctxcache::fromAlbum(st.context)) {
-            // from an album, or no context (a song from search): the song's own album name,
-            // no lookup (the album endpoint's whole track list was too big to parse)
-            txt::copy(st.context, st.album, sizeof(st.context));
-        } else {
-            if (cache.needsLookup(st.context, millis())) {
-                bool ok = resolveContext(st.context, cachedName, sizeof(cachedName));
-                cache.store(st.context, ok, millis());
-                Serial.printf("[spotify] context: %s%s\n", cachedName, ok ? "" : " (lookup failed, will retry)");
-            }
-            txt::copy(st.context, cachedName, sizeof(st.context));
-        }
-    } else if (code == 204) {
-        // currently-playing sometimes says 204 for minutes while the phone plays; /me/player
-        // still knows (util/nowplaying). Ask it before showing "Nothing playing".
-        // Only with a song to keep: parked with nothing playing, every 4 s poll would ask twice.
-        s_pdPlaying = false;
-        const bool haveTrack = st.trackName[0] != '\0';
-        const int pc = haveTrack ? s_sp->getPlayerDetails(onPlayerCheck, SPOTIFY_MARKET) : 0;
-        if (nowplaying::on204(pc, s_pdPlaying, haveTrack) == nowplaying::On204::KeepTrack) {
-            if (lastCode != 204) Serial.println("[spotify] poll 204 but /me/player says playing: keeping the song");
-            st.isPlaying = true;
-            st.progressMs = (uint32_t)s_pdProgress;
-            st.lastPollMs = millis();
-            st.status = PlaybackStatus::Playing;
-        } else {
-            if (lastCode != 204) Serial.println("[spotify] poll 204: Spotify says nothing is playing");
-            st.status = PlaybackStatus::Stopped;
-        }
-    } else {
-        st.certRejected = netcfg::certRejected(s_client, "api.spotify.com");
-        if (!st.certRejected) Serial.printf("[spotify] poll HTTP %d\n", code);
+    st.retryAfterS = code == 429 ? retryAfter : -1;
+    if (code == 204) {                          // no active device: nothing to show
+        if (st.status != PlaybackStatus::Stopped) Serial.println("[spotify] poll 204: no active device");
+        st.status = PlaybackStatus::Stopped;
+        return;
+    }
+    static playerjson::Now n;                   // ~900 B: off the network task's 10 KB stack
+    if (code == 200 && !playerjson::parse(s_body, n)) {
+        Serial.printf("[spotify] poll 200 but not a player answer (%u B)\n", (unsigned)s_bodyLen);
+        st.lastPollCode = -1;
+    }
+    if (st.lastPollCode != 200) {
+        if (code < 0) st.certRejected = netcfg::certRejected(s_api, "api.spotify.com");
+        if (!st.certRejected) Serial.printf("[spotify] poll HTTP %d\n", st.lastPollCode);
         st.status = PlaybackStatus::Offline;
+        return;
+    }
+    copyStr(st.deviceName, n.deviceName, sizeof(st.deviceName));
+    copyStr(st.deviceType, n.deviceType, sizeof(st.deviceType));
+    if (n.volume >= 0) st.volume = n.volume;
+    st.shuffle = n.shuffle;
+    st.repeat = n.repeat;
+    st.isPlaying = n.playing;
+    st.lastPollMs = millis();
+    if (n.kind != playerjson::Kind::Track && n.kind != playerjson::Kind::Episode) {
+        // An ad (free accounts), an unknown item or none: "Waiting for a song..." until music
+        // resumes. The last song's fields stay as they were, so no new track is detected.
+        static uint32_t lastLog = 0;
+        if (millis() - lastLog > 30000) {
+            lastLog = millis();
+            Serial.printf("[spotify] poll 200 but no song (%s, playing %d)\n",
+                          n.kind == playerjson::Kind::Other ? "ad or unknown item" : "no item", (int)n.playing);
+        }
+        st.status = PlaybackStatus::Stopped;
+        return;
+    }
+    // Store ORIGINAL (UTF-8) names so LRCLIB lyric matching works for accented
+    // titles; accents are folded to ASCII at display time instead.
+    copyStr(st.trackName, n.name, sizeof(st.trackName));
+    txt::copyId(n.uri, st.trackUri, sizeof(st.trackUri));   // long local-file URIs stay distinct
+    copyStr(st.artist, n.artist, sizeof(st.artist));
+    copyStr(st.album, n.album, sizeof(st.album));
+    copyStr(st.albumArtUrl, n.artUrl, sizeof(st.albumArtUrl));
+    st.progressMs = n.progressMs;
+    st.durationMs = n.durationMs;
+    st.status = n.playing ? PlaybackStatus::Playing : PlaybackStatus::Paused;
+
+    // The context (playlist/album/artist) name: resolved once per context change (cached), on
+    // the same connection. A failed lookup is retried after ctxcache::RETRY_MS.
+    static ctxcache::Cache cache;
+    static char cachedName[64] = "";
+    if (ctxcache::fromAlbum(n.context)) {
+        // from an album, or no context (a song from search): the song's own album name,
+        // no lookup (the album endpoint's whole track list was too big to parse)
+        txt::copy(st.context, st.album, sizeof(st.context));
+    } else {
+        if (cache.needsLookup(n.context, millis())) {
+            bool ok = resolveContext(n.context, cachedName, sizeof(cachedName));
+            cache.store(n.context, ok, millis());
+            Serial.printf("[spotify] context: %s%s\n", cachedName, ok ? "" : " (lookup failed, will retry)");
+        }
+        txt::copy(st.context, cachedName, sizeof(st.context));
     }
 }
 
-static void onPlayer(PlayerDetails pd) {
-    AppState& st = *s_target;
-    copyStr(st.deviceName, pd.device.name, sizeof(st.deviceName));
-    copyStr(st.deviceType, pd.device.type, sizeof(st.deviceType));
-    st.volume  = pd.device.volumePercent;
-    st.shuffle = pd.shuffleState;
-    // Library enum is repeat_track=0, repeat_context=1, repeat_off=2; ours makes the
-    // zero-initialised state mean "off" so nothing lights up before the first poll.
-    st.repeat  = pd.repeateState == repeat_track   ? 2
-               : pd.repeateState == repeat_context ? 1 : 0;
-}
-
-void pollPlayerDetails(AppState& st) {
-    if (!s_sp) return;
-    s_target = &st;
-    s_sp->getPlayerDetails(onPlayer, SPOTIFY_MARKET);
-}
 }

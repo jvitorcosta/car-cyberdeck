@@ -13,17 +13,13 @@
 MEDIA_DECL(data_greeting_pcm);
 MEDIA_DECL(data_finale_pcm);
 MEDIA_DECL(data_opener_pcm);
-#ifdef BOARD_S3
 MEDIA_DECL(data_intro_pcm);
 MEDIA_DECL(data_howl_pcm);
 MEDIA_DECL(data_greeting_alt_pcm);
 MEDIA_DECL(data_tunes_txt);
-#endif
-#ifdef MEDIA_PARTITION
 // In the app, so a deck with an empty media partition still boots with sound.
 EMBED(data_greeting_default_pcm);
 EMBED(data_tunes_default_txt);
-#endif
 
 namespace greeting {
 
@@ -32,25 +28,20 @@ constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_how
 constexpr int CHUNK = 128;               // samples per audiosink::write
 constexpr int TUNE_LEVEL = 5;            // the music box, percent of the clip volume: background
 
-// Volumes are per board (audiosink): the CYD's DAC distorts with level, the S3's codec doesn't.
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
 static Clip clip(media::Blob b, const char* name, const int* volume, int rate) {
     return {b.data, b.size / 2, name, volume, rate};
 }
-#ifdef BOARD_S3
 static const int INTRO_VOLUME = 50;      // percent: the intro video's song, quieter than the greeting
-#endif
 static_assert(howl::RATE == CLIP_RATE, "the synthesised howl plays at the clip rate");
 static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_VOLUME, CLIP_RATE};
 
 struct Clips {
     Clip greeting, finale, opener;
-#ifdef BOARD_S3
     Clip intro;
     Clip wolf;           // a real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none
     Clip greetingAlt;    // the second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot
-#endif
 };
 
 // Looked up once, on first use (a function-local static: thread-safe).
@@ -58,33 +49,25 @@ static const Clips& clips() {
     static const Clips c = [] {
         Clips k;
         media::Blob g = MEDIA(data_greeting_pcm, "greeting.pcm");
-#ifdef MEDIA_PARTITION
         if (g.size <= 2) g = {EMBED_DATA(data_greeting_default_pcm), EMBED_SIZE(data_greeting_default_pcm)};
-#endif
         k.greeting = clip(g, "greeting", &audiosink::GREETING_VOLUME, CLIP_RATE);
         k.finale = clip(MEDIA(data_finale_pcm, "finale.pcm"), "finale", &audiosink::FINALE_VOLUME, CLIP_RATE);
         k.opener = clip(MEDIA(data_opener_pcm, "opener.pcm"), "opener", &audiosink::GREETING_VOLUME, CLIP_RATE);
-#ifdef BOARD_S3
         k.intro = clip(MEDIA(data_intro_pcm, "intro.pcm"), "intro", &INTRO_VOLUME, INTRO_RATE);
         k.wolf = clip(MEDIA(data_howl_pcm, "howl.pcm"), "howl", &audiosink::GREETING_VOLUME, INTRO_RATE);
         k.greetingAlt = clip(MEDIA(data_greeting_alt_pcm, "greeting_alt.pcm"), "greeting",
                              &audiosink::GREETING_VOLUME, CLIP_RATE);
-#endif
         return k;
     }();
     return c;
 }
 
-#ifdef BOARD_S3
 // The music box's tune set: yours, else the public-domain fallback.
 static media::Blob tunesText() {
     media::Blob t = MEDIA(data_tunes_txt, "tunes.txt");
-#ifdef MEDIA_PARTITION
     if (!t.size) t = {EMBED_DATA(data_tunes_default_txt), EMBED_SIZE(data_tunes_default_txt)};
-#endif
     return t;
 }
-#endif
 
 // An optional clip the build may lack: the pre-build scripts write one silent sample instead.
 static bool present(const Clip& c) { return c.samples > 1; }
@@ -99,9 +82,7 @@ void choose(intropick::Greeting g) { s_choice = g; }
 // The clip play(), durationMs() and level() agree on (the boot scene's timing and car lights).
 static const Clip& greetingClip() {
     if (s_choice == intropick::NONE) return SILENT;
-#ifdef BOARD_S3
     if (s_choice == intropick::ALT && present(clips().greetingAlt)) return clips().greetingAlt;
-#endif
     return clips().greeting;
 }
 
@@ -168,13 +149,12 @@ static std::atomic<bool> s_tunesStop{false};
 static portMUX_TYPE s_nameMux = portMUX_INITIALIZER_UNLOCKED;
 static char s_tuneName[32] = "";                // the tune playing (tuneTask writes, any task reads)
 
-[[maybe_unused]] static void setTuneName(const char* s) {   // tuneTask: S3 only
+static void setTuneName(const char* s) {
     portENTER_CRITICAL(&s_nameMux);
     strlcpy(s_tuneName, s, sizeof s_tuneName);
     portEXIT_CRITICAL(&s_nameMux);
 }
 
-#ifdef BOARD_S3
 static_assert(musicbox::RATE == CLIP_RATE, "the music box plays at the clip rate");
 
 // Like task(), but the music box never ends by itself: it plays until stopTunes() and its fade.
@@ -209,10 +189,8 @@ static void tuneTask(void*) {
     s_playing.fetch_sub(1);
     vTaskDelete(nullptr);
 }
-#endif
 
 void playTunes() {
-#ifdef BOARD_S3
     if (s_tunes.load()) return;
     if (!s_output) s_output = xSemaphoreCreateMutex();
     s_tunesStop.store(false);
@@ -223,7 +201,6 @@ void playTunes() {
         s_playing.fetch_sub(1);
         Serial.println("[tunes] no memory for its task");
     }
-#endif
 }
 
 void stopTunes() { s_tunesStop.store(true); }
@@ -237,7 +214,6 @@ void tuneName(char* out, size_t n) {
     portEXIT_CRITICAL(&s_nameMux);
 }
 
-#ifdef BOARD_S3
 // Loaded once, on first use (a function-local static: thread-safe), then kept in RAM.
 static std::atomic<bool>& muted() {
     static std::atomic<bool> m{[] {
@@ -249,42 +225,29 @@ static std::atomic<bool>& muted() {
     }()};
     return m;
 }
-#endif
 
 void setTunesMuted(bool m) {
-#ifdef BOARD_S3
     if (muted().exchange(m) == m) return;
     Preferences p;
     p.begin("tunes", false);
     p.putBool("muted", m);
     p.end();
     Serial.printf("[tunes] %s\n", m ? "muted" : "unmuted");
-#else
-    (void)m;
-#endif
 }
 
 bool tunesMuted() {
-#ifdef BOARD_S3
     return muted().load();
-#else
-    return false;
-#endif
 }
 
 void playHowl() {
-#ifdef BOARD_S3
     if (present(clips().wolf)) { start(&clips().wolf, "howl"); return; }
-#endif
     start(&HOWL, "howl");
 }
 
 void playFinale() { if (present(clips().finale)) start(&clips().finale, "finale"); }
 
 void playIntro() {
-#ifdef BOARD_S3
     if (present(clips().intro)) start(&clips().intro, "intro");
-#endif
 }
 
 void playOpener() { if (present(clips().opener)) start(&clips().opener, "opener"); }

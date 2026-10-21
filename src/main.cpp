@@ -18,9 +18,7 @@
 #include "ui/intro.h"
 #include "util/idlesprite.h"
 #include "core/media.h"
-#ifdef BOARD_S3
 MEDIA_DECL(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_sprite.py), else empty
-#endif
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
@@ -29,31 +27,26 @@ MEDIA_DECL(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle
 #include "net/ota.h"
 #include "ui/otascreen.h"
 #include "util/qrfit.h"
-#ifdef BOARD_S3
 #include <qrcode.h>
-#endif
 #include "util/genre.h"
 #include "util/version.h"
 #include "util/interp.h"
 #include "util/netplan.h"
 #include "util/idlewait.h"
 #include "util/press.h"
-#ifdef BOARD_S3
 #include "board/s3/touch_ft6336.h"
 #include <Preferences.h>
 #include "util/intropick.h"
 #include "ui/carlook.h"
-#endif
 #include "images/art.h"
 #include "images/walksprite.h"
-#include "images/cache.h"
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 
-// Task watchdog: 30 s instead of the default 5 s. SpotifyArduino's response loops spin
-// (yield() never lets the lower-priority idle task run) and on a reset TLS connection one spun
-// ~11 s on core 0, so the idle task missed the 5 s watchdog and the board rebooted
-// (the "unexplained rst:0xc"). A genuine hang still reboots, after 30 s.
+// Task watchdog: 30 s instead of the default 5 s. It was raised for SpotifyArduino's spinning
+// response loops (one spun ~11 s on a reset TLS connection: the "unexplained rst:0xc"); that
+// library is gone, but a TLS handshake plus reads can still take 8 + 8 s on a weak hotspot.
+// A genuine hang still reboots, after 30 s.
 static const uint32_t TASK_WDT_S = 30;
 
 static const char* resetReason() {
@@ -70,7 +63,7 @@ static const char* resetReason() {
     }
 }
 
-// UI loop (core 1): draws only. All network/SD work runs in core/nettask on core 0 and
+// UI loop (core 1): draws only. All network work runs in core/nettask on core 0 and
 // arrives through core/shared (README "Design & performance history").
 static TFT_eSPI s_tft = TFT_eSPI();
 
@@ -117,7 +110,6 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
     s_notesDance = out.dance;
 }
 
-#ifdef BOARD_S3
 // This boot's opening (util/intropick): random, never last boot's (NVS "boot"/"last"), only
 // from what the build has. -D INTRO_FORCE=\"kiss\" (or honda, mcqueen) forces one for testing.
 static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen) {
@@ -134,16 +126,11 @@ static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen) {
     Serial.printf("[boot] opening: %s\n", intropick::name((intropick::Opening)o));
     return (intropick::Opening)o;
 }
-#endif
 
 void setup() {
     Serial.begin(115200);
     delay(200);
-#ifdef BOARD_S3
     Serial.printf("[boot] cardeck v%s (s3)\n", FW_VERSION);
-#else
-    Serial.printf("[boot] cardeck v%s (cyd)\n", FW_VERSION);
-#endif
     Serial.printf("[boot] reset reason: %s\n", resetReason());
     ota::checkBoot();   // may boot the other app slot (net/ota)
     board::begin();
@@ -159,14 +146,9 @@ void setup() {
         Serial.printf("[cjk] ranges=%d glyph(U+3042)=%s w=%d\n", ui::cjk().rangeCount(),
                       ok ? "ok" : "missing", w);
     }
-#ifdef SD_CACHE   // parked: a mounted card costs the RAM TLS needs (docs/BACKLOG.md)
-    cache::begin();
-#endif
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1); s_tft.fillScreen(TFT_BLACK);
     backlight::begin();
-#ifdef BOARD_S3
     touchft::begin();   // the music box's speaker button
-#endif
     if (!spclient::hasToken()) {
         // The token comes from a PC (Spotify only redirects to loopback addresses), so the
         // deck can't do anything without one.
@@ -177,7 +159,6 @@ void setup() {
         Serial.println("[spotify] no refresh token in src/config.h: run tools/spotify_auth.py");
         for (;;) delay(1000);
     }
-#ifdef BOARD_S3
     // One random opening (pickOpening): the kiss video (ui/intro, its own task, the boot terminal
     // over it), or the night drive with the Honda or McQueen and their greeting; all of them end
     // in the photo montage. WiFi connects and the network task logs into Spotify underneath. The S3 has heap to spare (~230 KB largest block), so the login and polls run
@@ -205,13 +186,13 @@ void setup() {
     if (wifi) {
         mem::log("boot+wifi");
         netclock::begin();                // the clock (night palette) right away, not after login
-        nettask::start(false, nullptr);   // logs in, then polls; no TLS hold
+        nettask::start();                 // logs in, then polls
     } else {
         // The network task retries WiFi underneath; the terminal says RETRYING... (the kiss holds
         // its last frame, the car cruises) until it's up. Started before intro::wait(), which
         // waits for WiFi.
         bootscene::setCaption("WiFi not found - retrying...");
-        nettask::start(false, nullptr);
+        nettask::start();
     }
     if (opening == intropick::KISS) {
         intro::wait();                    // over, and online (the last frame holds till then)
@@ -220,28 +201,6 @@ void setup() {
     }
     if (wifi) bootscene::setCaption("Connecting to Spotify...");
     bootscene::waitDone();                // the display is ours again
-#else
-    greeting::play();          // boot sound plays while WiFi connects
-    // Night drive while WiFi connects: the scene draws until the car leaves (>= 5 s, WiFi up).
-    bootscene::start(s_tft, net::isOnline);
-    bootscene::setCaption("Connecting WiFi...");
-
-    bool spotifyReady = false;
-    if (net::connectAny()) {
-        mem::log("boot+wifi");
-        netclock::begin();
-        bootscene::waitDone();               // the display is ours again
-        s_tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        s_tft.fillScreen(TFT_BLACK);
-        s_tft.drawString("Spotify auth...", 10, 10, 2);
-        spclient::begin();
-        spotifyReady = true;
-    } else {
-        // The scene keeps running; the network task retries and the car leaves once WiFi is up.
-        bootscene::setCaption("WiFi not found - retrying...");
-    }
-    nettask::start(spotifyReady, bootscene::active);   // always: it keeps retrying WiFi if the hotspot is late
-#endif
     remote::begin(bootscene::active);
     ota::begin(bootscene::active);
 }
@@ -258,7 +217,6 @@ static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, 
     return k;
 }
 
-#ifdef BOARD_S3
 // The phone-remote link as a QR code for the "Waiting for a song..." screen (esp_qrcode, built into
 // the core), from the deck's current address: 172.20.10.10 on the iPhone hotspot, the DHCP one
 // elsewhere. Rebuilt when the link changes (another network, a reconnect, the hotspot address
@@ -312,18 +270,13 @@ static const qrcard::Qr* phoneQr(bool recheck) {
     }
     return s_qr.size ? &s_qr : nullptr;
 }
-#else
-static const qrcard::Qr* phoneQr(bool) { return nullptr; }   // CYD: no flash to spare
-static constexpr uint32_t s_qrGen = 0;
-#endif
 
-// The S3's music box loops while "Waiting for a song..." is up, and stops (a short fade) as it
+// The music box loops while "Waiting for a song..." is up, and stops (a short fade) as it
 // goes.
 // It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
 // starts with the same margin as a phone howl, stops when memory runs low, and then tries again
 // at most once a minute.
 static void musicBox(bool want) {
-#ifdef BOARD_S3
     constexpr uint32_t RETRY_MS = 60000;
     static uint32_t gaveUpAt = 0;
     static bool gaveUp = false;
@@ -350,12 +303,8 @@ static void musicBox(bool want) {
     }
     gaveUp = false;
     greeting::playTunes();
-#else
-    (void)want;
-#endif
 }
 
-#ifdef BOARD_S3
 // A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on
 // the companion. Touch is read every 20 ms, only while "Waiting for a song..." is up.
 static press::Press s_soundPress;
@@ -368,7 +317,6 @@ static bool soundTapped() {
     const bool down = touchft::read(&x, &y);
     return p.update(down, down && statusscene::onSoundButton(x, y) ? 1 : 0, false, millis()) == 1;
 }
-#endif
 
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
 // when the mode changed (the caller redraws the current screen). No clock yet -> day.
@@ -443,15 +391,11 @@ void loop() {
         static int shownSound = -2;
         static uint32_t shownQrGen = 0;   // the phone link's QR on screen (s_qrGen)
         char text[80];   // title|detail: 24 + 1 + 48
-#ifdef BOARD_S3
         if (mode == 2 && soundTapped()) {   // the speaker button: mute or unmute, shown at once
             greeting::setTunesMuted(!greeting::tunesMuted());
             textAt = 0;
         }
         const int sound = mode == 2 ? (greeting::tunesMuted() ? 0 : 1) : -1;   // the button
-#else
-        const int sound = -1;
-#endif
         // Re-read the cause at most once a second: net::ssid() allocates a String.
         if (lastMode != mode || millis() - textAt >= 1000) {
             textAt = millis();
@@ -498,12 +442,10 @@ void loop() {
             remote::setStatus(title, detail);
             remote::setTunes(sound < 0 ? "" : sound ? "on" : "muted");
         }
-#ifdef BOARD_S3
         static bool shownPressed = false;   // the key darkens while a finger is on it
         const bool pressed = sound >= 0 && s_soundPress.pressed() == 1;
         if (pressed != shownPressed && sound == shownSound) ui::drawSoundButton(s_tft, sound, pressed);
         shownPressed = pressed;
-#endif
         shownSound = sound;
         strlcpy(shownText, text, sizeof shownText);
         strlcpy(shownTitle, title, sizeof shownTitle);

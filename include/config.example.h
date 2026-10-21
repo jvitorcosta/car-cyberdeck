@@ -2,8 +2,8 @@
 // Copy to src/config.h and fill in. src/config.h is git-ignored.
 
 // Up to 3 WiFi networks tried in order. The phone hotspot (the car) goes FIRST: it gets two tries
-// after a drop (util/roam) and both decks pin fixed addresses on it (172.20.10.10 / .11, iPhone
-// only). Enable "Maximize Compatibility" on the iPhone: the ESP32 only speaks 2.4 GHz.
+// after a drop (util/roam) and the deck and the companion pin fixed addresses on it (172.20.10.10 /
+// .11, iPhone only). Enable "Maximize Compatibility" on the iPhone: the ESP32 only speaks 2.4 GHz.
 struct WifiCred { const char* ssid; const char* pass; };
 static const WifiCred WIFI_NETWORKS[] = {
     {"YOUR_IPHONE_HOTSPOT", "YOUR_HOTSPOT_PASSWORD"},
@@ -28,11 +28,11 @@ static const int WIFI_NETWORK_COUNT = 2;
 #define TIMEZONE              "UTC0"
 
 // Phone remote: open http://cardeck.local/?k=<this token> on a phone on the same network
-// (cardeck-cyd.local on the CYD; uncomment REMOTE_NAME below to rename).
+// (uncomment REMOTE_NAME below to rename).
 // Any long random string; empty turns the remote off. The deck logs its address at boot.
 #define REMOTE_TOKEN          ""
 // #define REMOTE_NAME        "cardeck"
 
 // Companion screen (env cyd_companion): the new deck it reads. 172.20.10.10 is the S3's fixed
-// address on the iPhone hotspot. Both decks need the same REMOTE_TOKEN.
+// address on the iPhone hotspot. Both need the same REMOTE_TOKEN.
 #define COMPANION_DECK        "172.20.10.10"

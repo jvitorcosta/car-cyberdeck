@@ -5,8 +5,8 @@
 // The deck's media (clips, montage, intro video, CJK font...). On the S3 (MEDIA_PARTITION) they
 // live in the "media" flash partition, packed by tools/pack_media.py and flashed with
 //   pio run -e s3 -t uploadmedia
-// so a code change flashes ~1.2 MB instead of the whole 8 MB. The CYD and the companion still
-// link them into the app (board_build.embed_files). Either way a call site reads
+// so a code change flashes ~1.3 MB instead of the whole 8 MB. The companion still links its CJK
+// font into the app (board_build.embed_files). Either way a call site reads
 //   MEDIA_DECL(data_intro_bin);                     at namespace scope
 //   media::Blob b = MEDIA(data_intro_bin, "intro.bin");
 // A file the pack lacks, a bad CRC or an empty partition reads as {nullptr, 0}.
