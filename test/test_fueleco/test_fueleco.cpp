@@ -32,6 +32,16 @@ void test_no_air_reading_gives_nothing() {
     TEST_ASSERT_TRUE(std::isnan(t.kmLeft(50, CITY)));
 }
 
+// Km driven before the first air reading (the City has no MAF: speed density waits for the
+// intake temperature) burn no counted fuel, so they must not count as distance either.
+void test_distance_without_air_is_not_counted() {
+    fueleco::Trip t;
+    for (uint32_t ms = 0; ms <= 60000; ms += 250) t.step(ms, 80, NAN, false, 30);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.0f, t.km());
+    for (uint32_t ms = 60250; ms <= 260000; ms += 250) t.step(ms, 80, 12.3f, false, 30);
+    TEST_ASSERT_FLOAT_WITHIN(0.3f, 17.7f, t.avgKmL());
+}
+
 void test_steady_cruise() {          // 12.3 g/s at 80 km/h, E30: ~17.7 km/l
     fueleco::Trip t;
     for (uint32_t ms = 0; ms <= 200000; ms += 250) t.step(ms, 80, 12.3f, false, 30);
@@ -87,6 +97,7 @@ int main(int, char**) {
     RUN_TEST(test_blend_for_e30);
     RUN_TEST(test_speed_density_and_maf);
     RUN_TEST(test_no_air_reading_gives_nothing);
+    RUN_TEST(test_distance_without_air_is_not_counted);
     RUN_TEST(test_steady_cruise);
     RUN_TEST(test_fuel_cut_is_free);
     RUN_TEST(test_idle_counts_fuel_not_distance);

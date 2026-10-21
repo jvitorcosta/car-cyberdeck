@@ -6,6 +6,7 @@
 
 namespace obd {
 namespace {
+constexpr float MAX_VOLTS = 20.0f;   // ATRV: a 12 V system reads ~11-15 V
 struct Def { const char* cmd; uint8_t pid; uint8_t bytes; };
 // Order matches Pid. pid/bytes are unused for Battery (ATRV). FuelSys reads system 1 only.
 constexpr Def DEFS[(int)Pid::COUNT] = {
@@ -95,8 +96,11 @@ Reply battery(const char* raw, float* out) {
         if (!isdigit((unsigned char)*s)) continue;
         char* end = nullptr;
         const float v = strtof(s, &end);
+        // Not a number glued to a word ("ELM327 v1.5": a clone's banner after a brown-out
+        // reboot) and only a car battery's range.
+        const bool word = s > raw && isalpha((unsigned char)s[-1]);
         while (end && *end == ' ') ++end;
-        if (end && (*end == 'V' || *end == 'v')) { *out = v; return Reply::Ok; }
+        if (end && (*end == 'V' || *end == 'v') && !word && v <= MAX_VOLTS) { *out = v; return Reply::Ok; }
         s = end ? end - 1 : s;
     }
     return Reply::Error;

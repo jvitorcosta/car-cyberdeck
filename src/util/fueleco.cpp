@@ -51,7 +51,9 @@ void Trip::step(uint32_t nowMs, float speedKmh, float air, bool fuelCut, float e
     lastMs_ = nowMs;
     if (dtMs > MAX_STEP_MS) dtMs = MAX_STEP_MS;
     const float dtH = dtMs / 3600000.0f;
-    if (!std::isnan(speedKmh)) km_ += speedKmh * dtH;
+    // Distance only while the fuel is known too (counted, or cut): km with no fuel counted, e.g.
+    // before the first intake temperature, would push AVG and KM LEFT up.
+    if (!std::isnan(speedKmh) && (fuelCut || !std::isnan(air))) km_ += speedKmh * dtH;
     if (fuelCut) {
         now_ = CAP;
         return;

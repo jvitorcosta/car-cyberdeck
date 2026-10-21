@@ -75,6 +75,9 @@ void test_battery_voltage_forms() {
     struct { const char* raw; Reply want; float v; } rows[] = {
         {"12.6V", Reply::Ok, 12.6f}, {"ATRV\n14.1V", Reply::Ok, 14.1f}, {" 9V ", Reply::Ok, 9.0f},
         {"V", Reply::Error, -999.0f}, {"?", Reply::Error, -999.0f}, {"", Reply::Error, -999.0f},
+        // a clone's banner after a brown-out reboot is not 327 V
+        {"ELM327 v1.5", Reply::Error, -999.0f}, {"\r\rELM327 v2.1\r\r", Reply::Error, -999.0f},
+        {"ELM327 v1.5\r12.4V", Reply::Ok, 12.4f}, {"99V", Reply::Error, -999.0f},
     };
     for (auto& r : rows) {
         float v;
