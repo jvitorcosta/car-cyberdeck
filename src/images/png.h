@@ -7,6 +7,7 @@
 // mostly the 32 KB inflate window), so it lives on the heap only while a decode runs: acquire()
 // before, release() after; decoder() is valid in between. Static, it kept 45 KB away from the
 // TLS handshakes all the time, which then ran out of memory (failed polls, lwIP allocfails).
+// It is allocated in PSRAM (mem::bigAlloc), so on the S3 it no longer touches internal RAM.
 namespace img {
 
 bool acquire();      // false: no heap for the decoder right now (try again later)

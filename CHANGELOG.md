@@ -42,6 +42,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- The S3 keeps its big buffers in PSRAM (album art, both walker slots, the walk-sheet download
+  buffer, the PNG decoder): about 50 KB more internal RAM for TLS and WiFi all the time, and 45 KB
+  more during a walker decode. The download buffer grew from 12 KB to 64 KB, so large walk
+  sheets no longer fall back to the still sprite, and walkers keep all their frames.
 - The deck asks Spotify once per poll (`/v1/me/player`: song, progress and device together)
   instead of two endpoints, on a connection kept open between polls instead of a new TLS
   handshake each time. A 429's wait comes with the answer (no extra request), a revoked access
@@ -92,6 +96,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   greeting sizes in its flash check, and runs the media tool tests.
 
 ### Fixed
+- The boot scene's task had 1.8 KB of stack left at its end; it now has 6 KB instead of 4 KB.
 - Right after boot, a song playing on the phone no longer shows as **Waiting for a song...**
   when Spotify's currently-playing endpoint wrongly answered "nothing playing": the deck now
   reads `/me/player`, which knows.

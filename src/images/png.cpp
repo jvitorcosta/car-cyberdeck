@@ -1,5 +1,6 @@
 #include "png.h"
 #include <new>
+#include "../core/mem.h"
 #include "cache.h"
 #include "fetch.h"
 
@@ -9,7 +10,7 @@ static PNG* s_png = nullptr;
 
 bool acquire() {
     if (s_png) return true;
-    void* m = malloc(sizeof(PNG));
+    void* m = mem::bigAlloc(sizeof(PNG));   // ~45 KB, in PSRAM: no longer competes with TLS
     if (!m) return false;
     s_png = new (m) PNG();
     return true;

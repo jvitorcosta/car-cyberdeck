@@ -1,5 +1,6 @@
 #include "walksprite.h"
 #include <Arduino.h>
+#include "../core/mem.h"
 #include "png.h"
 #include "cache.h"
 #include "fetch.h"
@@ -13,9 +14,9 @@ static_assert(walk::MAX_FRAMES == animdata::MAX_FRAMES, "walk and animdata frame
 namespace walk {
 
 // Slot layout: all frames' pixels first (keeps uint16 access aligned), then masks.
-// Pools and the download scratch are allocated once in begin(), before WiFi; loaders never
-// malloc (README "Design & performance history": per-download mallocs with TLS open
-// exhausted byte-addressable RAM).
+// Pools and the download scratch are allocated once in begin(), in PSRAM (mem::bigAlloc);
+// loaders never malloc (README "Design & performance history": per-download mallocs with TLS
+// open exhausted byte-addressable RAM).
 static uint8_t* s_pool[2] = {nullptr, nullptr};
 static uint8_t* s_scratch = nullptr;
 static Info s_info[2] = {};
@@ -26,8 +27,8 @@ static inline int staged() { return 1 - s_active; }
 
 bool begin() {
     for (int i = 0; i < 2; ++i)
-        if (!s_pool[i]) s_pool[i] = (uint8_t*)malloc(CAP_BYTES);   // malloc is 4-byte aligned
-    if (!s_scratch) s_scratch = (uint8_t*)malloc(SCRATCH);
+        if (!s_pool[i]) s_pool[i] = (uint8_t*)mem::bigAlloc(CAP_BYTES);   // 4-byte aligned
+    if (!s_scratch) s_scratch = (uint8_t*)mem::bigAlloc(SCRATCH);
     bool ok = s_pool[0] && s_pool[1] && s_scratch;
     if (!ok) Serial.println("[walk] no heap for frame pools");
     return ok;
