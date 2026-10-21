@@ -42,6 +42,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
+- The S3's media (intro video and sounds, montage, howl, Sonic, McQueen, tunes, CJK font) move
+  out of the app into their own 9.9 MB flash partition: `pio run -e s3 -t uploadmedia` packs
+  `data/` (`tools/pack_media.py`) and flashes it. The app shrinks from 8.1 MB to ~1.3 MB, so a
+  code change flashes that much. The new partition table has two 3 MB app slots for OTA; an S3
+  flashed before needs one USB `upload` plus `uploadmedia` (README Quick start).
 - The "Nothing playing" screen now says **Waiting for a song...** (same screen, same timing).
 - The S3's "Waiting for a song..." screen shows the phone page's link as a QR code again, left of
   Sonic in a Gen-3 battle box named **REMOTE** (with a phone icon): 3 px modules (half as big

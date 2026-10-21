@@ -9,11 +9,11 @@
 #include <FS.h>
 using fs::File;            // JPEGDEC.h names the global File, which this core's FS.h may not export
 #include <JPEGDEC.h>
-#include "../core/embed.h"
+#include "../core/media.h"
 #include "bootterm.h"
 #include "../util/rgb565.h"
 #include "../util/termblend.h"
-EMBED(data_intro_bin);
+MEDIA_DECL(data_intro_bin);
 #endif
 
 namespace intro {
@@ -103,7 +103,8 @@ static void task(void*) {
 }
 
 bool available() {
-    return montage::parse(EMBED_DATA(data_intro_bin), EMBED_SIZE(data_intro_bin)) && montage::count() > 0;
+    const media::Blob b = MEDIA(data_intro_bin, "intro.bin");
+    return montage::parse(b.data, b.size) && montage::count() > 0;
 }
 
 void start(TFT_eSPI& t, bool (*online)()) {

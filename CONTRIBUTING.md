@@ -63,8 +63,9 @@ python tools/analyze_session.py session.log
 ```
 
 and mention the `[mem]` lines (free and largest block) before and after your change. Keep each
-deck's app partition (`cyd`, `cyd_companion`, `s3`) under 97 % (CI enforces it, counting your
-media's real sizes from `data/media_sizes.txt`).
+deck's app partition (`cyd`, `cyd_companion`, `s3`) under 97 % and the S3's media pack under
+95 % of its partition (CI enforces both, counting your media's real sizes from
+`data/media_sizes.txt`).
 
 ## Commits and pull requests
 

@@ -11,9 +11,9 @@
 #include "../audio/greeting.h"
 #include "../core/mem.h"
 #include "../util/bootanim.h"
-#include "../core/embed.h"
+#include "../core/media.h"
 
-EMBED(data_montage_bin);
+MEDIA_DECL(data_montage_bin);
 
 namespace bootscene {
 namespace {
@@ -380,8 +380,8 @@ void task(void*) {
     mem::log("bootscene start");
     const uint32_t t0 = millis();
     bootterm::begin(s_online);
-    montage::parse(EMBED_DATA(data_montage_bin),
-                   EMBED_SIZE(data_montage_bin));
+    const media::Blob photos = MEDIA(data_montage_bin, "montage.bin");
+    montage::parse(photos.data, photos.size);
     initTrees();
     for (int k = 0; k < 64; ++k) {
         const float d = (float)k / 64.0f;

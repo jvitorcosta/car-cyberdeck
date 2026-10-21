@@ -85,7 +85,14 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
 3. **Authorize:** run `python tools/spotify_auth.py`. It opens the browser and writes a refresh
    token into `src/config.h`.
 4. **Flash:** `pio run -e cyd -t upload` (or `-e s3`). Add `--upload-port <port>` if needed;
-   `pio device list` shows the ports.
+   `pio device list` shows the ports. The S3 keeps its media (see Make it yours) in a flash
+   partition of their own: flash them once with `pio run -e s3 -t uploadmedia`, and again only
+   when a clip, the montage, a tune or the font changes. A code change then flashes ~1.3 MB.
+
+   **An S3 flashed before the media partition** (one 12 MB app) needs both, once, from a PC
+   with your media in `data/`: `pio run -e s3 -t upload` (the new partition table; settings
+   in nvs survive) and then `pio run -e s3 -t uploadmedia`. Without the media the deck still
+   boots, with the default chime, and logs `[media] none`.
 5. **Play a song** on any Spotify device. The serial log is at 115200 baud:
    `pio device monitor`.
 
@@ -121,8 +128,9 @@ something already answers there); on any other network they use DHCP and mDNS na
 
 ## Make it yours
 
-All personal media is git-ignored and embedded at build time. Without it the deck uses
-built-in defaults.
+All personal media is git-ignored. The CYD and the companion embed it at build time; the S3
+packs it (`tools/pack_media.py`) into its media partition with `pio run -e s3 -t uploadmedia`.
+Without it the deck uses built-in defaults.
 
 | What | How | Default |
 |---|---|---|
@@ -142,7 +150,7 @@ built-in defaults.
 Convert other audio formats to WAV first, for example `ffmpeg -i in.mp3 in.wav`. After
 changing your media, run `python tools/media_sizes.py record` and commit
 `data/media_sizes.txt` (sizes only): CI builds stand-ins of those sizes, so its flash check
-counts your real media on every deck.
+counts your real media on every deck (and in the S3's media pack).
 
 ## How it works
 

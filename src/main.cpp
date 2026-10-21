@@ -17,9 +17,9 @@
 #include "ui/bootscene.h"
 #include "ui/intro.h"
 #include "util/idlesprite.h"
-#include "core/embed.h"
+#include "core/media.h"
 #ifdef BOARD_S3
-EMBED(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_sprite.py), else empty
+MEDIA_DECL(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_sprite.py), else empty
 #endif
 #include "audio/greeting.h"
 #include "ui/theme.h"
@@ -182,7 +182,9 @@ void setup() {
     // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
     // soon as the first poll lands. (Logging in here left the scene's faded last frame, i.e. a
     // black screen, up for as long as a slow hotspot took.)
-    Serial.println(idlesprite::parse(EMBED_DATA(data_idle_bin), EMBED_SIZE(data_idle_bin))
+    media::begin();
+    const media::Blob idle = MEDIA(data_idle_bin, "idle.bin");
+    Serial.println(idlesprite::parse(idle.data, idle.size)
                        ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
     carlook::Look mcqueen;
     const bool haveMcQueen = carlook::mcqueen(&mcqueen);
