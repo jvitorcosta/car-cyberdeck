@@ -92,6 +92,16 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
    with your media in `data/`: `pio run -e s3 -t upload` (the new partition table; settings
    in nvs survive) and then `pio run -e s3 -t uploadmedia`. Without the media the deck still
    boots, with the default chime, and logs `[media] none`.
+
+   **Updates over WiFi (S3):** with `REMOTE_TOKEN` set and the PC on the deck's network (home
+   WiFi on its 2.4 GHz band, see [Two decks](#two-decks); or the PC joined to the iPhone
+   hotspot with `--upload-port 172.20.10.10`), run
+   `pio run -e s3_ota -t upload`. The deck shows the upload's progress and restarts into the
+   new firmware; an interrupted upload never boots. If the new firmware crashes 3 boots in a
+   row before it has run a minute with a good poll, the deck goes back to the previous one
+   (`[ota] rolled back`). Windows may ask to let Python through the firewall the first time:
+   espota needs the deck to connect back to the PC. Media changes still go over USB
+   (`uploadmedia`), and USB `upload` is always the way back.
 5. **Play a song** on any Spotify device. The serial log is at 115200 baud:
    `pio device monitor`.
 

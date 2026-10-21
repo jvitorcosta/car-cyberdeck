@@ -5,6 +5,7 @@
 #include "mem.h"
 #include "../net/wifi.h"
 #include "../net/clock.h"
+#include "../net/ota.h"
 #include "../spotify/client.h"
 #include "../images/art.h"
 #include "../images/walksprite.h"
@@ -165,6 +166,10 @@ static void run(void*) {
                 continue;
             }
         }
+        if (ota::active()) {                   // an update has the WiFi: no requests beside it
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
         net::loop();
         uint32_t now = millis();
         // WiFi down: keep the normal pace (polls fail fast) so Health's 15-minute backstop runs
@@ -184,7 +189,7 @@ static void run(void*) {
                 Serial.printf("[net] poll every %lus (HTTP %d)\n",
                               (unsigned long)(s_backoff.interval() / 1000), s_st.lastPollCode);
             bool ok = s_st.status != PlaybackStatus::Offline;
-            if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::failTotal(); }
+            if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::failTotal(); ota::onGoodPoll(); }
             // Restart only helps a starved heap: allocations failed since the last good poll,
             // or no block big enough for TLS. A dead zone or a 401/429 is not that.
             bool starved = s_st.lastPollCode != 429 &&   // rate limited: a reboot only asks again
