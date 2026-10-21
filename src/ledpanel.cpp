@@ -1,10 +1,11 @@
 // Standalone LED panel for the car's two ELK-family controllers on the yellow deck (CYD). Not the
-// firmware; a first step before LED control becomes a deck feature.
-//   top:    BOTH / INSIDE / OUTSIDE tabs (dot: that controller's link, green = connected)
-//   middle: red, orange, pink, purple, blue, green, white, OFF
-//   bottom: intensity  -  [bar, tap or drag]  +
+// firmware; a first step before LED control becomes a deck feature. Layout B:
+//   header: painted in what the lights show now (colour name, zone, intensity) + power button
+//   zones:  BOTH / INSIDE / OUTSIDE (dot: that controller's link, green = connected)
+//   strip:  red, orange, pink, purple, blue, green, white
+//   bottom: intensity  -  [10 rising bars, tap or drag]  +
 // The iPhone's Bluetooth must be off (Settings): each controller takes one connection at a time.
-// Colour, intensity and tab survive a reboot (NVS).
+// Colour, intensity, power and zone survive a reboot (NVS).
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #include <NimBLEDevice.h>
@@ -22,11 +23,10 @@ static Preferences prefs;
 struct Swatch { const char* name; uint8_t r, g, b; };
 // LED strips run green and blue hot, so orange, pink and purple lean on red.
 static const Swatch SWATCHES[] = {
-    {"RED", 255, 0, 0},     {"ORANGE", 255, 60, 0}, {"PINK", 255, 20, 90},  {"PURPLE", 150, 0, 255},
-    {"BLUE", 0, 0, 255},    {"GREEN", 0, 255, 0},   {"WHITE", 255, 255, 255},
+    {"Red", 255, 0, 0},   {"Orange", 255, 60, 0}, {"Pink", 255, 20, 90}, {"Purple", 150, 0, 255},
+    {"Blue", 0, 0, 255},  {"Green", 0, 255, 0},   {"White", 255, 255, 255},
 };
 static constexpr int N_SWATCH = sizeof(SWATCHES) / sizeof(SWATCHES[0]);
-static constexpr int OFF_CELL = N_SWATCH;  // the grid's last cell
 
 enum Target { BOTH, INSIDE, OUTSIDE };
 static Target target = BOTH;
@@ -108,82 +108,118 @@ static void linkTask(void*) {
 
 // ---- Screen (320x240 landscape) ----
 
-static constexpr int TAB_H = 32;
-static constexpr int GRID_Y = 36, CELL_W = 80, CELL_H = 68;  // 2 rows x 4
-static constexpr int BAR_Y = 180, BAR_H = 56;
-static constexpr int MINUS_X = 0, PLUS_X = 264, BTN_W = 56;
-static constexpr int BAR_X = 62, BAR_W = 196;
+static constexpr int HEAD_H = 72;                           // y 0..71
+static constexpr int PWR_X = 280, PWR_Y = 36, PWR_R = 28;   // power button, in the header
+static constexpr int ZONE_Y = 76, ZONE_H = 26;              // y 76..101
+static constexpr int STRIP_Y = 108, STRIP_H = 64;           // y 108..171
+static constexpr int SW_X0 = 4, SW_STEP = 45, SW_W = 42;
+static constexpr int BOT_Y = 182, BOT_H = 54;               // y 182..235
+static constexpr int MINUS_X = 4, PLUS_X = 260, STEP_W = 56;
+static constexpr int BARS_X = 66, BAR_STEP = 19, BAR_W = 15;
 
-// Pressed feedback: whatever is under the finger turns yellow (tabs, -/+) or sinks inside a yellow
-// ring (colours) until it is released, so a press that registered is always visible.
+// Pressed feedback: whatever is under the finger turns yellow (or gets a yellow ring) until it is
+// released, so a press that registered is always visible.
 static constexpr uint16_t PRESSED = TFT_YELLOW;
 
-static void drawTab(int i, bool pressed = false) {
+static uint16_t shown565(const Swatch& s) {  // what the lights show: the colour at this intensity
+    return tft.color565(elkcmd::dim(s.r, intensity), elkcmd::dim(s.g, intensity), elkcmd::dim(s.b, intensity));
+}
+
+static bool bright(uint8_t r, uint8_t g, uint8_t b) { return (r * 3 + g * 6 + b) / 10 > 140; }
+
+static void drawPower(bool pressed = false) {
+    const Swatch& s = SWATCHES[swatch];
+    const uint16_t head = lit ? shown565(s) : TFT_BLACK;
+    const uint16_t bg = pressed ? PRESSED : lit ? TFT_BLACK : TFT_RED;
+    const uint16_t fg = pressed ? TFT_BLACK : TFT_WHITE;
+    tft.fillCircle(PWR_X, PWR_Y, PWR_R + 2, head);
+    tft.fillCircle(PWR_X, PWR_Y, PWR_R, bg);
+    // power icon: an open ring with a bar through the gap
+    for (int r = 11; r <= 13; r++) tft.drawCircle(PWR_X, PWR_Y + 1, r, fg);
+    tft.fillRect(PWR_X - 6, PWR_Y - 14, 13, 10, bg);
+    tft.fillRect(PWR_X - 1, PWR_Y - 15, 3, 15, fg);
+}
+
+static void drawHeader() {
+    const Swatch& s = SWATCHES[swatch];
+    const uint16_t bg = lit ? shown565(s) : tft.color565(21, 21, 21);
+    const uint8_t pr = elkcmd::dim(s.r, intensity), pg = elkcmd::dim(s.g, intensity), pb = elkcmd::dim(s.b, intensity);
+    const uint16_t ink = lit && bright(pr, pg, pb) ? TFT_BLACK : TFT_WHITE;
+    static const char* zones[] = {"Both", "Inside", "Outside"};
+    tft.fillRect(0, 0, 320, HEAD_H, bg);
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(ink, bg);
+    tft.drawString(lit ? s.name : "Lights off", 14, 12, 4);
+    char sub[32];
+    snprintf(sub, sizeof(sub), "%s  -  %u%%", zones[target], intensity);
+    tft.drawString(sub, 14, 44, 2);
+    drawPower();
+}
+
+static void drawZone(int i, bool pressed = false) {
     static const char* names[] = {"BOTH", "INSIDE", "OUTSIDE"};
     const bool sel = target == static_cast<Target>(i);
-    const uint16_t bg = pressed ? PRESSED : sel ? TFT_WHITE : TFT_DARKGREY;
-    const int x = i * 107 + 2;
+    const uint16_t bg = pressed ? PRESSED : sel ? TFT_WHITE : tft.color565(51, 51, 51);
+    const int x = 4 + i * 104;
+    tft.fillRoundRect(x, ZONE_Y, 100, ZONE_H, 6, bg);
     tft.setTextDatum(MC_DATUM);
-    tft.fillRoundRect(x, 2, 103, TAB_H - 4, 6, bg);
-    tft.setTextColor(sel || pressed ? TFT_BLACK : TFT_WHITE, bg);
-    tft.drawString(names[i], x + 51, TAB_H / 2, 2);
-    if (i > 0) tft.fillCircle(x + 92, TAB_H / 2, 4, linkUp(controllers[i - 1]) ? TFT_GREEN : TFT_RED);
+    tft.setTextColor(sel || pressed ? TFT_BLACK : TFT_LIGHTGREY, bg);
+    tft.drawString(names[i], x + 46, ZONE_Y + ZONE_H / 2, 2);
+    if (i > 0) tft.fillCircle(x + 88, ZONE_Y + ZONE_H / 2, 4, linkUp(controllers[i - 1]) ? TFT_GREEN : TFT_RED);
 }
 
-static void drawTabs() {
-    for (int i = 0; i < 3; i++) drawTab(i);
+static void drawZones() {
+    for (int i = 0; i < 3; i++) drawZone(i);
 }
 
-static void drawCell(int i, bool pressed = false) {
-    const int x = (i % 4) * CELL_W, y = GRID_Y + (i / 4) * CELL_H;
-    const bool off = i == OFF_CELL;
-    const uint16_t bg = off ? TFT_BLACK : tft.color565(SWATCHES[i].r, SWATCHES[i].g, SWATCHES[i].b);
-    const bool sel = off ? !lit : (lit && i == swatch);
-    const int inset = pressed ? 7 : 3;  // pressed: the colour shrinks inside the ring
-    tft.fillRect(x, y, CELL_W, CELL_H, TFT_BLACK);
-    tft.fillRoundRect(x + inset, y + inset, CELL_W - 2 * inset, CELL_H - 2 * inset, 8, bg);
-    if (pressed || sel) {  // a thick ring: yellow under the finger, white for what the lights show
-        for (int k = 0; k < 3; k++) {
-            tft.drawRoundRect(x + 1 + k, y + 1 + k, CELL_W - 2 - 2 * k, CELL_H - 2 - 2 * k, 9,
-                              pressed ? PRESSED : TFT_WHITE);
-        }
-    } else if (off) {
-        tft.drawRoundRect(x + 3, y + 3, CELL_W - 6, CELL_H - 6, 8, TFT_DARKGREY);
+static void drawSwatch(int i, bool pressed = false) {
+    const Swatch& s = SWATCHES[i];
+    const int x = SW_X0 + i * SW_STEP;
+    const bool sel = lit && i == swatch;
+    const int inset = pressed ? 5 : 0;  // pressed: the colour shrinks inside a yellow ring
+    tft.fillRect(x, STRIP_Y, SW_W, STRIP_H, TFT_BLACK);
+    tft.fillRoundRect(x + inset, STRIP_Y + inset, SW_W - 2 * inset, STRIP_H - 2 * inset, 8,
+                      tft.color565(s.r, s.g, s.b));
+    if (pressed || sel) {  // white ring: what the lights show; yellow: under the finger
+        const uint16_t ring = pressed ? PRESSED : TFT_WHITE;
+        for (int k = 0; k < 3; k++) tft.drawRoundRect(x + k, STRIP_Y + k, SW_W - 2 * k, STRIP_H - 2 * k, 8, ring);
+        if (!pressed) tft.drawRoundRect(x + 3, STRIP_Y + 3, SW_W - 6, STRIP_H - 6, 6, TFT_BLACK);
     }
-    const Swatch* s = off ? nullptr : &SWATCHES[i];
-    const bool light = s && (s->r * 3 + s->g * 6 + s->b) / 10 > 140;
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(light ? TFT_BLACK : TFT_WHITE, bg);
-    tft.drawString(off ? "OFF" : s->name, x + CELL_W / 2, y + CELL_H / 2, 2);
 }
 
-static void drawGrid() {
-    for (int i = 0; i <= OFF_CELL; i++) drawCell(i);
+static void drawStrip() {
+    for (int i = 0; i < N_SWATCH; i++) drawSwatch(i);
 }
 
-static void drawStepButton(int x, bool pressed = false) {
-    const uint16_t bg = pressed ? PRESSED : TFT_DARKGREY;
+static void drawStep(int x, bool pressed = false) {
+    const uint16_t bg = pressed ? PRESSED : tft.color565(51, 51, 51);
+    tft.fillRoundRect(x, BOT_Y, STEP_W, BOT_H, 8, bg);
     tft.setTextDatum(MC_DATUM);
-    tft.fillRoundRect(x + 2, BAR_Y + 2, BTN_W - 4, BAR_H - 4, 8, bg);
     tft.setTextColor(pressed ? TFT_BLACK : TFT_WHITE, bg);
-    tft.drawString(x == MINUS_X ? "-" : "+", x + BTN_W / 2, BAR_Y + BAR_H / 2, 4);
+    tft.drawString(x == MINUS_X ? "-" : "+", x + STEP_W / 2, BOT_Y + BOT_H / 2, 4);
 }
 
-static void drawIntensity() {
-    drawStepButton(MINUS_X);
-    drawStepButton(PLUS_X);
-    tft.setTextDatum(MC_DATUM);
+// Ten bars rising left to right, one per 10 %; the lit ones take the colour (grey while off).
+static void drawBars() {
     const Swatch& s = SWATCHES[swatch];
-    const uint16_t fill = tft.color565(elkcmd::dim(s.r, intensity), elkcmd::dim(s.g, intensity),
-                                       elkcmd::dim(s.b, intensity));
-    const int w = BAR_W * intensity / 100;
-    tft.fillRoundRect(BAR_X, BAR_Y + 2, BAR_W, BAR_H - 4, 8, TFT_BLACK);
-    tft.fillRoundRect(BAR_X, BAR_Y + 2, w, BAR_H - 4, 8, fill);
-    tft.drawRoundRect(BAR_X, BAR_Y + 2, BAR_W, BAR_H - 4, 8, TFT_LIGHTGREY);
-    char pct[8];
-    snprintf(pct, sizeof(pct), "%u%%", intensity);
-    tft.setTextColor(TFT_WHITE);  // transparent background over the split bar
-    tft.drawString(pct, BAR_X + BAR_W / 2, BAR_Y + BAR_H / 2, 4);
+    const uint16_t on = lit ? tft.color565(s.r, s.g, s.b) : TFT_DARKGREY;
+    const int litBars = (intensity + 5) / 10;
+    tft.fillRect(BARS_X - 2, BOT_Y, 10 * BAR_STEP + 2, BOT_H, TFT_BLACK);
+    for (int k = 0; k < 10; k++) {
+        const int h = 16 + k * 4;
+        tft.fillRoundRect(BARS_X + k * BAR_STEP, BOT_Y + BOT_H - h, BAR_W, h, 3,
+                          k < litBars ? on : tft.color565(42, 42, 42));
+    }
+}
+
+static void drawAll() {
+    tft.fillScreen(TFT_BLACK);
+    drawHeader();
+    drawZones();
+    drawStrip();
+    drawStep(MINUS_X);
+    drawBars();
+    drawStep(PLUS_X);
 }
 
 // ---- Input ----
@@ -192,6 +228,7 @@ static void save() {
     prefs.putUChar("swatch", static_cast<uint8_t>(swatch));
     prefs.putUChar("pct", intensity);
     prefs.putUChar("target", static_cast<uint8_t>(target));
+    prefs.putBool("lit", lit);
 }
 
 static uint32_t lastSend = 0;
@@ -200,48 +237,55 @@ static void setIntensity(int pct) {
     pct = pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct;
     if (pct == intensity) return;
     intensity = static_cast<uint8_t>(pct);
-    drawIntensity();
     if (lit) pushTargets();
     lastSend = millis();
+    drawHeader();
+    drawBars();
 }
 
-// The button held down right now (drawn pressed until release); the bar has no pressed look, its
-// fill follows the finger instead.
-enum PressKind { NONE, TAB, CELL, STEP };
+// The button held down right now (drawn pressed until release). The bars have no pressed look:
+// their fill follows the finger.
+enum PressKind { NONE, POWER, ZONE, SWATCH, STEP };
 static PressKind pressKind = NONE;
 static int pressIdx = 0;
 
 static void drawPress(bool pressed) {
-    if (pressKind == TAB) drawTab(pressIdx, pressed);
-    else if (pressKind == CELL) drawCell(pressIdx, pressed);
-    else if (pressKind == STEP) drawStepButton(pressIdx, pressed);
+    if (pressKind == POWER) drawPower(pressed);
+    else if (pressKind == ZONE) drawZone(pressIdx, pressed);
+    else if (pressKind == SWATCH) drawSwatch(pressIdx, pressed);
+    else if (pressKind == STEP) drawStep(pressIdx, pressed);
 }
 
 static void onTouch(int x, int y, bool fresh) {
-    if (y < TAB_H) {
+    if (y < HEAD_H) {
+        const int dx = x - PWR_X, dy = y - PWR_Y;
+        if (!fresh || dx * dx + dy * dy > (PWR_R + 8) * (PWR_R + 8)) return;
+        lit = !lit;
+        pushTargets();
+        drawHeader();
+        drawStrip();
+        drawBars();
+        pressKind = POWER;
+    } else if (y >= ZONE_Y - 2 && y < ZONE_Y + ZONE_H + 2) {
         if (!fresh) return;
         target = static_cast<Target>(x / 107 > 2 ? 2 : x / 107);
-        drawTabs();
-        save();
-        pressKind = TAB;
+        drawZones();
+        drawHeader();
+        pressKind = ZONE;
         pressIdx = target;
-    } else if (y >= GRID_Y && y < GRID_Y + 2 * CELL_H) {
+    } else if (y >= STRIP_Y - 2 && y < STRIP_Y + STRIP_H + 4) {
         if (!fresh) return;
-        const int cell = ((y - GRID_Y) / CELL_H) * 4 + (x / CELL_W > 3 ? 3 : x / CELL_W);
-        if (cell == OFF_CELL) {
-            lit = false;
-        } else {
-            lit = true;
-            swatch = cell;
-        }
+        const int i = (x - SW_X0) / SW_STEP;
+        swatch = i < 0 ? 0 : i >= N_SWATCH ? N_SWATCH - 1 : i;
+        lit = true;
         pushTargets();
-        drawGrid();
-        drawIntensity();
-        save();
-        pressKind = CELL;
-        pressIdx = cell;
-    } else if (y >= BAR_Y) {
-        if (x < MINUS_X + BTN_W) {
+        drawHeader();
+        drawStrip();
+        drawBars();
+        pressKind = SWATCH;
+        pressIdx = swatch;
+    } else if (y >= BOT_Y - 6) {
+        if (x < MINUS_X + STEP_W) {
             if (!fresh) return;
             setIntensity(intensity - 10);
             pressKind = STEP;
@@ -251,12 +295,17 @@ static void onTouch(int x, int y, bool fresh) {
             setIntensity(intensity + 10);
             pressKind = STEP;
             pressIdx = PLUS_X;
-        } else if (fresh || millis() - lastSend > 80) {  // drag: one update per 80 ms
-            setIntensity((x - BAR_X) * 100 / BAR_W);
+        } else if (fresh || millis() - lastSend > 80) {  // bars: tap or drag, one update per 80 ms
+            const int k = (x - BARS_X) / BAR_STEP;
+            setIntensity((k < 0 ? 0 : k > 9 ? 9 : k) * 10 + 10);
         }
-        if (fresh) save();
+    } else {
+        return;
     }
-    if (fresh) drawPress(true);
+    if (fresh) {
+        save();
+        drawPress(true);
+    }
 }
 
 void setup() {
@@ -266,7 +315,6 @@ void setup() {
     tft.init();
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
     tft.setRotation(1);
-    tft.fillScreen(TFT_BLACK);
     touch::begin();
 
     prefs.begin("leds", false);
@@ -274,10 +322,9 @@ void setup() {
     intensity = prefs.getUChar("pct", intensity);
     if (intensity < MIN_INTENSITY || intensity > 100) intensity = 100;
     target = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
+    lit = prefs.getBool("lit", true);
 
-    drawTabs();
-    drawGrid();
-    drawIntensity();
+    drawAll();
     NimBLEDevice::init("");
     xTaskCreatePinnedToCore(linkTask, "leds-link", 4096, nullptr, 1, nullptr, 0);
 }
@@ -305,7 +352,7 @@ void loop() {
         }
         if (up != shown[i]) {
             shown[i] = up;
-            drawTabs();
+            drawZone(i + 1, pressKind == ZONE && pressIdx == i + 1);
         }
     }
     delay(10);
