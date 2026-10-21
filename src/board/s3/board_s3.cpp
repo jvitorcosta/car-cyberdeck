@@ -15,6 +15,4 @@ void begin() {
                   (unsigned)(ESP.getFlashChipSize() >> 20));
 }
 
-bool sdMount() { return false; }   // the SDMMC slot is a later extra (spec section 4)
-
 }

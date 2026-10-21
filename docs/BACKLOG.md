@@ -52,19 +52,11 @@ Open items, not scheduled. Newest decisions first within each section.
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
 
-## Parked: SD card cache (not used)
+## SD card cache (removed 2026-10-21)
 
-Decided 2026-10-07: the deck runs without a card. The cache code stays; with no card every
-call is a no-op and the walker is downloaded each time (~25 KB/song, usually prefetched).
-
-- What a card would add: walk sheets (`/pmd/<dex>.xml|.png`) and fallback sprites
-  (`/sprites/<dex>.png`) load in ~0.2 s on repeat songs, with no download. Album art and
-  lyrics are never cached.
-- Never verified: SD (VSPI) alongside the display (moved to HSPI in `2b75c40`), cache hits,
-  and corrupt-file eviction.
-- To test: build with `PLATFORMIO_BUILD_FLAGS=-DSD_CACHE` (without it the card is never
-  mounted), FAT32 card in, power-cycle, look for `[cache] SD ready`, replay songs and compare
-  `[net] walk` times; check `/pmd` and `/sprites` on a PC.
+The parked SD cache for walk sheets and sprites was removed; it is in git history up to
+`0ba409b`. If repeat songs ever need it, the S3's SDMMC slot (pins in `include/pins.h`) is
+the place to add it.
 
 ## Accepted as is
 
