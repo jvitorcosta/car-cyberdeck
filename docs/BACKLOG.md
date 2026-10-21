@@ -23,8 +23,9 @@ Open items, not scheduled. Newest decisions first within each section.
   and drops the frame; TCP resends it and every request still succeeds, but each drop adds
   latency. Rate varies a lot by network and song: 1 800-4 900 in 5 min on the iPhone hotspot
   (2026-10-08). Findings: it happens during every TLS request, plain polls included, not only
-  around track changes; only one TLS session is ever open (SpotifyArduino closes its client
-  after each call, the steps run one at a time); even 218 B allocations fail, so the heap is
+  around track changes; only one TLS session was open at a time then (the old Spotify library
+  closed its client after each call; since 2026-10-21 the Spotify connection stays open, so
+  re-measure on the S3); even 218 B allocations fail, so the heap is
   momentarily empty while a TLS session (~40 KB) is open on ~65 KB free. The levers left are
   build-time settings fixed in the precompiled Arduino core (mbedTLS 16 KB input buffer, lwIP
   TCP window, WiFi RX buffer count): they need the arduino-as-ESP-IDF-component build.
@@ -39,8 +40,6 @@ Open items, not scheduled. Newest decisions first within each section.
 - One Spotify app is shared by every deck that runs a Spotify client: running the CYD's old
   standalone build next to the S3 got both blocked for ~2 h on 2026-10-13. That build is retired
   (2026-10-21); the companion (`cyd_companion`) has no Spotify client and doesn't count.
-- Retry-After costs one extra request per 429 (`spclient::fetchRetryAfter`) because
-  SpotifyArduino skips the headers; `tools/patch_spotify_lib.py` could capture it instead.
 
 ## Lyrics polish (deferred minors, final review 2026-10-08)
 

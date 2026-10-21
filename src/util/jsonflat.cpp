@@ -62,10 +62,9 @@ static void putUtf8(char* out, size_t n, size_t* len, unsigned cp) {
     *len += k;
 }
 
-bool str(const char* body, const char* key, char* out, size_t n) {
+bool strAt(const char* p, char* out, size_t n) {
     if (!out || n == 0) return false;
     out[0] = '\0';
-    const char* p = find(body, key);
     if (!p || *p != '"') return false;
     size_t len = 0;
     bool full = false;
@@ -117,8 +116,12 @@ bool str(const char* body, const char* key, char* out, size_t n) {
     return true;
 }
 
-bool num(const char* body, const char* key, long* out) {
-    const char* p = find(body, key);
+bool str(const char* body, const char* key, char* out, size_t n) {
+    if (out && n) out[0] = '\0';
+    return strAt(find(body, key), out, n);
+}
+
+bool numAt(const char* p, long* out) {
     if (!p || !((*p >= '0' && *p <= '9') || *p == '-')) return false;
     char* end = nullptr;
     long v = strtol(p, &end, 10);
@@ -126,6 +129,8 @@ bool num(const char* body, const char* key, long* out) {
     *out = v;
     return true;
 }
+
+bool num(const char* body, const char* key, long* out) { return numAt(find(body, key), out); }
 
 bool real(const char* body, const char* key, double* out) {
     const char* p = find(body, key);
@@ -137,13 +142,14 @@ bool real(const char* body, const char* key, double* out) {
     return true;
 }
 
-bool boolean(const char* body, const char* key, bool* out) {
-    const char* p = find(body, key);
+bool boolAt(const char* p, bool* out) {
     if (!p) return false;
     if (strncmp(p, "true", 4) == 0) { *out = true; return true; }
     if (strncmp(p, "false", 5) == 0) { *out = false; return true; }
     return false;
 }
+
+bool boolean(const char* body, const char* key, bool* out) { return boolAt(find(body, key), out); }
 
 bool arrayHas(const char* body, const char* key, const char* item) {
     const char* p = find(body, key);

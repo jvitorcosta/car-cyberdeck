@@ -36,7 +36,6 @@ static bool s_spotifyReady = false;   // WiFi + spclient::begin() done
 static int s_prefetchDex = 0;      // dex whose walker sits in the staged slot
 static uint32_t s_t0 = 0;
 
-constexpr uint32_t PLAYER_MS = 12000;       // device / volume / shuffle / repeat
 constexpr uint32_t WIFI_RETRY_MS = 5000;    // WiFi not up at boot: retry period
 constexpr uint32_t LOOP_DELAY_MS = 20;      // yield between work items
 
@@ -152,7 +151,7 @@ static bool doStep(netplan::Step step) {
 }
 
 static void run(void*) {
-    uint32_t lastPoll = 0, lastPlayer = 0;
+    uint32_t lastPoll = 0;
     bool first = true;
     for (;;) {
         if (!s_spotifyReady) {                 // log in once WiFi is up (setup's, or a late hotspot)
@@ -207,12 +206,6 @@ static void run(void*) {
             const char* id = s_st.trackUri[0] ? s_st.trackUri : s_st.trackName;   // URI: same-title songs differ
             if (s_gen.update(id)) onTrackChange();
             else shared::publish(s_st);
-        } else if (now - lastPlayer >= PLAYER_MS && !s_backoff.active()) {
-            lastPlayer = now;
-            tick();
-            spclient::pollPlayerDetails(s_st);
-            tock("player");
-            shared::publish(s_st);
         } else {
             netplan::Step step = netplan::next(s_work, s_lyricsRetry.ready(now));
             static bool deferred = false;

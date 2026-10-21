@@ -22,7 +22,6 @@ CarDeck stands on a lot of other people's work. Thank you.
 [TJpg_Decoder](https://github.com/Bodmer/TJpg_Decoder) (FreeBSD-style, tjpgd),
 [PNGdec](https://github.com/bitbank2/PNGdec) (Apache-2.0),
 [JPEGDEC](https://github.com/bitbank2/JPEGDEC) 1.8.4 (Apache-2.0, S3 intro video),
-[spotify-api-arduino](https://github.com/witnessmenow/spotify-api-arduino) (MIT),
 [XPT2046_Touchscreen](https://github.com/PaulStoffregen/XPT2046_Touchscreen) (MIT, hardware
 check only), [Unity](https://github.com/ThrowTheSwitch/Unity) (MIT, host tests).
 

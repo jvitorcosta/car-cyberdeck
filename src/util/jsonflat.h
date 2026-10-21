@@ -11,4 +11,9 @@ bool num(const char* body, const char* key, long* out);      // integer; false i
 bool real(const char* body, const char* key, double* out);
 bool boolean(const char* body, const char* key, bool* out);
 bool arrayHas(const char* body, const char* key, const char* item);   // array of strings
+// The same reads on a value already located (util/jsonpath::find): `value` points at its first
+// character. False for nullptr or a value of another type.
+bool strAt(const char* value, char* out, size_t n);
+bool numAt(const char* value, long* out);
+bool boolAt(const char* value, bool* out);
 }
