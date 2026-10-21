@@ -6,15 +6,21 @@
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
 // Colour, intensity, power and zone survive a reboot (NVS). Touch calibration (resistive panel)
-// runs on first boot, or with BOOT held (at power-up, or 2 s any time).
+// runs on first boot, or with BOOT held (at power-up, or 2 s any time). Voice: Siri Shortcuts call
+// GET /say over WiFi (see "Voice" below).
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <Preferences.h>
 #include <TFT_eSPI.h>
+#include <WebServer.h>
 #include "pins.h"
 #include "companion/touch.h"
+#include "net/remote_config.h"
+#include "net/wifi.h"
 #include "util/elkcmd.h"
+#include "util/ledvoice.h"
+#include "util/remotegate.h"
 #include "util/touchcal.h"
 
 static TFT_eSPI tft;
@@ -108,13 +114,28 @@ static bool connect(Controller& c) {
 }
 
 // Connecting blocks up to 4 s per controller, so it runs here on core 0 and the touch loop
-// (core 1) never waits. Retries a missing controller every 5 s.
+// (core 1) never waits. A connect attempt keeps the radio, which WiFi shares, busy for its whole
+// timeout: with the lights out of range (the deck at home), 5 s retries starved WiFi until the
+// deck didn't even answer ping. So the wait doubles after each failed round, 5 s up to 60 s, and
+// drops back to 5 s once everything is connected or a link is lost.
 static void linkTask(void*) {
+    uint32_t waitMs = 5000;
     for (;;) {
+        bool missing = false;
         for (Controller& c : controllers) {
-            if (!linkUp(c)) connect(c);
+            if (!linkUp(c) && !connect(c)) missing = true;
         }
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        waitMs = missing ? (waitMs * 2 > 60000 ? 60000 : waitMs * 2) : 5000;
+        // wake early when a connected light drops, so it comes back quickly
+        for (uint32_t t = 0; t < waitMs; t += 500) {
+            vTaskDelay(pdMS_TO_TICKS(500));
+            bool lost = false;
+            for (const Controller& c : controllers) lost = lost || (c.tx && !linkUp(c));
+            if (lost) {
+                waitMs = 5000;
+                break;
+            }
+        }
     }
 }
 
@@ -379,6 +400,92 @@ static void act() {
     drawButton(tap.id, true);
 }
 
+// ---- Voice: Siri Shortcuts over WiFi ----
+// On the iPhone hotspot the deck sits at 172.20.10.11 (net/wifi pins it). A Shortcut dictates a
+// phrase and calls  GET /say?text=<phrase>&k=<REMOTE_TOKEN>; the reply is one line to speak back
+// ("Purple, 70 percent"); voice always changes both lights. GET /state?k= answers the same line without changing anything.
+// The server runs in its own task; commands go to loop() through a queue (it owns the screen and
+// the state) and the handler waits for loop()'s reply.
+
+static WebServer* server = nullptr;
+static remotegate::Gate gate(REMOTE_TOKEN);
+static QueueHandle_t voiceQueue = nullptr;
+static SemaphoreHandle_t voiceDone = nullptr;
+static char voiceReply[64];
+
+static void describe(char* out, size_t n) {
+    if (!lit) snprintf(out, n, "Lights off");
+    else snprintf(out, n, "%s, %u percent", SWATCHES[swatch].name, intensity);
+}
+
+// In loop(): applies one voice command to both lights (voice doesn't pick a zone, and leaves the
+// screen's zone as it was), then answers the waiting handler.
+static void applyVoice(const ledvoice::Command& c) {
+    if (c.color >= 0) {
+        swatch = c.color;
+        lit = true;
+    }
+    if (c.power >= 0) lit = c.power == 1;
+    int pct = c.level >= 0 ? c.level : intensity + 10 * c.levelStep;
+    intensity = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
+    for (Controller& ctrl : controllers) push(ctrl);
+    save();
+    drawAll();
+    describe(voiceReply, sizeof(voiceReply));
+    Serial.printf("[voice] -> %s\n", voiceReply);
+    xSemaphoreGive(voiceDone);
+}
+
+static void handleSay() {
+    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    const String text = server->arg("text");
+    Serial.printf("[voice] \"%s\"\n", text.c_str());
+    ledvoice::Command c;
+    if (!ledvoice::parse(text.c_str(), &c)) { server->send(200, "text/plain", "Sorry, I didn't get a colour or a command"); return; }
+    xSemaphoreTake(voiceDone, 0);  // drop a stale answer
+    if (xQueueSend(voiceQueue, &c, pdMS_TO_TICKS(200)) != pdTRUE || xSemaphoreTake(voiceDone, pdMS_TO_TICKS(1500)) != pdTRUE) {
+        server->send(503, "text/plain", "The deck is busy, try again");
+        return;
+    }
+    server->send(200, "text/plain", voiceReply);
+}
+
+static void handleState() {
+    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    char line[64];
+    describe(line, sizeof(line));
+    server->send(200, "text/plain", line);
+}
+
+static void voiceTask(void*) {
+    net::connectAny();
+    while (!net::isOnline()) {
+        net::loop();
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    server->begin();
+    Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
+                  net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
+    for (;;) {
+        server->handleClient();
+        net::loop();  // rejoins after a drop
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+static void beginVoice() {
+    if (!gate.enabled()) {
+        Serial.println("[voice] off (REMOTE_TOKEN empty)");
+        return;
+    }
+    voiceQueue = xQueueCreate(2, sizeof(ledvoice::Command));
+    voiceDone = xSemaphoreCreateBinary();
+    server = new WebServer(80);
+    server->on("/say", HTTP_ANY, handleSay);
+    server->on("/state", HTTP_GET, handleState);
+    xTaskCreatePinnedToCore(voiceTask, "voice", 6144, nullptr, 0, nullptr, 1);
+}
+
 // TFT_eSPI's ILI9341_2_DRIVER init leaves a flat gamma that makes this panel look washed out; the
 // standard ILI9341 tables (as in Adafruit's driver) give saturated colours and deeper blacks.
 static void vividGamma() {
@@ -417,6 +524,7 @@ void setup() {
     drawAll();
     NimBLEDevice::init("");
     xTaskCreatePinnedToCore(linkTask, "leds-link", 4096, nullptr, 1, nullptr, 0);
+    beginVoice();
 }
 
 void loop() {
@@ -436,6 +544,9 @@ void loop() {
         if (tap.id >= 0) drawButton(tap.id);  // released: back to the normal look
         tap.down = false;
     }
+
+    ledvoice::Command voice;
+    if (voiceQueue && xQueueReceive(voiceQueue, &voice, 0) == pdTRUE) applyVoice(voice);
 
     // BOOT held for 2 s: calibrate the touch again.
     static uint32_t bootSince = 0;
