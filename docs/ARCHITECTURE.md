@@ -125,7 +125,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   `/trip/reset`). Her lines come from `avatarlines` and type out in the message bar
   (`avatarscene`); she sings along by `avatarsing`.
 - **Network choice** (`net/wifi`, `util/{roam,follow,deckaddr,netup,hotspotip}`) — config.h
-  order (the hotspot first; two tries after a drop from it, `roam`), then a deck stays put. The
+  order (the hotspot first: three tries at boot, two after a drop from it, `roam`); on a fallback
+  a deck scans for the hotspot once a minute and moves to it when it's in range. The
   companion reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`), keeps that
   address through blips (`deckaddr`), and after 30 s without the S3 (`follow`) moves to the
   other network if a quick scan finds it. Online means connected with an address; "connected

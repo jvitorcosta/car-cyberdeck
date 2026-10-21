@@ -90,16 +90,21 @@ bool connectAny() {
     return false;
 }
 
+// Whether network i is in range (a ~1.6 s scan). A switch only goes where this says: in the car
+// the home WiFi isn't, and a blind switch dropped the hotspot for 10-20 s each time the new deck
+// was late.
+static bool inRange(int i) {
+    const int n = WiFi.scanNetworks(false, false, false, 120);
+    bool seen = false;
+    for (int k = 0; k < n && !seen; ++k) seen = WiFi.SSID(k) == WIFI_NETWORKS[i].ssid;
+    WiFi.scanDelete();
+    return seen;
+}
+
 bool switchNetwork() {
     if (WIFI_NETWORK_COUNT < 2) return false;
     const int next = (s_index < 0 ? 0 : s_index + 1) % WIFI_NETWORK_COUNT;
-    // Only when it's actually in range (a ~1.6 s scan): in the car the home WiFi isn't, and a
-    // blind switch dropped the hotspot for 10-20 s each time the new deck was late.
-    const int n = WiFi.scanNetworks(false, false, false, 120);
-    bool seen = false;
-    for (int k = 0; k < n && !seen; ++k) seen = WiFi.SSID(k) == WIFI_NETWORKS[next].ssid;
-    WiFi.scanDelete();
-    if (!seen) {
+    if (!inRange(next)) {
         Serial.printf("[wifi] %s not in range, staying\n", WIFI_NETWORKS[next].ssid);
         return false;
     }
@@ -151,6 +156,15 @@ void loop() {
     if (watch.reconnect(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP())) {
         Serial.println("[wifi] dropped, reconnecting...");
         connectAny();
+        return;
     }
+    // On a fallback (home WiFi): the hotspot, once it shows up (util/roam).
+    static uint32_t lookedAt = 0;
+    if (!isOnline() || !roam::lookForPreferred(s_index, millis() - lookedAt)) return;
+    lookedAt = millis();
+    if (!inRange(0)) return;
+    Serial.printf("[wifi] %s is in range, moving to it\n", WIFI_NETWORKS[0].ssid);
+    WiFi.disconnect();
+    if (!join(0, 1)) connectAny();           // it went again: back to whatever is there
 }
 }

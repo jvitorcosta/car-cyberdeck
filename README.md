@@ -126,9 +126,10 @@ something already answers there); on any other network they use DHCP and mDNS na
 | Deck (S3) | `s3` | `172.20.10.10` | `cardeck.local` | `http://172.20.10.10/?k=<REMOTE_TOKEN>` |
 | Companion (CYD) | `cyd_companion` | `172.20.10.11` | `cardeck-companion.local` | `http://172.20.10.11/?k=<REMOTE_TOKEN>` (with an avatar) |
 
-- **The hotspot goes first in `WIFI_NETWORKS`.** It gets two tries after a drop, and the fixed
-  addresses are pinned only on an iPhone hotspot. A deck stays on the network it joined; off the
-  hotspot the companion finds the S3 by its mDNS name.
+- **The hotspot goes first in `WIFI_NETWORKS`.** It gets three tries at boot (~24 s, time to
+  unlock the phone) and two after a drop, and the fixed addresses are pinned only on an iPhone
+  hotspot. A deck that joined another network looks for the hotspot once a minute and moves to it
+  when it's in range; off the hotspot the companion finds the S3 by its mDNS name.
 - **Home WiFi:** the ESP32 speaks 2.4 GHz only. If the router isolates clients, or puts 2.4 and
   5 GHz on separate networks, a phone or PC on the other band can't reach the decks' pages even
   while the two decks see each other (seen 2026-10-15: "Destination host unreachable" from a PC
