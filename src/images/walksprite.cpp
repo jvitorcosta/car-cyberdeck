@@ -111,7 +111,7 @@ static Res decodeWith(uint8_t* data, size_t n, int rowY0, int rowH, int frameW, 
         if (png.openRAM(data, (int)n, regionDraw) != PNG_SUCCESS) return Res::Corrupt;
         if (s_pass == 1) {
             int w = png.getWidth(), h = png.getHeight();
-            if (w > SHEET_MAX_W || !walkanim::pngFits(w, png.getPixelType(), png.getBpp())) {
+            if (w > SHEET_MAX_W || !walkanim::pngFits(w, png.getPixelType(), png.getBpp(), PNG_MAX_BUFFERED_PIXELS)) {
                 png.close();
                 return Res::Unsupported;
             }

@@ -96,6 +96,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   greeting sizes in its flash check, and runs the media tool tests.
 
 ### Fixed
+- Pokémon whose walk sheet is 320 px wide (Doublade) walk again instead of showing the still
+  sprite: the S3's PNG decoder buffer now fits RGBA sheets up to 512 px.
 - The boot scene's task had 1.8 KB of stack left at its end; it now has 6 KB instead of 4 KB.
 - Right after boot, a song playing on the phone no longer shows as **Waiting for a song...**
   when Spotify's currently-playing endpoint wrongly answered "nothing playing": the deck now
