@@ -1,17 +1,24 @@
 // Standalone LED panel for the car's two ELK-family controllers on the yellow deck (CYD). Not the
 // firmware; a first step before LED control becomes a deck feature. Layout D, built for fingers:
-//   top:    BOTH / INSIDE / OUTSIDE (dot: that controller's link, green = connected)
+//   top:    pages BOTH / INSIDE / OUTSIDE. BOTH sets both lights together; INSIDE and OUTSIDE
+//           each keep their own look. Each zone tab shows its colour, ringed green when connected
 //   grid:   2x4 tiles of 75x66: red, orange, pink, purple, blue, green, white, yellow; tap one to
 //           set it (and turn on), double-tap the lit one to turn the lights off
 //   bottom: -  [level: the colour at its intensity and the %, or "Off"]  +
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
-// Colour, intensity, power and zone survive a reboot (NVS). Touch calibration (resistive panel)
+// Each page's colour, intensity and power, and the page shown, survive a reboot (NVS). Touch calibration (resistive panel)
 // runs on first boot, or with BOOT held (at power-up, or 2 s any time). Voice: Siri Shortcuts call
-// GET /say over WiFi (see "Voice" below).
+// GET /say over WiFi (see "Voice" below). An Xbox controller (BLE) drives it too: a cyan ring
+// marks the focused button (see "Xbox controller input" below).
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
+#pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
 #include <NimBLEDevice.h>
+#include <XboxSeriesXControllerESP32_asukiaaa.hpp>
+#pragma GCC diagnostic pop
 #include <Preferences.h>
 #include <TFT_eSPI.h>
 #include <WebServer.h>
@@ -47,11 +54,19 @@ static const Swatch SWATCHES[] = {
 };
 static constexpr int N_SWATCH = sizeof(SWATCHES) / sizeof(SWATCHES[0]);
 
+// The zone tabs are pages. BOTH is the general page: a change there goes to both lights (the
+// inside and outside looks become a copy of it). INSIDE and OUTSIDE each keep their own look and
+// change only their light. Voice works like the BOTH page.
 enum Target { BOTH, INSIDE, OUTSIDE };
-static Target target = BOTH;
-static int swatch = N_SWATCH - 1;  // white
-static uint8_t intensity = 100;    // 10..100 %, in steps of 10
-static bool lit = true;
+static Target target = BOTH;  // the page on screen
+
+struct Look {
+    int swatch = N_SWATCH - 1;  // white
+    uint8_t pct = 100;          // 10..100 %, in steps of 10
+    bool lit = true;
+};
+static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
+static Look& cur() { return looks[target]; }
 
 static constexpr uint8_t MIN_INTENSITY = 10;
 
@@ -78,29 +93,31 @@ static void write(Controller& c, const elkcmd::Frame& f) {
     if (linkUp(c)) c.tx->writeValue(f.b, sizeof(f.b), false);
 }
 
-// The current state (power + dimmed colour) to one controller, both header variants.
-static void push(Controller& c) {
-    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(c, elkcmd::power(v, lit));
-    if (!lit) return;
-    const Swatch& s = SWATCHES[swatch];
+// Controller i's look (power + dimmed colour), both header variants.
+static void push(int i) {
+    Controller& c = controllers[i];
+    const Look& l = looks[i + 1];
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(c, elkcmd::power(v, l.lit));
+    if (!l.lit) return;
+    const Swatch& s = SWATCHES[l.swatch];
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) {
-        write(c, elkcmd::color(v, elkcmd::dim(s.r, intensity), elkcmd::dim(s.g, intensity),
-                               elkcmd::dim(s.b, intensity)));
+        write(c, elkcmd::color(v, elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)));
     }
 }
 
-static bool targeted(int i) { return target == BOTH || target == static_cast<Target>(i + 1); }
-
+// After the page's look changed: on BOTH it becomes both zones' look; then the lights it covers
+// get it.
 static void pushTargets() {
+    if (target == BOTH) looks[INSIDE] = looks[OUTSIDE] = looks[BOTH];
     for (int i = 0; i < N_CTRL; i++) {
-        if (targeted(i)) push(controllers[i]);
+        if (target == BOTH || target == static_cast<Target>(i + 1)) push(i);
     }
 }
 
 static bool connect(Controller& c) {
     if (!c.client) {
         c.client = NimBLEDevice::createClient();
-        c.client->setConnectTimeout(4);
+        c.client->setConnectTimeout(4000);  // NimBLE 2: milliseconds
     }
     c.tx = nullptr;
     if (!c.client->connect(NimBLEAddress(std::string(c.addr), BLE_ADDR_PUBLIC))) {
@@ -114,29 +131,49 @@ static bool connect(Controller& c) {
     return c.fresh;
 }
 
-// Connecting blocks up to 4 s per controller, so it runs here on core 0 and the touch loop
-// (core 1) never waits. A connect attempt keeps the radio, which WiFi shares, busy for its whole
-// timeout: with the lights out of range (the deck at home), 5 s retries starved WiFi until the
-// deck didn't even answer ping. So the wait doubles after each failed round, 5 s up to 60 s, and
-// drops back to 5 s once everything is connected or a link is lost.
+// The Xbox controller (Series X|S / One 1708+, over BLE): the first one found in pairing mode,
+// or the bonded one when it's switched on.
+static XboxSeriesXControllerESP32_asukiaaa::Core xbox;
+
+// All Bluetooth work runs here on core 0, so the touch loop (core 1) never waits on a connect.
+// Connects and scans keep the radio, which WiFi shares, busy: with the lights out of range (the
+// deck at home), 5 s retries starved WiFi until the deck didn't even answer ping. So:
+//  - lights: a round of connects, then a wait that doubles after each failed round, 5 s up to
+//    60 s, back to 5 s once everything is connected or as soon as a light drops;
+//  - controller: while connected (or mid-pairing) the library runs every tick; otherwise one of
+//    its 4 s scans every 15 s (it scans flat out), stopped whenever the lights need a connect.
+static constexpr uint32_t PAD_SCAN_EVERY_MS = 15000;
+
 static void linkTask(void*) {
-    uint32_t waitMs = 5000;
+    uint32_t waitMs = 5000, nextLights = 0, lastPadScan = 0;
     for (;;) {
-        bool missing = false;
-        for (Controller& c : controllers) {
-            if (!linkUp(c) && !connect(c)) missing = true;
+        const uint32_t now = millis();
+        NimBLEScan* scan = NimBLEDevice::getScan();
+        const bool padBusy = xbox.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr ||
+                             scan->isScanning();
+        if (padBusy) {
+            xbox.onLoop();
+        } else if (now - lastPadScan > PAD_SCAN_EVERY_MS) {
+            lastPadScan = now;
+            xbox.onLoop();  // starts a scan
         }
-        waitMs = missing ? (waitMs * 2 > 60000 ? 60000 : waitMs * 2) : 5000;
-        // wake early when a connected light drops, so it comes back quickly
-        for (uint32_t t = 0; t < waitMs; t += 500) {
-            vTaskDelay(pdMS_TO_TICKS(500));
-            bool lost = false;
-            for (const Controller& c : controllers) lost = lost || (c.tx && !linkUp(c));
-            if (lost) {
-                waitMs = 5000;
-                break;
+
+        bool lost = false;
+        for (const Controller& c : controllers) lost = lost || (c.tx && !linkUp(c));
+        if (lost) {
+            waitMs = 5000;
+            nextLights = now;
+        }
+        if (static_cast<int32_t>(now - nextLights) >= 0) {
+            if (scan->isScanning()) scan->stop();  // a connect can't start mid-scan
+            bool missing = false;
+            for (Controller& c : controllers) {
+                if (!linkUp(c) && !connect(c)) missing = true;
             }
+            waitMs = missing ? (waitMs * 2 > 60000 ? 60000 : waitMs * 2) : 5000;
+            nextLights = millis() + waitMs;
         }
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
@@ -200,13 +237,18 @@ static void drawButton(int id, bool pressed = false) {
         const uint16_t bg = pressed ? PRESSED : sel ? TFT_WHITE : grey(51);
         tft.fillRoundRect(r.x, r.y, r.w, r.h, 8, bg);
         tft.setTextColor(sel || pressed ? TFT_BLACK : TFT_LIGHTGREY, bg);
-        tft.drawString(names[id], cx - (id > 0 ? 6 : 0), cy, 2);
-        if (id > 0) tft.fillCircle(r.x + r.w - 12, cy, 5, linkUp(controllers[id - 1]) ? TFT_GREEN : TFT_RED);
+        tft.drawString(names[id], cx - (id > 0 ? 9 : 0), cy, 2);
+        if (id > 0) {  // that zone's colour (grey when off), ringed green when its light is connected
+            const Look& l = looks[id];
+            const int chipX = r.x + r.w - 24, chipY = cy - 9;
+            tft.fillRoundRect(chipX, chipY, 18, 18, 4, linkUp(controllers[id - 1]) ? TFT_GREEN : TFT_RED);
+            tft.fillRoundRect(chipX + 3, chipY + 3, 12, 12, 2, l.lit ? c565(SWATCHES[l.swatch].screen) : grey(70));
+        }
         return;
     }
     if (id < TILE_END) {
         const Swatch& s = SWATCHES[id - TILE0];
-        const bool sel = lit && id - TILE0 == swatch;
+        const bool sel = cur().lit && id - TILE0 == cur().swatch;
         const int in = pressed ? 5 : 0;  // pressed: the colour shrinks inside a yellow ring
         tft.fillRect(r.x, r.y, r.w, r.h, TFT_BLACK);
         tft.fillRoundRect(r.x + in, r.y + in, r.w - 2 * in, r.h - 2 * in, 10, c565(s.screen));
@@ -227,25 +269,43 @@ static void drawButton(int id, bool pressed = false) {
 
 // The colour at its intensity (shown no darker than 25 % so it stays readable) and the %.
 static void drawLevel() {
-    const Swatch& s = SWATCHES[swatch];
-    const int shade = intensity < 25 ? 25 : intensity;
-    const uint16_t bg = lit ? c565At(s.screen, shade) : grey(26);
+    const Look& l = cur();
+    const Swatch& s = SWATCHES[l.swatch];
+    const int shade = l.pct < 25 ? 25 : l.pct;
+    const uint16_t bg = l.lit ? c565At(s.screen, shade) : grey(26);
     tft.fillRoundRect(LEVEL.x, LEVEL.y, LEVEL.w, LEVEL.h, 10, bg);
     char pct[8];
-    snprintf(pct, sizeof(pct), "%u%%", intensity);
+    snprintf(pct, sizeof(pct), "%u%%", l.pct);
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(lit ? (bright(s.screen, shade) ? TFT_BLACK : TFT_WHITE) : TFT_DARKGREY, bg);
-    tft.drawString(lit ? pct : "Off", LEVEL.x + LEVEL.w / 2, LEVEL.y + LEVEL.h / 2, 4);
+    tft.setTextColor(l.lit ? (bright(s.screen, shade) ? TFT_BLACK : TFT_WHITE) : TFT_DARKGREY, bg);
+    tft.drawString(l.lit ? pct : "Off", LEVEL.x + LEVEL.w / 2, LEVEL.y + LEVEL.h / 2, 4);
 }
 
 static void drawGrid() {
     for (int id = TILE0; id < TILE_END; id++) drawButton(id);
 }
 
+static void drawZones() {
+    for (int id = ZONE0; id < TILE0; id++) drawButton(id);
+}
+
+// The button the Xbox controller points at: a cyan ring in the gap around it (white is "what the
+// lights show", yellow "pressed"). -1 while no controller is connected.
+static int focus = -1;
+
+static void drawFocus(int id, bool on) {
+    if (id < 0) return;
+    const Rect r = rectOf(id);
+    const uint16_t c = on ? TFT_CYAN : TFT_BLACK;
+    tft.drawRoundRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, 11, c);
+    tft.drawRoundRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2, 10, c);
+}
+
 static void drawAll() {
     tft.fillScreen(TFT_BLACK);
     for (int id = 0; id < N_BTN; id++) drawButton(id);
     drawLevel();
+    drawFocus(focus, true);
 }
 
 // ---- Touch calibration: tap five crosses with the pen, fit, keep it in NVS ("touch"/"hom") ----
@@ -338,18 +398,48 @@ static bool loadCalibration() {
 
 // ---- Input ----
 
+// NVS keys per look: sw0/pct0/lit0 (BOTH), ...1 (INSIDE), ...2 (OUTSIDE).
 static void save() {
-    prefs.putUChar("swatch", static_cast<uint8_t>(swatch));
-    prefs.putUChar("pct", intensity);
+    char key[8];
+    for (int i = 0; i < 3; i++) {
+        snprintf(key, sizeof(key), "sw%d", i);
+        prefs.putUChar(key, static_cast<uint8_t>(looks[i].swatch));
+        snprintf(key, sizeof(key), "pct%d", i);
+        prefs.putUChar(key, looks[i].pct);
+        snprintf(key, sizeof(key), "lit%d", i);
+        prefs.putBool(key, looks[i].lit);
+    }
     prefs.putUChar("target", static_cast<uint8_t>(target));
-    prefs.putBool("lit", lit);
+}
+
+// Builds before the pages kept one look under swatch/pct/lit: it seeds all three.
+static void load() {
+    Look old;
+    old.swatch = prefs.getUChar("swatch", static_cast<uint8_t>(old.swatch)) % N_SWATCH;
+    old.pct = static_cast<uint8_t>((prefs.getUChar("pct", old.pct) + 5) / 10 * 10);  // older builds stored any %
+    old.lit = prefs.getBool("lit", true);
+    char key[8];
+    for (int i = 0; i < 3; i++) {
+        Look& l = looks[i];
+        snprintf(key, sizeof(key), "sw%d", i);
+        l.swatch = prefs.getUChar(key, static_cast<uint8_t>(old.swatch)) % N_SWATCH;
+        snprintf(key, sizeof(key), "pct%d", i);
+        l.pct = prefs.getUChar(key, old.pct);
+        if (l.pct < MIN_INTENSITY || l.pct > 100) l.pct = 100;
+        snprintf(key, sizeof(key), "lit%d", i);
+        l.lit = prefs.getBool(key, old.lit);
+    }
+    target = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
 }
 
 // One settled tap on a button.
 static void press(int id) {
-    if (id < TILE0) {
+    Look& l = cur();
+    if (id < TILE0) {  // another page: show its look
         target = static_cast<Target>(id);
-        for (int z = 0; z < TILE0; z++) drawButton(z);
+        drawZones();
+        drawGrid();
+        drawLevel();
     } else if (id < TILE_END) {
         // A second tap on the lit colour within DOUBLE_MS turns the lights off; any other tap sets
         // the colour and turns them on.
@@ -357,22 +447,23 @@ static void press(int id) {
         static int lastTile = -1;
         static uint32_t lastTileMs = 0;
         const int tile = id - TILE0;
-        const bool doubleTap = lit && tile == swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
+        const bool doubleTap = l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
         lastTile = doubleTap ? -1 : tile;  // a third tap starts over
         lastTileMs = millis();
         if (doubleTap) {
-            lit = false;
+            l.lit = false;
         } else {
-            swatch = tile;
-            lit = true;
+            l.swatch = tile;
+            l.lit = true;
         }
         pushTargets();
         drawGrid();
         drawLevel();
+        drawZones();  // the tab chips follow
     } else {
-        const int pct = intensity + (id == PLUS ? 10 : -10);
-        intensity = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
-        if (lit) pushTargets();
+        const int pct = l.pct + (id == PLUS ? 10 : -10);
+        l.pct = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
+        pushTargets();
         drawLevel();
     }
     save();
@@ -398,6 +489,114 @@ static void act() {
     drawButton(tap.id, true);
 }
 
+// ---- Xbox controller input ----
+//   D-pad: move the focus ring (held: repeats; the sticks are ignored)    A: press the focused button
+//   B: the BOTH page    X: next page    Y: this page's lights on/off    LB / RB: - / +
+
+// The nearest button from `from` in direction (dx, dy), by centres; straying sideways costs double.
+static int neighbour(int from, int dx, int dy) {
+    const Rect a = rectOf(from);
+    const int ax = a.x + a.w / 2, ay = a.y + a.h / 2;
+    int best = from, bestScore = 1 << 30;
+    for (int id = 0; id < N_BTN; id++) {
+        if (id == from) continue;
+        const Rect b = rectOf(id);
+        const int vx = b.x + b.w / 2 - ax, vy = b.y + b.h / 2 - ay;
+        const int along = dx ? vx * dx : vy * dy;
+        if (along <= 0) continue;
+        const int across = dx ? (vy < 0 ? -vy : vy) : (vx < 0 ? -vx : vx);
+        if (along + 2 * across < bestScore) {
+            bestScore = along + 2 * across;
+            best = id;
+        }
+    }
+    return best;
+}
+
+static void moveFocus(int dx, int dy) {
+    const int to = neighbour(focus, dx, dy);
+    if (to == focus) return;
+    drawFocus(focus, false);
+    focus = to;
+    drawFocus(focus, true);
+}
+
+// A button press on the controller: the press looks (yellow) for PAD_FLASH_MS.
+static constexpr uint32_t PAD_FLASH_MS = 150;
+static int padFlash = -1;
+static uint32_t padFlashAt = 0;
+
+static void padPress(int id) {
+    press(id);
+    drawButton(id, true);
+    drawFocus(focus, true);
+    padFlash = id;
+    padFlashAt = millis();
+}
+
+static void handlePad() {
+    static bool was = false;
+    const bool is = xbox.isConnected() && !xbox.isWaitingForFirstNotification();
+    if (is != was) {
+        was = is;
+        Serial.printf("[pad] %s\n", is ? "connected" : "gone");
+        if (is) {
+            focus = TILE0 + cur().swatch;
+            drawFocus(focus, true);
+        } else {
+            drawFocus(focus, false);
+            focus = -1;
+        }
+    }
+    if (padFlash >= 0 && millis() - padFlashAt > PAD_FLASH_MS) {
+        drawButton(padFlash);
+        drawFocus(focus, true);
+        padFlash = -1;
+    }
+    if (!is) return;
+
+    const XboxControllerNotificationParser& n = xbox.xboxNotif;
+    // D-pad only: João's controller has left-stick drift, which wandered the ring on its own.
+    int dx = (n.btnDirRight ? 1 : 0) - (n.btnDirLeft ? 1 : 0);
+    int dy = (n.btnDirDown ? 1 : 0) - (n.btnDirUp ? 1 : 0);
+    if (dx && dy) dy = 0;  // diagonals: horizontal wins
+    static int lastDx = 0, lastDy = 0;
+    static uint32_t repeatAt = 0;
+    if (dx || dy) {
+        if (dx != lastDx || dy != lastDy) {
+            moveFocus(dx, dy);
+            repeatAt = millis() + 400;
+        } else if (static_cast<int32_t>(millis() - repeatAt) >= 0) {
+            moveFocus(dx, dy);
+            repeatAt = millis() + 150;
+        }
+    }
+    lastDx = dx;
+    lastDy = dy;
+
+    // buttons act on the press, once
+    static bool pA = false, pB = false, pX = false, pY = false, pLB = false, pRB = false;
+    auto edge = [](bool now, bool& prev) {
+        const bool down = now && !prev;
+        prev = now;
+        return down;
+    };
+    if (edge(n.btnA, pA)) padPress(focus);
+    if (edge(n.btnB, pB)) padPress(ZONE0 + BOTH);
+    if (edge(n.btnX, pX)) padPress(ZONE0 + (target + 1) % 3);
+    if (edge(n.btnLB, pLB)) padPress(MINUS);
+    if (edge(n.btnRB, pRB)) padPress(PLUS);
+    if (edge(n.btnY, pY)) {
+        cur().lit = !cur().lit;
+        pushTargets();
+        drawGrid();
+        drawLevel();
+        drawZones();
+        drawFocus(focus, true);
+        save();
+    }
+}
+
 // ---- Voice: Siri Shortcuts over WiFi ----
 // On the iPhone hotspot the deck sits at 172.20.10.11 (net/wifi pins it). A Shortcut dictates a
 // phrase and calls  GET /say?text=<phrase>&k=<REMOTE_TOKEN>; the reply is one line to speak back
@@ -413,23 +612,27 @@ static char voiceReply[64];
 
 // withLevel: say the % too. A voice reply only does when the command changed it: "Purple, 20
 // percent" after a plain "purple" sounded like the deck wanted a percentage.
+// The BOTH look, which voice changes.
 static void describe(char* out, size_t n, bool withLevel = true) {
-    if (!lit) snprintf(out, n, "Lights off");
-    else if (withLevel) snprintf(out, n, "%s, %u percent", SWATCHES[swatch].name, intensity);
-    else snprintf(out, n, "%s", SWATCHES[swatch].name);
+    const Look& l = looks[BOTH];
+    if (!l.lit) snprintf(out, n, "Lights off");
+    else if (withLevel) snprintf(out, n, "%s, %u percent", SWATCHES[l.swatch].name, l.pct);
+    else snprintf(out, n, "%s", SWATCHES[l.swatch].name);
 }
 
-// In loop(): applies one voice command to both lights (voice doesn't pick a zone, and leaves the
-// screen's zone as it was), then answers the waiting handler.
+// In loop(): applies one voice command like the BOTH page does (both lights get the BOTH look;
+// the page on screen stays), then answers the waiting handler.
 static void applyVoice(const ledvoice::Command& c) {
+    Look& l = looks[BOTH];
     if (c.color >= 0) {
-        swatch = c.color;
-        lit = true;
+        l.swatch = c.color;
+        l.lit = true;
     }
-    if (c.power >= 0) lit = c.power == 1;
-    int pct = c.level >= 0 ? c.level : intensity + 10 * c.levelStep;
-    intensity = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
-    for (Controller& ctrl : controllers) push(ctrl);
+    if (c.power >= 0) l.lit = c.power == 1;
+    int pct = c.level >= 0 ? c.level : l.pct + 10 * c.levelStep;
+    l.pct = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
+    looks[INSIDE] = looks[OUTSIDE] = l;
+    for (int i = 0; i < N_CTRL; i++) push(i);
     save();
     drawAll();
     describe(voiceReply, sizeof(voiceReply), c.level >= 0 || c.levelStep != 0);
@@ -530,17 +733,14 @@ void setup() {
     touch::begin();
 
     prefs.begin("leds", false);
-    swatch = prefs.getUChar("swatch", static_cast<uint8_t>(swatch)) % N_SWATCH;
-    intensity = prefs.getUChar("pct", intensity);
-    intensity = static_cast<uint8_t>((intensity + 5) / 10 * 10);  // older builds stored any %
-    if (intensity < MIN_INTENSITY || intensity > 100) intensity = 100;
-    target = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
-    lit = prefs.getBool("lit", true);
+    load();
 
     pinMode(PIN_BOOT, INPUT_PULLUP);
     if (!loadCalibration() || digitalRead(PIN_BOOT) == LOW) calibrate();
     drawAll();
-    NimBLEDevice::init("");
+    // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
+    // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
+    xbox.begin();
     xTaskCreatePinnedToCore(linkTask, "leds-link", 4096, nullptr, 1, nullptr, 0);
     beginVoice();
 }
@@ -566,6 +766,8 @@ void loop() {
     ledvoice::Command voice;
     if (voiceQueue && xQueueReceive(voiceQueue, &voice, 0) == pdTRUE) applyVoice(voice);
 
+    handlePad();
+
     // BOOT held for 2 s: calibrate the touch again.
     static uint32_t bootSince = 0;
     if (digitalRead(PIN_BOOT) == LOW) {
@@ -579,14 +781,14 @@ void loop() {
         bootSince = 0;
     }
 
-    // A controller that just came up gets the current state, so it matches the screen.
+    // A controller that just came up gets its zone's look, so it matches what the deck remembers.
     static bool shown[N_CTRL] = {};
     for (int i = 0; i < N_CTRL; i++) {
         Controller& c = controllers[i];
         const bool up = linkUp(c);
         if (up && c.fresh) {
             c.fresh = false;
-            if (targeted(i)) push(c);
+            push(i);
         }
         if (up != shown[i]) {
             shown[i] = up;
