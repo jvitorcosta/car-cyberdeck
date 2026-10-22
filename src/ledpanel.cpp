@@ -777,31 +777,14 @@ static void voiceTask(void*) {
     server->begin();
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
-    uint32_t lastLook = millis(), lookEvery = 20000;
+    // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
+    // in the car only the hotspot exists. At home, a deck that booted while the iPhone hid its
+    // hotspot sits on home WiFi, out of the iPhone's reach: open the hotspot screen and restart it.
+    // (An every-20 s hunt for the hotspot was tried here on 2026-10-22 and removed: the hidden
+    // hotspot was rarely seen, and the scans cost the server and the radio.)
     for (;;) {
         server->handleClient();
         net::loop();  // rejoins after a drop
-        // The iPhone only shows its hotspot while its Personal Hotspot screen is open, so a deck
-        // that started meanwhile sits on home WiFi, where the iPhone can't reach it. Off the
-        // hotspot (the first saved network), look for it every 20 s and move over when it's there.
-        // A short passive scan (120 ms a channel, like net::switchNetwork) keeps the server
-        // answering; a move that fails (seen but not joinable: "Allow Others to Join" off) doubles
-        // the wait, up to 5 min, instead of dropping home WiFi every 20 s.
-        if (millis() - lastLook > lookEvery && net::isOnline() && net::ssid() != WIFI_NETWORKS[0].ssid) {
-            lastLook = millis();
-            const int n = WiFi.scanNetworks(false, false, true, 120);
-            bool seen = false;
-            for (int i = 0; i < n && !seen; i++) seen = WiFi.SSID(i) == WIFI_NETWORKS[0].ssid;
-            WiFi.scanDelete();
-            if (seen) {
-                Serial.printf("[voice] %s is up, moving over\n", WIFI_NETWORKS[0].ssid);
-                WiFi.disconnect();
-                net::connectAny();  // tries the hotspot first
-                const bool moved = net::ssid() == WIFI_NETWORKS[0].ssid;
-                lookEvery = moved ? 20000 : (lookEvery * 2 > 300000 ? 300000 : lookEvery * 2);
-                Serial.printf("[voice] on: http://%s/say  (%s)\n", net::deviceIp().c_str(), net::ssid().c_str());
-            }
-        }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

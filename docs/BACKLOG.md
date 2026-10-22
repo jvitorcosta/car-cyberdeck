@@ -83,7 +83,10 @@ the place to add it.
 - **Switch back to the hotspot automatically** (tried 2026-10-14, then removed): scanning on
   the home WiFi paused the S3's network task and blipped the companion, and the move back was
   never seen working (joins were refused, likely "Allow Others to Join" off). Owner: decks stay
-  where they joined; home WiFi is dev only, the car has only the hotspot.
+  where they joined; home WiFi is dev only, the car has only the hotspot. Tried again in the LED
+  panel on 2026-10-22 (a short passive scan every 20 s) and removed again: the iPhone hides its
+  hotspot unless its settings screen is open, so the scan rarely saw it; restarting the deck with
+  that screen open is what worked.
 
 - **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
   a top strip with the clock and outside weather (`util/weather` is committed, not wired in).

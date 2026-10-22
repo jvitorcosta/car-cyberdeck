@@ -87,6 +87,10 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
 
 ## Notes
 
+- At home the deck may join home WiFi instead (the iPhone only shows its hotspot while the
+  Personal Hotspot screen is open), and then the iPhone can't reach it: open that screen and
+  restart the deck. It stays on the network it joined; in the car only the hotspot exists.
+
 - The iPhone's Bluetooth must be off for the deck to hold the LED controllers, but the hotspot is
   WiFi, so the Shortcuts still reach the deck.
 - At home on the router the PC couldn't reach the deck at all (it never showed in the PC's ARP
