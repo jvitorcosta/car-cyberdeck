@@ -18,7 +18,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - A fourth boot opening on the S3: Max Verstappen's F1 intro (~8 s), letterboxed under the boot
   log. `tools/gen_intro.py` gained `--out`, `--letterbox` and `--q` to build it as
   `data/max.bin` + `max.pcm` (git-ignored, in the media partition).
-- A music box on the S3's "Nothing playing" screen: soft plucked tunes (5 % of the clips'
+- A music box on the S3's "Nothing playing" screen: soft plucked tunes (2.5 % of the clips'
   volume) loop in random order until the song comes back. Make your own from MIDI with
   `tools/gen_tune.py` (`data/tunes/`, git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
 - Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.

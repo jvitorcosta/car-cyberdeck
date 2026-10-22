@@ -27,7 +27,7 @@ namespace greeting {
 constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (16-bit signed LE)
 constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_howl.py output rate
 constexpr int CHUNK = 128;               // samples per audiosink::write
-constexpr int TUNE_LEVEL = 5;            // the music box, percent of the clip volume: background
+constexpr int TUNE_LEVEL = 25;           // the music box, per mille of the clip volume: barely there
 
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
@@ -115,7 +115,7 @@ static void task(void* arg) {
             n = synth.fill(buf, CHUNK);
             if (n == 0) break;
             i += n;
-            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 100);
+            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 1000);
         }
         for (; c->data && n < CHUNK && i < c->samples; ++n, ++i) {
             int16_t s;
@@ -169,7 +169,7 @@ static void tuneTask(void*) {
         char name[32] = "";
         int shown = -1;
         int16_t buf[CHUNK];
-        const int volume = audiosink::GREETING_VOLUME * TUNE_LEVEL / 100;
+        const int volume = audiosink::GREETING_VOLUME * TUNE_LEVEL / 100;   // per mille
         for (;;) {
             if (s_tunesStop.load()) box.stop();
             if (box.tune() != shown) {
@@ -180,7 +180,7 @@ static void tuneTask(void*) {
             }
             const size_t n = box.fill(buf, CHUNK);
             if (n == 0) break;
-            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 100);
+            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 1000);
             audiosink::write(buf, n);
         }
         audiosink::close();
