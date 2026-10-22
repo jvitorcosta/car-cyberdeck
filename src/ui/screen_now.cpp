@@ -6,6 +6,7 @@
 #include "typebadge.h"
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
+#include "../util/idlewait.h"
 #include "statusscene.h"
 #include "qrcard.h"
 #include "sunset.h"
@@ -290,11 +291,14 @@ static void drawTuneNoteAt(TFT_eSPI& t, int frame) {
 
 void drawTuneNote(TFT_eSPI& t, int frame) { drawTuneNoteAt(t, frame); }
 
-// "Waiting for a song..."'s second line: ♪ and the tune; muted, the words in a softer ink.
+// "Waiting for a song..."'s second line: ♪ and the tune; muted, the words in a softer ink; the
+// phone hint (util/idlewait) plain, from the left edge (it needs the whole line).
 static void drawTuneLine(TFT_eSPI& t, const char* detail, int sound) {
     t.fillRect(16, TUNE_Y - 2, TUNE_LINE_W, 20, theme::pal().dlgFill);
     if (!detail || !detail[0]) return;
-    if (sound == 1) {
+    if (strcmp(detail, idlewait::PHONE_HINT) == 0) {
+        shadowText(t, detail, 18, TUNE_Y + 1, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
+    } else if (sound == 1) {
         drawTuneNoteAt(t, -1);
         shadowText(t, detail, TUNE_TEXT_X, TUNE_Y + 1, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
     } else {

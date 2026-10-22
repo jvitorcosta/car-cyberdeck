@@ -4,6 +4,20 @@
 void setUp() {}
 void tearDown() {}
 
+// The phone hint: not in the first HINT_AFTER_MS, then HINT_SHOW_MS out of every HINT_EVERY_MS
+// (the tune name shows the rest of the time).
+void test_phone_hint_comes_and_goes() {
+    using namespace idlewait;
+    TEST_ASSERT_FALSE(hintNow(0));
+    TEST_ASSERT_FALSE(hintNow(HINT_AFTER_MS - 1));
+    TEST_ASSERT_TRUE(hintNow(HINT_AFTER_MS));
+    TEST_ASSERT_TRUE(hintNow(HINT_AFTER_MS + HINT_SHOW_MS - 1));
+    TEST_ASSERT_FALSE(hintNow(HINT_AFTER_MS + HINT_SHOW_MS));
+    TEST_ASSERT_FALSE(hintNow(HINT_AFTER_MS + HINT_EVERY_MS - 1));
+    TEST_ASSERT_TRUE(hintNow(HINT_AFTER_MS + HINT_EVERY_MS));
+    TEST_ASSERT_TRUE(hintNow(HINT_AFTER_MS + 100 * HINT_EVERY_MS + 1));   // hours in: still cycles
+}
+
 // Spotify has nothing at all: "Nothing playing" right away.
 void test_stopped_is_idle_at_once() {
     idlewait::Clock c;
@@ -45,6 +59,7 @@ void test_survives_millis_wrap() {
 
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_phone_hint_comes_and_goes);
     RUN_TEST(test_stopped_is_idle_at_once);
     RUN_TEST(test_paused_turns_idle_after_a_minute);
     RUN_TEST(test_playing_resets_the_wait);

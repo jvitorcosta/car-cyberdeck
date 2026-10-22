@@ -407,6 +407,10 @@ void loop() {
             else if (sound == 1) {                       // the tune playing, once it has started
                 greeting::tuneName(detail, sizeof detail);
             }
+            // A phone that dropped off Spotify plays on unseen (the account has no active device
+            // until the app is touched): now and then, how to wake it (util/idlewait).
+            if (mode == 2 && lastMode == mode && idlewait::hintNow(millis() - shownAt))
+                strlcpy(detail, idlewait::PHONE_HINT, sizeof detail);
         }
         statusscene::Look look = statusscene::lookFor(kind);
         look.night = theme::isNightActive();   // Sonic's sunset turns to night with the palette
@@ -433,7 +437,8 @@ void loop() {
             if (statusscene::frameKey(t, look) != shownKey) {   // only what moves (frameRect)
                 shownKey = statusscene::frameKey(t, look);
                 ui::drawOfflineScene(s_tft, look, t, sound < 0, false, qr);   // music box: no arrow
-                if (sound == 1 && detail[0]) ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
+                if (sound == 1 && detail[0] && strcmp(detail, idlewait::PHONE_HINT) != 0)
+                    ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
             }
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
