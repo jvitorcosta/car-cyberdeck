@@ -4,6 +4,7 @@
 #include "../../src/ui/status_sprite.h"
 #include "../../src/util/idlesprite.h"
 #include "../../src/ui/sunset.h"
+#include "../../src/ui/qrcard.h"
 #include <cstring>
 
 using linkstatus::Kind;
@@ -158,7 +159,7 @@ void test_nothing_playing_is_sonic_with_the_file() {
 void test_sonic_drawn_2x_on_the_platform_following_the_timeline() {
     loadIdle();
     const statusscene::Look l = statusscene::lookFor(Kind::Ok);
-    const int left = statusscene::CX - idlesprite::width();
+    const int left = statusscene::IDLE_CX - idlesprite::width();
     const int top = statusscene::FEET_Y - 2 * idlesprite::height();
     struct { uint32_t ms; int frame; } rows[] = {{0, idlesprite::STAND}, {4800, idlesprite::WAIT2},
                                                  {5200, idlesprite::WAIT1}, {6800, idlesprite::WAIT3}};
@@ -236,11 +237,20 @@ void test_frame_rect_is_sonics_box() {
     loadIdle();
     const statusscene::Look l = statusscene::lookFor(Kind::Ok);
     const statusscene::Rect r = statusscene::frameRect(l);
-    TEST_ASSERT_EQUAL_INT(statusscene::CX - idlesprite::width(), r.x);
+    TEST_ASSERT_EQUAL_INT(statusscene::IDLE_CX - idlesprite::width(), r.x);
     TEST_ASSERT_EQUAL_INT(2 * idlesprite::width(), r.w);
     TEST_ASSERT_EQUAL_INT(statusscene::FEET_Y - 2 * idlesprite::height(), r.y);
     TEST_ASSERT_EQUAL_INT(2 * idlesprite::height(), r.h);
     assertChangesInsideFrameRect(l);
+}
+
+// Sonic (32 px wide, 2x: data/idle.bin) stands clear of the phone link's QR card on the left
+// (ui/qrcard, x 4..127 with its shadow) and inside the scene, with room between them.
+void test_sonic_stands_clear_of_the_qr_card() {
+    constexpr int SONIC_W = 32;
+    const int cardRight = qrcard::FOOTPRINT.x + qrcard::FOOTPRINT.w;
+    TEST_ASSERT_TRUE(statusscene::IDLE_CX - SONIC_W >= cardRight + 32);
+    TEST_ASSERT_TRUE(statusscene::IDLE_CX + SONIC_W <= statusscene::X0 + statusscene::W);
 }
 
 // Pikachu (no Sonic file): his box with room for the 2 px bob.
@@ -285,6 +295,7 @@ int main(int, char**) {
     RUN_TEST(test_sonic_waits_in_front_of_the_sunset);
     RUN_TEST(test_sound_button);
     RUN_TEST(test_frame_rect_is_sonics_box);
+    RUN_TEST(test_sonic_stands_clear_of_the_qr_card);
     RUN_TEST(test_frame_rect_is_pikachus_box_with_the_bob);
     RUN_TEST(test_frame_rect_is_the_region_with_a_bubble_or_a_ball);
     return UNITY_END();

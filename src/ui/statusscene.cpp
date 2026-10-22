@@ -69,6 +69,7 @@ static const char* bubbleText(Bubble b, int step) {
     return "";
 }
 
+static int centreX(const Look& look) { return look.idle ? IDLE_CX : CX; }   // Sonic stands aside
 static int spriteW(const Look& look) { return look.idle ? idlesprite::width() : status_sprite::width(look.sprite); }
 static int spriteH(const Look& look) { return look.idle ? idlesprite::height() : status_sprite::height(look.sprite); }
 
@@ -77,7 +78,7 @@ static int spriteTop(const Look& look, const Pose& pose) {
 }
 
 Rect bubbleRect(const Look& look, const Pose& pose) {
-    Rect r{CX + spriteW(look) - 6, spriteTop(look, pose) - BUBBLE_H + 6,
+    Rect r{centreX(look) + spriteW(look) - 6, spriteTop(look, pose) - BUBBLE_H + 6,
            BUBBLE_W, BUBBLE_H};
     if (r.y < Y0) r.y = Y0;
     return r;
@@ -141,7 +142,7 @@ uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c
     if (bubblePixel(x, y, look, pose, c, &v)) return v;
     if (ballPixel(x, y, look, pose, c, &v)) return v;
     const int w = spriteW(look);
-    const int left = CX - w, top = spriteTop(look, pose);
+    const int left = centreX(look) - w, top = spriteTop(look, pose);
     if (x >= left && y >= top) {
         const int sx = (x - left) / 2, sy = (y - top) / 2;
         if (look.idle ? idlesprite::pixel(pose.idleFrame, sx, sy, &v) : status_sprite::pixel(look.sprite, sx, sy, &v))
@@ -164,7 +165,7 @@ Rect frameRect(const Look& look) {
     if (look.ball || look.bubble != Bubble::None) return {X0, Y0, W, H};
     const int w = spriteW(look), h = spriteH(look);
     const int bob = look.idle ? 0 : 2;   // BOB's highest step
-    return {CX - w, FEET_Y - 2 * h - bob, 2 * w, 2 * h + bob};
+    return {centreX(look) - w, FEET_Y - 2 * h - bob, 2 * w, 2 * h + bob};
 }
 
 uint32_t frameKey(uint32_t ms, const Look& look) {

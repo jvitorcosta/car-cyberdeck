@@ -18,6 +18,7 @@ Look lookFor(linkstatus::Kind k);
 constexpr int DLG_Y = 168, DLG_H = 68;
 constexpr int X0 = 40, Y0 = 20, W = 240, H = 148;
 constexpr int CX = 160;              // sprite and platform centre
+constexpr int IDLE_CX = 216;         // Sonic's centre: right of the phone link's QR card (x 4..127)
 constexpr int FEET_Y = 132;          // sprite's bottom edge at rest
 constexpr uint32_t FRAME_MS = 250;   // 4 fps: gentle, and cheap on the UI loop
 
