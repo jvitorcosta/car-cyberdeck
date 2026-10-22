@@ -6,8 +6,9 @@ the lipstick print on the wall). A looping wallpaper starts mid-loop: its openin
 kiss. It is one of the S3's random boot openings; the boot terminal types over it.
 The Max Verstappen opening is the same kind of video, data/max.bin + max.pcm, from his F1 intro
 (16:9, the whole frame kept under a black band for the terminal):
-  python tools/gen_intro.py max-clip/max.mp4 --seg 0-99 --out max --letterbox --q 8
-(-q 8: ~9 KB a frame, near the kiss's ~7 KB; the deck decodes a frame in ~50 ms at best.)
+  python tools/gen_intro.py max-clip/max.mp4 --seg 0-99 --out max --letterbox --q 8 --fps 16
+(-q 8: ~9 KB a frame; the deck draws one in ~54 ms, so at 20 fps it dropped 24 of 163, at 16 fps
+it has 62 ms a frame.)
 The clips and the built files are git-ignored. Needs ffmpeg.
 
 Format: the montage's "MTG1" (ui/montage): u16 count, u16 fps, count x (u32 offset, u32 size),
@@ -27,7 +28,7 @@ import tempfile
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
-FPS = 20
+FPS = 20                   # the default; the deck plays each clip at the rate in its header
 RATE = 48000               # sound sample rate (the S3's ES8311 has a 48 kHz clock row)
 MAX_BYTES = 4_000_000      # the S3 has a 12 MB app partition; keep the video under ~4 MB
 QUALITY = 2                # ffmpeg -q:v (2 best .. 31 worst); raised automatically to fit
@@ -62,14 +63,14 @@ def fit(pcm, frames, fps, rate):
     return pcm[:want] + bytes(max(0, want - len(pcm)))
 
 
-def sound_of(video, segments, counts):
+def sound_of(video, segments, counts, fps=FPS):
     """The segments' sound, each fitted to its frame count, as one 16-bit mono RATE stream."""
     out = b""
     for (start, end), n in zip(segments, counts):
         pcm = subprocess.run(["ffmpeg", "-v", "error", "-ss", str(start), "-to", str(end), "-i", video,
                               "-vn", "-ac", "1", "-ar", str(RATE), "-f", "s16le", "-"],
                              check=True, capture_output=True).stdout
-        out += fit(pcm, n, FPS, RATE)
+        out += fit(pcm, n, fps, RATE)
     return out
 
 
@@ -77,10 +78,10 @@ CROP = "crop=ih*4/3:ih,scale=320:240:flags=lanczos"
 LETTERBOX = "scale=320:180:flags=lanczos,pad=320:240:0:60:black"   # below the terminal (60 px)
 
 
-def segment_frames(video, start, end, q, tmp, fit=CROP):
+def segment_frames(video, start, end, q, tmp, fit=CROP, fps=FPS):
     for f in glob.glob(os.path.join(tmp, "f*.jpg")):
         os.remove(f)
-    vf = f"fps={FPS},{fit}"
+    vf = f"fps={fps},{fit}"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", str(start), "-to", str(end), "-i", video,
                     "-vf", vf, "-an", "-pix_fmt", "yuvj420p", "-q:v", str(q),
                     os.path.join(tmp, "f%04d.jpg")], check=True)
@@ -93,6 +94,7 @@ def main():
     ap.add_argument("--seg", type=segment, action="append", metavar="START-END")
     ap.add_argument("--out", default="intro", help="data/<out>.bin and .pcm (intro, max)")
     ap.add_argument("--letterbox", action="store_true", help="keep the whole frame (16:9 clips)")
+    ap.add_argument("--fps", type=int, default=FPS, help="frames a second (the deck draws one in ~50 ms)")
     ap.add_argument("--q", type=int, default=QUALITY, help="JPEG quality to start at (2 best .. 31)")
     a = ap.parse_args()
     out, out_pcm = (os.path.join(DATA, a.out + ext) for ext in (".bin", ".pcm"))
@@ -104,13 +106,13 @@ def main():
     try:
         q = a.q
         while True:
-            per = [segment_frames(a.video, s0, s1, q, tmp, fit) for s0, s1 in segments]
+            per = [segment_frames(a.video, s0, s1, q, tmp, fit, a.fps) for s0, s1 in segments]
             frames = [f for seg in per for f in seg]
-            blob = pack(frames, FPS)
+            blob = pack(frames, a.fps)
             if len(blob) <= MAX_BYTES or q >= 20:
                 break
             q += 2                                       # too big: lower the quality and retry
-        sound = sound_of(a.video, segments, [len(seg) for seg in per])
+        sound = sound_of(a.video, segments, [len(seg) for seg in per], a.fps)
     except subprocess.CalledProcessError as e:
         sys.exit(f"gen_intro: ffmpeg failed ({e})")
     finally:
@@ -124,7 +126,7 @@ def main():
         f.write(blob)
     with open(out_pcm, "wb") as f:
         f.write(sound or bytes(2))                       # the build cannot embed an empty file
-    print(f"gen_intro: {len(frames)} frames at {FPS} fps (-q {q}), {len(blob)} bytes -> {out}")
+    print(f"gen_intro: {len(frames)} frames at {a.fps} fps (-q {q}), {len(blob)} bytes -> {out}")
     print(f"gen_intro: sound {len(sound) // 2} samples at {RATE} Hz, {len(sound)} bytes -> {out_pcm}")
 
 
