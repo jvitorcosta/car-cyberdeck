@@ -17,7 +17,7 @@
 #pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
 #pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
 #include <NimBLEDevice.h>
-#include <XboxSeriesXControllerESP32_asukiaaa.hpp>
+#include <XboxPad.hpp>  // lib/xboxpad: asukiaaa's Xbox library, vendored with shorter timeouts
 #pragma GCC diagnostic pop
 #include <Preferences.h>
 #include <TFT_eSPI.h>
@@ -72,11 +72,14 @@ static constexpr uint8_t MIN_INTENSITY = 10;
 
 // ---- BLE ----
 
+// The link task (core 0) connects; the loop (core 1) writes. `tx` is set once, on the first
+// connect, and the client keeps its attributes across reconnects (connect(.., false)), so the
+// characteristic it points to is never freed under the loop's feet.
 struct Controller {
     const char* label;
     const char* addr;
     NimBLEClient* client = nullptr;
-    NimBLERemoteCharacteristic* volatile tx = nullptr;  // set by the link task, read by the loop
+    NimBLERemoteCharacteristic* volatile tx = nullptr;  // FFF3, once discovered
     volatile bool fresh = false;                         // just connected: needs the current state
 };
 
@@ -90,7 +93,10 @@ static constexpr int N_CTRL = sizeof(controllers) / sizeof(controllers[0]);
 static bool linkUp(const Controller& c) { return c.client && c.client->isConnected() && c.tx; }
 
 static void write(Controller& c, const elkcmd::Frame& f) {
-    if (linkUp(c)) c.tx->writeValue(f.b, sizeof(f.b), false);
+    NimBLERemoteCharacteristic* tx = c.tx;  // one read: the link task may be reconnecting
+    if (tx && c.client && c.client->isConnected() && !tx->writeValue(f.b, sizeof(f.b), false)) {
+        Serial.printf("[leds] %s: write failed\n", c.label);
+    }
 }
 
 // Controller i's look (power + dimmed colour), both header variants.
@@ -119,38 +125,46 @@ static bool connect(Controller& c) {
         c.client = NimBLEDevice::createClient();
         c.client->setConnectTimeout(4000);  // NimBLE 2: milliseconds
     }
-    c.tx = nullptr;
-    if (!c.client->connect(NimBLEAddress(std::string(c.addr), BLE_ADDR_PUBLIC))) {
+    // false: keep the discovered attributes, so `tx` stays valid for the loop across reconnects
+    if (!c.client->isConnected() && !c.client->connect(NimBLEAddress(std::string(c.addr), BLE_ADDR_PUBLIC), false)) {
         Serial.printf("[leds] %s: connect failed\n", c.label);
         return false;
     }
-    NimBLERemoteService* svc = c.client->getService(NimBLEUUID(static_cast<uint16_t>(0xFFF0)));
-    if (svc) c.tx = svc->getCharacteristic(NimBLEUUID(static_cast<uint16_t>(0xFFF3)));
-    Serial.printf("[leds] %s: %s\n", c.label, c.tx ? "connected" : "no FFF3");
-    c.fresh = c.tx != nullptr;
-    return c.fresh;
+    if (!c.tx) {
+        NimBLERemoteService* svc = c.client->getService(NimBLEUUID(static_cast<uint16_t>(0xFFF0)));
+        if (svc) c.tx = svc->getCharacteristic(NimBLEUUID(static_cast<uint16_t>(0xFFF3)));
+    }
+    if (!c.tx) {  // connected but discovery failed (e.g. a GATT timeout): drop it, try again later
+        Serial.printf("[leds] %s: no FFF3, disconnecting\n", c.label);
+        c.client->disconnect();
+        return false;
+    }
+    Serial.printf("[leds] %s: connected\n", c.label);
+    c.fresh = true;
+    return true;
 }
 
 // The Xbox controller (Series X|S / One 1708+, over BLE): the first one found in pairing mode,
 // or the bonded one when it's switched on.
 static XboxSeriesXControllerESP32_asukiaaa::Core xbox;
 
-// All Bluetooth work runs here on core 0, so the touch loop (core 1) never waits on a connect.
-// Connects and scans keep the radio, which WiFi shares, busy: with the lights out of range (the
-// deck at home), 5 s retries starved WiFi until the deck didn't even answer ping. So:
-//  - lights: a round of connects, then a wait that doubles after each failed round, 5 s up to
-//    60 s, back to 5 s once everything is connected or as soon as a light drops;
+// All connecting runs here on core 0, so the touch loop (core 1) never waits on it. Connects and
+// scans keep the radio, which WiFi shares, busy: with the lights out of range (the deck at home),
+// 5 s retries starved WiFi until the deck didn't even answer ping. So:
+//  - lights: only while one is missing, rounds of connects 5 s apart, doubling after each failed
+//    round up to 60 s, back to 5 s (at once) when a connected light drops. A connect pauses a
+//    running controller scan by itself (NimBLE stops it on EBUSY);
 //  - controller: while connected (or mid-pairing) the library runs every tick; otherwise one of
-//    its 4 s scans every 15 s (it scans flat out), stopped whenever the lights need a connect.
+//    its 4 s scans every 15 s (it scans flat out).
 static constexpr uint32_t PAD_SCAN_EVERY_MS = 15000;
+static TaskHandle_t linkHandle = nullptr;
 
 static void linkTask(void*) {
     uint32_t waitMs = 5000, nextLights = 0, lastPadScan = 0;
     for (;;) {
         const uint32_t now = millis();
-        NimBLEScan* scan = NimBLEDevice::getScan();
         const bool padBusy = xbox.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr ||
-                             scan->isScanning();
+                             NimBLEDevice::getScan()->isScanning();
         if (padBusy) {
             xbox.onLoop();
         } else if (now - lastPadScan > PAD_SCAN_EVERY_MS) {
@@ -158,20 +172,26 @@ static void linkTask(void*) {
             xbox.onLoop();  // starts a scan
         }
 
-        bool lost = false;
-        for (const Controller& c : controllers) lost = lost || (c.tx && !linkUp(c));
+        // lost: a light that was up last tick and isn't now (`tx` outlives the link, so it can't tell)
+        static bool wasUp[N_CTRL] = {};
+        bool lost = false, missing = false;
+        for (int i = 0; i < N_CTRL; i++) {
+            const bool up = linkUp(controllers[i]);
+            lost = lost || (wasUp[i] && !up);
+            missing = missing || !up;
+            wasUp[i] = up;
+        }
         if (lost) {
             waitMs = 5000;
             nextLights = now;
         }
-        if (static_cast<int32_t>(now - nextLights) >= 0) {
-            if (scan->isScanning()) scan->stop();  // a connect can't start mid-scan
-            bool missing = false;
+        if (missing && static_cast<int32_t>(now - nextLights) >= 0) {
+            bool still = false;
             for (Controller& c : controllers) {
-                if (!linkUp(c) && !connect(c)) missing = true;
+                if (!linkUp(c) && !connect(c)) still = true;
             }
-            waitMs = missing ? (waitMs * 2 > 60000 ? 60000 : waitMs * 2) : 5000;
             nextLights = millis() + waitMs;
+            waitMs = still ? (waitMs * 2 > 60000 ? 60000 : waitMs * 2) : 5000;
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
@@ -196,9 +216,15 @@ static Rect rectOf(int id) {
 }
 static constexpr Rect LEVEL{106, 188, 108, 48};  // display only
 
-// The button under (x, y), or the nearest within SNAP px when the tap lands in a gap; -1 if none.
+// The button the Xbox controller points at (a cyan ring around it); -1 while none is connected.
+static int focus = -1;
+static void drawFocus(int id, bool on);
+
+// The button under (x, y), or the nearest within SNAP px when the tap lands in a gap; -1 if none,
+// and for the level box (display only: snapping from it pressed Green, White or -).
 static constexpr int SNAP = 10;
 static int hit(int x, int y) {
+    if (x >= LEVEL.x && x < LEVEL.x + LEVEL.w && y >= LEVEL.y && y < LEVEL.y + LEVEL.h) return -1;
     int best = -1, bestD = SNAP + 1;
     for (int id = 0; id < N_BTN; id++) {
         const Rect r = rectOf(id);
@@ -227,7 +253,7 @@ static bool bright(uint32_t rgb, int pct = 100) {
     return (((rgb >> 16) & 0xFF) * 3 + ((rgb >> 8) & 0xFF) * 6 + (rgb & 0xFF)) / 10 * pct / 100 > 140;
 }
 
-static void drawButton(int id, bool pressed = false) {
+static void drawButtonBody(int id, bool pressed) {
     const Rect r = rectOf(id);
     tft.setTextDatum(MC_DATUM);
     const int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
@@ -267,6 +293,11 @@ static void drawButton(int id, bool pressed = false) {
     tft.drawString(id == MINUS ? "-" : "+", cx, cy, 4);
 }
 
+static void drawButton(int id, bool pressed = false) {
+    drawButtonBody(id, pressed);
+    if (id == focus) drawFocus(id, true);  // its corners fall inside the rect just drawn over
+}
+
 // The colour at its intensity (shown no darker than 25 % so it stays readable) and the %.
 static void drawLevel() {
     const Look& l = cur();
@@ -289,10 +320,8 @@ static void drawZones() {
     for (int id = ZONE0; id < TILE0; id++) drawButton(id);
 }
 
-// The button the Xbox controller points at: a cyan ring in the gap around it (white is "what the
-// lights show", yellow "pressed"). -1 while no controller is connected.
-static int focus = -1;
-
+// The focus ring sits in the gap around the button (white is "what the lights show", yellow
+// "pressed"); its corners dip into the button's rect, so drawButton() redraws it.
 static void drawFocus(int id, bool on) {
     if (id < 0) return;
     const Rect r = rectOf(id);
@@ -398,18 +427,46 @@ static bool loadCalibration() {
 
 // ---- Input ----
 
-// NVS keys per look: sw0/pct0/lit0 (BOTH), ...1 (INSIDE), ...2 (OUTSIDE).
+// NVS keys per look: sw0/pct0/lit0 (BOTH), ...1 (INSIDE), ...2 (OUTSIDE), and the page.
+// save() only marks the state dirty; flushSave() (from loop) writes what changed, SAVE_AFTER_MS
+// after the last change: a burst of +/- taps is one write, not 10 commits per tap. A change in
+// the last SAVE_AFTER_MS before the power goes is lost.
+static constexpr uint32_t SAVE_AFTER_MS = 1500;
+static Look savedLooks[3];
+static Target savedTarget = BOTH;
+static bool dirty = false;
+static uint32_t dirtyAt = 0;
+
 static void save() {
+    dirty = true;
+    dirtyAt = millis();
+}
+
+static void flushSave() {
+    if (!dirty || millis() - dirtyAt < SAVE_AFTER_MS) return;
+    dirty = false;
     char key[8];
     for (int i = 0; i < 3; i++) {
-        snprintf(key, sizeof(key), "sw%d", i);
-        prefs.putUChar(key, static_cast<uint8_t>(looks[i].swatch));
-        snprintf(key, sizeof(key), "pct%d", i);
-        prefs.putUChar(key, looks[i].pct);
-        snprintf(key, sizeof(key), "lit%d", i);
-        prefs.putBool(key, looks[i].lit);
+        const Look& l = looks[i];
+        Look& s = savedLooks[i];
+        if (l.swatch != s.swatch) {
+            snprintf(key, sizeof(key), "sw%d", i);
+            prefs.putUChar(key, static_cast<uint8_t>(l.swatch));
+        }
+        if (l.pct != s.pct) {
+            snprintf(key, sizeof(key), "pct%d", i);
+            prefs.putUChar(key, l.pct);
+        }
+        if (l.lit != s.lit) {
+            snprintf(key, sizeof(key), "lit%d", i);
+            prefs.putBool(key, l.lit);
+        }
+        s = l;
     }
-    prefs.putUChar("target", static_cast<uint8_t>(target));
+    if (target != savedTarget) {
+        prefs.putUChar("target", static_cast<uint8_t>(target));
+        savedTarget = target;
+    }
 }
 
 // Builds before the pages kept one look under swatch/pct/lit: it seeds all three.
@@ -428,8 +485,9 @@ static void load() {
         if (l.pct < MIN_INTENSITY || l.pct > 100) l.pct = 100;
         snprintf(key, sizeof(key), "lit%d", i);
         l.lit = prefs.getBool(key, old.lit);
+        savedLooks[i] = l;
     }
-    target = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
+    target = savedTarget = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
 }
 
 // One settled tap on a button.
@@ -513,23 +571,32 @@ static int neighbour(int from, int dx, int dy) {
     return best;
 }
 
-static void moveFocus(int dx, int dy) {
-    const int to = neighbour(focus, dx, dy);
-    if (to == focus) return;
-    drawFocus(focus, false);
-    focus = to;
-    drawFocus(focus, true);
-}
-
-// A button press on the controller: the press looks (yellow) for PAD_FLASH_MS.
+// The button a controller press is showing yellow, and since when (see padPress).
 static constexpr uint32_t PAD_FLASH_MS = 150;
 static int padFlash = -1;
 static uint32_t padFlashAt = 0;
 
+// Moves the ring to `to` (-1: hides it). Erasing the old ring also notches its button's corners,
+// so that button is redrawn.
+static void setFocus(int to) {
+    const int old = focus;
+    if (to == old) return;
+    focus = to;
+    if (old >= 0) {
+        drawFocus(old, false);
+        drawButton(old, padFlash == old);
+    }
+    if (to >= 0) drawFocus(to, true);
+}
+
+static void moveFocus(int dx, int dy) { setFocus(neighbour(focus, dx, dy)); }
+
+// A button press on the controller: the press looks (yellow) for PAD_FLASH_MS. One at a time: a
+// second press inside that window first restores the earlier button (else -/+ stayed yellow).
 static void padPress(int id) {
+    if (padFlash >= 0 && padFlash != id) drawButton(padFlash);
     press(id);
     drawButton(id, true);
-    drawFocus(focus, true);
     padFlash = id;
     padFlashAt = millis();
 }
@@ -540,17 +607,10 @@ static void handlePad() {
     if (is != was) {
         was = is;
         Serial.printf("[pad] %s\n", is ? "connected" : "gone");
-        if (is) {
-            focus = TILE0 + cur().swatch;
-            drawFocus(focus, true);
-        } else {
-            drawFocus(focus, false);
-            focus = -1;
-        }
+        setFocus(is ? TILE0 + cur().swatch : -1);
     }
     if (padFlash >= 0 && millis() - padFlashAt > PAD_FLASH_MS) {
         drawButton(padFlash);
-        drawFocus(focus, true);
         padFlash = -1;
     }
     if (!is) return;
@@ -592,7 +652,6 @@ static void handlePad() {
         drawGrid();
         drawLevel();
         drawZones();
-        drawFocus(focus, true);
         save();
     }
 }
@@ -602,13 +661,23 @@ static void handlePad() {
 // phrase and calls  GET /say?text=<phrase>&k=<REMOTE_TOKEN>; the reply is one line to speak back
 // ("Purple, 70 percent"); voice always changes both lights. GET /state?k= answers the same line without changing anything.
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
-// the state) and the handler waits for loop()'s reply.
+// the state) and the handler waits for loop()'s reply. Each job carries a sequence number that the
+// reply echoes, so a request that timed out (loop busy, e.g. calibrating) can't answer the next
+// one; a timed-out job is dropped from the queue rather than applied late.
+
+struct VoiceJob {
+    ledvoice::Command c;
+    uint32_t seq;
+};
 
 static WebServer* server = nullptr;
+static TaskHandle_t voiceHandle = nullptr;
 static remotegate::Gate gate(REMOTE_TOKEN);
 static QueueHandle_t voiceQueue = nullptr;
 static SemaphoreHandle_t voiceDone = nullptr;
-static char voiceReply[64];
+static portMUX_TYPE voiceMux = portMUX_INITIALIZER_UNLOCKED;
+static char voiceReply[64];  // guarded by voiceMux, with replySeq
+static uint32_t replySeq = 0;
 
 // withLevel: say the % too. A voice reply only does when the command changed it: "Purple, 20
 // percent" after a plain "purple" sounded like the deck wanted a percentage.
@@ -622,7 +691,8 @@ static void describe(char* out, size_t n, bool withLevel = true) {
 
 // In loop(): applies one voice command like the BOTH page does (both lights get the BOTH look;
 // the page on screen stays), then answers the waiting handler.
-static void applyVoice(const ledvoice::Command& c) {
+static void applyVoice(const VoiceJob& job) {
+    const ledvoice::Command& c = job.c;
     Look& l = looks[BOTH];
     if (c.color >= 0) {
         l.swatch = c.color;
@@ -635,8 +705,13 @@ static void applyVoice(const ledvoice::Command& c) {
     for (int i = 0; i < N_CTRL; i++) push(i);
     save();
     drawAll();
-    describe(voiceReply, sizeof(voiceReply), c.level >= 0 || c.levelStep != 0);
-    Serial.printf("[voice] -> %s\n", voiceReply);
+    char line[64];
+    describe(line, sizeof(line), c.level >= 0 || c.levelStep != 0);
+    Serial.printf("[voice] -> %s\n", line);
+    portENTER_CRITICAL(&voiceMux);
+    memcpy(voiceReply, line, sizeof(line));
+    replySeq = job.seq;
+    portEXIT_CRITICAL(&voiceMux);
     xSemaphoreGive(voiceDone);
 }
 
@@ -644,14 +719,33 @@ static void handleSay() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
     const String text = server->arg("text");
     Serial.printf("[voice] \"%s\"\n", text.c_str());
-    ledvoice::Command c;
-    if (!ledvoice::parse(text.c_str(), &c)) { server->send(200, "text/plain", "Sorry, I didn't get a colour or a command"); return; }
-    xSemaphoreTake(voiceDone, 0);  // drop a stale answer
-    if (xQueueSend(voiceQueue, &c, pdMS_TO_TICKS(200)) != pdTRUE || xSemaphoreTake(voiceDone, pdMS_TO_TICKS(1500)) != pdTRUE) {
+    if (text.length() == 0) { server->send(200, "text/plain", "I didn't hear anything"); return; }  // no text from the Shortcut
+    VoiceJob job;
+    if (!ledvoice::parse(text.c_str(), &job.c)) { server->send(200, "text/plain", "Sorry, I didn't get a colour or a command"); return; }
+    static uint32_t nextSeq = 0;
+    job.seq = ++nextSeq;
+    xQueueReset(voiceQueue);        // a job left by a timed-out request is not applied late
+    xSemaphoreTake(voiceDone, 0);   // nor is its stale "done"
+    if (xQueueSend(voiceQueue, &job, 0) != pdTRUE) {
         server->send(503, "text/plain", "The deck is busy, try again");
         return;
     }
-    server->send(200, "text/plain", voiceReply);
+    char line[64] = "";
+    const uint32_t until = millis() + 1500;
+    bool answered = false;
+    while (!answered && static_cast<int32_t>(until - millis()) > 0 &&
+           xSemaphoreTake(voiceDone, pdMS_TO_TICKS(until - millis())) == pdTRUE) {
+        portENTER_CRITICAL(&voiceMux);
+        answered = replySeq == job.seq;
+        if (answered) memcpy(line, voiceReply, sizeof(line));
+        portEXIT_CRITICAL(&voiceMux);
+    }
+    if (!answered) {
+        xQueueReset(voiceQueue);
+        server->send(503, "text/plain", "The deck is busy, try again");
+        return;
+    }
+    server->send(200, "text/plain", line);
 }
 
 static void handleState() {
@@ -670,16 +764,19 @@ static void voiceTask(void*) {
     server->begin();
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
-    uint32_t lastLook = millis();
+    uint32_t lastLook = millis(), lookEvery = 20000;
     for (;;) {
         server->handleClient();
         net::loop();  // rejoins after a drop
         // The iPhone only shows its hotspot while its Personal Hotspot screen is open, so a deck
-        // that started meanwhile sits on home WiFi, where the iPhone can't reach it. Every 20 s
-        // off the hotspot (the first saved network), look for it and move over when it's there.
-        if (millis() - lastLook > 20000 && net::isOnline() && net::ssid() != WIFI_NETWORKS[0].ssid) {
+        // that started meanwhile sits on home WiFi, where the iPhone can't reach it. Off the
+        // hotspot (the first saved network), look for it every 20 s and move over when it's there.
+        // A short passive scan (120 ms a channel, like net::switchNetwork) keeps the server
+        // answering; a move that fails (seen but not joinable: "Allow Others to Join" off) doubles
+        // the wait, up to 5 min, instead of dropping home WiFi every 20 s.
+        if (millis() - lastLook > lookEvery && net::isOnline() && net::ssid() != WIFI_NETWORKS[0].ssid) {
             lastLook = millis();
-            const int n = WiFi.scanNetworks();
+            const int n = WiFi.scanNetworks(false, false, true, 120);
             bool seen = false;
             for (int i = 0; i < n && !seen; i++) seen = WiFi.SSID(i) == WIFI_NETWORKS[0].ssid;
             WiFi.scanDelete();
@@ -687,6 +784,8 @@ static void voiceTask(void*) {
                 Serial.printf("[voice] %s is up, moving over\n", WIFI_NETWORKS[0].ssid);
                 WiFi.disconnect();
                 net::connectAny();  // tries the hotspot first
+                const bool moved = net::ssid() == WIFI_NETWORKS[0].ssid;
+                lookEvery = moved ? 20000 : (lookEvery * 2 > 300000 ? 300000 : lookEvery * 2);
                 Serial.printf("[voice] on: http://%s/say  (%s)\n", net::deviceIp().c_str(), net::ssid().c_str());
             }
         }
@@ -699,12 +798,12 @@ static void beginVoice() {
         Serial.println("[voice] off (REMOTE_TOKEN empty)");
         return;
     }
-    voiceQueue = xQueueCreate(2, sizeof(ledvoice::Command));
+    voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);
     server->on("/say", HTTP_ANY, handleSay);
     server->on("/state", HTTP_GET, handleState);
-    xTaskCreatePinnedToCore(voiceTask, "voice", 6144, nullptr, 0, nullptr, 1);
+    xTaskCreatePinnedToCore(voiceTask, "voice", 6144, nullptr, 0, &voiceHandle, 1);
 }
 
 // TFT_eSPI's ILI9341_2_DRIVER init leaves a flat gamma that makes this panel look washed out; the
@@ -741,7 +840,9 @@ void setup() {
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
     xbox.begin();
-    xTaskCreatePinnedToCore(linkTask, "leds-link", 4096, nullptr, 1, nullptr, 0);
+    // 8 KB: the Xbox library's connect, discovery and subscribe (std::function, std::string) run on
+    // this task too; the [mem] line shows what's left.
+    xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);
     beginVoice();
 }
 
@@ -763,8 +864,20 @@ void loop() {
         tap.down = false;
     }
 
-    ledvoice::Command voice;
+    VoiceJob voice;
     if (voiceQueue && xQueueReceive(voiceQueue, &voice, 0) == pdTRUE) applyVoice(voice);
+    flushSave();
+
+    // every minute: free heap and the least stack each task has had to spare
+    static uint32_t memAt = 0;
+    if (millis() - memAt > 60000) {
+        memAt = millis();
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, loop %u\n", static_cast<unsigned>(ESP.getFreeHeap()),
+                      static_cast<unsigned>(ESP.getMinFreeHeap()),
+                      linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
+                      voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
+                      static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+    }
 
     handlePad();
 
