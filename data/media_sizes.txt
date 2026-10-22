@@ -13,3 +13,4 @@ mcqueen.bin 33020
 slzbg.bin 153608
 max.bin 1102328
 max.pcm 780000
+shadow.bin 7168

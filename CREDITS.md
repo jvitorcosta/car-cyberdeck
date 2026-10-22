@@ -69,7 +69,11 @@ from Sonic the Hedgehog (Mega Drive, 1991) art in the
 [s1disasm](https://github.com/sonicretro/s1disasm) disassembly. The art is © SEGA; it is fetched
 into the git-ignored `sonic-sprites/` and `data/idle.bin`, never distributed here. The Star Light
 Zone night behind the firmware-update screen is rebuilt the same way by `tools/gen_slz_backdrop.py`
-(into `sonic-sprites/slz/` and `data/slzbg.bin`).
+(into `sonic-sprites/slz/` and `data/slzbg.bin`). Shadow skating on its rail is cut by
+`tools/gen_shadow_rider.py` from his Sonic Battle (GBA, 2003) sprite sheet: original sprites by
+SEGA and Sonic Team, ripped by QuadFactor, fetched from
+[Sonic Battle Unlimited Edition](https://github.com/SingularMJ/Sonic-Battle-Unlimited-Edition)
+into `sonic-sprites/shadow/` and `data/shadow.bin`, never distributed here.
 
 ## Inspiration
 
