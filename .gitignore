@@ -51,3 +51,7 @@ data/tunes.txt
 # Pixel McQueen (a Disney/Pixar character): the art and the packed sprite stay local
 data/mcqueen.bin
 mcqueen*.png
+
+# Garmin watch app: the deck key, and build output
+garmin/carlights/source/Secrets.mc
+garmin/carlights/bin/

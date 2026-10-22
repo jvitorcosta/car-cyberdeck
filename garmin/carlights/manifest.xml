@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- Car lights: a Connect IQ watch app that sends commands to the old deck's LED panel
+     (GET /say, the same endpoint the Siri shortcut uses). For now a one-button test. -->
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application id="6f1c2a4e8b3d4c5e9a7f0b1d2c3e4f50" type="watch-app" name="@Strings.AppName"
+                    entry="CarLightsApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
+        <iq:products>
+            <iq:product id="fr255"/>
+        </iq:products>
+        <iq:permissions>
+            <iq:uses-permission id="Communications"/>
+        </iq:permissions>
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+        <iq:barrels/>
+    </iq:application>
+</iq:manifest>
