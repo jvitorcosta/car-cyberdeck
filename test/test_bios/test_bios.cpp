@@ -109,6 +109,19 @@ void test_term_format_plain_line_has_no_leader() {
     TEST_ASSERT_EQUAL_STRING("RUNNING", out + TERM_COLS - 7);
 }
 
+// The live WI-FI line waits plain (no leader) until its value arrives, then gains it in place.
+void test_term_format_live_line_gains_its_leader() {
+    Term term = {};
+    termSet(term, "WI-FI", "", 0, 0, true);
+    char out[TERM_COLS + 1];
+    TEST_ASSERT_EQUAL_INT(-1, termFormat(term.rows[0], out));
+    TEST_ASSERT_EQUAL_STRING("WI-FI", out);
+    termSet(term, "WI-FI", "HOTSPOT [OK]", 0, 100);
+    TEST_ASSERT_EQUAL_INT(1, term.n);                          // updated in place, not a new line
+    TEST_ASSERT_EQUAL_INT(TERM_COLS - 12, termFormat(term.rows[0], out));
+    TEST_ASSERT_EQUAL_STRING("HOTSPOT [OK]", out + TERM_COLS - 12);
+}
+
 void test_term_script_feeds_due_lines_once() {
     Term term = {};
     termScript(term, 0);
@@ -207,5 +220,6 @@ int main() {
     RUN_TEST(test_term_expire_keeps_fresh_and_pending_lines);
     RUN_TEST(test_term_update_restarts_the_expiry_clock);
     RUN_TEST(test_term_format_plain_line_has_no_leader);
+    RUN_TEST(test_term_format_live_line_gains_its_leader);
     return UNITY_END();
 }
