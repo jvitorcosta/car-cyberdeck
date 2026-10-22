@@ -88,6 +88,13 @@ void test_start_during_done_is_ignored() {
     TEST_ASSERT_TRUE(t.rebootDue(1000 + otaview::DONE_MS));
 }
 
+// Shadow hovers HOVER px over the rail: his box's bottom edge sits that far above its top.
+void test_rider_top_hovers() {
+    TEST_ASSERT_EQUAL_INT(otaview::RAIL_Y - otaview::HOVER - 36, otaview::riderTop(36));
+    TEST_ASSERT_EQUAL_INT(6, otaview::HOVER);
+    TEST_ASSERT_TRUE(otaview::riderTop(64) >= 20);   // the tallest frame stays under the top strip
+}
+
 // What a frame repaints: everything on a change of phase or percent; on a bob step only the
 // jets (never the rail, or the fill would flicker 8 times a second), and no jets once failed.
 void test_repaint_plan() {
@@ -143,6 +150,7 @@ int main() {
     RUN_TEST(test_new_start_during_failed_hold);
     RUN_TEST(test_start_during_done_is_ignored);
     RUN_TEST(test_repaint_plan);
+    RUN_TEST(test_rider_top_hovers);
     RUN_TEST(test_hold_survives_millis_wrap);
     RUN_TEST(test_fill_and_rider_clamp);
     return UNITY_END();

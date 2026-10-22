@@ -20,7 +20,9 @@
 #include "core/media.h"
 MEDIA_DECL(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_sprite.py), else empty
 MEDIA_DECL(data_slzbg_bin);  // Star Light Zone behind the update screen (tools/gen_slz_backdrop.py)
+MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rider.py)
 #include "util/backdrop.h"
+#include "util/ridersprite.h"
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
@@ -175,6 +177,8 @@ void setup() {
     const media::Blob slz = MEDIA(data_slzbg_bin, "slzbg.bin");
     Serial.println(backdrop::parse(slz.data, slz.size) ? "[ota] update screen: Star Light Zone"
                                                        : "[ota] update screen: battle box");
+    const media::Blob rider = MEDIA(data_shadow_bin, "shadow.bin");
+    if (ridersprite::parse(rider.data, rider.size)) Serial.println("[ota] Shadow skates the rail");
     carlook::Look mcqueen;
     const bool haveMcQueen = carlook::mcqueen(&mcqueen);
     const intropick::Opening opening = pickOpening(intro::available(intropick::KISS), haveMcQueen,

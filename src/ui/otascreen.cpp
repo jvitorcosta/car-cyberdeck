@@ -4,6 +4,7 @@
 #include "battle.h"
 #include "theme.h"
 #include "../util/backdrop.h"
+#include "../util/ridersprite.h"
 #include "../util/rgb565.h"
 
 namespace ui {
@@ -98,10 +99,29 @@ void jets(TFT_eSPI& t, const ota::View& v, int bob, bool rows) {
 }
 }
 
+// Shadow (util/ridersprite) over his stretch of the night, composed row by row in RAM and pushed
+// once per row, so he never flickers: rows riderTop..RAIL_Y-1 across the whole width (his last
+// spot is cleared with them).
+void rider(TFT_eSPI& t, const ota::View& v, int frame) {
+    static uint16_t row[320];
+    const int w = ridersprite::width(), bw = backdrop::width();
+    const int x0 = riderX(v.pct, w), top = riderTop(ridersprite::height());
+    for (int y = top; y < RAIL_Y; ++y) {
+        const uint8_t* src = backdrop::row(y);
+        if (!src) continue;
+        memcpy(row, src, (size_t)bw * 2);
+        for (int x = 0; x < w && x0 + x < bw; ++x) {
+            uint16_t c;
+            if (ridersprite::pixel(frame, x, y - top, &c)) row[x0 + x] = rgb565::be(c);
+        }
+        t.pushImage(0, y, bw, 1, row);
+    }
+}
+
 bool drawShadowUpdate(TFT_eSPI& t, const ota::View& v, uint32_t nowMs, bool full) {
     if (backdrop::width() == 0) return false;
     static Phase shownPhase = Phase::Idle;
-    static int shownPct = -1, shownBob = -1;
+    static int shownPct = -1, shownStep = -1;
     if (v.phase == Phase::Done) {                 // the flash, once; the deck reboots after it
         if (full || shownPhase != Phase::Done) {
             t.fillScreen(DEEP);
@@ -110,18 +130,25 @@ bool drawShadowUpdate(TFT_eSPI& t, const ota::View& v, uint32_t nowMs, bool full
         shownPhase = v.phase;
         return true;
     }
-    const int bob = (int)((nowMs / BOB_MS) & 1);
-    const Repaint r = repaint(full, v.phase != shownPhase || v.pct != shownPct, bob != shownBob, v.phase);
+    // The animation's step: Shadow's run frame with his file, else the jet glows' 1 px bob.
+    const bool shadow = ridersprite::runFrames() > 0;
+    const int step = shadow ? ridersprite::frameAt(nowMs) : (int)((nowMs / BOB_MS) & 1);
+    const Repaint r = repaint(full, v.phase != shownPhase || v.pct != shownPct, step != shownStep, v.phase);
     if (full) {
         for (int y = STRIP_H; y < backdrop::height(); ++y) pushRow(t, y);
         shadowText(t, "Keep the deck powered", RAIL_X, NOTE_Y, 2, WHITE, BLACK, TL_DATUM);
     }
     if (r.strip) strip(t, v);
     if (r.rail) rail(t, v);
-    if (r.jets) jets(t, v, bob, !r.rail);
+    if (shadow) {
+        if (r.jets) rider(t, v, step);                                  // skating
+        else if (r.rail && v.phase == Phase::Failed) rider(t, v, ridersprite::stand());   // he stops
+    } else if (r.jets) {
+        jets(t, v, step, !r.rail);
+    }
     shownPhase = v.phase;
     shownPct = v.pct;
-    shownBob = bob;
+    shownStep = step;
     return true;
 }
 

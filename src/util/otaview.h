@@ -51,6 +51,10 @@ inline Repaint repaint(bool full, bool changed, bool bobStep, Phase p) {
     return {all, all, (all || bobStep) && p == Phase::Receiving};
 }
 
+// Shadow hovers on his jet shoes: his box's top for a frame h px high, HOVER px over the rail.
+constexpr int HOVER = 6;
+inline int riderTop(int h) { return RAIL_Y - HOVER - h; }
+
 // The rider's left edge: his centre on the fill's tip, kept on the rail.
 inline int riderX(int pct, int riderW) {
     const int x = INNER_X + fillWidth(pct) - riderW / 2;
