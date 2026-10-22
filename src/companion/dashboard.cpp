@@ -20,7 +20,7 @@ static void bigLine(TFT_eSPI& t, const char* text, int x0, int cy) {
     constexpr size_t MAX = 160;
     static glyphrun::Item items[MAX + 3];   // + room for a "..." on the second row
     const size_t n = glyphrun::decode(text, items, MAX, ui::asciiWidth2, ui::wideWidth, &t, false,
-                                      ui::emojiWidth);
+                                      ui::emojiWidth, ui::emojiSeq);
     const int colW = W - x0 - 24, cx = x0 + (W - x0) / 2;
     const uint16_t fg = theme::pal().topText, sh = TFT_BLACK;
     const int dot = ui::asciiWidth2('.', &t);
