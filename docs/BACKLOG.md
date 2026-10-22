@@ -79,9 +79,14 @@ the place to add it.
 - **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
   Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
 - **PS3 controller for the avatar menu** (side idea, 2026-10-14): over Bluetooth Classic on the
-  CYD (the S3 has BLE only), library `esp32-ps3`; one-time pairing with SixaxisPairTool;
-  D-pad = cursor, X = open, O = back. A cable needs a USB host (MAX3421E module + wiring): the
-  CYD's USB port is a device-only CH340.
+  CYD (the S3 has BLE only), library `esp32-ps3`; D-pad = cursor, X = open, O = back. A cable
+  needs a USB host (MAX3421E module + wiring): the CYD's USB port is a device-only CH340.
+  **2026-10-22, waiting on a battery:** João's original DS3 is already paired to the yellow deck
+  (its master address set over USB to the CYD's Bluetooth address, 68:09:47:F8:25:9E, no
+  SixaxisPairTool needed) and the `ps3test` env (Bluedroid) is ready, but its battery is dead. A
+  genuine DS3 only powers on from a USB host, not a wall charger, and on the PC it stays wired.
+  Next: a new LIP1472 (3.7 V 570 mAh), charge, unplug, press PS. Bluetooth Classic means Bluedroid,
+  so it can't share a firmware with the LED panel's NimBLE (Xbox + lights): one or the other.
 - **Switch back to the hotspot automatically** (tried 2026-10-14, then removed): scanning on
   the home WiFi paused the S3's network task and blipped the companion, and the move back was
   never seen working (joins were refused, likely "Allow Others to Join" off). Owner: decks stay
