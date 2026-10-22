@@ -7,8 +7,11 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 - Address: on the iPhone hotspot the deck is always `172.20.10.11`.
 - `GET /say?text=<phrase>&k=<REMOTE_TOKEN>` changes the lights; the reply is e.g. `Purple, 70 percent`.
 - `GET /state?k=<REMOTE_TOKEN>` answers the same line without changing anything.
+- Both take an optional `&zone=inside|outside`: then only that light's page changes (or is read),
+  and the reply is prefixed: `Inside: Purple, 70 percent`. Without it, both lights (the BOTH page).
 - A wrong key gets 403; a phrase with nothing to do gets "Sorry, I didn't get a colour or a command".
-- Voice always changes both lights; the zone picked on the screen is left as it is.
+- Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page
+  on the deck's screen is left as it is.
 
 ## What it understands
 
@@ -55,6 +58,32 @@ English Siri misheard "Luzes"):
 - **Started without Siri** (tap, Back Tap, Action Button): Dictate Text uses its own language,
   so Portuguese works ("Roxo" arrived as "Roxo").
 - "run" before the name helps Siri treat it as a shortcut.
+
+## From the Garmin watch (Forerunner 255)
+
+The Connect IQ app in `garmin/carlights/` (shown as **Honda City**, a silver City with magenta
+underglow as its icon) talks to `GET /say` and `GET /state` through Garmin Connect on the iPhone.
+Plain `http` to the hotspot works through Garmin Connect on iOS (tested 2026-10-22); the deck has
+to be on the hotspot, not home WiFi ("No answer" means it isn't).
+
+- **Pages** (UP/DOWN, looping; opens on BOTH, so each zone is one press away): BOTH shows inside
+  (left) and outside (right) as two columns, each filled with its colour up to its brightness;
+  INSIDE and OUTSIDE fill the whole round face that way. On opening, the app reads both lights
+  from `/state`, so the pages show the real colours.
+- **START** opens that page's list: the eight colours (each with a dot), **Brightness**, **Off**.
+  A colour or Off is sent for that zone (BOTH: both lights). Brightness opens a level screen whose
+  fill rises and falls with UP/DOWN in 10 % steps; the deck gets the level 0.5 s after the last
+  press.
+- **Glance**: a card for the watch face's glance loop with both lights' dots and levels, as of
+  the last time the app ran (a glance can't make web requests). START on it opens the app.
+- Requests go one at a time from a short queue; every reply is read back into the screen, so it
+  shows what the deck reports. Errors: "No answer", "Phone not connected", "Wrong key".
+- Key: copy `source/Secrets.mc.example` to `source/Secrets.mc` (git-ignored) with REMOTE_TOKEN.
+- Build: Connect IQ SDK + a developer key, `monkeyc -d fr255 -f monkey.jungle -o bin/CarLights.prg
+  -y <key> -l 2` (the manifest also lists fr255m, fr255s, fr255sm).
+- Install: copy `bin/CarLights.prg` to the watch's `GARMIN/APPS` over USB (if Windows asks about
+  the file already there, keep the new one), then unplug. To have it in the glance loop, add
+  Honda City in the watch's glance settings.
 
 ## Notes
 

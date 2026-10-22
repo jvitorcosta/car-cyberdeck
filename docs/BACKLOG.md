@@ -67,14 +67,7 @@ the place to add it.
 
 ## Ideas
 
-- **Car lights from the Garmin watch** (parked 2026-10-21): a Connect IQ app for the Forerunner 255
-  (no microphone, so buttons, not voice) that calls the LED panel's `GET /say` like the Siri
-  shortcut. A one-button test (START sends "purple") is in `garmin/carlights/`; the deck key goes
-  in the git-ignored `source/Secrets.mc` (see `Secrets.mc.example`). The SDK (9.3.0) and a
-  developer key are set up on the PC, but the SDK Manager hadn't installed the `fr255` device files
-  yet, so nothing was built. Open question for the test: whether Garmin Connect on iOS lets the
-  watch reach a plain `http://` address on the hotspot (172.20.10.11). If not, it needs https or a
-  relay, probably not worth it next to the shortcut.
+- **Car lights from the Garmin watch**: done 2026-10-22, see docs/leds-voice.md.
 
 - **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
   Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
