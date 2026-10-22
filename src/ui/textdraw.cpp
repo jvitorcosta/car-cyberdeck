@@ -20,6 +20,10 @@ int emojiWidth(uint32_t key, void*) {
     return emoji().glyph(key) ? emojifont::SIZE : 0;
 }
 
+uint32_t emojiSeq(const uint32_t* cps, int n, void*) {
+    return emoji().sequence(cps, n);
+}
+
 // s: integer scale (1 = the deck's normal size); each pixel becomes an s x s block.
 static void drawMark(TFT_eSPI& t, txt::Mark m, char base, int cx, int top, uint16_t col, int s) {
     int r0 = top + accents::topRow(m, base) * s;
@@ -111,7 +115,7 @@ int drawText(TFT_eSPI& t, const char* utf8, int x, int y, uint16_t fg,
     constexpr size_t MAX_ITEMS = 96;   // AppState strings are < 96 bytes
     glyphrun::Item items[MAX_ITEMS];
     size_t n = glyphrun::decode(utf8 ? utf8 : "", items, MAX_ITEMS, asciiWidth2, wideWidth, &t, upper,
-                                emojiWidth);
+                                emojiWidth, emojiSeq);
     n = glyphrun::fit(items, n, MAX_ITEMS, maxW, asciiWidth2, &t);
     return drawRun(t, items, n, x, y, fg, shadow, datum);
 }

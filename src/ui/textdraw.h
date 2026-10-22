@@ -23,4 +23,5 @@ int drawRunScaled(TFT_eSPI& t, const glyphrun::Item* it, size_t n, int x, int y,
 int asciiWidth2(char c, void* ctx);
 int wideWidth(uint32_t cp, void* ctx);
 int emojiWidth(uint32_t key, void* ctx);
+uint32_t emojiSeq(const uint32_t* cps, int n, void* ctx);
 }
