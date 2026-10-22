@@ -226,6 +226,30 @@ void test_walk_retry_other_results_are_final() {
     TEST_ASSERT_FALSE(r.onResult(false, true));    // and starts the count over
 }
 
+// A failed album art download (timeout, 5xx) runs again once after the next poll.
+void test_art_retry_once_then_gives_up() {
+    netplan::ArtRetry r;
+    TEST_ASSERT_FALSE(r.onResult(false, true));    // failed: try once more
+    TEST_ASSERT_TRUE(r.onResult(false, true));     // second failure: no cover for this song
+    TEST_ASSERT_FALSE(r.onResult(false, true));    // a fresh count for the next song
+}
+
+// Success, or no URL to fetch (some podcasts), is final at once.
+void test_art_ok_or_no_url_is_final() {
+    netplan::ArtRetry ok;
+    TEST_ASSERT_TRUE(ok.onResult(true, true));
+    netplan::ArtRetry noUrl;
+    TEST_ASSERT_TRUE(noUrl.onResult(false, false));
+}
+
+// A new song mid-retry starts the count over: it doesn't inherit a spent retry.
+void test_art_retry_reset_on_track_change() {
+    netplan::ArtRetry r;
+    TEST_ASSERT_FALSE(r.onResult(false, true));
+    r.reset();
+    TEST_ASSERT_FALSE(r.onResult(false, true));
+}
+
 void test_backoff_doubles_on_429_up_to_a_minute() {
     netplan::PollBackoff b;
     TEST_ASSERT_EQUAL_UINT32(4000, b.interval());
@@ -321,5 +345,8 @@ int main(int, char**) {
     RUN_TEST(test_genre_done_skips_to_walk);
     RUN_TEST(test_walk_retry_out_of_memory_then_gives_up);
     RUN_TEST(test_walk_retry_other_results_are_final);
+    RUN_TEST(test_art_retry_once_then_gives_up);
+    RUN_TEST(test_art_ok_or_no_url_is_final);
+    RUN_TEST(test_art_retry_reset_on_track_change);
     return UNITY_END();
 }

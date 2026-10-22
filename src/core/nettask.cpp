@@ -31,6 +31,7 @@ static netplan::PollBackoff s_backoff;   // Spotify 429: poll less often until i
 static netplan::Health s_health;   // pause optional work / restart when polls keep failing
 static netplan::WalkRetry s_walkRetry;       // PNG decoder didn't fit: retry after the polls
 static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB hiccups
+static netplan::ArtRetry s_artRetry;         // a failed cover download: one more try
 static genre::Cache s_genres;   // last 32 artists' badges: repeats cost no request
 static uint32_t s_failsAtOk = 0;   // mem::failTotal() at the last good poll
 static bool s_spotifyReady = false;   // WiFi + spclient::begin() done
@@ -57,6 +58,7 @@ static void onTrackChange() {
     }
     s_work = netplan::freshWork(prefetched);
     s_lyricsRetry.reset();               // UI shows "searching" until the first result
+    s_artRetry.reset();
     uint8_t badge;
     if (s_genres.find(s_st.artist, &badge)) {   // known artist (or none): no request
         netplan::done(s_work, netplan::Step::Genre);
@@ -92,6 +94,7 @@ static bool doStep(netplan::Step step) {
             if (ok) shared::postArt(gen);
             tock(ok ? "art" : "art failed");
             mem::log("art");
+            if (!s_artRetry.onResult(ok, s_st.albumArtUrl[0] != '\0')) return false;   // once more
             break;
         }
         case netplan::Step::Lyrics: {

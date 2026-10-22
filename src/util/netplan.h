@@ -160,4 +160,20 @@ public:
 private:
     int tries_ = 0;
 };
+
+// Album art: a failed download (timeout, 5xx) is tried again (the step stays on the work list),
+// MAX_TRIES attempts in all; success or no URL (some podcasts) is final. reset() on a new track.
+class ArtRetry {
+public:
+    static constexpr int MAX_TRIES = 2;
+    void reset() { tries_ = 0; }
+    // Records one attempt; true when the step is finished (no further attempt).
+    bool onResult(bool ok, bool hasUrl) {
+        if (!ok && hasUrl && ++tries_ < MAX_TRIES) return false;
+        tries_ = 0;
+        return true;
+    }
+private:
+    int tries_ = 0;
+};
 }
