@@ -4,6 +4,19 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **Car LEDs: not tested on the real lights since the first run** (2026-10-22, branch
+  `feat/car-leds`). Proven in the car on 2026-10-21: both controllers connect, and colour and
+  power commands work. Everything after that was only tested at home with the lights out of range:
+  the deck's state and replies, the touch panel, voice, the Xbox controller and the Garmin app all
+  work, but nothing has driven the actual strips. To check in the car:
+  - both zone rings turn green (the lights' Bluetooth on NimBLE 2 and the reconnect backoff);
+  - the LED colours look right (orange, pink, purple, white and yellow are guesses for RGB LEDs),
+    and the perceptual 10 % brightness steps look even;
+  - INSIDE / OUTSIDE aren't swapped (the controller addresses were assigned by signal strength);
+  - per-zone pages, the zone param on `/say` (Garmin), Siri via the car button, and the Xbox
+    controller each change the right strips;
+  - memory over a long drive (heap's low point drifted 130 → 123 KB over 25 min at home).
+
 - **Old deck touch works with the pen** (2026-10-21; was "faulty" on 2026-10-14): at rest the
   panel reads a press at raw x=0 (y~4000, z~600), which tripped the stuck-press guard for good.
   `companion/touch` now treats raw x < 100 as released, and `TOUCH_RAW_*` were recalibrated from
