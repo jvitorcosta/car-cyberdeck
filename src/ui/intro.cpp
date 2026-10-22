@@ -13,6 +13,7 @@ using fs::File;            // JPEGDEC.h names the global File, which this core's
 #include "../util/rgb565.h"
 #include "../util/termblend.h"
 MEDIA_DECL(data_intro_bin);
+MEDIA_DECL(data_max_bin);
 
 namespace intro {
 static TFT_eSPI* s_tft = nullptr;
@@ -99,13 +100,18 @@ static void task(void*) {
     vTaskDelete(nullptr);
 }
 
-bool available() {
-    const media::Blob b = MEDIA(data_intro_bin, "intro.bin");
+// Parses o's clip into ui/montage's reader (the boot montage parses its own after).
+static bool load(intropick::Opening o) {
+    const media::Blob b = o == intropick::MAX ? MEDIA(data_max_bin, "max.bin")
+                        : o == intropick::KISS ? MEDIA(data_intro_bin, "intro.bin")
+                        : media::Blob{nullptr, 0};
     return montage::parse(b.data, b.size) && montage::count() > 0;
 }
 
-void start(TFT_eSPI& t, bool (*online)()) {
-    if (!available()) {
+bool available(intropick::Opening o) { return load(o); }
+
+void start(TFT_eSPI& t, bool (*online)(), intropick::Opening o) {
+    if (!load(o)) {
         Serial.println("[intro] none");
         return;
     }
@@ -121,7 +127,7 @@ void start(TFT_eSPI& t, bool (*online)()) {
     if (!s_termPx) freeTerm();
     // The sound starts first: started after the decode task (priority 2, busy from its first
     // frame), its task got going late and played the 14 s clip in 24 s, full of gaps.
-    greeting::playIntro();
+    greeting::playIntro(o);
     if (xTaskCreatePinnedToCore(task, "intro", 6144, nullptr, 2, nullptr, 1) != pdPASS) {
         s_playing = false;     // wait() would spin forever and the deck never boot
         freeTerm();

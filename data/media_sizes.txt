@@ -10,3 +10,5 @@ howl.pcm 624000
 avatar.bin 67736
 idle.bin 2536
 mcqueen.bin 33020
+max.bin 1382665
+max.pcm 782400

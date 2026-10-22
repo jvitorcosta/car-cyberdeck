@@ -14,6 +14,7 @@ MEDIA_DECL(data_greeting_pcm);
 MEDIA_DECL(data_finale_pcm);
 MEDIA_DECL(data_opener_pcm);
 MEDIA_DECL(data_intro_pcm);
+MEDIA_DECL(data_max_pcm);
 MEDIA_DECL(data_howl_pcm);
 MEDIA_DECL(data_greeting_alt_pcm);
 MEDIA_DECL(data_tunes_txt);
@@ -40,6 +41,7 @@ static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_V
 struct Clips {
     Clip greeting, finale, opener;
     Clip intro;
+    Clip max;            // Max Verstappen's F1 intro, the other video opening
     Clip wolf;           // a real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none
     Clip greetingAlt;    // the second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot
 };
@@ -54,6 +56,7 @@ static const Clips& clips() {
         k.finale = clip(MEDIA(data_finale_pcm, "finale.pcm"), "finale", &audiosink::FINALE_VOLUME, CLIP_RATE);
         k.opener = clip(MEDIA(data_opener_pcm, "opener.pcm"), "opener", &audiosink::GREETING_VOLUME, CLIP_RATE);
         k.intro = clip(MEDIA(data_intro_pcm, "intro.pcm"), "intro", &INTRO_VOLUME, INTRO_RATE);
+        k.max = clip(MEDIA(data_max_pcm, "max.pcm"), "intro", &INTRO_VOLUME, INTRO_RATE);
         k.wolf = clip(MEDIA(data_howl_pcm, "howl.pcm"), "howl", &audiosink::GREETING_VOLUME, INTRO_RATE);
         k.greetingAlt = clip(MEDIA(data_greeting_alt_pcm, "greeting_alt.pcm"), "greeting",
                              &audiosink::GREETING_VOLUME, CLIP_RATE);
@@ -140,7 +143,7 @@ static void start(const Clip* c, const char* name) {
 }
 
 void play() {
-    if (s_choice == intropick::NONE) return;   // the kiss video has its own sound
+    if (s_choice == intropick::NONE) return;   // the videos have their own sound
     start(&greetingClip(), "greeting");
 }
 
@@ -246,8 +249,9 @@ void playHowl() {
 
 void playFinale() { if (present(clips().finale)) start(&clips().finale, "finale"); }
 
-void playIntro() {
-    if (present(clips().intro)) start(&clips().intro, "intro");
+void playIntro(intropick::Opening o) {
+    const Clip& c = o == intropick::MAX ? clips().max : clips().intro;
+    if (present(c)) start(&c, "intro");
 }
 
 void playOpener() { if (present(clips().opener)) start(&clips().opener, "opener"); }

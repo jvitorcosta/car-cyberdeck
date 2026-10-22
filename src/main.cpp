@@ -111,16 +111,16 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
 }
 
 // This boot's opening (util/intropick): random, never last boot's (NVS "boot"/"last"), only
-// from what the build has. -D INTRO_FORCE=\"kiss\" (or honda, mcqueen) forces one for testing.
-static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen) {
+// from what the build has. -D INTRO_FORCE=\"kiss\" (or honda, mcqueen, max) forces one for testing.
+static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen, bool haveMax) {
     Preferences p;
     p.begin("boot", false);
     const int last = p.getInt("last", -1);
     int o = -1;
 #ifdef INTRO_FORCE
-    o = intropick::forced(intropick::parse(INTRO_FORCE), haveKiss, haveMcQueen);
+    o = intropick::forced(intropick::parse(INTRO_FORCE), haveKiss, haveMcQueen, haveMax);
 #endif
-    if (o < 0) o = intropick::pick(esp_random(), last, haveKiss, haveMcQueen);
+    if (o < 0) o = intropick::pick(esp_random(), last, haveKiss, haveMcQueen, haveMax);
     p.putInt("last", o);
     p.end();
     Serial.printf("[boot] opening: %s\n", intropick::name((intropick::Opening)o));
@@ -159,8 +159,8 @@ void setup() {
         Serial.println("[spotify] no refresh token in src/config.h: run tools/spotify_auth.py");
         for (;;) delay(1000);
     }
-    // One random opening (pickOpening): the kiss video (ui/intro, its own task, the boot terminal
-    // over it), or the night drive with the Honda or McQueen and their greeting; all of them end
+    // One random opening (pickOpening): the kiss or Max Verstappen video (ui/intro, its own task,
+    // the boot terminal over it), or the night drive with the Honda or McQueen and their greeting; all of them end
     // in the photo montage. WiFi connects and the network task logs into Spotify underneath. The S3 has heap to spare (~230 KB largest block), so the login and polls run
     // under the scenes (the network task's late-WiFi path: spclient::begin + netclock::begin).
     // setup() never blocks on the login: when the scene ends the deck shows at once, the song as
@@ -172,12 +172,14 @@ void setup() {
                        ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
     carlook::Look mcqueen;
     const bool haveMcQueen = carlook::mcqueen(&mcqueen);
-    const intropick::Opening opening = pickOpening(intro::available(), haveMcQueen);
+    const intropick::Opening opening = pickOpening(intro::available(intropick::KISS), haveMcQueen,
+                                                   intro::available(intropick::MAX));
+    const bool video = intropick::isVideo(opening);
     greeting::choose(intropick::greetingFor(opening));
     const bootscene::Opts opts{opening == intropick::MCQUEEN ? mcqueen : carlook::honda(),
-                               opening != intropick::KISS};
-    if (opening == intropick::KISS) {
-        intro::start(s_tft, net::isOnline);
+                               !video};
+    if (video) {
+        intro::start(s_tft, net::isOnline, opening);
     } else {                              // the drive covers the WiFi connect (the screen'd be black)
         greeting::play();
         bootscene::start(s_tft, net::isOnline, opts);
@@ -188,13 +190,13 @@ void setup() {
         netclock::begin();                // the clock (night palette) right away, not after login
         nettask::start();                 // logs in, then polls
     } else {
-        // The network task retries WiFi underneath; the terminal says RETRYING... (the kiss holds
+        // The network task retries WiFi underneath; the terminal says RETRYING... (a video holds
         // its last frame, the car cruises) until it's up. Started before intro::wait(), which
         // waits for WiFi.
         bootscene::setCaption("WiFi not found - retrying...");
         nettask::start();
     }
-    if (opening == intropick::KISS) {
+    if (video) {
         intro::wait();                    // over, and online (the last frame holds till then)
         greeting::play();                 // no greeting: waits for the intro's sound (one output)
         bootscene::start(s_tft, net::isOnline, opts);   // straight to the montage

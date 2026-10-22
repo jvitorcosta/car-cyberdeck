@@ -13,15 +13,15 @@ import sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
 SIZES = os.path.join(DATA, "media_sizes.txt")
-# Both decks' media: the S3's sounds, montage, intro video and sound, second greeting, wolf howl,
+# Both decks' media: the S3's sounds, montage, intro videos (kiss, Max) and their sound, second greeting, wolf howl,
 # Sonic and McQueen (its media partition), the companion's avatar. A zero-filled McQueen stand-in
 # fails carbin's checks, so the S3 reads it as no McQueen.
 FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin",
          "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "avatar.bin", "idle.bin",
-         "mcqueen.bin"]
+         "mcqueen.bin", "max.bin", "max.pcm"]
 MONTAGE_EMPTY = b"MTG1" + (0).to_bytes(2, "little") + (10).to_bytes(2, "little")
 # Stand-ins start with an empty header, so the firmware reads "no clip" / "no avatar" and boots.
-HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "avatar.bin": b"AVT1",
+HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "max.bin": MONTAGE_EMPTY, "avatar.bin": b"AVT1",
          "idle.bin": b"IDL1"}
 
 

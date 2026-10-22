@@ -20,9 +20,9 @@ uint32_t finaleMs();                // 0 when there's no finale clip
 // scene skips it when it would still be playing as the finale starts (one I2S port).
 void playOpener();
 uint32_t openerMs();                // 0 when there's no opener clip
-// The boot intro video's sound (data/intro.pcm, 48 kHz, git-ignored, may be empty), started
-// by ui/intro with its first frame.
-void playIntro();
+// A boot intro video's sound (data/intro.pcm for the kiss, max.pcm for Max; 48 kHz, git-ignored,
+// may be empty), started by ui/intro with its first frame.
+void playIntro(intropick::Opening o);
 // Wolf howl for the phone remote (net/remote): a real recording (data/howl.pcm from
 // tools/gen_howl.py, git-ignored) when the build has one, else synthesised on the fly (util/howl).
 void playHowl();
