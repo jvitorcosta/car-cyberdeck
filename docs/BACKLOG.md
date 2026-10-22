@@ -5,9 +5,9 @@ Open items, not scheduled. Newest decisions first within each section.
 ## Verification (on device)
 
 - **Star Light Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
-  USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/slzbg.bin`),
-  then an update over WiFi (`pio run -e s3_ota -t upload`): the night fills the screen, the rail
-  fills red with the jets riding its tip, a red flash at 100%, the reboot. Cut the PC's upload
+  USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/slzbg.bin` and
+  `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): the night fills
+  the screen, the rail fills red with Shadow skating its tip, a red flash at 100%, the reboot. Cut the PC's upload
   mid-way: grey rail and "Update failed" for ~3 s, then the deck, polling again.
 
 - **Car LEDs** (branch `feat/car-leds`): **tested in the car 2026-10-22, owner: "they worked"**,
@@ -82,10 +82,6 @@ the place to add it.
   sensor (GPIO 34), even though it was suggested for night glare.
 
 ## Ideas
-
-- **Shadow on the update screen** (stage 2 of spec 2026-10-22-shadow-update-screen): his running
-  frames from Sonic Battle (GBA) where the jet glows ride. Waiting on the owner's download of
-  the sprite sheet (scripted downloads are refused); a tool then cuts the frames into `data/`.
 
 - **Car lights from the Garmin watch**: done 2026-10-22, see docs/leds-voice.md.
 

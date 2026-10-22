@@ -97,7 +97,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   restarts 600 ms after the end, once the screen has flashed red. While Receiving or Done the
   network task pauses; a failure resumes it at once. With `data/slzbg.bin` (Star Light Zone, from
   `tools/gen_slz_backdrop.py`, media partition) the screen is that night with the red rail
-  filling and jet glows riding it (spec 2026-10-22-shadow-update-screen; Shadow in stage 2),
+  filling and Shadow skating its tip (`util/ridersprite`, `data/shadow.bin` from
+  `tools/gen_shadow_rider.py`: his Sonic Battle run; two jet glows without it),
   else the battle box with its EXP bar.
 - **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`,
   `util/qrfit`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
