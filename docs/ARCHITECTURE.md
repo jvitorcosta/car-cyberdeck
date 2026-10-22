@@ -91,6 +91,14 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   synthesised in a 4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
   screen goes, starts only with the howl's TLS margin, stops when the largest block nears
   `TLS_NEED`, and retries at most once a minute. `tools/gen_tune.py` makes tunes from MIDI.
+- **Firmware updates** (`net/ota`, `util/otaview`, `util/backdrop`, `ui/otascreen`, `util/bootguard`)
+  — ArduinoOTA on port 3232 (password REMOTE_TOKEN), its own task. `otaview::Tracker` keeps the
+  update's state (Receiving, Done, Failed held 3 s); ArduinoOTA's own reboot is off, so the deck
+  restarts 600 ms after the end, once the screen has flashed red. While Receiving or Done the
+  network task pauses; a failure resumes it at once. With `data/slzbg.bin` (Star Light Zone, from
+  `tools/gen_slz_backdrop.py`, media partition) the screen is that night with the red rail
+  filling and jet glows riding it (spec 2026-10-22-shadow-update-screen; Shadow in stage 2),
+  else the battle box with its EXP bar.
 - **Phone remote** (`net/remote`, `util/remotegate`, `util/howl`, `util/statejson`,
   `util/qrfit`) — off unless `REMOTE_TOKEN` is set. A page on port 80 (`http://cardeck.local/`,
   mDNS; `172.20.10.10` on the iPhone hotspot, `util/hotspotip`) served by its own idle-priority
