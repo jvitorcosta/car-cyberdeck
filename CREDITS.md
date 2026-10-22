@@ -50,7 +50,7 @@ original and MIT-licensed.
 ## Personal media
 
 Your own media are built locally, git-ignored and never distributed with this repository: the
-avatar art (`tools/gen_avatar.py`), the intro clip (`tools/gen_intro.py`), the greeting clips
+avatar art (`tools/gen_avatar.py`), the intro clips (`tools/gen_intro.py`), the greeting clips
 (`tools/gen_greeting.py`), the photo montage (`tools/gen_montage.py`) and the wolf howl
 (`tools/gen_howl.py`). Use media you have the rights to. For the howl, the suggested source is
 the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) on
@@ -59,6 +59,10 @@ Wikimedia Commons.
 The pixel Lightning McQueen in the S3's boot opening is a fan sprite of a Disney/Pixar
 character (*Cars*), drawn with PixelLab and packed locally by `tools/gen_mcqueen_sprite.py`. It
 lives in the git-ignored `montage-photos/mcqueen.png` and `data/mcqueen.bin`, never distributed here.
+
+The Max Verstappen opening is a clip of Formula 1's broadcast graphics (Formula One Management),
+cut locally by `tools/gen_intro.py` from a copy you download yourself. It lives in the git-ignored
+`max-clip/` and `data/max.bin` / `max.pcm`, never distributed here.
 
 Sonic waiting on the S3's "Nothing playing" screen is rebuilt locally by `tools/gen_idle_sprite.py`
 from Sonic the Hedgehog (Mega Drive, 1991) art in the

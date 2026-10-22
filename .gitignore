@@ -38,6 +38,10 @@ data/avatar.bin
 __pycache__/
 data/intro.bin
 data/intro.pcm
+# Max Verstappen's F1 intro (tools/gen_intro.py --out max): F1/FOM footage, never committed
+max-clip/
+data/max.bin
+data/max.pcm
 data/howl.pcm
 data/greeting_alt.pcm
 

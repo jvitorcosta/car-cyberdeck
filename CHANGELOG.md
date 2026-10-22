@@ -14,8 +14,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   log typed over it, the Honda's night drive with "bem vindo moreno", or a pixel Lightning
   McQueen's drive with "eu sou a velocidade" (`tools/gen_mcqueen_sprite.py`, git-ignored; red
   rims). All of them end in the photo montage and the POWERED BY HONDA card.
-  `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`) forces one for testing.
-- A music box on the S3's "Nothing playing" screen: soft plucked tunes (5 % of the clips'
+  `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) forces one for testing.
+- A fourth boot opening on the S3: Max Verstappen's F1 intro (~8 s), letterboxed under the boot
+  log. `tools/gen_intro.py` gained `--out`, `--letterbox` and `--q` to build it as
+  `data/max.bin` + `max.pcm` (git-ignored, in the media partition).
+- A music box on the S3's "Nothing playing" screen: soft plucked tunes (2.5 % of the clips'
   volume) loop in random order until the song comes back. Make your own from MIDI with
   `tools/gen_tune.py` (`data/tunes/`, git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
 - Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.

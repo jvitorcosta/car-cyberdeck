@@ -3,15 +3,16 @@
 
 namespace intropick {
 
-static bool available(int o, bool haveKiss, bool haveMcQueen) {
-    return o == HONDA || (o == KISS && haveKiss) || (o == MCQUEEN && haveMcQueen);
+static bool available(int o, bool haveKiss, bool haveMcQueen, bool haveMax) {
+    return o == HONDA || (o == KISS && haveKiss) || (o == MCQUEEN && haveMcQueen) ||
+           (o == MAX && haveMax);
 }
 
-Opening pick(uint32_t rnd, int last, bool haveKiss, bool haveMcQueen) {
+Opening pick(uint32_t rnd, int last, bool haveKiss, bool haveMcQueen, bool haveMax) {
     Opening list[COUNT];
     int n = 0;
     for (int o = 0; o < COUNT; ++o)
-        if (available(o, haveKiss, haveMcQueen)) list[n++] = (Opening)o;
+        if (available(o, haveKiss, haveMcQueen, haveMax)) list[n++] = (Opening)o;
     if (n > 1) {                       // drop last boot's, when there's another
         int k = 0;
         for (int i = 0; i < n; ++i)
@@ -23,8 +24,10 @@ Opening pick(uint32_t rnd, int last, bool haveKiss, bool haveMcQueen) {
 
 Greeting greetingFor(Opening o) { return o == HONDA ? MAIN : o == MCQUEEN ? ALT : NONE; }
 
+bool isVideo(Opening o) { return o == KISS || o == MAX; }
+
 const char* name(Opening o) {
-    static const char* const NAMES[COUNT] = {"kiss", "honda", "mcqueen"};
+    static const char* const NAMES[COUNT] = {"kiss", "honda", "mcqueen", "max"};
     return o < COUNT ? NAMES[o] : "?";
 }
 
@@ -35,8 +38,8 @@ int parse(const char* s) {
     return -1;
 }
 
-int forced(int f, bool haveKiss, bool haveMcQueen) {
-    return f >= 0 && f < COUNT && available(f, haveKiss, haveMcQueen) ? f : -1;
+int forced(int f, bool haveKiss, bool haveMcQueen, bool haveMax) {
+    return f >= 0 && f < COUNT && available(f, haveKiss, haveMcQueen, haveMax) ? f : -1;
 }
 
 }

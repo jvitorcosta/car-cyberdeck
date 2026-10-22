@@ -30,7 +30,8 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, optionally
   followed by a montage of your own photos. On the S3 each boot picks one opening at random,
   never last boot's: your intro video with the log typed over it, the Honda's drive with its
-  greeting, or a pixel McQueen's drive with the second greeting. All of them end in the montage
+  greeting, a pixel McQueen's drive with the second greeting, or a second video (Max
+  Verstappen's F1 intro). All of them end in the montage
   and its logo card, while WiFi connects and Spotify logs in underneath.
 - **Built for a car:** never freezes on a slow link, retries a late hotspot in the background,
   and recovers on its own.
@@ -149,6 +150,7 @@ Without it the deck uses built-in defaults.
 | Pixel McQueen (S3) | a 200 × 66 side view facing right, then `python tools/gen_mcqueen_sprite.py montage-photos/mcqueen.png` → `data/mcqueen.bin` (the defaults fit the approved art; new art sets `--wheels`, `--head`, `--tail`, `--beam`) | two openings: the kiss and the Honda |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
 | Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; default: the kiss wallpaper's walk-in and kiss, ~13 s; needs ffmpeg). One of the random boot openings | none: the night drive openings only |
+| Second intro video (S3) | `python tools/gen_intro.py max-clip/max.mp4 --seg 0-99 --out max --letterbox --q 8 --fps 16` → `data/max.bin` + `.pcm` (the whole 16:9 frame under the boot log; smaller frames at 16 fps, so the deck draws every one). Max Verstappen's F1 intro, another random opening | one video opening fewer |
 | Update screen night (S3) | `python tools/gen_slz_backdrop.py` → `data/slzbg.bin` (Star Light Zone, rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/slz/`) | the battle box on firmware updates |
 | Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Waiting for a song..." |
 | Music-box tunes (S3) | `python tools/gen_tune.py song.mid --name "National Park"` → `data/tunes/national_park.txt`, one per song (the melody line; `--track N` if it picks the accompaniment); all of `data/tunes/` loop in random order | two public-domain tunes (`data/tunes_default.txt`) |

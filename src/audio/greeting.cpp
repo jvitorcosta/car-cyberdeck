@@ -14,6 +14,7 @@ MEDIA_DECL(data_greeting_pcm);
 MEDIA_DECL(data_finale_pcm);
 MEDIA_DECL(data_opener_pcm);
 MEDIA_DECL(data_intro_pcm);
+MEDIA_DECL(data_max_pcm);
 MEDIA_DECL(data_howl_pcm);
 MEDIA_DECL(data_greeting_alt_pcm);
 MEDIA_DECL(data_tunes_txt);
@@ -26,7 +27,7 @@ namespace greeting {
 constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (16-bit signed LE)
 constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_howl.py output rate
 constexpr int CHUNK = 128;               // samples per audiosink::write
-constexpr int TUNE_LEVEL = 5;            // the music box, percent of the clip volume: background
+constexpr int TUNE_LEVEL = 25;           // the music box, per mille of the clip volume: barely there
 
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
@@ -40,6 +41,7 @@ static const Clip HOWL = {nullptr, howl::SAMPLES, "howl", &audiosink::GREETING_V
 struct Clips {
     Clip greeting, finale, opener;
     Clip intro;
+    Clip max;            // Max Verstappen's F1 intro, the other video opening
     Clip wolf;           // a real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none
     Clip greetingAlt;    // the second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot
 };
@@ -54,6 +56,7 @@ static const Clips& clips() {
         k.finale = clip(MEDIA(data_finale_pcm, "finale.pcm"), "finale", &audiosink::FINALE_VOLUME, CLIP_RATE);
         k.opener = clip(MEDIA(data_opener_pcm, "opener.pcm"), "opener", &audiosink::GREETING_VOLUME, CLIP_RATE);
         k.intro = clip(MEDIA(data_intro_pcm, "intro.pcm"), "intro", &INTRO_VOLUME, INTRO_RATE);
+        k.max = clip(MEDIA(data_max_pcm, "max.pcm"), "intro", &INTRO_VOLUME, INTRO_RATE);
         k.wolf = clip(MEDIA(data_howl_pcm, "howl.pcm"), "howl", &audiosink::GREETING_VOLUME, INTRO_RATE);
         k.greetingAlt = clip(MEDIA(data_greeting_alt_pcm, "greeting_alt.pcm"), "greeting",
                              &audiosink::GREETING_VOLUME, CLIP_RATE);
@@ -112,7 +115,7 @@ static void task(void* arg) {
             n = synth.fill(buf, CHUNK);
             if (n == 0) break;
             i += n;
-            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 100);
+            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 1000);
         }
         for (; c->data && n < CHUNK && i < c->samples; ++n, ++i) {
             int16_t s;
@@ -140,7 +143,7 @@ static void start(const Clip* c, const char* name) {
 }
 
 void play() {
-    if (s_choice == intropick::NONE) return;   // the kiss video has its own sound
+    if (s_choice == intropick::NONE) return;   // the videos have their own sound
     start(&greetingClip(), "greeting");
 }
 
@@ -166,7 +169,7 @@ static void tuneTask(void*) {
         char name[32] = "";
         int shown = -1;
         int16_t buf[CHUNK];
-        const int volume = audiosink::GREETING_VOLUME * TUNE_LEVEL / 100;
+        const int volume = audiosink::GREETING_VOLUME * TUNE_LEVEL / 100;   // per mille
         for (;;) {
             if (s_tunesStop.load()) box.stop();
             if (box.tune() != shown) {
@@ -177,7 +180,7 @@ static void tuneTask(void*) {
             }
             const size_t n = box.fill(buf, CHUNK);
             if (n == 0) break;
-            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 100);
+            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 1000);
             audiosink::write(buf, n);
         }
         audiosink::close();
@@ -246,8 +249,9 @@ void playHowl() {
 
 void playFinale() { if (present(clips().finale)) start(&clips().finale, "finale"); }
 
-void playIntro() {
-    if (present(clips().intro)) start(&clips().intro, "intro");
+void playIntro(intropick::Opening o) {
+    const Clip& c = o == intropick::MAX ? clips().max : clips().intro;
+    if (present(c)) start(&c, "intro");
 }
 
 void playOpener() { if (present(clips().opener)) start(&clips().opener, "opener"); }
