@@ -12,7 +12,8 @@ constexpr uint32_t DONE_MS = 600, FAILED_HOLD_MS = 3000;
 
 class Tracker {
 public:
-    void onStart() { phase_ = Phase::Receiving; pct_ = 0; }
+    // Ignored once Done: a second upload invited in the reboot window can't cancel the good one.
+    void onStart() { if (phase_ != Phase::Done) { phase_ = Phase::Receiving; pct_ = 0; } }
     void onProgress(int pct) { if (phase_ == Phase::Receiving) pct_ = pct; }
     void onEnd(uint32_t nowMs) { phase_ = Phase::Done; pct_ = 100; at_ = nowMs; }
     void onError(uint32_t nowMs) { if (phase_ == Phase::Receiving) fail(nowMs); }
@@ -39,6 +40,15 @@ inline int fillWidth(int pct) {
     if (pct <= 0) return 0;
     if (pct >= 100) return INNER_W;
     return INNER_W * pct / 100;
+}
+
+// What one frame repaints: the strip and the rail on a change of phase or percent (or full); the
+// jets also on a bob step, and never once the update failed (he stops). A bob alone leaves the
+// rail alone, or the fill would flicker 8 times a second.
+struct Repaint { bool strip, rail, jets; };
+inline Repaint repaint(bool full, bool changed, bool bobStep, Phase p) {
+    const bool all = full || changed;
+    return {all, all, (all || bobStep) && p == Phase::Receiving};
 }
 
 // The rider's left edge: his centre on the fill's tip, kept on the rail.

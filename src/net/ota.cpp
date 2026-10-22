@@ -76,7 +76,11 @@ void task(void*) {
     ArduinoOTA.begin();
     Serial.printf("[ota] listening on %s:3232\n", net::deviceIp().c_str());
     for (;;) {
-        ArduinoOTA.handle();   // an update runs to the end inside this call
+        // An update runs to the end inside handle(). Not once Done: a second upload in the reboot
+        // window would write over the slot the good one just filled.
+        bool done = false;
+        locked([&] { done = s_tracker.phase(0) == otaview::Phase::Done; });
+        if (!done) ArduinoOTA.handle();
         // Still Receiving: it was cut off on a path that skips onError. Resume the deck.
         bool cut = false, reboot = false;
         locked([&] {

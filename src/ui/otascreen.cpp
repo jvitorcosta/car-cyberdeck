@@ -74,7 +74,8 @@ void strip(TFT_eSPI& t, const ota::View& v) {
     shadowText(t, s, 312, 2, 2, failed ? GREY : RED, BLACK, TR_DATUM);
 }
 
-void band(TFT_eSPI& t, const ota::View& v, int bob) {
+// The rail band (backdrop rows under and around the rail, then the rail and its fill).
+void rail(TFT_eSPI& t, const ota::View& v) {
     for (int y = BAND_Y; y < BAND_Y + BAND_H; ++y) pushRow(t, y);
     const bool failed = v.phase == Phase::Failed;
     t.fillRect(RAIL_X, RAIL_Y, RAIL_W, RAIL_H, failed ? GREY : BORDER_C);
@@ -82,8 +83,14 @@ void band(TFT_eSPI& t, const ota::View& v, int bob) {
     const int fill = fillWidth(v.pct);
     for (int i = 0; i < fill; ++i)
         t.drawFastVLine(INNER_X + i, RAIL_Y + BORDER, RAIL_H - 2 * BORDER, failed ? GREY : fillColour(i));
-    if (failed) return;                           // he stops: no jets
-    const int x = riderX(v.pct, RIDER_W), y = RAIL_Y - 11 + bob;   // stage 2: Shadow above them
+}
+
+// The jet glows over the fill's tip (stage 2: Shadow above them). rows: repaint the backdrop above
+// the rail first (a bob step alone; after rail() it's already clean).
+void jets(TFT_eSPI& t, const ota::View& v, int bob, bool rows) {
+    if (rows)
+        for (int y = BAND_Y; y < RAIL_Y; ++y) pushRow(t, y);
+    const int x = riderX(v.pct, RIDER_W), y = RAIL_Y - 11 + bob;
     for (const int jx : {x + 2, x + RIDER_W - 8}) {
         t.fillRoundRect(jx, y, 6, 8, 3, JET_EDGE);
         t.fillRoundRect(jx + 1, y + 1, 4, 5, 2, JET);
@@ -104,13 +111,14 @@ bool drawShadowUpdate(TFT_eSPI& t, const ota::View& v, uint32_t nowMs, bool full
         return true;
     }
     const int bob = (int)((nowMs / BOB_MS) & 1);
-    const bool redraw = full || v.phase != shownPhase || v.pct != shownPct;
+    const Repaint r = repaint(full, v.phase != shownPhase || v.pct != shownPct, bob != shownBob, v.phase);
     if (full) {
         for (int y = STRIP_H; y < backdrop::height(); ++y) pushRow(t, y);
         shadowText(t, "Keep the deck powered", RAIL_X, NOTE_Y, 2, WHITE, BLACK, TL_DATUM);
     }
-    if (redraw) strip(t, v);
-    if (redraw || bob != shownBob) band(t, v, bob);
+    if (r.strip) strip(t, v);
+    if (r.rail) rail(t, v);
+    if (r.jets) jets(t, v, bob, !r.rail);
     shownPhase = v.phase;
     shownPct = v.pct;
     shownBob = bob;

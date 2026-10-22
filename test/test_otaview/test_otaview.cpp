@@ -76,6 +76,36 @@ void test_new_start_during_failed_hold() {
     TEST_ASSERT_EQUAL_INT(3, t.pct());
 }
 
+// A second upload invited during the Done window can't cancel the good update's reboot.
+void test_start_during_done_is_ignored() {
+    Tracker t;
+    t.onStart();
+    t.onEnd(1000);
+    t.onStart();
+    t.onProgress(5);
+    t.onError(1100);
+    TEST_ASSERT_TRUE(is(t, Phase::Done, 1100));
+    TEST_ASSERT_TRUE(t.rebootDue(1000 + otaview::DONE_MS));
+}
+
+// What a frame repaints: everything on a change of phase or percent; on a bob step only the
+// jets (never the rail, or the fill would flicker 8 times a second), and no jets once failed.
+void test_repaint_plan() {
+    using otaview::repaint;
+    otaview::Repaint r = repaint(true, false, false, Phase::Receiving);
+    TEST_ASSERT_TRUE(r.strip && r.rail && r.jets);
+    r = repaint(false, true, false, Phase::Receiving);
+    TEST_ASSERT_TRUE(r.strip && r.rail && r.jets);
+    r = repaint(false, false, true, Phase::Receiving);
+    TEST_ASSERT_TRUE(!r.strip && !r.rail && r.jets);
+    r = repaint(false, false, true, Phase::Failed);
+    TEST_ASSERT_TRUE(!r.strip && !r.rail && !r.jets);
+    r = repaint(false, true, false, Phase::Failed);
+    TEST_ASSERT_TRUE(r.strip && r.rail && !r.jets);
+    r = repaint(false, false, false, Phase::Receiving);
+    TEST_ASSERT_TRUE(!r.strip && !r.rail && !r.jets);
+}
+
 void test_hold_survives_millis_wrap() {
     Tracker t;
     t.onStart();
@@ -111,6 +141,8 @@ int main() {
     RUN_TEST(test_error_is_failed);
     RUN_TEST(test_return_while_idle_stays_idle);
     RUN_TEST(test_new_start_during_failed_hold);
+    RUN_TEST(test_start_during_done_is_ignored);
+    RUN_TEST(test_repaint_plan);
     RUN_TEST(test_hold_survives_millis_wrap);
     RUN_TEST(test_fill_and_rider_clamp);
     return UNITY_END();
