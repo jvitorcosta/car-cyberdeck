@@ -43,8 +43,10 @@ void loop() {
     if (ts.touched()) {
         TS_Point p = ts.getPoint();
         Serial.printf("[touch] raw x=%d y=%d z=%d\n", p.x, p.y, p.z);
-        s_tft.fillCircle(map(p.x, 200, 3900, 0, 320),
-                       map(p.y, 200, 3900, 0, 240), 4, TFT_WHITE);
+        if (p.x >= 100) {   // at rest the panel reads a press at raw x=0: not a touch
+            s_tft.fillCircle(map(p.x, TOUCH_RAW_X0, TOUCH_RAW_X1, 0, 320),
+                             map(p.y, TOUCH_RAW_Y0, TOUCH_RAW_Y1, 0, 240), 4, TFT_WHITE);
+        }
         delay(50);
     }
 }

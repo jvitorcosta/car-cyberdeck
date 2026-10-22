@@ -28,9 +28,9 @@ static const int TOUCH_CS   = 33;
 static const int TOUCH_IRQ  = 36;
 // Touch calibration: raw XPT2046 readings at the screen's left/right (x) and top/bottom (y)
 // edges in rotation 1. Tune from the companion's "[touch] raw x=.. y=.." log lines; swap a pair
-// to flip an axis.
-static const int TOUCH_RAW_X0 = 200, TOUCH_RAW_X1 = 3900;
-static const int TOUCH_RAW_Y0 = 200, TOUCH_RAW_Y1 = 3900;
+// to flip an axis. Measured with the pen on 2026-10-21 (taps reached x 532..3477, y 590..3513).
+static const int TOUCH_RAW_X0 = 500, TOUCH_RAW_X1 = 3510;
+static const int TOUCH_RAW_Y0 = 560, TOUCH_RAW_Y1 = 3540;
 
 // Backlight
 static const int PIN_BL = 21;

@@ -4,9 +4,21 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
-- **Old deck touch layer is faulty** (2026-10-14): one constant press (raw x=0, y~3977) under
-  both the companion and `hwcheck`, stylus taps never register. The avatar menu is driven from
-  the phone; touch stays in code (with the stuck-press guard) for a working board.
+- **Car LEDs** (branch `feat/car-leds`): **tested in the car 2026-10-22, owner: "they worked"**,
+  the lights and voice (Siri) on the final build (NimBLE 2, pages, debounced saves). The Garmin app
+  works against the deck (tested at home over the hotspot); in the car it takes the same path, so
+  it's assumed to work there too, not seen yet. Still open, not reported either way:
+  - the LED colours (orange, pink, purple, white and yellow are guesses for RGB LEDs) and whether
+    the perceptual 10 % brightness steps look even;
+  - INSIDE / OUTSIDE not swapped (the controller addresses were assigned by signal strength);
+  - the Xbox controller with the lights connected;
+  - memory over a long drive (heap's low point drifted 130 → 123 KB over 25 min at home).
+
+- **Old deck touch works with the pen** (2026-10-21; was "faulty" on 2026-10-14): at rest the
+  panel reads a press at raw x=0 (y~4000, z~600), which tripped the stuck-press guard for good.
+  `companion/touch` now treats raw x < 100 as released, and `TOUCH_RAW_*` were recalibrated from
+  pen taps (x 532..3477, y 590..3513). Taps register under `ledpanel`; the companion's own
+  touch menu hasn't been retried yet.
 
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
@@ -65,16 +77,26 @@ the place to add it.
 
 ## Ideas
 
+- **Car lights from the Garmin watch**: done 2026-10-22, see docs/leds-voice.md.
+
 - **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
   Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
 - **PS3 controller for the avatar menu** (side idea, 2026-10-14): over Bluetooth Classic on the
-  CYD (the S3 has BLE only), library `esp32-ps3`; one-time pairing with SixaxisPairTool;
-  D-pad = cursor, X = open, O = back. A cable needs a USB host (MAX3421E module + wiring): the
-  CYD's USB port is a device-only CH340.
+  CYD (the S3 has BLE only), library `esp32-ps3`; D-pad = cursor, X = open, O = back. A cable
+  needs a USB host (MAX3421E module + wiring): the CYD's USB port is a device-only CH340.
+  **2026-10-22, waiting on a battery:** João's original DS3 is already paired to the yellow deck
+  (its master address set over USB to the CYD's Bluetooth address, 68:09:47:F8:25:9E, no
+  SixaxisPairTool needed) and the `ps3test` env (Bluedroid) is ready, but its battery is dead. A
+  genuine DS3 only powers on from a USB host, not a wall charger, and on the PC it stays wired.
+  Next: a new LIP1472 (3.7 V 570 mAh), charge, unplug, press PS. Bluetooth Classic means Bluedroid,
+  so it can't share a firmware with the LED panel's NimBLE (Xbox + lights): one or the other.
 - **Switch back to the hotspot automatically** (tried 2026-10-14, then removed): scanning on
   the home WiFi paused the S3's network task and blipped the companion, and the move back was
   never seen working (joins were refused, likely "Allow Others to Join" off). Owner: decks stay
-  where they joined; home WiFi is dev only, the car has only the hotspot.
+  where they joined; home WiFi is dev only, the car has only the hotspot. Tried again in the LED
+  panel on 2026-10-22 (a short passive scan every 20 s) and removed again: the iPhone hides its
+  hotspot unless its settings screen is open, so the scan rarely saw it; restarting the deck with
+  that screen open is what worked.
 
 - **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
   a top strip with the clock and outside weather (`util/weather` is committed, not wired in).
