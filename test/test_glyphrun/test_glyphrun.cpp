@@ -175,6 +175,57 @@ void test_emoji_fit_and_wrap() {
     TEST_ASSERT_EQUAL_INT(6, (int)w.aEnd);
     TEST_ASSERT_EQUAL_INT(6, (int)w.bStart);
 }
+// ---- joined (ZWJ) emoji ----
+#define CAT "\xF0\x9F\x90\x88"
+#define BLACK "\xE2\xAC\x9B"
+#define WOMAN "\xF0\x9F\x91\xA9"
+#define MAN "\xF0\x9F\x91\xA8"
+#define GIRL "\xF0\x9F\x91\xA7"
+#define BOY "\xF0\x9F\x91\xA6"
+#define LAPTOP "\xF0\x9F\x92\xBB"
+static const uint32_t K_CAT = 0x120000, K_FLAG = 0x120001, K_CODER = 0x120002, K_FAMILY = 0x120003,
+                      K_NOPIC = 0x120004;
+// Fake sequence table; K_NOPIC is a sequence the fake font has no picture for.
+static uint32_t sq(const uint32_t* c, int n, void*) {
+    if (n == 2 && c[0] == 0x1F408 && c[1] == 0x2B1B) return K_CAT;
+    if (n == 2 && c[0] == 0x1F3F3 && c[1] == 0x1F308) return K_FLAG;
+    if (n == 2 && c[0] == 0x1F469 && c[1] == 0x1F4BB) return K_CODER;
+    if (n == 3 && c[0] == 0x1F468 && c[1] == 0x1F469 && c[2] == 0x1F467) return K_FAMILY;
+    if (n == 2 && c[0] == 0x1F468 && c[1] == 0x1F4BB) return K_NOPIC;
+    return 0;
+}
+static int ewSeq(uint32_t k, void* ctx) {
+    if (k == 0x1F408 || k == 0x1F469 || (k >= K_CAT && k < K_NOPIC)) return 16;
+    return ew(k, ctx);
+}
+static size_t decZ(const char* s) {
+    return glyphrun::decode(s, buf, 128, aw, ww, nullptr, false, ewSeq, sq);
+}
+void test_zwj_sequence_is_one_picture() {
+    TEST_ASSERT_EQUAL_INT(2, (int)decZ(CAT ZWJ BLACK "x"));                // black cat
+    expectEmoji(0, K_CAT);
+    expectAscii(1, 'x');
+    TEST_ASSERT_EQUAL_INT(1, (int)decZ("\xF0\x9F\x8F\xB3" VS16 ZWJ "\xF0\x9F\x8C\x88"));   // rainbow flag
+    expectEmoji(0, K_FLAG);
+    TEST_ASSERT_EQUAL_INT(1, (int)decZ(MAN ZWJ WOMAN ZWJ GIRL));          // family of three
+    expectEmoji(0, K_FAMILY);
+}
+void test_zwj_skin_tone_falls_back_to_the_plain_sequence() {
+    TEST_ASSERT_EQUAL_INT(1, (int)decZ(WOMAN TONE ZWJ LAPTOP));
+    expectEmoji(0, K_CODER);
+}
+void test_zwj_unknown_sequence_shows_its_first_emoji() {
+    TEST_ASSERT_EQUAL_INT(2, (int)decZ(MAN ZWJ WOMAN ZWJ GIRL ZWJ BOY "y"));   // not in the table
+    expectEmoji(0, 0x1F468);
+    expectAscii(1, 'y');
+    TEST_ASSERT_EQUAL_INT(1, (int)decZ(MAN ZWJ LAPTOP));                  // in the table, no picture
+    expectEmoji(0, 0x1F468);
+    TEST_ASSERT_EQUAL_INT(1, (int)decZ(CAT ZWJ CAT ZWJ CAT ZWJ CAT ZWJ CAT));   // longer than 4
+    expectEmoji(0, 0x1F408);
+    TEST_ASSERT_EQUAL_INT(2, (int)decZ(CAT ZWJ "z"));                     // ZWJ before ASCII
+    expectEmoji(0, 0x1F408);
+    expectAscii(1, 'z');
+}
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_decode_mixed_ascii_accent_cjk);
@@ -194,5 +245,8 @@ int main(int, char**) {
     RUN_TEST(test_emoji_uncovered_or_no_font_dropped);
     RUN_TEST(test_emoji_wins_over_cjk_and_cut_sequence);
     RUN_TEST(test_emoji_fit_and_wrap);
+    RUN_TEST(test_zwj_sequence_is_one_picture);
+    RUN_TEST(test_zwj_skin_tone_falls_back_to_the_plain_sequence);
+    RUN_TEST(test_zwj_unknown_sequence_shows_its_first_emoji);
     return UNITY_END();
 }

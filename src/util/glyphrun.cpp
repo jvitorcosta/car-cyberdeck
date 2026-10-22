@@ -33,8 +33,31 @@ static uint32_t codepoint(const char* s, int len) {
     return cp;
 }
 
+// The joined sequence that starts with `first`, its next part at s: fills cps (first + each
+// codepoint after a ZWJ, modifiers skipped) and returns how many, with *end just past it.
+// 0 when no ZWJ follows or the sequence is longer than JOIN_MAX.
+static constexpr int JOIN_MAX = 4;   // emojifont::SEQ_MAX
+static int joined(uint32_t first, const char* s, uint32_t* cps, size_t* end) {
+    int m = 0;
+    size_t j = 0;
+    cps[m++] = first;
+    for (;;) {
+        size_t k = j;
+        int l;
+        while ((l = seqLen(s + k)) != 0 && isModifier(codepoint(s + k, l))) k += l;
+        if (l == 0 || codepoint(s + k, l) != ZWJ) break;
+        k += l;
+        if ((l = seqLen(s + k)) == 0) break;              // ZWJ before ASCII: not joined
+        if (m == JOIN_MAX) return 0;
+        cps[m++] = codepoint(s + k, l);
+        j = k + l;
+    }
+    *end = j;
+    return m > 1 ? m : 0;
+}
+
 size_t decode(const char* s, Item* out, size_t cap, AsciiWidthFn aw, WideWidthFn ww, void* ctx,
-              bool upper, EmojiWidthFn ew) {
+              bool upper, EmojiWidthFn ew, EmojiSeqFn sq) {
     size_t n = 0;
     if (!s) return 0;
     for (size_t i = 0; s[i] && n < cap;) {
@@ -65,6 +88,18 @@ size_t decode(const char* s, Item* out, size_t cap, AsciiWidthFn aw, WideWidthFn
         if (cp == ZWJ) {                                  // joined emoji: keep only the first
             if ((unsigned char)s[i] >= 0x80) { int l = seqLen(s + i); i += l ? l : 1; }
             continue;
+        }
+        if (sq && ew) {                                   // a joined emoji the font has
+            uint32_t cps[JOIN_MAX];
+            size_t end = 0;
+            const int m = joined(cp, s + i, cps, &end);
+            const uint32_t k = m ? sq(cps, m, ctx) : 0;
+            const int w = k ? ew(k, ctx) : 0;
+            if (w > 0) {
+                out[n++] = {Kind::Emoji, 0, txt::Mark::None, k, (uint8_t)w};
+                i += end;
+                continue;
+            }
         }
         uint32_t key = cp;
         if (isRegional(cp)) {                             // flag = a pair; half of one is dropped
