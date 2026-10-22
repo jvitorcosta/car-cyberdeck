@@ -1,9 +1,9 @@
 """Generate data/emoji16.bin: the most used emoji as 16x16 colour pictures (Twemoji), in flash.
 
-Why: Spotify names and lyrics are full of emoji, and the deck dropped them all. The ~700 most
-used (Unicode's frequency tiers 0..10, tools/emoji_freq.txt) cover nearly every name; the 248
+Why: Spotify names and lyrics are full of emoji, and the deck dropped them all. The ~900 most
+used (Unicode's frequency tiers 0..11, tools/emoji_freq.txt) cover nearly every name; the 248
 joined (ZWJ) emoji without skin tones (tools/emoji_zwj.txt: black cat, rainbow flag, families...)
-draw as one picture. With a 16-colour palette per emoji that is ~160 KB of flash and 0 RAM
+draw as one picture. With a 16-colour palette per emoji that is ~195 KB of flash and 0 RAM
 (src/ui/emojifont.h).
 
   python tools/gen_emoji.py [--tiers N] [--cache DIR]
@@ -165,7 +165,7 @@ def fetch(name, cache):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--tiers", type=int, default=10)
+    ap.add_argument("--tiers", type=int, default=11)
     ap.add_argument("--cache", default=os.path.join(ROOT, ".pio", "twemoji"))
     args = ap.parse_args()
     os.makedirs(args.cache, exist_ok=True)
