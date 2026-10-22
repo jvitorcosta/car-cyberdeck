@@ -19,6 +19,8 @@
 #include "util/idlesprite.h"
 #include "core/media.h"
 MEDIA_DECL(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_sprite.py), else empty
+MEDIA_DECL(data_slzbg_bin);  // Star Light Zone behind the update screen (tools/gen_slz_backdrop.py)
+#include "util/backdrop.h"
 #include "audio/greeting.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
@@ -170,6 +172,9 @@ void setup() {
     const media::Blob idle = MEDIA(data_idle_bin, "idle.bin");
     Serial.println(idlesprite::parse(idle.data, idle.size)
                        ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
+    const media::Blob slz = MEDIA(data_slzbg_bin, "slzbg.bin");
+    Serial.println(backdrop::parse(slz.data, slz.size) ? "[ota] update screen: Star Light Zone"
+                                                       : "[ota] update screen: battle box");
     carlook::Look mcqueen;
     const bool haveMcQueen = carlook::mcqueen(&mcqueen);
     const intropick::Opening opening = pickOpening(intro::available(intropick::KISS), haveMcQueen,
@@ -369,11 +374,16 @@ void loop() {
         netplan::stale(millis(), st.lastPollOkMs, STALE_MS)) mode = 1;
     else if (idleNow) mode = 2;
     static int lastMode = -1;
-    if (ota::active()) {   // an update over WiFi: its progress, nothing else (net/ota)
+    // An update over WiFi (net/ota): its screen, nothing else. With the Star Light Zone file also
+    // its flash and "Update failed"; the battle box only while it receives, as before.
+    const ota::View ov = ota::view();
+    const bool slzScreen = backdrop::width() > 0;
+    if (ov.phase != otaview::Phase::Idle && (slzScreen || ov.phase != otaview::Phase::Failed)) {
         static int shownPct = -1;
-        const int pct = ota::progress();
-        if (lastMode != -2 || pct != shownPct) ui::drawUpdate(s_tft, pct, lastMode != -2);
-        shownPct = pct;
+        if (!ui::drawShadowUpdate(s_tft, ov, millis(), lastMode != -2) &&
+            (lastMode != -2 || ov.pct != shownPct))
+            ui::drawUpdate(s_tft, ov.pct, lastMode != -2);
+        shownPct = ov.pct;
         lastMode = -2;     // no screen's mode: the one it covered comes back in full
         delay(20);
         return;

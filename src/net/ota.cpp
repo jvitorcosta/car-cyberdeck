@@ -10,6 +10,7 @@
 #include "wifi.h"
 #include "../audio/greeting.h"
 #include "../util/bootguard.h"
+#include "../util/otaview.h"
 
 namespace ota {
 namespace {
@@ -18,7 +19,14 @@ RTC_NOINIT_ATTR uint32_t s_magic;
 RTC_NOINIT_ATTR uint32_t s_crashes;
 RTC_NOINIT_ATTR uint32_t s_rolledBack;   // MAGIC: the boot before this one rolled back
 
-std::atomic<int> s_progress{-1};
+// The update's state (util/otaview), written by ArduinoOTA's callbacks on this task, read by the UI.
+otaview::Tracker s_tracker;
+portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
+template <typename F> void locked(F f) {
+    portENTER_CRITICAL(&s_mux);
+    f();
+    portEXIT_CRITICAL(&s_mux);
+}
 std::atomic<bool> s_good{false};   // the running firmware has proven itself (nvs "ota"/"good")
 bool (*s_hold)() = nullptr;
 
@@ -45,28 +53,45 @@ void task(void*) {
     ArduinoOTA.setHostname(REMOTE_NAME);
     ArduinoOTA.setPassword(REMOTE_TOKEN);
     ArduinoOTA.setMdnsEnabled(false);   // net/remote already answers to REMOTE_NAME.local
+    ArduinoOTA.setRebootOnSuccess(false);   // the deck reboots itself, after the screen's flash
     ArduinoOTA.onStart([] {
-        s_progress.store(0);
+        locked([] { s_tracker.onStart(); });
         greeting::stopTunes();
         Serial.println("[ota] update started: Spotify polls paused");
     });
     ArduinoOTA.onProgress([](unsigned done, unsigned total) {
         const int pct = total ? (int)((uint64_t)done * 100 / total) : 0;
-        if (pct / 10 != s_progress.load() / 10) Serial.printf("[ota] %d %%\n", pct);
-        s_progress.store(pct);
+        int was = 0;
+        locked([&] { was = s_tracker.pct(); s_tracker.onProgress(pct); });
+        if (pct / 10 != was / 10) Serial.printf("[ota] %d %%\n", pct);
     });
-    ArduinoOTA.onEnd([] { Serial.println("[ota] done, restarting into the new firmware"); });
+    ArduinoOTA.onEnd([] {
+        locked([] { s_tracker.onEnd(millis()); });
+        Serial.println("[ota] done, restarting into the new firmware");
+    });
     ArduinoOTA.onError([](ota_error_t e) {
+        locked([] { s_tracker.onError(millis()); });
         Serial.printf("[ota] failed (error %d): the running firmware stays\n", (int)e);
     });
     ArduinoOTA.begin();
     Serial.printf("[ota] listening on %s:3232\n", net::deviceIp().c_str());
     for (;;) {
-        ArduinoOTA.handle();   // an update runs to the end inside this call
-        // Still here: it failed or was cut off on a path that skips onError. Resume the deck.
-        if (s_progress.load() >= 0) {
-            Serial.println("[ota] update ended without the new firmware: the running one stays");
-            s_progress.store(-1);
+        // An update runs to the end inside handle(). Not once Done: a second upload in the reboot
+        // window would write over the slot the good one just filled.
+        bool done = false;
+        locked([&] { done = s_tracker.phase(0) == otaview::Phase::Done; });
+        if (!done) ArduinoOTA.handle();
+        // Still Receiving: it was cut off on a path that skips onError. Resume the deck.
+        bool cut = false, reboot = false;
+        locked([&] {
+            cut = s_tracker.phase(millis()) == otaview::Phase::Receiving;
+            s_tracker.onHandleReturned(millis());
+            reboot = s_tracker.rebootDue(millis());
+        });
+        if (cut) Serial.println("[ota] update ended without the new firmware: the running one stays");
+        if (reboot) {   // DONE_MS after the end: the screen has flashed
+            delay(100);
+            esp_restart();
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
@@ -111,8 +136,18 @@ void begin(bool (*hold)()) {
     xTaskCreatePinnedToCore(task, "ota", 4096, nullptr, 1, nullptr, 0);
 }
 
-bool active() { return s_progress.load() >= 0; }
-int progress() { return s_progress.load(); }
+View view() {
+    View v{otaview::Phase::Idle, -1};
+    locked([&] { v = {s_tracker.phase(millis()), s_tracker.pct()}; });
+    if (v.phase == otaview::Phase::Idle) v.pct = -1;
+    return v;
+}
+
+bool active() {
+    const otaview::Phase p = view().phase;
+    return p == otaview::Phase::Receiving || p == otaview::Phase::Done;
+}
+int progress() { return active() ? view().pct : -1; }
 
 void onGoodPoll() {
     if (s_good.load() || !bootguard::healthy(millis(), true)) return;
