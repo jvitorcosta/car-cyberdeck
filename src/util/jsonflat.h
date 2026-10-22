@@ -4,8 +4,8 @@
 // arrays of strings (the deck's GET /state). Keys are found by scanning tokens, so a key's
 // name appearing inside a string value never matches. No allocation. PURE, host-tested.
 namespace jsonflat {
-// Decodes \" \\ \/ \b \f \n \r \t and \uXXXX (BMP, to UTF-8). Cut to n-1 bytes (whole UTF-8
-// characters), always terminated. False when the key is missing or not a string.
+// Decodes \" \\ \/ \b \f \n \r \t and \uXXXX to UTF-8 (a surrogate pair -> one 4-byte character,
+// half a pair is skipped). Cut to n-1 bytes (whole UTF-8 characters), always terminated. False when the key is missing or not a string.
 bool str(const char* body, const char* key, char* out, size_t n);
 bool num(const char* body, const char* key, long* out);      // integer; false if not a number
 bool real(const char* body, const char* key, double* out);

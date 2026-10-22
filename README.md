@@ -206,7 +206,7 @@ known limitations and how to report a problem.
 
 ## Credits and legal
 
-Built on PokéAPI, PMD SpriteCollab, LRCLIB, GNU Unifont and several open-source libraries;
+Built on PokéAPI, PMD SpriteCollab, LRCLIB, GNU Unifont, Twemoji and several open-source libraries;
 see [CREDITS.md](CREDITS.md), which also lists the files in this repository that are **not**
 covered by the MIT license.
 

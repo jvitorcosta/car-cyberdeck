@@ -2,6 +2,7 @@
 #include "accents.h"
 #include "battle.h"
 #include "cjkdata.h"
+#include "emojidata.h"
 
 namespace ui {
 
@@ -13,6 +14,10 @@ int asciiWidth2(char c, void* ctx) {
 int wideWidth(uint32_t cp, void*) {
     int w = 0;
     return cjk().glyph(cp, &w) ? w : 0;
+}
+
+int emojiWidth(uint32_t key, void*) {
+    return emoji().glyph(key) ? emojifont::SIZE : 0;
 }
 
 // s: integer scale (1 = the deck's normal size); each pixel becomes an s x s block.
@@ -35,6 +40,20 @@ static void drawWide(TFT_eSPI& t, uint32_t cp, int x, int top, uint16_t col, int
         for (int c = 0; c < w; ++c)
             if ((g[r * bpr + c / 8] >> (7 - (c & 7))) & 1)
                 t.fillRect(x + c * s, top + (CJK_DY + r) * s, s, s, col);
+}
+
+// Each row as runs of one palette colour; index 0 (transparent) is skipped.
+static void drawEmoji(TFT_eSPI& t, uint32_t key, int x, int top, int s) {
+    const uint8_t* g = emoji().glyph(key);
+    if (!g) return;
+    constexpr int N = emojifont::SIZE;
+    for (int r = 0; r < N; ++r)
+        for (int c = 0; c < N;) {
+            int idx = emojifont::pixelAt(g, c, r), c0 = c;
+            while (c < N && emojifont::pixelAt(g, c, r) == idx) ++c;
+            if (idx) t.fillRect(x + c0 * s, top + (CJK_DY + r) * s, (c - c0) * s, s,
+                                emojifont::paletteAt(g, idx));
+        }
 }
 
 int drawRun(TFT_eSPI& t, const glyphrun::Item* it, size_t n, int x, int y, uint16_t fg,
@@ -61,6 +80,8 @@ int drawRunScaled(TFT_eSPI& t, const glyphrun::Item* it, size_t n, int x, int y,
         if (g.kind == glyphrun::Kind::Wide) {
             drawWide(t, g.cp, px + s, top + s, shadow, s);   // shadow first, like shadowText
             drawWide(t, g.cp, px, top, fg, s);
+        } else if (g.kind == glyphrun::Kind::Emoji) {
+            drawEmoji(t, g.cp, px, top, s);                  // no shadow: it would outline it
         } else {
             one[0] = g.ch;
             if (s == 1) {
@@ -89,7 +110,8 @@ int drawText(TFT_eSPI& t, const char* utf8, int x, int y, uint16_t fg,
              uint16_t shadow, uint8_t datum, int maxW, bool upper) {
     constexpr size_t MAX_ITEMS = 96;   // AppState strings are < 96 bytes
     glyphrun::Item items[MAX_ITEMS];
-    size_t n = glyphrun::decode(utf8 ? utf8 : "", items, MAX_ITEMS, asciiWidth2, wideWidth, &t, upper);
+    size_t n = glyphrun::decode(utf8 ? utf8 : "", items, MAX_ITEMS, asciiWidth2, wideWidth, &t, upper,
+                                emojiWidth);
     n = glyphrun::fit(items, n, MAX_ITEMS, maxW, asciiWidth2, &t);
     return drawRun(t, items, n, x, y, fg, shadow, datum);
 }

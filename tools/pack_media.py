@@ -15,9 +15,10 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
 PARTITIONS = os.path.join(ROOT, "partitions_s3.csv")
 # The S3's media: the openings' video and sounds, the montage, Sonic, McQueen, the music box
-# tunes and the CJK lyrics font.
+# tunes, the CJK lyrics font and the emoji.
 FILES = ["greeting.pcm", "greeting_alt.pcm", "opener.pcm", "finale.pcm", "intro.bin", "intro.pcm",
-         "howl.pcm", "montage.bin", "idle.bin", "mcqueen.bin", "tunes.txt", "cjk16.bin"]
+         "howl.pcm", "montage.bin", "idle.bin", "mcqueen.bin", "tunes.txt", "cjk16.bin",
+         "emoji16.bin"]
 MAGIC, VERSION = b"CDMEDIA1", 1
 HEAD, ENTRY, NAME = 16, 32, 20
 STAND_IN = 8

@@ -38,6 +38,8 @@ generated files contain third-party material and keep their own terms:
 |---|---|---|
 | `src/ui/status_sprite.inc` | Pikachu, Zubat, Psyduck, Slowpoke and Porygon sprites from PokeAPI/sprites (`tools/gen_status_sprite.py`) | © Nintendo / Creatures Inc. / GAME FREAK inc.; fan use |
 | `data/cjk16.bin` | [GNU Unifont](https://unifoundry.com/unifont/) 16.0.04 glyphs (`tools/gen_cjk_font.py`) | GPLv2+ with the GNU font embedding exception, or SIL OFL 1.1 |
+| `data/emoji16.bin` | [Twemoji](https://github.com/jdecked/twemoji) 15.1.0 graphics, © Twitter, Inc and other contributors, shrunk to 16 px (`tools/gen_emoji.py`) | CC-BY 4.0 |
+| `tools/emoji_freq.txt` | Unicode's [emoji frequency](https://home.unicode.org/emoji/emoji-frequency/) tiers | Unicode terms of use |
 | `src/pokemon/dex_data.inc` | Pokémon names and types from PokéAPI's CSV data (`tools/gen_dex.py`) | PokéAPI data; names © Nintendo |
 | `src/util/genre_data.inc` | Apple's genre ids and names (`tools/gen_genres.py`) | Apple iTunes Search API terms |
 
