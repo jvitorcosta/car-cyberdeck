@@ -93,9 +93,9 @@ void drawProgressRegion(TFT_eSPI& t, const AppState& st) {
     char tbuf[24];
     snprintf(tbuf, sizeof(tbuf), "%u:%02u/%u:%02u",
              rem / 60000, (rem / 1000) % 60, tot / 60000, (tot / 1000) % 60);
-    t.fillRect(206, 129, 100, 16, theme::pal().boxFill);   // clear the old time (and ball)
+    t.fillRect(pokeball::AREA_X, 129, 100, 16, theme::pal().boxFill);   // clear the old time (and ball)
     shadowText(t, tbuf, 304, 129, 2, theme::pal().text, theme::pal().textShadow, TR_DATUM);
-    s_ballX = 304 - t.textWidth(tbuf, 2) - 4 - pokeball::SIZE;
+    s_ballX = pokeball::left(304, t.textWidth(tbuf, 2));   // -1: no room (100 min or more)
     drawBall(t);
     hpBarBattle(t, BAR_X, BAR_Y, BAR_W, BAR_H, hpFrac);
     expBar(t, FILL_X, EXP_Y, FILL_W, st.volume / 100.0f);

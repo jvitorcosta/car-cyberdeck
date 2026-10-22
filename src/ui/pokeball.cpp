@@ -3,6 +3,11 @@
 
 namespace pokeball {
 
+int left(int textRight, int textW) {
+    const int x = textRight - textW - 4 - SIZE;
+    return x < AREA_X ? -1 : x;
+}
+
 Px pixel(int x, int y, int frame) {
     const int c = SIZE / 2;
     int dx = x - c, dy = y - c;

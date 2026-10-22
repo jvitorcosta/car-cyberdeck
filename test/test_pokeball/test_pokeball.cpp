@@ -52,8 +52,20 @@ void test_every_frame_has_both_halves() {
         TEST_ASSERT_TRUE(white >= 15);
     }
 }
+// The ball sits left of the time text; when the time is too wide (episodes of 100 min or more:
+// font 2 digits are 8 px) it would leave the area drawProgressRegion clears and cover the name.
+void test_ball_hides_when_the_time_is_wide() {
+    TEST_ASSERT_EQUAL_INT(210, pokeball::left(304, 77));   // "12:34/12:34", today's case
+    TEST_ASSERT_EQUAL_INT(207, pokeball::left(304, 80));
+    TEST_ASSERT_EQUAL_INT(-1, pokeball::left(304, 83));    // would be 204
+    TEST_ASSERT_EQUAL_INT(-1, pokeball::left(304, 85));    // "10:00/100:00", would be 202
+    TEST_ASSERT_EQUAL_INT(-1, pokeball::left(304, 93));    // "100:00/100:00", would be 194
+    TEST_ASSERT_EQUAL_INT(pokeball::AREA_X, pokeball::left(304, 304 - pokeball::AREA_X - 4 - pokeball::SIZE));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_ball_hides_when_the_time_is_wide);
     RUN_TEST(test_upright_ball_red_top_white_bottom);
     RUN_TEST(test_centre_button_and_ring);
     RUN_TEST(test_outside_is_clear);

@@ -8,4 +8,9 @@ constexpr int SIZE = 13;
 constexpr int FRAMES = 8;
 enum class Px : uint8_t { Clear, Red, White, Dark };
 Px pixel(int x, int y, int frame);
+// The status box's time area (screen_now's drawProgressRegion clears from here every 250 ms).
+constexpr int AREA_X = 206;
+// The ball's left edge, 4 px left of a time text of width textW ending at textRight; -1 (no
+// ball) when that falls left of AREA_X, where it would cover the name and never be cleared.
+int left(int textRight, int textW);
 }
