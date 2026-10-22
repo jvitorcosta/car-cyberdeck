@@ -469,9 +469,26 @@ static void voiceTask(void*) {
     server->begin();
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
+    uint32_t lastLook = millis();
     for (;;) {
         server->handleClient();
         net::loop();  // rejoins after a drop
+        // The iPhone only shows its hotspot while its Personal Hotspot screen is open, so a deck
+        // that started meanwhile sits on home WiFi, where the iPhone can't reach it. Every 20 s
+        // off the hotspot (the first saved network), look for it and move over when it's there.
+        if (millis() - lastLook > 20000 && net::isOnline() && net::ssid() != WIFI_NETWORKS[0].ssid) {
+            lastLook = millis();
+            const int n = WiFi.scanNetworks();
+            bool seen = false;
+            for (int i = 0; i < n && !seen; i++) seen = WiFi.SSID(i) == WIFI_NETWORKS[0].ssid;
+            WiFi.scanDelete();
+            if (seen) {
+                Serial.printf("[voice] %s is up, moving over\n", WIFI_NETWORKS[0].ssid);
+                WiFi.disconnect();
+                net::connectAny();  // tries the hotspot first
+                Serial.printf("[voice] on: http://%s/say  (%s)\n", net::deviceIp().c_str(), net::ssid().c_str());
+            }
+        }
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
