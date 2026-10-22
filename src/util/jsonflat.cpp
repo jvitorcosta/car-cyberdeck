@@ -51,12 +51,14 @@ static int hexval(char c) {
 
 // Appends UTF-8 for cp if all of it fits (keeps whole characters).
 static void putUtf8(char* out, size_t n, size_t* len, unsigned cp) {
-    char b[3];
+    char b[4];
     size_t k;
     if (cp < 0x80) { b[0] = (char)cp; k = 1; }
     else if (cp < 0x800) { b[0] = (char)(0xC0 | (cp >> 6)); b[1] = (char)(0x80 | (cp & 0x3F)); k = 2; }
-    else { b[0] = (char)(0xE0 | (cp >> 12)); b[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
-           b[2] = (char)(0x80 | (cp & 0x3F)); k = 3; }
+    else if (cp < 0x10000) { b[0] = (char)(0xE0 | (cp >> 12)); b[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                             b[2] = (char)(0x80 | (cp & 0x3F)); k = 3; }
+    else { b[0] = (char)(0xF0 | (cp >> 18)); b[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+           b[2] = (char)(0x80 | ((cp >> 6) & 0x3F)); b[3] = (char)(0x80 | (cp & 0x3F)); k = 4; }
     if (*len + k >= n) return;
     memcpy(out + *len, b, k);
     *len += k;
@@ -87,6 +89,19 @@ bool strAt(const char* p, char* out, size_t n) {
                 }
                 p += 4;
                 cp = (unsigned)v;
+                if (cp >= 0xD800 && cp <= 0xDFFF) {   // UTF-16 surrogate: join a pair (emoji)
+                    int lo = -1;
+                    if (cp <= 0xDBFF && p[1] == '\\' && p[2] == 'u') {
+                        lo = 0;
+                        for (int i = 3; i <= 6 && lo >= 0; ++i) {
+                            int h = hexval(p[i]);
+                            lo = h < 0 ? -1 : lo * 16 + h;
+                        }
+                    }
+                    if (lo < 0xDC00 || lo > 0xDFFF) continue;   // half a pair: skipped
+                    p += 6;
+                    cp = 0x10000 + ((cp - 0xD800) << 10) + ((unsigned)lo - 0xDC00);
+                }
                 break;
             }
             case '\0': return false;

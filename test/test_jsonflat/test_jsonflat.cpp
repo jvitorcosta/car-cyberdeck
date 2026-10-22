@@ -59,6 +59,24 @@ void test_wrong_types_and_small_buffers() {
     TEST_ASSERT_FALSE(jsonflat::str(nullptr, "track", s, sizeof s));
 }
 
+// An emoji escaped as a UTF-16 surrogate pair becomes one 4-byte UTF-8 character.
+void test_surrogate_pair_to_utf8() {
+    char s[16];
+    TEST_ASSERT_TRUE(jsonflat::strAt("\"a\\ud83d\\udd25b\"", s, sizeof s));
+    TEST_ASSERT_EQUAL_STRING("a\xF0\x9F\x94\xA5" "b", s);
+}
+
+// Half a pair is skipped, not written as a broken 3-byte sequence.
+void test_lone_surrogate_dropped() {
+    char s[16];
+    TEST_ASSERT_TRUE(jsonflat::strAt("\"a\\ud83db\"", s, sizeof s));
+    TEST_ASSERT_EQUAL_STRING("ab", s);
+    TEST_ASSERT_TRUE(jsonflat::strAt("\"a\\udd25b\"", s, sizeof s));
+    TEST_ASSERT_EQUAL_STRING("ab", s);
+    TEST_ASSERT_TRUE(jsonflat::strAt("\"a\\ud83d\\u0041\"", s, sizeof s));
+    TEST_ASSERT_EQUAL_STRING("aA", s);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_reads_strings_numbers_and_bools);
@@ -66,5 +84,7 @@ int main(int, char**) {
     RUN_TEST(test_keys_inside_strings_are_not_keys);
     RUN_TEST(test_array_membership);
     RUN_TEST(test_wrong_types_and_small_buffers);
+    RUN_TEST(test_surrogate_pair_to_utf8);
+    RUN_TEST(test_lone_surrogate_dropped);
     return UNITY_END();
 }
