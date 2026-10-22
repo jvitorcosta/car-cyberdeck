@@ -659,7 +659,9 @@ static void handlePad() {
 // ---- Voice: Siri Shortcuts over WiFi ----
 // On the iPhone hotspot the deck sits at 172.20.10.11 (net/wifi pins it). A Shortcut dictates a
 // phrase and calls  GET /say?text=<phrase>&k=<REMOTE_TOKEN>; the reply is one line to speak back
-// ("Purple, 70 percent"); voice always changes both lights. GET /state?k= answers the same line without changing anything.
+// ("Purple, 70 percent"). Without a zone it acts like the BOTH page (Siri: spoken zone words are
+// ignored); &zone=inside|outside (the Garmin app) acts on that zone's page only.
+// GET /state?k=[&zone=] answers that zone's line (level included) without changing anything.
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
 // the state) and the handler waits for loop()'s reply. Each job carries a sequence number that the
 // reply echoes, so a request that timed out (loop busy, e.g. calibrating) can't answer the next
@@ -667,6 +669,7 @@ static void handlePad() {
 
 struct VoiceJob {
     ledvoice::Command c;
+    Target zone;  // BOTH unless the request named one (zone=inside|outside)
     uint32_t seq;
 };
 
@@ -679,21 +682,23 @@ static portMUX_TYPE voiceMux = portMUX_INITIALIZER_UNLOCKED;
 static char voiceReply[64];  // guarded by voiceMux, with replySeq
 static uint32_t replySeq = 0;
 
-// withLevel: say the % too. A voice reply only does when the command changed it: "Purple, 20
-// percent" after a plain "purple" sounded like the deck wanted a percentage.
-// The BOTH look, which voice changes.
-static void describe(char* out, size_t n, bool withLevel = true) {
-    const Look& l = looks[BOTH];
-    if (!l.lit) snprintf(out, n, "Lights off");
-    else if (withLevel) snprintf(out, n, "%s, %u percent", SWATCHES[l.swatch].name, l.pct);
-    else snprintf(out, n, "%s", SWATCHES[l.swatch].name);
+// A zone's look as one line ("Purple, 70 percent", "Inside: Lights off"). withLevel: say the %
+// too; a voice reply only does when the command changed it ("Purple, 20 percent" after a plain
+// "purple" sounded like the deck wanted a percentage).
+static void describe(char* out, size_t n, Target zone = BOTH, bool withLevel = true) {
+    static const char* prefix[] = {"", "Inside: ", "Outside: "};
+    const Look& l = looks[zone];
+    if (!l.lit) snprintf(out, n, "%sLights off", prefix[zone]);
+    else if (withLevel) snprintf(out, n, "%s%s, %u percent", prefix[zone], SWATCHES[l.swatch].name, l.pct);
+    else snprintf(out, n, "%s%s", prefix[zone], SWATCHES[l.swatch].name);
 }
 
-// In loop(): applies one voice command like the BOTH page does (both lights get the BOTH look;
-// the page on screen stays), then answers the waiting handler.
+// In loop(): applies one voice command to its zone's page, like a tap there: BOTH (no zone given)
+// copies to both lights; INSIDE or OUTSIDE changes only that light. The page on screen stays.
+// Then answers the waiting handler.
 static void applyVoice(const VoiceJob& job) {
     const ledvoice::Command& c = job.c;
-    Look& l = looks[BOTH];
+    Look& l = looks[job.zone];
     if (c.color >= 0) {
         l.swatch = c.color;
         l.lit = true;
@@ -701,12 +706,16 @@ static void applyVoice(const VoiceJob& job) {
     if (c.power >= 0) l.lit = c.power == 1;
     int pct = c.level >= 0 ? c.level : l.pct + 10 * c.levelStep;
     l.pct = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
-    looks[INSIDE] = looks[OUTSIDE] = l;
-    for (int i = 0; i < N_CTRL; i++) push(i);
+    if (job.zone == BOTH) {
+        looks[INSIDE] = looks[OUTSIDE] = l;
+        for (int i = 0; i < N_CTRL; i++) push(i);
+    } else {
+        push(job.zone - 1);
+    }
     save();
     drawAll();
     char line[64];
-    describe(line, sizeof(line), c.level >= 0 || c.levelStep != 0);
+    describe(line, sizeof(line), job.zone, c.level >= 0 || c.levelStep != 0);
     Serial.printf("[voice] -> %s\n", line);
     portENTER_CRITICAL(&voiceMux);
     memcpy(voiceReply, line, sizeof(line));
@@ -723,6 +732,8 @@ static void handleSay() {
     VoiceJob job;
     if (!ledvoice::parse(text.c_str(), &job.c)) { server->send(200, "text/plain", "Sorry, I didn't get a colour or a command"); return; }
     static uint32_t nextSeq = 0;
+    const String zone = server->arg("zone");
+    job.zone = zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH;
     job.seq = ++nextSeq;
     xQueueReset(voiceQueue);        // a job left by a timed-out request is not applied late
     xSemaphoreTake(voiceDone, 0);   // nor is its stale "done"
@@ -748,10 +759,12 @@ static void handleSay() {
     server->send(200, "text/plain", line);
 }
 
+// The zone's current look, level always included: the Garmin remote syncs its screen from it.
 static void handleState() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    const String zone = server->arg("zone");
     char line[64];
-    describe(line, sizeof(line));
+    describe(line, sizeof(line), zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH);
     server->send(200, "text/plain", line);
 }
 
