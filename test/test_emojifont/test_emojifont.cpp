@@ -67,10 +67,55 @@ void test_rejects_bad_blobs() {
     TEST_ASSERT_NULL(f.glyph(0x2764));
 }
 
+// EMJ2: keys 0x1F408, SEQ_BASE, SEQ_BASE + 1; sequences [1F3F3 1F308] and [1F408 2B1B] (sorted).
+static std::vector<uint8_t> makeBlob2() {
+    std::vector<uint8_t> b = {'E', 'M', 'J', '2', 3, 0, 2, 0};
+    auto u32 = [&](uint32_t v) { for (int i = 0; i < 4; ++i) b.push_back((v >> (8 * i)) & 0xFF); };
+    u32(0x1F408); u32(emojifont::SEQ_BASE); u32(emojifont::SEQ_BASE + 1);
+    u32(0x1F3F3); u32(0x1F308); u32(0); u32(0);
+    u32(0x1F408); u32(0x2B1B); u32(0); u32(0);
+    for (int g = 0; g < 3; ++g)
+        for (size_t i = 0; i < emojifont::GLYPH_BYTES; ++i) b.push_back((uint8_t)(0x10 * g));
+    return b;
+}
+
+void test_sequences() {
+    std::vector<uint8_t> b = makeBlob2();
+    emojifont::Font f;
+    TEST_ASSERT_TRUE(f.open(b.data(), b.size()));
+    TEST_ASSERT_EQUAL_INT(3, f.count());
+    const uint32_t cat[] = {0x1F408, 0x2B1B}, flag[] = {0x1F3F3, 0x1F308};
+    TEST_ASSERT_EQUAL_HEX32(emojifont::SEQ_BASE + 1, f.sequence(cat, 2));
+    TEST_ASSERT_EQUAL_HEX32(emojifont::SEQ_BASE, f.sequence(flag, 2));
+    TEST_ASSERT_EQUAL_HEX32(0, f.sequence(cat, 1));                   // a prefix is no match
+    const uint32_t longer[] = {0x1F408, 0x2B1B, 0x1F308};
+    TEST_ASSERT_EQUAL_HEX32(0, f.sequence(longer, 3));
+    TEST_ASSERT_EQUAL_HEX32(0, f.sequence(longer, 5));                // too long for the table
+    const uint8_t* g = f.glyph(emojifont::SEQ_BASE + 1);
+    TEST_ASSERT_EQUAL_PTR(b.data() + 8 + 12 + 32 + 2 * emojifont::GLYPH_BYTES, g);
+    TEST_ASSERT_EQUAL_HEX8(0x20, g[0]);
+}
+
+void test_rejects_bad_sequence_tables() {
+    emojifont::Font f;
+    std::vector<uint8_t> b = makeBlob2();
+    TEST_ASSERT_FALSE(f.open(b.data(), b.size() - 1));                 // truncated glyphs
+    std::vector<uint8_t> unsorted = b;                                  // swap the two sequences
+    for (int i = 0; i < 16; ++i) std::swap(unsorted[20 + i], unsorted[36 + i]);
+    TEST_ASSERT_FALSE(f.open(unsorted.data(), unsorted.size()));
+    // an EMJ1 blob still opens, without sequences
+    std::vector<uint8_t> b1 = makeBlob();
+    TEST_ASSERT_TRUE(f.open(b1.data(), b1.size()));
+    const uint32_t cat[] = {0x1F408, 0x2B1B};
+    TEST_ASSERT_EQUAL_HEX32(0, f.sequence(cat, 2));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_open_and_lookup);
     RUN_TEST(test_missing_keys);
     RUN_TEST(test_rejects_bad_blobs);
+    RUN_TEST(test_sequences);
+    RUN_TEST(test_rejects_bad_sequence_tables);
     return UNITY_END();
 }
