@@ -3,8 +3,38 @@
 
 namespace glyphrun {
 
+static constexpr uint32_t RI_FIRST = 0x1F1E6, RI_LAST = 0x1F1FF, ZWJ = 0x200D;
+
+uint32_t flagKey(uint32_t ri1, uint32_t ri2) {
+    return 0x110000 + (ri1 - RI_FIRST) * 26 + (ri2 - RI_FIRST);
+}
+
+static bool isRegional(uint32_t c) { return c >= RI_FIRST && c <= RI_LAST; }
+
+// Parts of an emoji sequence that never draw on their own: variation selectors, keycap mark,
+// skin tones, tags.
+static bool isModifier(uint32_t c) {
+    return c == 0xFE0E || c == 0xFE0F || c == 0x20E3 || (c >= 0x1F3FB && c <= 0x1F3FF) ||
+           (c >= 0xE0020 && c <= 0xE007F);
+}
+
+// Length of the multi-byte UTF-8 character at s (2..4), or 0 for a stray/invalid/cut byte.
+static int seqLen(const char* s) {
+    unsigned char c = (unsigned char)s[0];
+    int len = (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 0;
+    for (int k = 1; k < len; ++k)
+        if (((unsigned char)s[k] & 0xC0) != 0x80) return 0;   // also stops at the NUL
+    return len;
+}
+
+static uint32_t codepoint(const char* s, int len) {
+    uint32_t cp = (unsigned char)s[0] & (len == 3 ? 0x0F : 0x07);
+    for (int k = 1; k < len; ++k) cp = (cp << 6) | ((unsigned char)s[k] & 0x3F);
+    return cp;
+}
+
 size_t decode(const char* s, Item* out, size_t cap, AsciiWidthFn aw, WideWidthFn ww, void* ctx,
-              bool upper) {
+              bool upper, EmojiWidthFn ew) {
     size_t n = 0;
     if (!s) return 0;
     for (size_t i = 0; s[i] && n < cap;) {
@@ -15,11 +45,8 @@ size_t decode(const char* s, Item* out, size_t cap, AsciiWidthFn aw, WideWidthFn
             ++i;
             continue;
         }
-        int len = (c & 0xE0) == 0xC0 ? 2 : (c & 0xF0) == 0xE0 ? 3 : (c & 0xF8) == 0xF0 ? 4 : 1;
-        bool complete = true;
-        for (int k = 1; k < len; ++k)
-            if (((unsigned char)s[i + k] & 0xC0) != 0x80) { complete = false; break; }
-        if (!complete || len == 1) { ++i; continue; }     // stray/invalid byte
+        int len = seqLen(s + i);
+        if (len == 0) { ++i; continue; }                  // stray/invalid byte
         if (len == 2) {                                   // Latin-1 letters -> base + mark
             char seq[3] = {s[i], s[i + 1], 0}, base[4];
             txt::Mark marks[4];
@@ -29,13 +56,27 @@ size_t decode(const char* s, Item* out, size_t cap, AsciiWidthFn aw, WideWidthFn
                 out[n++] = {Kind::Ascii, ch, marks[k], (uint32_t)(unsigned char)base[k],
                             (uint8_t)aw(ch, ctx)};
             }
-        } else if (len == 3) {
-            uint32_t cp = ((c & 0x0F) << 12) | (((unsigned char)s[i + 1] & 0x3F) << 6) |
-                          ((unsigned char)s[i + 2] & 0x3F);
-            int w = ww(cp, ctx);
-            if (w > 0) out[n++] = {Kind::Wide, 0, txt::Mark::None, cp, (uint8_t)w};
-        }                                                  // 4-byte (emoji...) dropped
+            i += len;
+            continue;
+        }
+        const uint32_t cp = codepoint(s + i, len);
         i += len;
+        if (isModifier(cp)) continue;
+        if (cp == ZWJ) {                                  // joined emoji: keep only the first
+            if ((unsigned char)s[i] >= 0x80) { int l = seqLen(s + i); i += l ? l : 1; }
+            continue;
+        }
+        uint32_t key = cp;
+        if (isRegional(cp)) {                             // flag = a pair; half of one is dropped
+            int l = seqLen(s + i);
+            if (l != 4 || !isRegional(codepoint(s + i, l))) continue;
+            key = flagKey(cp, codepoint(s + i, l));
+            i += l;
+        }
+        int w = ew ? ew(key, ctx) : 0;
+        if (w > 0) { out[n++] = {Kind::Emoji, 0, txt::Mark::None, key, (uint8_t)w}; continue; }
+        w = len == 3 ? ww(cp, ctx) : 0;
+        if (w > 0) out[n++] = {Kind::Wide, 0, txt::Mark::None, cp, (uint8_t)w};
     }
     return n;
 }
@@ -64,6 +105,7 @@ static size_t fitCount(const Item* it, size_t start, size_t n, int maxW) {
 }
 
 static bool isSpace(const Item& x) { return x.kind == Kind::Ascii && x.ch == ' '; }
+static bool isPicture(const Item& x) { return x.kind == Kind::Wide || x.kind == Kind::Emoji; }
 
 Wrap wrapTwo(const Item* it, size_t n, int maxW, int ellipsisW) {
     size_t fitA = fitCount(it, 0, n, maxW);
@@ -71,7 +113,7 @@ Wrap wrapTwo(const Item* it, size_t n, int maxW, int ellipsisW) {
     size_t cut = fitA, next = fitA;                       // hard split by default
     for (size_t k = fitA; k > 0; --k) {
         if (isSpace(it[k])) { cut = k; next = k + 1; break; }          // break at a space
-        if (it[k].kind == Kind::Wide || it[k - 1].kind == Kind::Wide) { cut = next = k; break; }
+        if (isPicture(it[k]) || isPicture(it[k - 1])) { cut = next = k; break; }
     }
     if (cut == 0) cut = next = fitA;
     Wrap w{cut, next, n, false};
