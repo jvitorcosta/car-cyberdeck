@@ -1,7 +1,14 @@
 #pragma once
 #include <TFT_eSPI.h>
-// The S3's screen while an update arrives over WiFi (net/ota): a battle box whose EXP bar fills
-// with the upload. full: the whole screen; else only the bar and its percent.
+#include "../net/ota.h"
+// The S3's screen while an update arrives over WiFi (net/ota).
 namespace ui {
+// The battle box whose EXP bar fills with the upload (without the Star Light Zone file). full:
+// the whole screen; else only the bar and its percent.
 void drawUpdate(TFT_eSPI& t, int pct, bool full);
+// The Star Light Zone night (util/backdrop, spec 2026-10-22-shadow-update-screen-design): the
+// red rail filling, jet glows riding its tip (Shadow joins them in stage 2), a red flash on Done,
+// the grey rail and "Update failed" on Failed. Repaints only what changed (full: everything).
+// False, drawing nothing, without the backdrop file.
+bool drawShadowUpdate(TFT_eSPI& t, const ota::View& v, uint32_t nowMs, bool full);
 }
