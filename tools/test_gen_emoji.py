@@ -37,21 +37,49 @@ class Pack(unittest.TestCase):
         px = [0] * 256
         px[0], px[1], px[255] = 1, 2, 2
         blob = ge.pack([(0x1F525, [0xF800, 0x07E0], px), (0x2764, [0x001F], [1] * 256)])
-        self.assertEqual(b"EMJ1", blob[:4])
-        self.assertEqual(2, struct.unpack_from("<H", blob, 4)[0])
-        self.assertEqual((0x2764, 0x1F525), struct.unpack_from("<II", blob, 6))   # sorted
-        g1 = 6 + 8 + 160
-        self.assertEqual(160 * 2 + 14, len(blob))
+        self.assertEqual(b"EMJ2", blob[:4])
+        self.assertEqual((2, 0), struct.unpack_from("<HH", blob, 4))
+        self.assertEqual((0x2764, 0x1F525), struct.unpack_from("<II", blob, 8))   # sorted
+        g1 = 8 + 8 + 160
+        self.assertEqual(160 * 2 + 16, len(blob))
         self.assertEqual((0, 0xF800, 0x07E0), struct.unpack_from("<3H", blob, g1))   # 0 = clear
         self.assertEqual(0x12, blob[g1 + 32])                      # high nibble = left pixel
         self.assertEqual(0x02, blob[g1 + 32 + 127])
-        self.assertEqual(0x11, blob[6 + 8 + 32])
+        self.assertEqual(0x11, blob[8 + 8 + 32])
+
+    def test_sequence_table(self):
+        seqs = [(0x1F3F3, 0x1F308), (0x1F408, 0x2B1B)]
+        glyphs = [(ge.SEQ_BASE + i, [], [0] * 256) for i in range(2)]
+        blob = ge.pack(glyphs, seqs)
+        self.assertEqual((2, 2), struct.unpack_from("<HH", blob, 4))
+        self.assertEqual((0x1F3F3, 0x1F308, 0, 0, 0x1F408, 0x2B1B, 0, 0),
+                         struct.unpack_from("<8I", blob, 8 + 8))
+        self.assertEqual(8 + 8 + 32 + 2 * 160, len(blob))
+        with self.assertRaises(ValueError):
+            ge.pack(glyphs, list(reversed(seqs)))                  # not ascending
+        with self.assertRaises(ValueError):
+            ge.pack(glyphs, [(1, 2, 3, 4, 5)])                     # too long
 
     def test_rejects_too_many_colours_and_duplicates(self):
         with self.assertRaises(ValueError):
             ge.pack([(1, list(range(16)), [0] * 256)])
         with self.assertRaises(ValueError):
             ge.pack([(1, [], [0] * 256), (1, [], [0] * 256)])
+
+
+class Joined(unittest.TestCase):
+    def test_parts_drop_zwj_selectors_and_tones(self):
+        self.assertEqual((0x1F408, 0x2B1B), ge.joined_parts([0x1F408, 0x200D, 0x2B1B]))
+        self.assertEqual((0x1F3F3, 0x1F308), ge.joined_parts([0x1F3F3, 0xFE0F, 0x200D, 0x1F308]))
+        self.assertEqual((0x1F469, 0x1F4BB), ge.joined_parts([0x1F469, 0x1F3FD, 0x200D, 0x1F4BB]))
+
+    def test_list_has_the_248_without_tones(self):
+        seqs = ge.read_zwj(ge.ZWJ_LIST)
+        self.assertEqual(248, len(seqs))
+        parts = [ge.joined_parts(s) for s, _ in seqs]
+        self.assertEqual(len(parts), len(set(parts)))
+        self.assertTrue(all(2 <= len(p) <= ge.SEQ_MAX for p in parts))
+        self.assertIn(([0x1F408, 0x200D, 0x2B1B], "1f408-200d-2b1b"), seqs)
 
     def test_rgb565(self):
         self.assertEqual(0xFFFF, ge.rgb565(255, 255, 255))

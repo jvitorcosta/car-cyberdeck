@@ -1,0 +1,251 @@
+# Unicode 15.1 emoji ZWJ sequences without skin tones (emoji-zwj-sequences.txt,
+# https://unicode.org/Public/emoji/15.1/). One per line: '-'-joined hex codepoints, then the name.
+# tools/gen_emoji.py draws each as one picture. Unicode terms of use: https://www.unicode.org/copyright.html
+1f468-200d-2764-fe0f-200d-1f468	couple with heart: man, man
+1f468-200d-2764-fe0f-200d-1f48b-200d-1f468	kiss: man, man
+1f468-200d-1f466	family: man, boy
+1f468-200d-1f466-200d-1f466	family: man, boy, boy
+1f468-200d-1f467	family: man, girl
+1f468-200d-1f467-200d-1f466	family: man, girl, boy
+1f468-200d-1f467-200d-1f467	family: man, girl, girl
+1f468-200d-1f468-200d-1f466	family: man, man, boy
+1f468-200d-1f468-200d-1f466-200d-1f466	family: man, man, boy, boy
+1f468-200d-1f468-200d-1f467	family: man, man, girl
+1f468-200d-1f468-200d-1f467-200d-1f466	family: man, man, girl, boy
+1f468-200d-1f468-200d-1f467-200d-1f467	family: man, man, girl, girl
+1f468-200d-1f469-200d-1f466	family: man, woman, boy
+1f468-200d-1f469-200d-1f466-200d-1f466	family: man, woman, boy, boy
+1f468-200d-1f469-200d-1f467	family: man, woman, girl
+1f468-200d-1f469-200d-1f467-200d-1f466	family: man, woman, girl, boy
+1f468-200d-1f469-200d-1f467-200d-1f467	family: man, woman, girl, girl
+1f469-200d-2764-fe0f-200d-1f468	couple with heart: woman, man
+1f469-200d-2764-fe0f-200d-1f469	couple with heart: woman, woman
+1f469-200d-2764-fe0f-200d-1f48b-200d-1f468	kiss: woman, man
+1f469-200d-2764-fe0f-200d-1f48b-200d-1f469	kiss: woman, woman
+1f469-200d-1f466	family: woman, boy
+1f469-200d-1f466-200d-1f466	family: woman, boy, boy
+1f469-200d-1f467	family: woman, girl
+1f469-200d-1f467-200d-1f466	family: woman, girl, boy
+1f469-200d-1f467-200d-1f467	family: woman, girl, girl
+1f469-200d-1f469-200d-1f466	family: woman, woman, boy
+1f469-200d-1f469-200d-1f466-200d-1f466	family: woman, woman, boy, boy
+1f469-200d-1f469-200d-1f467	family: woman, woman, girl
+1f469-200d-1f469-200d-1f467-200d-1f466	family: woman, woman, girl, boy
+1f469-200d-1f469-200d-1f467-200d-1f467	family: woman, woman, girl, girl
+1f9d1-200d-1f91d-200d-1f9d1	people holding hands
+1f9d1-200d-1f9d1-200d-1f9d2	family: adult, adult, child
+1f9d1-200d-1f9d1-200d-1f9d2-200d-1f9d2	family: adult, adult, child, child
+1f9d1-200d-1f9d2	family: adult, child
+1f9d1-200d-1f9d2-200d-1f9d2	family: adult, child, child
+1f3c3-200d-27a1-fe0f	person running facing right
+1f468-200d-2695-fe0f	man health worker
+1f468-200d-2696-fe0f	man judge
+1f468-200d-2708-fe0f	man pilot
+1f468-200d-1f33e	man farmer
+1f468-200d-1f373	man cook
+1f468-200d-1f37c	man feeding baby
+1f468-200d-1f393	man student
+1f468-200d-1f3a4	man singer
+1f468-200d-1f3a8	man artist
+1f468-200d-1f3eb	man teacher
+1f468-200d-1f3ed	man factory worker
+1f468-200d-1f4bb	man technologist
+1f468-200d-1f4bc	man office worker
+1f468-200d-1f527	man mechanic
+1f468-200d-1f52c	man scientist
+1f468-200d-1f680	man astronaut
+1f468-200d-1f692	man firefighter
+1f468-200d-1f9af	man with white cane
+1f468-200d-1f9af-200d-27a1-fe0f	man with white cane facing right
+1f468-200d-1f9bc	man in motorized wheelchair
+1f468-200d-1f9bc-200d-27a1-fe0f	man in motorized wheelchair facing right
+1f468-200d-1f9bd	man in manual wheelchair
+1f468-200d-1f9bd-200d-27a1-fe0f	man in manual wheelchair facing right
+1f469-200d-2695-fe0f	woman health worker
+1f469-200d-2696-fe0f	woman judge
+1f469-200d-2708-fe0f	woman pilot
+1f469-200d-1f33e	woman farmer
+1f469-200d-1f373	woman cook
+1f469-200d-1f37c	woman feeding baby
+1f469-200d-1f393	woman student
+1f469-200d-1f3a4	woman singer
+1f469-200d-1f3a8	woman artist
+1f469-200d-1f3eb	woman teacher
+1f469-200d-1f3ed	woman factory worker
+1f469-200d-1f4bb	woman technologist
+1f469-200d-1f4bc	woman office worker
+1f469-200d-1f527	woman mechanic
+1f469-200d-1f52c	woman scientist
+1f469-200d-1f680	woman astronaut
+1f469-200d-1f692	woman firefighter
+1f469-200d-1f9af	woman with white cane
+1f469-200d-1f9af-200d-27a1-fe0f	woman with white cane facing right
+1f469-200d-1f9bc	woman in motorized wheelchair
+1f469-200d-1f9bc-200d-27a1-fe0f	woman in motorized wheelchair facing right
+1f469-200d-1f9bd	woman in manual wheelchair
+1f469-200d-1f9bd-200d-27a1-fe0f	woman in manual wheelchair facing right
+1f6b6-200d-27a1-fe0f	person walking facing right
+1f9ce-200d-27a1-fe0f	person kneeling facing right
+1f9d1-200d-2695-fe0f	health worker
+1f9d1-200d-2696-fe0f	judge
+1f9d1-200d-2708-fe0f	pilot
+1f9d1-200d-1f33e	farmer
+1f9d1-200d-1f373	cook
+1f9d1-200d-1f37c	person feeding baby
+1f9d1-200d-1f384	mx claus
+1f9d1-200d-1f393	student
+1f9d1-200d-1f3a4	singer
+1f9d1-200d-1f3a8	artist
+1f9d1-200d-1f3eb	teacher
+1f9d1-200d-1f3ed	factory worker
+1f9d1-200d-1f4bb	technologist
+1f9d1-200d-1f4bc	office worker
+1f9d1-200d-1f527	mechanic
+1f9d1-200d-1f52c	scientist
+1f9d1-200d-1f680	astronaut
+1f9d1-200d-1f692	firefighter
+1f9d1-200d-1f9af	person with white cane
+1f9d1-200d-1f9af-200d-27a1-fe0f	person with white cane facing right
+1f9d1-200d-1f9bc	person in motorized wheelchair
+1f9d1-200d-1f9bc-200d-27a1-fe0f	person in motorized wheelchair facing right
+1f9d1-200d-1f9bd	person in manual wheelchair
+1f9d1-200d-1f9bd-200d-27a1-fe0f	person in manual wheelchair facing right
+26f9-fe0f-200d-2640-fe0f	woman bouncing ball
+26f9-fe0f-200d-2642-fe0f	man bouncing ball
+1f3c3-200d-2640-fe0f	woman running
+1f3c3-200d-2640-fe0f-200d-27a1-fe0f	woman running facing right
+1f3c3-200d-2642-fe0f	man running
+1f3c3-200d-2642-fe0f-200d-27a1-fe0f	man running facing right
+1f3c4-200d-2640-fe0f	woman surfing
+1f3c4-200d-2642-fe0f	man surfing
+1f3ca-200d-2640-fe0f	woman swimming
+1f3ca-200d-2642-fe0f	man swimming
+1f3cb-fe0f-200d-2640-fe0f	woman lifting weights
+1f3cb-fe0f-200d-2642-fe0f	man lifting weights
+1f3cc-fe0f-200d-2640-fe0f	woman golfing
+1f3cc-fe0f-200d-2642-fe0f	man golfing
+1f46e-200d-2640-fe0f	woman police officer
+1f46e-200d-2642-fe0f	man police officer
+1f46f-200d-2640-fe0f	women with bunny ears
+1f46f-200d-2642-fe0f	men with bunny ears
+1f470-200d-2640-fe0f	woman with veil
+1f470-200d-2642-fe0f	man with veil
+1f471-200d-2640-fe0f	woman: blond hair
+1f471-200d-2642-fe0f	man: blond hair
+1f473-200d-2640-fe0f	woman wearing turban
+1f473-200d-2642-fe0f	man wearing turban
+1f477-200d-2640-fe0f	woman construction worker
+1f477-200d-2642-fe0f	man construction worker
+1f481-200d-2640-fe0f	woman tipping hand
+1f481-200d-2642-fe0f	man tipping hand
+1f482-200d-2640-fe0f	woman guard
+1f482-200d-2642-fe0f	man guard
+1f486-200d-2640-fe0f	woman getting massage
+1f486-200d-2642-fe0f	man getting massage
+1f487-200d-2640-fe0f	woman getting haircut
+1f487-200d-2642-fe0f	man getting haircut
+1f575-fe0f-200d-2640-fe0f	woman detective
+1f575-fe0f-200d-2642-fe0f	man detective
+1f645-200d-2640-fe0f	woman gesturing NO
+1f645-200d-2642-fe0f	man gesturing NO
+1f646-200d-2640-fe0f	woman gesturing OK
+1f646-200d-2642-fe0f	man gesturing OK
+1f647-200d-2640-fe0f	woman bowing
+1f647-200d-2642-fe0f	man bowing
+1f64b-200d-2640-fe0f	woman raising hand
+1f64b-200d-2642-fe0f	man raising hand
+1f64d-200d-2640-fe0f	woman frowning
+1f64d-200d-2642-fe0f	man frowning
+1f64e-200d-2640-fe0f	woman pouting
+1f64e-200d-2642-fe0f	man pouting
+1f6a3-200d-2640-fe0f	woman rowing boat
+1f6a3-200d-2642-fe0f	man rowing boat
+1f6b4-200d-2640-fe0f	woman biking
+1f6b4-200d-2642-fe0f	man biking
+1f6b5-200d-2640-fe0f	woman mountain biking
+1f6b5-200d-2642-fe0f	man mountain biking
+1f6b6-200d-2640-fe0f	woman walking
+1f6b6-200d-2640-fe0f-200d-27a1-fe0f	woman walking facing right
+1f6b6-200d-2642-fe0f	man walking
+1f6b6-200d-2642-fe0f-200d-27a1-fe0f	man walking facing right
+1f926-200d-2640-fe0f	woman facepalming
+1f926-200d-2642-fe0f	man facepalming
+1f935-200d-2640-fe0f	woman in tuxedo
+1f935-200d-2642-fe0f	man in tuxedo
+1f937-200d-2640-fe0f	woman shrugging
+1f937-200d-2642-fe0f	man shrugging
+1f938-200d-2640-fe0f	woman cartwheeling
+1f938-200d-2642-fe0f	man cartwheeling
+1f939-200d-2640-fe0f	woman juggling
+1f939-200d-2642-fe0f	man juggling
+1f93c-200d-2640-fe0f	women wrestling
+1f93c-200d-2642-fe0f	men wrestling
+1f93d-200d-2640-fe0f	woman playing water polo
+1f93d-200d-2642-fe0f	man playing water polo
+1f93e-200d-2640-fe0f	woman playing handball
+1f93e-200d-2642-fe0f	man playing handball
+1f9b8-200d-2640-fe0f	woman superhero
+1f9b8-200d-2642-fe0f	man superhero
+1f9b9-200d-2640-fe0f	woman supervillain
+1f9b9-200d-2642-fe0f	man supervillain
+1f9cd-200d-2640-fe0f	woman standing
+1f9cd-200d-2642-fe0f	man standing
+1f9ce-200d-2640-fe0f	woman kneeling
+1f9ce-200d-2640-fe0f-200d-27a1-fe0f	woman kneeling facing right
+1f9ce-200d-2642-fe0f	man kneeling
+1f9ce-200d-2642-fe0f-200d-27a1-fe0f	man kneeling facing right
+1f9cf-200d-2640-fe0f	deaf woman
+1f9cf-200d-2642-fe0f	deaf man
+1f9d4-200d-2640-fe0f	woman: beard
+1f9d4-200d-2642-fe0f	man: beard
+1f9d6-200d-2640-fe0f	woman in steamy room
+1f9d6-200d-2642-fe0f	man in steamy room
+1f9d7-200d-2640-fe0f	woman climbing
+1f9d7-200d-2642-fe0f	man climbing
+1f9d8-200d-2640-fe0f	woman in lotus position
+1f9d8-200d-2642-fe0f	man in lotus position
+1f9d9-200d-2640-fe0f	woman mage
+1f9d9-200d-2642-fe0f	man mage
+1f9da-200d-2640-fe0f	woman fairy
+1f9da-200d-2642-fe0f	man fairy
+1f9db-200d-2640-fe0f	woman vampire
+1f9db-200d-2642-fe0f	man vampire
+1f9dc-200d-2640-fe0f	mermaid
+1f9dc-200d-2642-fe0f	merman
+1f9dd-200d-2640-fe0f	woman elf
+1f9dd-200d-2642-fe0f	man elf
+1f9de-200d-2640-fe0f	woman genie
+1f9de-200d-2642-fe0f	man genie
+1f9df-200d-2640-fe0f	woman zombie
+1f9df-200d-2642-fe0f	man zombie
+1f468-200d-1f9b0	man: red hair
+1f468-200d-1f9b1	man: curly hair
+1f468-200d-1f9b2	man: bald
+1f468-200d-1f9b3	man: white hair
+1f469-200d-1f9b0	woman: red hair
+1f469-200d-1f9b1	woman: curly hair
+1f469-200d-1f9b2	woman: bald
+1f469-200d-1f9b3	woman: white hair
+1f9d1-200d-1f9b0	person: red hair
+1f9d1-200d-1f9b1	person: curly hair
+1f9d1-200d-1f9b2	person: bald
+1f9d1-200d-1f9b3	person: white hair
+26d3-fe0f-200d-1f4a5	broken chain
+2764-fe0f-200d-1f525	heart on fire
+2764-fe0f-200d-1fa79	mending heart
+1f344-200d-1f7eb	brown mushroom
+1f34b-200d-1f7e9	lime
+1f3f3-fe0f-200d-26a7-fe0f	transgender flag
+1f3f3-fe0f-200d-1f308	rainbow flag
+1f3f4-200d-2620-fe0f	pirate flag
+1f408-200d-2b1b	black cat
+1f415-200d-1f9ba	service dog
+1f426-200d-2b1b	black bird
+1f426-200d-1f525	phoenix
+1f43b-200d-2744-fe0f	polar bear
+1f441-fe0f-200d-1f5e8-fe0f	eye in speech bubble
+1f62e-200d-1f4a8	face exhaling
+1f635-200d-1f4ab	face with spiral eyes
+1f636-200d-1f32b-fe0f	face in clouds
+1f642-200d-2194-fe0f	head shaking horizontally
+1f642-200d-2195-fe0f	head shaking vertically
