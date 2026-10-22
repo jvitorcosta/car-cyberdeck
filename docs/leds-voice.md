@@ -16,7 +16,7 @@ English or Portuguese, any order, other words ignored (`src/util/ledvoice.h`):
 
 | Kind | Words |
 |---|---|
-| Colours | red/vermelho, orange/laranja, pink/rosa, purple/roxo/lilás, blue/azul, green/verde, white/branco |
+| Colours | red/vermelho, orange/laranja, pink/rosa, purple/roxo/lilás, blue/azul, green/verde, white/branco, yellow/amarelo (also Siri's "read" = red, "blew" = blue) |
 | Power | on, off / liga, desliga, acende, apaga |
 | Brighter / dimmer (10 % steps) | brighter, up, more / mais, aumenta, forte; dimmer, down, less / menos, diminui, fraco |
 | Level | a number (`50`, `50%`, rounded to 10), max/máximo, min/mínimo |
