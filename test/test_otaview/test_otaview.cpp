@@ -95,6 +95,14 @@ void test_rider_top_hovers() {
     TEST_ASSERT_TRUE(otaview::riderTop(64) >= 20);   // the tallest frame stays under the top strip
 }
 
+// The rail's repaint starts at the rail itself when Shadow is drawn (his rows reach down to it,
+// composed with him: repainting them bare first made his feet blink on every percent step), and
+// at the band's top above the rail for the jet glows, whose rows the rail repaint cleans.
+void test_rail_repaint_top() {
+    TEST_ASSERT_EQUAL_INT(otaview::RAIL_Y, otaview::railRepaintTop(true));
+    TEST_ASSERT_EQUAL_INT(otaview::RAIL_Y - 14, otaview::railRepaintTop(false));
+}
+
 // What a frame repaints: everything on a change of phase or percent; on a bob step only the
 // jets (never the rail, or the fill would flicker 8 times a second), and no jets once failed.
 void test_repaint_plan() {
@@ -151,6 +159,7 @@ int main() {
     RUN_TEST(test_start_during_done_is_ignored);
     RUN_TEST(test_repaint_plan);
     RUN_TEST(test_rider_top_hovers);
+    RUN_TEST(test_rail_repaint_top);
     RUN_TEST(test_hold_survives_millis_wrap);
     RUN_TEST(test_fill_and_rider_clamp);
     return UNITY_END();

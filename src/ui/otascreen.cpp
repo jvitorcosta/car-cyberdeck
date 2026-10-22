@@ -76,8 +76,8 @@ void strip(TFT_eSPI& t, const ota::View& v) {
 }
 
 // The rail band (backdrop rows under and around the rail, then the rail and its fill).
-void rail(TFT_eSPI& t, const ota::View& v) {
-    for (int y = BAND_Y; y < BAND_Y + BAND_H; ++y) pushRow(t, y);
+void rail(TFT_eSPI& t, const ota::View& v, int top) {
+    for (int y = top; y < BAND_Y + BAND_H; ++y) pushRow(t, y);
     const bool failed = v.phase == Phase::Failed;
     t.fillRect(RAIL_X, RAIL_Y, RAIL_W, RAIL_H, failed ? GREY : BORDER_C);
     t.fillRect(INNER_X, RAIL_Y + BORDER, INNER_W, RAIL_H - 2 * BORDER, TRACK);
@@ -139,7 +139,7 @@ bool drawShadowUpdate(TFT_eSPI& t, const ota::View& v, uint32_t nowMs, bool full
         shadowText(t, "Keep the deck powered", RAIL_X, NOTE_Y, 2, WHITE, BLACK, TL_DATUM);
     }
     if (r.strip) strip(t, v);
-    if (r.rail) rail(t, v);
+    if (r.rail) rail(t, v, railRepaintTop(shadow));
     if (shadow) {
         if (r.jets) rider(t, v, step);                                  // skating
         else if (r.rail && v.phase == Phase::Failed) rider(t, v, ridersprite::stand());   // he stops

@@ -51,6 +51,11 @@ inline Repaint repaint(bool full, bool changed, bool bobStep, Phase p) {
     return {all, all, (all || bobStep) && p == Phase::Receiving};
 }
 
+// Where a rail repaint starts: at the rail when Shadow is drawn (his own rows reach down to it and
+// are composed with him; repainting them bare first made his feet blink), else 14 rows above it,
+// where the jet glows sit.
+inline int railRepaintTop(bool riderDrawn) { return riderDrawn ? RAIL_Y : RAIL_Y - 14; }
+
 // Shadow hovers on his jet shoes: his box's top for a frame h px high, HOVER px over the rail.
 constexpr int HOVER = 6;
 inline int riderTop(int h) { return RAIL_Y - HOVER - h; }
