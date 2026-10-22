@@ -109,4 +109,8 @@ void termExpire(Term& term, uint32_t t, uint32_t ttl) {
         ++term.gen;
     }
 }
+
+int termFormat(const TermLine& r, char* out) {
+    return format(r.label, r.value[0] ? r.value : nullptr, out, TERM_COLS + 1, TERM_COLS);
+}
 }
