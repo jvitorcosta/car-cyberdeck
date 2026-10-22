@@ -413,9 +413,12 @@ static QueueHandle_t voiceQueue = nullptr;
 static SemaphoreHandle_t voiceDone = nullptr;
 static char voiceReply[64];
 
-static void describe(char* out, size_t n) {
+// withLevel: say the % too. A voice reply only does when the command changed it: "Purple, 20
+// percent" after a plain "purple" sounded like the deck wanted a percentage.
+static void describe(char* out, size_t n, bool withLevel = true) {
     if (!lit) snprintf(out, n, "Lights off");
-    else snprintf(out, n, "%s, %u percent", SWATCHES[swatch].name, intensity);
+    else if (withLevel) snprintf(out, n, "%s, %u percent", SWATCHES[swatch].name, intensity);
+    else snprintf(out, n, "%s", SWATCHES[swatch].name);
 }
 
 // In loop(): applies one voice command to both lights (voice doesn't pick a zone, and leaves the
@@ -431,7 +434,7 @@ static void applyVoice(const ledvoice::Command& c) {
     for (Controller& ctrl : controllers) push(ctrl);
     save();
     drawAll();
-    describe(voiceReply, sizeof(voiceReply));
+    describe(voiceReply, sizeof(voiceReply), c.level >= 0 || c.levelStep != 0);
     Serial.printf("[voice] -> %s\n", voiceReply);
     xSemaphoreGive(voiceDone);
 }

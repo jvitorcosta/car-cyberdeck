@@ -27,12 +27,14 @@ inline int lookup(const char* w, const Word* table, int n) {
     return -1;
 }
 
+// Siri transcribes a lone colour word by sound: "red" comes back "Read", "blue" can come back "Blew"
+// (seen in the deck's log, 2026-10-21). Neither homophone means anything else here.
 static const Word COLORS[] = {
-    {"red", 0},    {"vermelho", 0}, {"vermelha", 0},
+    {"red", 0},    {"read", 0},     {"vermelho", 0}, {"vermelha", 0},
     {"orange", 1}, {"laranja", 1},
     {"pink", 2},   {"rosa", 2},     {"magenta", 2},
     {"purple", 3}, {"violet", 3},   {"roxo", 3},    {"roxa", 3}, {"lilac", 3}, {"lilas", 3}, {"lil\xc3\xa1s", 3},
-    {"blue", 4},   {"azul", 4},
+    {"blue", 4},   {"blew", 4},     {"azul", 4},
     {"green", 5},  {"verde", 5},
     {"white", 6},  {"branco", 6},   {"branca", 6},
 };

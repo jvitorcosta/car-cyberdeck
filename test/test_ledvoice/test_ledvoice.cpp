@@ -42,6 +42,10 @@ void test_portuguese() {
     TEST_ASSERT_EQUAL_INT(100, parsed("m\xc3\xa1ximo").level);
     TEST_ASSERT_EQUAL_INT(3, parsed("lil\xc3\xa1s").color);
 }
+void test_siri_homophones() {
+    TEST_ASSERT_EQUAL_INT(0, parsed("Read").color);   // a lone "red", as Siri wrote it
+    TEST_ASSERT_EQUAL_INT(4, parsed("Blew").color);
+}
 void test_nothing_to_do() {
     ledvoice::Command c;
     TEST_ASSERT_FALSE(ledvoice::parse("hello there", &c));
@@ -55,6 +59,7 @@ int main(int, char**) {
     RUN_TEST(test_power);
     RUN_TEST(test_levels_and_steps);
     RUN_TEST(test_portuguese);
+    RUN_TEST(test_siri_homophones);
     RUN_TEST(test_nothing_to_do);
     return UNITY_END();
 }
