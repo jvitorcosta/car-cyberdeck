@@ -179,7 +179,7 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
     // static: keep the UI loop stack small; +3 slots so line b's "..." can be written in place
     constexpr size_t MAX_ITEMS = lyricmsg::TEXT_CAP;   // one item per byte at most
     static glyphrun::Item items[MAX_ITEMS + 3];
-    size_t n = glyphrun::decode(line, items, MAX_ITEMS, asciiWidth2, wideWidth, &t);
+    size_t n = glyphrun::decode(line, items, MAX_ITEMS, asciiWidth2, wideWidth, &t, false, emojiWidth);
     if (!n) return;
     if (notes) drawNotes(t, -1);
     const int textW = iw - 2 * 18;
