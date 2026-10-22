@@ -226,28 +226,51 @@ void test_walk_retry_other_results_are_final() {
     TEST_ASSERT_FALSE(r.onResult(false, true));    // and starts the count over
 }
 
-// A failed album art download (timeout, 5xx) runs again once after the next poll.
+// A failed album art download (timeout, 5xx) runs again once, WAIT_MS later.
 void test_art_retry_once_then_gives_up() {
     netplan::ArtRetry r;
-    TEST_ASSERT_FALSE(r.onResult(false, true));    // failed: try once more
-    TEST_ASSERT_TRUE(r.onResult(false, true));     // second failure: no cover for this song
-    TEST_ASSERT_FALSE(r.onResult(false, true));    // a fresh count for the next song
+    TEST_ASSERT_FALSE(r.onResult(false, true, 1000));    // failed: try once more
+    TEST_ASSERT_TRUE(r.onResult(false, true, 7000));     // second failure: no cover for this song
+    TEST_ASSERT_FALSE(r.onResult(false, true, 9000));    // a fresh count for the next song
+}
+
+// The second try waits WAIT_MS (a poll in between): a 5xx or refused connection retried at
+// once would fail the same way.
+void test_art_retry_waits_before_the_second_try() {
+    netplan::ArtRetry r;
+    TEST_ASSERT_TRUE(r.ready(0));
+    r.onResult(false, true, 1000);
+    TEST_ASSERT_FALSE(r.ready(1000 + netplan::ArtRetry::WAIT_MS - 1));
+    TEST_ASSERT_TRUE(r.ready(1000 + netplan::ArtRetry::WAIT_MS));
+    netplan::ArtRetry w;                                    // across the millis() wrap
+    w.onResult(false, true, 0xFFFFF000u);
+    TEST_ASSERT_FALSE(w.ready(0xFFFFF000u + netplan::ArtRetry::WAIT_MS - 1));
+    TEST_ASSERT_TRUE(w.ready(0xFFFFF000u + netplan::ArtRetry::WAIT_MS));
 }
 
 // Success, or no URL to fetch (some podcasts), is final at once.
 void test_art_ok_or_no_url_is_final() {
     netplan::ArtRetry ok;
-    TEST_ASSERT_TRUE(ok.onResult(true, true));
+    TEST_ASSERT_TRUE(ok.onResult(true, true, 0));
     netplan::ArtRetry noUrl;
-    TEST_ASSERT_TRUE(noUrl.onResult(false, false));
+    TEST_ASSERT_TRUE(noUrl.onResult(false, false, 0));
+    TEST_ASSERT_TRUE(noUrl.ready(0));
 }
 
-// A new song mid-retry starts the count over: it doesn't inherit a spent retry.
+// A new song mid-retry starts the count over and doesn't wait: it doesn't inherit a spent retry.
 void test_art_retry_reset_on_track_change() {
     netplan::ArtRetry r;
-    TEST_ASSERT_FALSE(r.onResult(false, true));
+    TEST_ASSERT_FALSE(r.onResult(false, true, 1000));
     r.reset();
-    TEST_ASSERT_FALSE(r.onResult(false, true));
+    TEST_ASSERT_TRUE(r.ready(1001));
+    TEST_ASSERT_FALSE(r.onResult(false, true, 1001));
+}
+
+// While the art retry waits, the other steps go ahead (art first again once it's ready).
+void test_next_skips_art_while_waiting() {
+    netplan::Work w = netplan::freshWork(false);
+    TEST_ASSERT_EQUAL_INT((int)Step::Lyrics, (int)netplan::next(w, true, false));
+    TEST_ASSERT_EQUAL_INT((int)Step::Art, (int)netplan::next(w, true, true));
 }
 
 void test_backoff_doubles_on_429_up_to_a_minute() {
@@ -346,6 +369,8 @@ int main(int, char**) {
     RUN_TEST(test_walk_retry_out_of_memory_then_gives_up);
     RUN_TEST(test_walk_retry_other_results_are_final);
     RUN_TEST(test_art_retry_once_then_gives_up);
+    RUN_TEST(test_art_retry_waits_before_the_second_try);
+    RUN_TEST(test_next_skips_art_while_waiting);
     RUN_TEST(test_art_ok_or_no_url_is_final);
     RUN_TEST(test_art_retry_reset_on_track_change);
     return UNITY_END();

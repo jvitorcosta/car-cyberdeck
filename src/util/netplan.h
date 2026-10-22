@@ -121,8 +121,8 @@ struct Work { bool walk, art, lyrics, prefetch, genre; };   // true = still to d
 Work freshWork(bool walkerReady);
 // Next step in priority order: Art, Lyrics, Genre, Walk, Prefetch; None when all done.
 // Art and lyrics are what the listener waits for; the walker is usually prefetched.
-// lyricsReady false (waiting to retry): Lyrics is skipped for now.
-Step next(const Work& w, bool lyricsReady = true);
+// lyricsReady / artReady false (waiting to retry): that step is skipped for now.
+Step next(const Work& w, bool lyricsReady = true, bool artReady = true);
 void done(Work& w, Step s);
 
 // Memory gate (largest free byte-addressable block, mem::byteLargest()). mbedTLS needs a
@@ -161,19 +161,28 @@ private:
     int tries_ = 0;
 };
 
-// Album art: a failed download (timeout, 5xx) is tried again (the step stays on the work list),
-// MAX_TRIES attempts in all; success or no URL (some podcasts) is final. reset() on a new track.
+// Album art: a failed download (timeout, 5xx) is tried again WAIT_MS later (a poll in between: a
+// fast failure retried at once fails the same way), MAX_TRIES attempts in all; success or no URL
+// (some podcasts) is final. Until ready(), next() runs the other steps. reset() on a new track.
 class ArtRetry {
 public:
     static constexpr int MAX_TRIES = 2;
-    void reset() { tries_ = 0; }
+    static constexpr uint32_t WAIT_MS = 5000;
+    void reset() { tries_ = 0; waiting_ = false; }
     // Records one attempt; true when the step is finished (no further attempt).
-    bool onResult(bool ok, bool hasUrl) {
-        if (!ok && hasUrl && ++tries_ < MAX_TRIES) return false;
-        tries_ = 0;
+    bool onResult(bool ok, bool hasUrl, uint32_t nowMs) {
+        if (!ok && hasUrl && ++tries_ < MAX_TRIES) {
+            waiting_ = true;
+            since_ = nowMs;
+            return false;
+        }
+        reset();
         return true;
     }
+    bool ready(uint32_t nowMs) const { return !waiting_ || nowMs - since_ >= WAIT_MS; }   // wrap-safe
 private:
     int tries_ = 0;
+    bool waiting_ = false;
+    uint32_t since_ = 0;
 };
 }
