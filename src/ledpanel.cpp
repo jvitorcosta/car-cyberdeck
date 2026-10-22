@@ -1,8 +1,9 @@
 // Standalone LED panel for the car's two ELK-family controllers on the yellow deck (CYD). Not the
 // firmware; a first step before LED control becomes a deck feature. Layout D, built for fingers:
 //   top:    BOTH / INSIDE / OUTSIDE (dot: that controller's link, green = connected)
-//   grid:   2x4 tiles of 75x66: red, orange, pink, purple, blue, green, white, power
-//   bottom: -  [level: the colour at its intensity, and the %]  +
+//   grid:   2x4 tiles of 75x66: red, orange, pink, purple, blue, green, white, yellow; tap one to
+//           set it (and turn on), double-tap the lit one to turn the lights off
+//   bottom: -  [level: the colour at its intensity and the %, or "Off"]  +
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
 // Colour, intensity, power and zone survive a reboot (NVS). Touch calibration (resistive panel)
@@ -42,7 +43,7 @@ static const Swatch SWATCHES[] = {
     {"Red", 255, 0, 0, 0xFF0000},       {"Orange", 255, 40, 0, 0xFF6A00},
     {"Pink", 255, 0, 70, 0xFF0090},     {"Purple", 120, 0, 255, 0x9000FF},
     {"Blue", 0, 0, 255, 0x0040FF},      {"Green", 0, 255, 0, 0x00FF30},
-    {"White", 255, 215, 170, 0xFFFFFF},
+    {"White", 255, 215, 170, 0xFFFFFF}, {"Yellow", 255, 110, 0, 0xFFD400},  // LED yellow: full green goes lime
 };
 static constexpr int N_SWATCH = sizeof(SWATCHES) / sizeof(SWATCHES[0]);
 
@@ -141,13 +142,16 @@ static void linkTask(void*) {
 
 // ---- Buttons (320x240 landscape) ----
 
-enum : int { ZONE0 = 0, TILE0 = 3, POWER = TILE0 + N_SWATCH, MINUS, PLUS, N_BTN };
+// The grid is all colours; there is no power tile: double-tapping the lit colour turns the lights
+// off, and tapping any colour turns them back on.
+enum : int { ZONE0 = 0, TILE0 = 3, TILE_END = TILE0 + N_SWATCH, MINUS = TILE_END, PLUS, N_BTN };
+static_assert(N_SWATCH == 8, "the grid is 2x4");
 struct Rect { int x, y, w, h; };
 
 static Rect rectOf(int id) {
     if (id < TILE0) return {4 + id * 106, 4, 100, 36};
-    if (id <= POWER) {
-        const int i = id - TILE0;  // the power button is the grid's 8th tile
+    if (id < TILE_END) {
+        const int i = id - TILE0;
         return {4 + (i % 4) * 79, 46 + (i / 4) * 70, 75, 66};
     }
     if (id == MINUS) return {4, 188, 96, 48};
@@ -186,12 +190,6 @@ static bool bright(uint32_t rgb, int pct = 100) {
     return (((rgb >> 16) & 0xFF) * 3 + ((rgb >> 8) & 0xFF) * 6 + (rgb & 0xFF)) / 10 * pct / 100 > 140;
 }
 
-static void drawPowerIcon(int cx, int cy, uint16_t fg, uint16_t bg) {
-    for (int r = 11; r <= 13; r++) tft.drawCircle(cx, cy + 1, r, fg);
-    tft.fillRect(cx - 6, cy - 14, 13, 10, bg);
-    tft.fillRect(cx - 1, cy - 15, 3, 15, fg);
-}
-
 static void drawButton(int id, bool pressed = false) {
     const Rect r = rectOf(id);
     tft.setTextDatum(MC_DATUM);
@@ -206,7 +204,7 @@ static void drawButton(int id, bool pressed = false) {
         if (id > 0) tft.fillCircle(r.x + r.w - 12, cy, 5, linkUp(controllers[id - 1]) ? TFT_GREEN : TFT_RED);
         return;
     }
-    if (id < POWER) {
+    if (id < TILE_END) {
         const Swatch& s = SWATCHES[id - TILE0];
         const bool sel = lit && id - TILE0 == swatch;
         const int in = pressed ? 5 : 0;  // pressed: the colour shrinks inside a yellow ring
@@ -219,14 +217,6 @@ static void drawButton(int id, bool pressed = false) {
         const uint16_t fill = c565(s.screen);
         tft.setTextColor(bright(s.screen) ? TFT_BLACK : TFT_WHITE, fill);
         tft.drawString(s.name, cx, cy, 2);
-        return;
-    }
-    if (id == POWER) {
-        const uint16_t bg = pressed ? PRESSED : lit ? grey(51) : TFT_RED;
-        tft.fillRoundRect(r.x, r.y, r.w, r.h, 10, bg);
-        drawPowerIcon(cx, cy - 6, pressed ? TFT_BLACK : TFT_WHITE, bg);
-        tft.setTextColor(pressed ? TFT_BLACK : TFT_WHITE, bg);
-        tft.drawString(lit ? "Off" : "On", cx, r.y + r.h - 12, 2);
         return;
     }
     const uint16_t bg = pressed ? PRESSED : grey(51);  // MINUS / PLUS
@@ -249,7 +239,7 @@ static void drawLevel() {
 }
 
 static void drawGrid() {
-    for (int id = TILE0; id <= POWER; id++) drawButton(id);
+    for (int id = TILE0; id < TILE_END; id++) drawButton(id);
 }
 
 static void drawAll() {
@@ -360,14 +350,22 @@ static void press(int id) {
     if (id < TILE0) {
         target = static_cast<Target>(id);
         for (int z = 0; z < TILE0; z++) drawButton(z);
-    } else if (id < POWER) {
-        swatch = id - TILE0;
-        lit = true;
-        pushTargets();
-        drawGrid();
-        drawLevel();
-    } else if (id == POWER) {
-        lit = !lit;
+    } else if (id < TILE_END) {
+        // A second tap on the lit colour within DOUBLE_MS turns the lights off; any other tap sets
+        // the colour and turns them on.
+        static constexpr uint32_t DOUBLE_MS = 450;
+        static int lastTile = -1;
+        static uint32_t lastTileMs = 0;
+        const int tile = id - TILE0;
+        const bool doubleTap = lit && tile == swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
+        lastTile = doubleTap ? -1 : tile;  // a third tap starts over
+        lastTileMs = millis();
+        if (doubleTap) {
+            lit = false;
+        } else {
+            swatch = tile;
+            lit = true;
+        }
         pushTargets();
         drawGrid();
         drawLevel();

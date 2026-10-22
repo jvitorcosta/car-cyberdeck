@@ -6,7 +6,7 @@
 #include <cstring>
 
 namespace ledvoice {
-// Colour indices follow the panel's swatches: red, orange, pink, purple, blue, green, white.
+// Colour indices follow the panel's swatches: red, orange, pink, purple, blue, green, white, yellow.
 enum Zone { ZONE_NONE = -1, ZONE_BOTH = 0, ZONE_INSIDE = 1, ZONE_OUTSIDE = 2 };
 
 struct Command {
@@ -37,6 +37,7 @@ static const Word COLORS[] = {
     {"blue", 4},   {"blew", 4},     {"azul", 4},
     {"green", 5},  {"verde", 5},
     {"white", 6},  {"branco", 6},   {"branca", 6},
+    {"yellow", 7}, {"amarelo", 7},  {"amarela", 7},
 };
 static const Word POWER[] = {
     {"off", 0}, {"desliga", 0}, {"desligar", 0}, {"desligue", 0}, {"apaga", 0}, {"apagar", 0}, {"apague", 0},
