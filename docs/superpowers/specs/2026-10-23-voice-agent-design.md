@@ -14,7 +14,7 @@ the Shortcut, speaks Portuguese and English, and can grow into managing more thi
 
 ## Goals (v1)
 
-- Replace the Siri Shortcut for the car lights, in Portuguese, English or a mix of both
+- Replace the Siri Shortcut for the car lights, in **Portuguese** (v1 is pt-BR only, see below)
   ("deixa azul fraquinho dentro, fora desliga").
 - Control Spotify by voice: play/pause, next/previous, volume, search and play ("toca Djavan",
   "põe o álbum novo do Tyler"), add to queue, save the current song to a playlist, "what's playing".
@@ -43,6 +43,9 @@ worked).
 
 ## Non-goals (v1)
 
+- English commands. **v1 is Portuguese only** (owner, 2026-10-23): one language makes speech-to-text,
+  the prompt, stock phrases and the evals simpler and more accurate. English and mixed sentences
+  come later; only English names inside a Portuguese command are handled now.
 - WhatsApp (the later route is Apple's ANCS notifications over BLE on the S3, read-only, after a
   heap test; the unofficial WhatsApp libraries risk a ban and are rejected).
 - Distance/ETA (Google Routes API; needs a location source: a GPS module, an iPhone Shortcut, or
@@ -110,17 +113,17 @@ Xbox (RT/LT) ──BLE──▶ yellow deck ──HTTP over hotspot──▶ bla
   (`claude-haiku-5-5`). A request that needs more steps or reasoning may go to Sonnet
   (`claude-sonnet-5-5`). If the Agent SDK's own overhead breaks the 1.5 s target, the builder may run
   the fast path as a plain Messages API tool loop with the same tools; the speed rule wins.
-- **Speech-to-text:** must handle Brazilian Portuguese, English and a mix of both in one sentence,
-  streaming. The builder picks the provider by measuring accuracy and latency on **recordings made in
+- **Speech-to-text:** Brazilian Portuguese (v1), including English artist and song names inside a
+  Portuguese sentence ("toca Tyler, the Creator"), biased with a word list; streaming. The builder picks the provider by measuring accuracy and latency on **recordings made in
   the car** (see the first step).
 - **Voice (TTS):** ElevenLabs, a voice made with **Voice Design**: young, bright, expressive,
-  anime-style girl, speaks pt-BR and English. Not cloned from any real voice actress. Its fast
+  anime-style girl, speaks pt-BR. Not cloned from any real voice actress. Its fast
   model, PCM output at 16 kHz.
 - **Stock phrases:** the common replies ("hai~", "tocando", "pulando", "não entendi", "sem
   sinal", "desfeito", the colours) are generated once in her voice by a tool and packed into the
   media partition. Live TTS only for answers that change (a song or artist name, a question).
-- **Personality (system prompt):** Zero Two style, cheerful and a little smug, replies in the
-  language he spoke, **one short sentence at most** and usually just a stock phrase; a sprinkle of
+- **Personality (system prompt):** Zero Two style, cheerful and a little smug, replies in
+  Portuguese, **one short sentence at most** and usually just a stock phrase; a sprinkle of
   "hai~", never a joke when he asked for an action.
 - **Short context:** the last few exchanges are kept for 2 minutes so follow-ups work
   ("mais forte", "não, a outra", the answer to her question). Nothing kept between drives.
@@ -183,12 +186,12 @@ controlled.
 The 2026-10-22 mic spike (`spike/mictest-s3`, ES8311 settings in its notes) found a hum floor
 (silence rms ~750 at max gain) and phone music close by didn't rise above it. Voice at arm's length
 in a moving car with music is **unproven**. Before anything else: record a set of real commands in
-the car (pt-BR, English, mixed; music on and ducked; windows up and down) from the deck's mic, and
+the car (pt-BR, with English artist names; music on and ducked; windows up and down) from the deck's mic, and
 run them through the candidate STT services. If accuracy isn't good enough, the plan stops and we
 decide on a better mic before building the rest.
 
 - **Pass bar (my call):** at least 9 of 10 commands transcribed well enough to act on, in each
-  condition (pt-BR, English, mixed × music ducked/paused × windows up/down), with the best STT
+  condition (music ducked/paused × windows up/down), with the best STT
   provider. The owner sees the results and makes the call.
 - **The speaker too (my call):** the same drive checks that the S3's speaker can be heard over the
   road while Spotify is ducked or paused. If it can't, voice replies wait (screen and a beep only)
