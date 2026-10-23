@@ -97,6 +97,11 @@ GitHub as a backup on 2026-10-23, no PR): 41 commits on an older main, 56 behind
   remote key); `1d44c44` (self-heal) isn't needed on the S3 (see Investigate). The car checks
   still to do are in the branch's own BACKLOG ("Gauge cluster in the car", "Companion drive
   screens").
+- **Trip reset: keep or remove, when the companion returns** (asked 2026-10-23, deferred). On main
+  the companion's TRIP screen and its phone page have a hold-to-reset button that zeroes the S3's
+  own trip clock (`POST /trip/reset`, `net/remote`, `util/tripclock`); it never touches the car.
+  Dormant while the yellow deck runs `ledpanel`. Removing it means the companion's TRIP button,
+  the phone page's hold button, the S3 endpoint and her TripReset line.
 
 ## Accepted as is
 
