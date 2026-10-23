@@ -187,8 +187,8 @@ class PokefaceView extends WatchUi.WatchFace {
         }
         small(dc, x, 67, _sunText, ink, shade);
 
-        // Its info box: name, Lv (this week's running km), HP = Body Battery, then the Pokédex, a
-        // status tag and Body Battery, EXP toward the weekly km goal, steps
+        // Its info box: name, Lv (this week's running km), HP = Body Battery, then the Pokédex and
+        // Body Battery, EXP toward the weekly km goal, a status tag and the steps
         var bx = 116;
         var by = 80;
         var bi = night ? 0xFFFFAA : 0x000000;   // text in the battle box
@@ -200,10 +200,10 @@ class PokefaceView extends WatchUi.WatchFace {
         Battle.bar(dc, bx + 54, by + 32, 62, _bbFrac, hpInk(Partner.hpColour(_bbValue)));
         var dex = "DEX " + _dex + "/7";
         Battle.text(dc, bx + 8, by + 47, _f1, dex, bi, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.badge(dc, bx + 8 + dc.getTextWidthInPixels(dex, _f1) + 5, by + 47, _badge, _f1);
         Battle.text(dc, bx + 114, by + 47, _f1, "BB " + _bb, bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
         Battle.text(dc, bx + 8, by + 60, _f1, "EXP", night ? 0x00AAFF : 0x0055FF, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
         Battle.bar(dc, bx + 34, by + 58, 82, _bar, 0x00AAFF);
+        Battle.badge(dc, bx + 8, by + 71, _badge, _f1);   // left of the steps, where there's room
         Battle.text(dc, bx + 108, by + 71, _f1, _steps + " steps", bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
 
         // The dialogue box: heart rate | temperature, then distance (or today's run card); on the

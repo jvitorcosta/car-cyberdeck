@@ -78,25 +78,27 @@ module Battle {
     // a sandstorm's dashes. `frame` moves them; nothing for other weather.
     function weather(dc as Dc, kind as Number, frame as Number, night as Boolean) as Void {
         if (kind == Icons.RAIN || kind == Icons.STORM) {
-            dc.setColor(night ? 0x5555AA : 0xAAFFFF, Graphics.COLOR_TRANSPARENT);
-            for (var i = 0; i < 24; i++) {
+            dc.setColor(night ? 0xAAAAFF : 0xFFFFFF, Graphics.COLOR_TRANSPARENT);
+            dc.setPenWidth(2);
+            for (var i = 0; i < 60; i++) {
                 var x = (i * 37 + frame * 9) % 270;
-                var y = (i * 53 + frame * 14) % 190;
-                dc.drawLine(x, y, x - 4, y + 9);
+                var y = (i * 53 + frame * 16) % 190;
+                dc.drawLine(x, y, x - 5, y + 12);
             }
+            dc.setPenWidth(1);
         } else if (kind == Icons.SNOW) {
             dc.setColor(0xFFFFFF, Graphics.COLOR_TRANSPARENT);
-            for (var i = 0; i < 24; i++) {
+            for (var i = 0; i < 60; i++) {
                 var x = (i * 41 + (frame % 4) * 3) % 260;
-                var y = (i * 31 + frame * 6) % 190;
-                dc.fillRectangle(x, y, 2, 2);
+                var y = (i * 31 + frame * 7) % 190;
+                dc.fillRectangle(x, y, 3, 3);
             }
         } else if (kind == Icons.SAND) {
-            dc.setColor(0xFFAA55, Graphics.COLOR_TRANSPARENT);
-            for (var i = 0; i < 28; i++) {
-                var x = (i * 47 + frame * 22) % 270;
-                var y = 20 + (i * 29) % 170;
-                dc.drawLine(x - 6, y, x, y);
+            dc.setColor(0xFFAA00, Graphics.COLOR_TRANSPARENT);
+            for (var i = 0; i < 60; i++) {
+                var x = (i * 47 + frame * 24) % 270;
+                var y = 12 + (i * 29) % 178;
+                dc.fillRectangle(x - 10, y, 10, 2);
             }
         }
     }
