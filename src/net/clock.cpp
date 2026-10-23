@@ -30,4 +30,15 @@ bool minuteOfDay(int* m) {
     return true;
 }
 
+bool localDate(int* y, int* month, int* day) {
+    time_t now = time(nullptr);
+    if (!daynight::synced((int64_t)now)) return false;
+    struct tm local;
+    localtime_r(&now, &local);
+    *y = local.tm_year + 1900;
+    *month = local.tm_mon + 1;
+    *day = local.tm_mday;
+    return true;
+}
+
 }
