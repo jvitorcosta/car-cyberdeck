@@ -22,7 +22,7 @@ uint32_t rgb(Role r, bool night) {
     return night ? NIGHT[r] : DAY[r];
 }
 
-uint32_t scan(bool night) { return night ? 0x0A0700 : 0x081004; }
+uint32_t scan(bool night) { return night ? 0x050300 : 0x030503; }
 
 uint32_t tile(uint32_t screenRgb, bool night) { return night ? scale(screenRgb, 70) : screenRgb; }
 
