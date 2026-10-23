@@ -15,7 +15,8 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 - `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on:
   `inside=on outside=nolink`. Each word is `on`, `off` or `nolink`; a light the deck has no link
   to is always `nolink`, whatever it last showed.
-- A wrong key gets 403 (on all four); a phrase with nothing to do gets "Sorry, I didn't get a colour or a command".
+- All four reply in plain text (`text/plain`). A wrong key gets 403 (on all four); a phrase with
+  nothing to do gets "Sorry, I didn't get a colour or a command".
 - Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page
   on the deck's screen is left as it is.
 
@@ -30,6 +31,11 @@ page it last showed.
 - **Lights**: `< BACK` returns to the Menu. Then the pages BOTH / INSIDE / OUTSIDE, the status
   line, the 2x4 colour tiles, the favourite slots, and `-` / level / `+`. Tap a tile to set the
   colour and turn on; double-tap the lit one to turn off.
+- **BOTH while the lights differ** (after a favourite like "pink, inside 50 %, outside 100 %", or
+  after the INSIDE / OUTSIDE pages): no tile is ringed and the level box says `MIX`. On/off (Y,
+  voice "off", the watch's Off) and `-` / `+` (LB / RB, "brighter" / "dimmer") act on each light's
+  own look, so each keeps its colour and level; a spoken level ("50%") sets both to that level and
+  keeps each colour. A colour (a tile, or spoken) sets both lights to it, as usual.
 - **Status line**: `IN ON 50%  OUT --  LINK 1/2`. Per light: `ON 50%`, `OFF`, or `--` (no link);
   `LINK n/2` counts the linked lights. `ON` is what the deck last sent while connected, not a
   reading from the controller (the LED controllers can't be read back).
@@ -51,8 +57,8 @@ reboot, and a restart still boots to the Menu.
   `Favourite 1: inside Pink 50 percent, outside Purple 100 percent`, or `Favourite 3 is empty`.
 - **Watch**: the Honda City app has a fourth page, **Favourites** (F1-F4 with the two dots each,
   `F3 --` when empty). START there lists them; pick one to apply it.
-- If a favourite has different looks inside and outside, the BOTH page keeps its own look and the
-  status line shows the truth.
+- If a favourite has different looks inside and outside, the BOTH page shows `MIX` (see "BOTH
+  while the lights differ" above) and the status line shows each light.
 
 ## Night mode
 
@@ -87,7 +93,7 @@ In the Shortcuts app, new shortcut:
 
 1. **Dictate Text**: language English (or Portuguese), stop listening *After Pause*.
 2. **URL Encode** the Dictated Text.
-3. **Text**: `http://172.20.10.11/say?k=YOUR_REMOTE_TOKEN&text=` followed by the URL Encoded Text
+3. **Text**: `http://172.20.10.11/say?k=<REMOTE_TOKEN>&text=` followed by the URL Encoded Text
    variable.
 4. **Get Contents of URL** of that Text (method GET).
 5. **Speak Text**: Contents of URL (or *Show Result*, for a silent version).
@@ -132,8 +138,10 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
 - **Favourites page** (fourth page): the deck's four favourites. START opens a list (F1..F4 with
   their two dots, "None saved" if there are none); picking one applies it. Saving is done on the
   deck, not the watch.
-- **Not connected**: when a light has no link, its page (and the BOTH pill) says "Not connected"
-  instead of a stale colour; the app reads this from `/status` when it opens.
+- **Not connected**: when a light has no link, its page's bottom line says "Not connected" (on
+  BOTH: "Inside not connected", "Outside not connected", or "Not connected" for both) in orange in
+  place of the "START: change" hint. The page still shows that light's last known colour. The app
+  reads this from `/status` when it opens.
 - **Glance**: a card for the watch face's glance loop with both lights' dots and levels, as of
   the last time the app ran (a glance can't make web requests). START on it opens the app.
 - Requests go one at a time from a short queue; every reply is read back into the screen, so it
