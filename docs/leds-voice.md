@@ -41,10 +41,12 @@ the panel would turn teal.
   - `LIGHTS`: one row per light (`INSIDE`, `OUTSIDE`) with a chip of its colour, the colour name and
     its level (`40%`); `OFF` (dim) for a light that is off, `-- NO LINK` when the deck has no link to
     it (never its last colour);
-  - two big buttons: `> [LIGHTS]` opens the Lights page, `> [KARAOKE]` the black deck's lyrics
-    (dimmed while the black deck plays nothing with synced lyrics: a tap then says why);
-  - the strip: the trip line (`TRIP 12.4 KM  0:32`) and the song the black deck is playing
-    (`> Blinding Lights - The Weeknd`, or a dim `> --`), ending in a blinking block cursor.
+  - two big buttons: `> [LIGHTS]` opens the Lights page, `> [KARAOKE]` the black deck's lyrics.
+    KARAOKE is bright with a small inverted `LIVE` tag at its right edge while the black deck plays
+    a song with synced lyrics, and dim (no tag) otherwise: a tap then says why;
+  - the strip: the trip line (`TRIP 12.4 KM  0:32`) ending in a blinking block cursor, and under it
+    the message line, empty unless a message shows (see Messages). The song itself is on the
+    Karaoke page only.
 - There is no Weather page any more: its data is on the main screen. The presets are on the Lights
   page only (and voice, the watch, `/presets`).
 - **Lights**: `< BACK` returns to the main screen. Then Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE,
@@ -59,14 +61,16 @@ the panel would turn teal.
 - **Status line**: `IN ON 50%  OUT --  LINK 1/2`. Per light: `ON 50%`, `OFF`, or `--` (no link);
   `LINK n/2` counts the linked lights. `ON` is what the deck last sent while connected, not a
   reading from the controller (the LED controllers can't be read back).
-- **Messages**: a terminal line replaces the song line (on Lights: the status line) for 2.5 s when
-  something happens: `>ROSE APPLIED` (a preset, from any source), `>INSIDE: NO LINK`,
-  `>OUTSIDE: LINKED` (a light's link changed), why KARAOKE won't open. Then the song comes back.
+- **Messages**: a terminal line shows on the main screen's message line (on Lights: in place of the
+  status line) for 2.5 s when something happens: `>ROSE APPLIED` (a preset, from any source),
+  `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's link changed), why KARAOKE won't open; the
+  blinking cursor moves to its end. Then the line empties (on Lights: the status line comes back).
 - **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the main screen's two
   buttons, left / right between them; a green ring on Lights), **A** presses, **B** is Back (to the
-  main screen; there it does nothing). On Lights
-  only: **X** next page, **Y** this page's lights on/off, **LB / RB** `-` / `+`. B used to switch
-  to the BOTH page; use X for that now.
+  main screen; there it does nothing). On Lights only: **X** next page, **Y** this page's lights
+  on/off, **LB / RB** `-` / `+`. B used to switch to the BOTH page; use X for that now. The focus
+  shows only while the controller is connected: without it the main screen's two buttons look
+  alike, so the clock and the lights lead.
 
 ## Presets
 

@@ -68,29 +68,11 @@ void test_hi_lo() {
     TEST_ASSERT_EQUAL_STRING("HI -9 LO -12  ABCDEFGHIJKLMNOPQRSTUVW", s);
 }
 
-void test_song() {
-    char s[64];
-    dashtext::song("Blinding Lights", "The Weeknd", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("> Blinding Lights - The Weeknd", s);
-    dashtext::song("Garota de Ipanema", "", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("> Garota de Ipanema", s);
-    dashtext::song("Cora\xC3\xA7\xC3\xA3o", "Jo\xC3\xA3o", s, sizeof(s));  // accents folded, case kept
-    TEST_ASSERT_EQUAL_STRING("> Coracao - Joao", s);
-    dashtext::song("", "The Weeknd", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("> --", s);
-    dashtext::song(nullptr, nullptr, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("> --", s);
-    char small[8];
-    dashtext::song("Blinding Lights", "The Weeknd", small, sizeof(small));
-    TEST_ASSERT_EQUAL_STRING("> Blind", small);
-}
-
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_weekday);
     RUN_TEST(test_date);
     RUN_TEST(test_temp);
     RUN_TEST(test_hi_lo);
-    RUN_TEST(test_song);
     return UNITY_END();
 }

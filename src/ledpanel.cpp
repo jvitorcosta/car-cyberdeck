@@ -6,9 +6,10 @@
 //           right of it the outside temperature big, the sky in words and "HI 32 LO 26  MANAUS"
 //           (see "Weather" below); LIGHTS: a row per light with its colour chip, colour name and
 //           level (OFF, or -- NO LINK when the deck has no link to it); the two items "> [LIGHTS]"
-//           and "> [KARAOKE]" (the second dimmed while the black deck plays nothing with synced
-//           lyrics: a tap then only says why); and the strip: the trip line and the black deck's
-//           song ("> Blinding Lights - The Weeknd") ending in a blinking block cursor
+//           and "> [KARAOKE]" (the second with a LIVE tag while the black deck plays a song with
+//           synced lyrics, dimmed otherwise: a tap then only says why); and the strip: the trip line
+//           ending in a blinking block cursor, and under it the message line (empty but for a
+//           message). The song itself is on the Karaoke screen only
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
 //           together; INSIDE and OUTSIDE each keep their own look), the status line ("IN ON 50%
 //           OUT --  LINK 1/2"), 2x4 colour buttons (tap one to set it and turn on, double-tap the
@@ -22,15 +23,15 @@
 //           (see "Lyrics" below)
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
-// The STATUS line on Lights and the song line on the Menu show a terminal message for 2.5 s
-// (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again.
+// The STATUS line on Lights and the message line on the Menu show a terminal message for 2.5 s
+// (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again (on the Menu: nothing).
 // Each page's colour, intensity and power and the page last shown survive a reboot (NVS); the deck
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
 // /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
 // drives it too: the D-pad moves the focus (an inverted bar on the Menu's two items, a TEXT ring on
-// Lights and Karaoke), A presses, B goes back to the Menu; on Lights X is the next page, Y on/off,
-// LB / RB - / + (see "Xbox controller input" below).
+// Lights and Karaoke; none is drawn while no controller is connected), A presses, B goes back to the
+// Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see "Xbox controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
 // palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
 // there is no WiFi, no clock, and the deck stays in day mode.
@@ -152,7 +153,7 @@ static volatile bool lyricsNudge = false;         // loop(): poll now, the line 
 static constexpr uint32_t LYRICS_NUDGE_MS = 300;  // least gap between a poll and a nudged one
 
 // A state is believed for a while after it came, so the black deck's odd dropped poll doesn't blank
-// the KARAOKE screen, dim its Menu item or blank the Menu's song line: on KARAOKE (a poll a second) for LYRICS_HOLD_MS after it
+// the KARAOKE screen or dim its Menu item: on KARAOKE (a poll a second) for LYRICS_HOLD_MS after it
 // came or after the screen opened (the Menu's last poll carries it until the screen's own first
 // one), on the Menu (a poll every MENU_POLL_MS) for MENU_HOLD_MS, a dropped poll and some.
 static constexpr uint32_t MENU_POLL_MS = 5000;
@@ -421,10 +422,13 @@ static void drawChrome(const Rect& r, const char* s, Face f, bool pressed, bool 
 }
 
 // A Menu item ("> [LIGHTS]"): a MID outline (it stands among the dashboard's text), the text left;
-// the inverted bar when focused. Dimmed (an item that won't open now): DIM text in a DIM border, the
-// bar in DIM; a press keeps that look (only a second DIM outline inside the border), since it won't
-// open: the message is the feedback.
-static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim = false) {
+// the inverted bar when focused. Only the Xbox controller focuses (focus is -1 without it), so
+// without one both items look alike and the clock and the lights band lead. Dimmed (an item that
+// won't open now): DIM text in a DIM border, the bar in DIM; a press keeps that look (only a second
+// DIM outline inside the border), since it won't open: the message is the feedback. `live`
+// (KARAOKE while it opens): a LIVE tag at the right edge, an inverted mini-label in the text's ink
+// with the ground's colour for letters (TEXT, not ALERT: red is for problems).
+static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim, bool live) {
     uint16_t ink;
     if (dim) {
         clearBg(r);
@@ -441,6 +445,12 @@ static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, b
     }
     tft.setTextColor(ink);
     text(s, r.x + ROW_TEXT_X, r.y + r.h / 2, Face::BODY, ML_DATUM);
+    if (!live) return;
+    const int w = termfont::width(Face::SMALL, LIVE_TAG) + 2 * LIVE_PAD, h = termfont::capHeight(Face::SMALL) + 2 * LIVE_PAD;
+    const int x = r.x + r.w - LIVE_RIGHT - w, y = r.y + (r.h - h) / 2;
+    tft.fillRect(x, y, w, h, ink);
+    tft.setTextColor(pressed ? tint(PRESSED) : inverted ? pal(termpal::TEXT) : pal(termpal::BG));  // the ground's
+    text(LIVE_TAG, x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
 }
 
 // A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
@@ -509,12 +519,13 @@ static void drawButtonBody(int id, bool pressed) {
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
         static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [KARAOKE]"};  // in deckmenu::Item order
-        bool dim = false;
+        bool dim = false, live = false;
         if (id == M_ITEM0 + deckmenu::KARAOKE) {
             karaokeShownReady = karaokeReady();
             dim = !karaokeShownReady;
+            live = karaokeShownReady;
         }
-        drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus, dim);
+        drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus, dim, live);
         return;
     }
     if (screen == Screen::Karaoke || id == L_BACK) {  // K_BACK: its only button
@@ -560,8 +571,8 @@ static void drawLevel() {
     text(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, Face::TITLE, MC_DATUM);
 }
 
-// A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS line
-// or the Menu's song line for MESSAGE_MS since messageAt; loop() then puts the usual line back. A
+// A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS line,
+// or on the Menu's message line, for MESSAGE_MS since messageAt; loop() then puts the usual line back. A
 // newer message replaces it, and so does a screen change (show() drops it), so none outlives its
 // screen. Only loop() touches it (and setup(), before loop() starts).
 static constexpr uint32_t MESSAGE_MS = 2500;
@@ -595,10 +606,11 @@ static void drawStatus() {
 // ---- The Menu: a dashboard of stacked bands ----
 // Top to bottom (termlayout's DASH_* place them, test_termfont checks they fit): the header line;
 // the clock and the date left, the weather right, today's HI / LO across; the lights; the two items;
-// the strip (the trip line, the song line ending in the block cursor). A MID rule under each band.
-// Each part clears and draws its own rows, so it is redrawn alone when what it shows changes: the
-// clock each minute, the weather on a new reading, the lights on a look or link change, the trip
-// line when its text moves, the song line on a new track or message, the cursor's cell on a blink.
+// the strip (the trip line, the message line; the block cursor ends one of them). A MID rule under
+// each band. Each part clears and draws its own rows, so it is redrawn alone when what it shows
+// changes: the clock each minute, the weather on a new reading, the lights on a look or link change,
+// the trip line when its text moves, the message line when a message comes or goes, the cursor's
+// cell on a blink.
 
 // The first row a text in face f reaches with its caps' top at capTop: where a part's clear starts
 // from, so it never takes the part above.
@@ -708,37 +720,33 @@ static void drawLightsBand() {
 // change (every minute, or every 0.1 km).
 static tripmeter::Meter tripMeter;
 
-// The strip's rows: the trip line from under the rule, the song line from where its ink starts.
-static int songTop() { return SONG_BASE - termfont::ascent(Face::SMALL); }
-
-static void drawTrip() {
-    char s[40];
-    tripmeter::line(tripMeter.trip(), s, sizeof(s));
-    clearBg(RULE_X0, STRIP_RULE_Y + 1, RULE_X1 - RULE_X0, songTop() - (STRIP_RULE_Y + 1));
-    tft.setTextColor(pal(termpal::TEXT));
-    text(s, DASH_X, TRIP_BASE, Face::SMALL, BL_DATUM);
-}
+// The strip's rows: the trip line from under the rule, the message line from where its ink starts.
+static int msgTop() { return MSG_BASE - termfont::ascent(Face::SMALL); }
 
 // The strip's block cursor: one SMALL cell (as wide as a character, as tall as the caps) at the end
-// of the song line, blinking at ~1 Hz. Only its cell is redrawn. -1 when it would pass DASH_RIGHT;
-// the longest message and a song cut to SONG_W still leave it room (test_termfont).
+// of the trip line, or of the message while one shows, blinking at ~1 Hz. Only its cell is redrawn.
+// -1 when it would pass DASH_RIGHT; the longest trip line and message still leave it room
+// (test_termfont).
 static constexpr uint32_t BLINK_MS = 500;
-static int cursorX = -1;
+static int cursorX = -1, cursorBase = TRIP_BASE;
 static bool cursorOn = false;
+static int tripEndX = DASH_X;  // where the trip line on screen ends
 
 static void drawCursor(bool on) {
     cursorOn = on;
     if (cursorX < 0) return;
     const int cap = termfont::capHeight(Face::SMALL), w = termfont::cell(Face::SMALL);
-    if (on) tft.fillRect(cursorX, SONG_BASE - cap, w, cap, pal(termpal::TEXT));
-    else clearBg(cursorX, SONG_BASE - cap, w, cap);
+    if (on) tft.fillRect(cursorX, cursorBase - cap, w, cap, pal(termpal::TEXT));
+    else clearBg(cursorX, cursorBase - cap, w, cap);
 }
 
 static bool blinkPhase() { return (millis() / BLINK_MS) % 2 == 0; }
 
-// The cursor follows the text's end: a message's, or the song's.
-static void placeCursor(int x) {
+// The cursor goes to x on the line whose baseline is `base`. Moving it to the other line, the caller
+// first clears its old cell (drawMessageLine does).
+static void placeCursor(int x, int base) {
     cursorX = x + termfont::cell(Face::SMALL) <= DASH_RIGHT ? x : -1;
+    cursorBase = base;
     drawCursor(blinkPhase());
 }
 
@@ -747,29 +755,27 @@ static void blinkCursor() {
     if (screen == Screen::Menu && blinkPhase() != cursorOn) drawCursor(!cursorOn);
 }
 
-// The black deck's song as the song line shows it: "> Title - Artist" while it plays and is heard
-// (the Menu's polls, see "Lyrics" below), "> --" otherwise. songShown is the song on screen, so
-// lyricsTick redraws the line only when it changed.
-static bool songLive() { return lyricsHeard() && song.deck.playing && song.deck.track[0]; }
-static char songShown[sizeof(stateparse::Deck::track) + sizeof(stateparse::Deck::artist) + 8];
+// The strip's first line (SMALL, TEXT); the cursor ends it unless a message holds the cursor.
+static void drawTrip() {
+    char s[40];
+    tripmeter::line(tripMeter.trip(), s, sizeof(s));
+    clearBg(RULE_X0, STRIP_RULE_Y + 1, RULE_X1 - RULE_X0, msgTop() - (STRIP_RULE_Y + 1));
+    tft.setTextColor(pal(termpal::TEXT));
+    tripEndX = DASH_X + text(s, DASH_X, TRIP_BASE, Face::SMALL, BL_DATUM);
+    if (!message[0]) placeCursor(tripEndX, TRIP_BASE);
+}
 
-static void songText(bool live, char* out, size_t n) { dashtext::song(live ? song.deck.track : "", song.deck.artist, out, n); }
-
-// The strip's second line: the message while one shows (TEXT), else the song (MID; "> --" in DIM),
-// cut to SONG_W with "..". Case kept, accents folded (the font is ASCII only). Then the cursor.
-static void drawSongLine() {
-    clearBg(RULE_X0, songTop(), RULE_X1 - RULE_X0, tft.height() - songTop());
-    if (message[0]) {
-        tft.setTextColor(msgInk(message));
-        placeCursor(DASH_X + text(message, DASH_X, SONG_BASE, Face::SMALL, BL_DATUM));
+// The strip's second line: the message while one shows (TEXT, ALERT for a problem) with the cursor
+// after it; else empty, and the cursor back at the trip line's end.
+static void drawMessageLine() {
+    drawCursor(false);  // its old cell, on either line
+    clearBg(RULE_X0, msgTop(), RULE_X1 - RULE_X0, tft.height() - msgTop());
+    if (!message[0]) {
+        placeCursor(tripEndX, TRIP_BASE);
         return;
     }
-    const bool live = songLive();  // once: the hold can run out between two looks
-    songText(live, songShown, sizeof(songShown));
-    static karaoke::Line fit[1];  // static: 160 B, off the loop's stack
-    const int n = karaoke::wrap(songShown, static_cast<int>(Face::SMALL), termfont::widthOf, SONG_W, 1, fit);
-    tft.setTextColor(pal(live ? termpal::MID : termpal::DIM));
-    placeCursor(DASH_X + (n > 0 ? text(fit[0].s, DASH_X, SONG_BASE, Face::SMALL, BL_DATUM) : 0));
+    tft.setTextColor(msgInk(message));
+    placeCursor(DASH_X + text(message, DASH_X, MSG_BASE, Face::SMALL, BL_DATUM), MSG_BASE);
 }
 
 // The whole dashboard but its two items (drawAll draws those as buttons).
@@ -782,7 +788,7 @@ static void drawDash() {
     drawRule(LIGHTS_RULE_Y);
     drawRule(STRIP_RULE_Y);
     drawTrip();
-    drawSongLine();
+    drawMessageLine();
 }
 
 // The terminal's boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
@@ -826,10 +832,11 @@ static void drawLightState() {
     else if (screen == Screen::Menu) drawLightsBand();
 }
 
-// What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's song line.
+// What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's message
+// line (then empty).
 static void drawMessage() {
     if (screen == Screen::Lights) drawStatus();
-    else if (screen == Screen::Menu) drawSongLine();
+    else if (screen == Screen::Menu) drawMessageLine();
 }
 
 // After a look changed (a tap, voice, the watch, Y): everything that shows it.
@@ -1337,7 +1344,7 @@ static void press(int id) {
     switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
     case deckmenu::LIGHTS: show(Screen::Lights); break;
     case deckmenu::KARAOKE:
-        // dimmed: no song to sing along, so only the song line says why
+        // dimmed: no song to sing along, so only the message line says why
         if (karaokeReady()) {
             show(Screen::Karaoke);
         } else {
@@ -1592,7 +1599,7 @@ static void takeWeather() {
 // link), started with the weather once WiFi is up. It polls only while a screen that shows it is up
 // (loop() keeps lyricsWant): the KARAOKE screen every second, every 5 s after ten misses in a row
 // (util/pollpace); the Menu every MENU_POLL_MS, every 30 s after those ten misses (enough to light or
-// dim its KARAOKE item and keep its song line); at once when either opens. Otherwise it sleeps. On KARAOKE loop() also
+// dim its KARAOKE item); at once when either opens. Otherwise it sleeps. On KARAOKE loop() also
 // nudges an extra poll (lyricsNudge, at most one per LYRICS_NUDGE_MS) when the line shown changes
 // and the next one isn't known, so the dim line under it needn't wait for the next second's poll. The black deck is at its fixed hotspot
 // address (COMPANION_DECK) on the iPhone hotspot, else looked up by its mDNS name (DECK_MDNS_NAME)
@@ -1720,10 +1727,9 @@ static void beginLyrics() {
 }
 
 // In loop(): tells the task how to poll, takes a published poll, and redraws what changed: on the
-// Menu the KARAOKE item when it turns lit or dimmed and the song line when the song changes (a state
-// also goes stale with time), on KARAOKE
-// the parts of the screen that changed (the line and the bar move between polls, so this looks
-// every KARAOKE_TICK_MS).
+// Menu the KARAOKE item when it turns lit or dimmed (a state also goes stale with time, so this looks
+// each pass), on KARAOKE the parts of the screen that changed (the line and the bar move between
+// polls, so this looks every KARAOKE_TICK_MS).
 static void lyricsTick() {
     lyricsWant = screen == Screen::Karaoke ? WANT_KARAOKE : screen == Screen::Menu ? WANT_MENU : WANT_NONE;
     bool fresh = false;
@@ -1737,14 +1743,6 @@ static void lyricsTick() {
     if (screen == Screen::Menu) {
         const int item = M_ITEM0 + deckmenu::KARAOKE;
         if (karaokeReady() != karaokeShownReady) drawButton(item, pressedNow(item));
-        // the song line: on a poll, and each second (a state goes stale with time); under a message
-        // it waits, drawMessage() brings it back
-        static uint32_t songAt = 0;
-        if (message[0] || (!fresh && millis() - songAt < 1000)) return;
-        songAt = millis();
-        char s[sizeof(songShown)];
-        songText(songLive(), s, sizeof(s));
-        if (strcmp(s, songShown) != 0) drawSongLine();
         return;
     }
     if (screen != Screen::Karaoke) return;

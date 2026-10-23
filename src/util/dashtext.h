@@ -1,8 +1,8 @@
 #pragma once
 // The texts of the yellow deck's main screen (the dashboard in ledpanel.cpp): the date under the
-// clock, the outside temperature, today's high / low with the city, and the black deck's song on the
-// strip. Upper case where the terminal shows capitals; the font is ASCII only, so names are
-// accent-folded. Each writes at most n bytes, always terminated. PURE, host-tested.
+// clock, the outside temperature, and today's high / low with the city. Upper case where the
+// terminal shows capitals; the font is ASCII only, so names are accent-folded. Each writes at most n
+// bytes, always terminated. PURE, host-tested.
 #include <cstddef>
 
 namespace dashtext {
@@ -17,8 +17,5 @@ void temp(bool ok, double c, char* out, size_t n);
 // "HI 32 LO 26  MANAUS": today's max and min rounded ("--" each without them), then the city in
 // capitals, folded; without a city just "HI 32 LO 26".
 void hiLo(bool daily, double maxC, double minC, const char* city, char* out, size_t n);
-// "> Blinding Lights - The Weeknd", "> Title" without an artist, "> --" without a track. Folded,
-// case kept (titles read better as written); the caller cuts it to the screen.
-void song(const char* track, const char* artist, char* out, size_t n);
 
 }  // namespace dashtext

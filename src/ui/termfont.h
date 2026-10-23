@@ -23,7 +23,8 @@ struct Font {                   // = GFXfont
 };
 
 // SMALL 17 px: the boot lines, the dashboard's header, date, weather words, HI / LO, LIGHTS label and
-// strip (trip, song, messages), small labels (the Lights colour names, the Lights status line);
+// strip (trip, messages), the KARAOKE item's LIVE tag, small labels (the Lights colour names, the
+// Lights status line);
 // BODY 19 px: buttons and the Menu items, tabs, < BACK, INSIDE / OUTSIDE, the Lights preset names,
 // the KARAOKE song row, the next lyric; TITLE 24 px: the lights band's colour names and levels, the
 // Lights level %, [-] / [+]; BIG 36 px: the clock, the temperature, the lyric line.

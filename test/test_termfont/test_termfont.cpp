@@ -104,6 +104,14 @@ void test_menu_items_fit() {
         for (const char* s : {"> [LIGHTS]", "> [KARAOKE]"}) fitsLeft(Face::BODY, s, ROW_TEXT_X, r.w);
         TEST_ASSERT_TRUE(termfont::capHeight(Face::BODY) <= r.h - 2 * MARGIN);
     }
+    // KARAOKE's LIVE tag: inside the item at its right edge, clear of the item's text, its caps
+    // LIVE_PAD from the label's edges
+    const deckmenu::Rect k = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + deckmenu::KARAOKE);
+    const int tagW = termfont::width(Face::SMALL, LIVE_TAG) + 2 * LIVE_PAD, tagH = termfont::capHeight(Face::SMALL) + 2 * LIVE_PAD;
+    TEST_ASSERT_TRUE(LIVE_RIGHT >= MARGIN);
+    TEST_ASSERT_TRUE(ROW_TEXT_X + termfont::width(Face::BODY, "> [KARAOKE]") + MARGIN <= k.w - LIVE_RIGHT - tagW);
+    TEST_ASSERT_TRUE(tagH <= k.h - 2 * MARGIN);
+    TEST_ASSERT_TRUE(LIVE_PAD >= 2);
 }
 
 void test_preset_names_fit() {
@@ -207,6 +215,7 @@ void test_dash_lights_fit() {
 }
 
 void test_dash_strip_fits() {
+    // the longest trip line, the block cursor after it
     tripmeter::Trip t;
     t.seconds = 99 * 3600 + 59 * 60;
     t.meters = 999900;
@@ -214,28 +223,20 @@ void test_dash_strip_fits() {
     char s[40];
     tripmeter::line(t, s, sizeof(s));
     TEST_ASSERT_EQUAL_STRING("TRIP 999.9 KM  99:59", s);
-    fitsLeft(Face::SMALL, s, DASH_X, DASH_RIGHT + MARGIN);
-    // every message, the block cursor after it
+    TEST_ASSERT_TRUE(DASH_X + termfont::advance(Face::SMALL, s) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
+    // every message on the line under it, the block cursor after it
     tripmeter::last(t, s, sizeof(s));
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", s);
     for (const char* m : {static_cast<const char*>(s), ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED",
                           ">LIGHTS: NO LINK", ">WRONG KEY", ">NO SIGNAL", ">STANDBY"}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
-    // a long song is cut to SONG_W with "..", and the cursor still ends by DASH_RIGHT
-    char song[128];
-    dashtext::song("Bohemian Rhapsody (Remastered 2011, Live at Wembley Stadium)", "Queen", song, sizeof(song));
-    karaoke::Line fit[1];
-    bool cut = false;
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap(song, static_cast<int>(Face::SMALL), termfont::widthOf, SONG_W, 1, fit, &cut));
-    TEST_ASSERT_TRUE(cut);
-    TEST_ASSERT_TRUE(DASH_X + termfont::advance(Face::SMALL, fit[0].s) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
-    // rows: the rule, the trip line, the song line, all on screen
-    const Rows trip = fromBase(Face::SMALL, TRIP_BASE), line = fromBase(Face::SMALL, SONG_BASE);
+    // rows: the rule, the trip line, the message line, all on screen
+    const Rows trip = fromBase(Face::SMALL, TRIP_BASE), line = fromBase(Face::SMALL, MSG_BASE);
     const deckmenu::Rect item = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0);
     TEST_ASSERT_TRUE(STRIP_RULE_Y >= deckmenu::MENU_STRIP.y && item.y + item.h < STRIP_RULE_Y);
     between(STRIP_RULE_Y, trip, 240, "trip");
-    above(trip, line, "trip over the song");
+    above(trip, line, "trip over the message");
     TEST_ASSERT_TRUE(line.bottom <= 239);
 }
 

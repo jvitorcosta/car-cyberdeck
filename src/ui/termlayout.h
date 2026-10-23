@@ -9,6 +9,10 @@ namespace termlayout {
 
 // The Menu's items ("> [LIGHTS]", BODY): text x from the rect's left.
 constexpr int ROW_TEXT_X = 8;
+// KARAOKE's LIVE tag while it opens (SMALL, an inverted mini-label): LIVE_PAD px of fill around the
+// caps, its right edge LIVE_RIGHT in from the item's.
+constexpr const char* LIVE_TAG = "LIVE";
+constexpr int LIVE_PAD = 3, LIVE_RIGHT = 6;
 
 // A Lights colour button (75x44): the chip left, as tall as before but 20 wide (was 28 square) so the
 // name (SMALL) fits right of it.
@@ -41,10 +45,9 @@ constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, HILO_Y = 74, CLOCK_RULE_Y
 // one baseline
 constexpr int LIGHTS_LABEL_Y = 96, LIGHT_ROW_BASE = 125, LIGHT_ROW_DY = 22, LIGHTS_RULE_Y = 156;
 constexpr int LIGHT_CHIP_X = 84, LIGHT_CHIP_W = 18, LIGHT_CHIP_H = 14, LIGHT_NAME_X = 108;
-// the strip under the items: the trip line, then the song line (or a message) ending in the block
-// cursor; the song is cut to SONG_W so the cursor (a SMALL cell) still ends by DASH_RIGHT
-constexpr int STRIP_RULE_Y = 204, TRIP_BASE = 222, SONG_BASE = 237;
-constexpr int SONG_W = DASH_RIGHT - DASH_X - 9;
+// the strip under the items: the trip line, then the message line (empty unless a message shows);
+// the block cursor (a SMALL cell) ends the trip line, or the message while one shows, by DASH_RIGHT
+constexpr int STRIP_RULE_Y = 204, TRIP_BASE = 222, MSG_BASE = 237;
 
 // The KARAOKE body: the line due now in BIG over up to 3 lines KARAOKE_BIG_DY apart (or, when that
 // would cut it, TITLE over up to 4 lines KARAOKE_FIT_DY apart) in KARAOKE_BIG_H rows; the next line in

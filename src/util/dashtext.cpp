@@ -49,16 +49,4 @@ void hiLo(bool daily, double maxC, double minC, const char* city, char* out, siz
     else snprintf(out, n, "HI %s LO %s", hi, lo);
 }
 
-void song(const char* track, const char* artist, char* out, size_t n) {
-    if (!track || !track[0]) {
-        snprintf(out, n, "> --");
-        return;
-    }
-    char t[96], a[96] = "";  // stateparse::Deck's sizes
-    txt::asciiFold(track, t, sizeof(t));
-    if (artist) txt::asciiFold(artist, a, sizeof(a));
-    if (a[0]) snprintf(out, n, "> %s - %s", t, a);
-    else snprintf(out, n, "> %s", t);
-}
-
 }  // namespace dashtext
