@@ -22,8 +22,14 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 
 ## On the deck
 
-The deck boots by typing the welcome (`WELCOME TO CYBERDECK`, character by character in about half a second), then shows the **main screen**, whatever
-page it last showed. The look is "Seegson" (Alien: Isolation): pale green on black, one hue at three brightnesses, and red kept for problems only (`-- NO LINK`, `>OFFLINE`, the `NO LINK` messages, `>WRONG KEY`; a deeper red at night). Every screen has faint scanlines and ALL CAPS bracket labels.
+The deck boots by typing the welcome (`WELCOME TO CYBERDECK`, character by character in about half
+a second), then shows the **main screen**, whatever page it last showed. The look is "Seegson"
+(Alien: Isolation): pale green on black, one hue at three brightnesses, and red kept for problems
+only (`-- NO LINK`, `>OFFLINE`, the `NO LINK` messages, `>WRONG KEY`; a deeper red at night). Every
+screen has faint scanlines and ALL CAPS bracket labels. To read at a glance in a moving car, every
+colour clears a contrast on black of at least 4.5:1 by day (the dimmest green too) and 3:1 at night
+(WCAG; `src/util/termpal.h` lists each one's figure), and the darker greens carry no blue, which
+the panel would turn teal.
 
 - **Main screen** (a dashboard, top to bottom):
   - the header `CYBERDECK // HONDA CITY`;

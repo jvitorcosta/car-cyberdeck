@@ -1,6 +1,6 @@
-// The yellow deck (CYD) as the car's control screen: a RobCo-style terminal (green on black, amber
-// at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Three
-// screens, laid out by util/deckmenu:
+// The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
+// red only for problems, amber at night, faint scanlines, all caps) that drives the car's two
+// ELK-family LED controllers. Three screens, laid out by util/deckmenu:
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands. The header line
 //           (CYBERDECK // HONDA CITY); the clock big with the date under it ("FRI 23 OCT"), and
 //           right of it the outside temperature big, the sky in words and "HI 32 LO 26  MANAUS"
@@ -636,8 +636,8 @@ static void drawClock() {
 }
 
 // The weather's three texts as shown: the temperature ("32C", "--C" before the first reading), the sky
-// in words ("PARTLY CLOUDY"; nothing before a reading), and "HI 32 LO 26  MANAUS" (">OFFLINE" while
-// no reading ever came and the last try failed, or there's no WiFi; "HI -- LO --" before the first
+// in words ("PARTLY CLOUDY"; nothing before a reading), and "HI 32 LO 26  MANAUS" (">OFFLINE", in
+// ALERT, while no reading ever came and the last try failed, or there's no WiFi; "HI -- LO --" before the first
 // try). A failed try keeps the last good reading on screen. wxShown is what is on screen: a new
 // reading redraws the part only when one of them changed.
 static constexpr int N_WX_TEXT = 3;
@@ -654,7 +654,7 @@ static void weatherTexts(char (&t)[N_WX_TEXT][48]) {
 }
 
 // The clock band's right, right-aligned: the temperature (BIG, TEXT), the sky (SMALL, MID), and
-// across the band under both columns the HI / LO line (SMALL, DIM).
+// across the band under both columns the HI / LO line (SMALL, DIM; ">OFFLINE" in ALERT).
 static void drawWeather() {
     weatherTexts(wxShown);
     const int top = HEADER_RULE_Y + 1, hiLoTop = inkTop(Face::SMALL, HILO_Y);
@@ -785,7 +785,7 @@ static void drawDash() {
     drawSongLine();
 }
 
-// The RobCo boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
+// The terminal's boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
 // type out one character every TYPE_MS behind a block cursor (a SMALL cell; 85 characters, ~0.5 s),
 // stay BOOT_HOLD_MS to be read, then drawAll() puts up the dashboard. It runs in setup(), so nothing
 // else draws meanwhile: every other drawing path runs from loop(), and the link and voice tasks start
@@ -865,7 +865,7 @@ static void drawFocus(int id, bool on) {
 // it (BODY, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). Texts
 // keep their case (lyrics read better than caps) and are accent-folded (the font is ASCII only).
 // Without a song to sing along the big text is the state word in DIM (>NO SYNCED LYRICS, >STANDBY,
-// >NO SIGNAL, >WRONG KEY) and the screen stays. The line switches at its start time: karaoke
+// >NO SIGNAL; >WRONG KEY, a problem, in ALERT) and the screen stays. The line switches at its start time: karaoke
 // interpolates the position between polls and lyricsTick looks every KARAOKE_TICK_MS. Each part is
 // redrawn only when what it shows changed.
 static constexpr uint32_t KARAOKE_TICK_MS = 50;
