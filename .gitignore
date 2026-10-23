@@ -61,3 +61,7 @@ mcqueen*.png
 # Garmin watch app: the deck key, and build output
 garmin/carlights/source/Secrets.mc
 garmin/carlights/bin/
+garmin/pokeface/bin/
+# Pokéface sprites and font: Nintendo's / pokeemerald-expansion's art, fetched by tools/gen_pokeface.py, never committed
+pokefont-src/
+garmin/pokeface/resources/gen/
