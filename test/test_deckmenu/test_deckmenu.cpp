@@ -34,12 +34,12 @@ void test_rects_inside_screen_and_apart() {
 
 void test_unbuilt_items_have_no_rect() {
     TEST_ASSERT_TRUE(rect(Screen::Menu, M_ITEM0).w > 0);
-    for (int i = M_ITEM0 + N_ITEMS; i < M_FAV0; i++) TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, i).w);
+    for (int i = M_ITEM0 + N_ITEMS; i < M_PRE0; i++) TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, i).w);
     // Every point of the screen: an unbuilt slot is never a hit.
     for (int y = 0; y < 240; y++)
         for (int x = 0; x < 320; x++) {
             const int h = hit(Screen::Menu, x, y);
-            TEST_ASSERT_TRUE(h < M_ITEM0 + N_ITEMS || h >= M_FAV0);
+            TEST_ASSERT_TRUE(h < M_ITEM0 + N_ITEMS || h >= M_PRE0);
         }
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, 99).w);
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Lights, -1).w);
@@ -53,8 +53,10 @@ void test_hit_snaps_and_ignores_display_rects() {
     // Just under the Back button, in the gap above the status line.
     const Rect back = rect(Screen::Lights, L_BACK);
     TEST_ASSERT_EQUAL_INT(L_BACK, hit(Screen::Lights, back.x + 5, back.y + back.h + 1));
-    // More than 10 px from every menu button.
-    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, 300, 100));
+    // The menu has no spot more than 10 px from a button; the gap between a preset column
+    // snaps to the nearer block.
+    TEST_ASSERT_EQUAL_INT(M_PRE0, hit(Screen::Menu, 157, 100));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, hit(Screen::Menu, 160, 100));
     // Display only: no snapping to a neighbour from inside them.
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, LEVEL.x + 50, LEVEL.y + 20));
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, STATUS.x + 50, STATUS.y + 5));
@@ -64,27 +66,30 @@ void test_hit_snaps_and_ignores_display_rects() {
 
 void test_neighbour() {
     TEST_ASSERT_EQUAL_INT(L_TILE0 + 1, neighbour(Screen::Lights, L_TILE0, 1, 0));
-    TEST_ASSERT_EQUAL_INT(L_FAV0, neighbour(Screen::Lights, L_TILE0 + 4, 0, 1));
+    TEST_ASSERT_EQUAL_INT(L_PRE0, neighbour(Screen::Lights, L_TILE0 + 4, 0, 1));
     TEST_ASSERT_EQUAL_INT(L_ZONE0, neighbour(Screen::Lights, L_ZONE0, 0, -1));
     TEST_ASSERT_EQUAL_INT(L_TILE0, neighbour(Screen::Lights, L_TILE0 + 1, -1, 0));
-    TEST_ASSERT_EQUAL_INT(M_FAV0, neighbour(Screen::Menu, M_ITEM0, 0, 1));
+    TEST_ASSERT_EQUAL_INT(M_PRE0, neighbour(Screen::Menu, M_ITEM0, 0, 1));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, neighbour(Screen::Menu, M_PRE0, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 2, neighbour(Screen::Menu, M_PRE0, 0, 1));
     // Never lands on an unbuilt slot.
     for (int dy = -1; dy <= 1; dy++)
         for (int dx = -1; dx <= 1; dx++) {
             if ((dx != 0) == (dy != 0)) continue;
             const int n = neighbour(Screen::Menu, M_ITEM0, dx, dy);
-            TEST_ASSERT_TRUE(n < M_ITEM0 + N_ITEMS || n >= M_FAV0);
+            TEST_ASSERT_TRUE(n < M_ITEM0 + N_ITEMS || n >= M_PRE0);
         }
 }
 
-void test_fav_slots() {
-    TEST_ASSERT_EQUAL_INT(3, favSlot(Screen::Lights, L_FAV0 + 3));
-    TEST_ASSERT_EQUAL_INT(0, favSlot(Screen::Menu, M_FAV0));
-    TEST_ASSERT_EQUAL_INT(-1, favSlot(Screen::Lights, L_TILE0));
-    TEST_ASSERT_EQUAL_INT(-1, favSlot(Screen::Lights, L_MINUS));
-    TEST_ASSERT_EQUAL_INT(-1, favSlot(Screen::Menu, M_ITEM0));
-    TEST_ASSERT_TRUE(isFav(Screen::Menu, M_FAV0 + 3));
-    TEST_ASSERT_FALSE(isFav(Screen::Lights, L_PLUS));
+void test_preset_slots() {
+    TEST_ASSERT_EQUAL_INT(3, presetSlot(Screen::Lights, L_PRE0 + 3));
+    TEST_ASSERT_EQUAL_INT(0, presetSlot(Screen::Menu, M_PRE0));
+    TEST_ASSERT_EQUAL_INT(3, presetSlot(Screen::Menu, M_PRE0 + 3));
+    TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Lights, L_TILE0));
+    TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Lights, L_MINUS));
+    TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Menu, M_ITEM0));
+    TEST_ASSERT_TRUE(isPreset(Screen::Menu, M_PRE0 + 3));
+    TEST_ASSERT_FALSE(isPreset(Screen::Lights, L_PLUS));
 }
 
 int main(int, char**) {
@@ -93,6 +98,6 @@ int main(int, char**) {
     RUN_TEST(test_unbuilt_items_have_no_rect);
     RUN_TEST(test_hit_snaps_and_ignores_display_rects);
     RUN_TEST(test_neighbour);
-    RUN_TEST(test_fav_slots);
+    RUN_TEST(test_preset_slots);
     return UNITY_END();
 }

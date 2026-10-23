@@ -83,11 +83,11 @@ static ledfavs::Fav favs[ledfavs::N_FAV];
 using deckmenu::Rect;
 using deckmenu::Screen;
 using deckmenu::M_ITEM0;
-using deckmenu::M_FAV0;
+using deckmenu::M_PRE0;
 using deckmenu::L_BACK;
 using deckmenu::L_ZONE0;
 using deckmenu::L_TILE0;
-using deckmenu::L_FAV0;
+using deckmenu::L_PRE0;
 using deckmenu::L_MINUS;
 using deckmenu::L_PLUS;
 
@@ -228,7 +228,7 @@ static void linkTask(void*) {
 
 // The grid is all colours; there is no power tile: double-tapping the lit colour turns the lights
 // off, and tapping any colour turns them back on.
-static_assert(N_SWATCH == 8 && L_FAV0 - L_TILE0 == N_SWATCH, "the grid is 2x4 colours");
+static_assert(N_SWATCH == 8 && L_PRE0 - L_TILE0 == N_SWATCH, "the grid is 2x4 colours");
 
 static bool built(int id) { return deckmenu::rect(screen, id).w > 0; }
 
@@ -363,8 +363,8 @@ static void drawButtonBody(int id, bool pressed) {
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
         static const char* const ITEM[deckmenu::N_ITEMS] = {"[ LIGHTS ]"};  // in deckmenu::Item order
-        if (id < M_FAV0) drawChrome(r, ITEM[id - M_ITEM0], 2, pressed, id == focus);
-        else drawFavSlot(r, deckmenu::favSlot(screen, id), pressed, id == focus);
+        if (id < M_PRE0) drawChrome(r, ITEM[id - M_ITEM0], 2, pressed, id == focus);
+        else drawFavSlot(r, deckmenu::presetSlot(screen, id), pressed, id == focus);
         return;
     }
     if (id == L_BACK) {
@@ -372,10 +372,10 @@ static void drawButtonBody(int id, bool pressed) {
     } else if (id < L_TILE0) {
         static const char* const ZONE[] = {"BOTH", "INSIDE", "OUTSIDE"};
         drawChrome(r, ZONE[id - L_ZONE0], 2, pressed, target == static_cast<Target>(id - L_ZONE0));
-    } else if (id < L_FAV0) {
+    } else if (id < L_PRE0) {
         drawTile(r, id - L_TILE0, pressed);
     } else if (id < L_MINUS) {
-        drawFavSlot(r, deckmenu::favSlot(screen, id), pressed, false);  // focus: the ring
+        drawFavSlot(r, deckmenu::presetSlot(screen, id), pressed, false);  // focus: the ring
     } else {
         drawChrome(r, id == L_MINUS ? "-" : "+", 4, pressed, false);
     }
@@ -493,7 +493,7 @@ static void drawHeader() {
 }
 
 static void drawGrid() {
-    for (int id = L_TILE0; id < L_FAV0; id++) drawButton(id);
+    for (int id = L_TILE0; id < L_PRE0; id++) drawButton(id);
 }
 
 static void drawZones() {
@@ -702,7 +702,7 @@ static void load() {
 }
 
 // The favourite slot's button on the current screen.
-static int favId(int slot0) { return (screen == Screen::Menu ? static_cast<int>(M_FAV0) : L_FAV0) + slot0; }
+static int favId(int slot0) { return (screen == Screen::Menu ? static_cast<int>(M_PRE0) : L_PRE0) + slot0; }
 
 // Favourite slot0 (0..3) onto the lights: each light gets its saved look. The BOTH page copies
 // them when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
@@ -774,13 +774,13 @@ static void pressLights(int id) {
         show(Screen::Menu);
         return;
     }
-    if (deckmenu::isFav(screen, id)) return;  // favourites act on release (loop, handlePad)
+    if (deckmenu::isPreset(screen, id)) return;  // favourites act on release (loop, handlePad)
     if (id < L_TILE0) {  // another page: show its look
         target = static_cast<Target>(id - L_ZONE0);
         drawZones();
         drawGrid();
         drawLevel();
-    } else if (id < L_FAV0) {
+    } else if (id < L_PRE0) {
         // A second tap on the lit colour within DOUBLE_MS turns the lights off; any other tap sets
         // the colour and turns them on.
         static constexpr uint32_t DOUBLE_MS = 450;
@@ -825,7 +825,7 @@ static void act() {
     tap.id = deckmenu::hit(screen, x, y);
     Serial.printf("[tap] %d,%d -> button %d\n", x, y, tap.id);
     if (tap.id < 0) return;
-    if (deckmenu::isFav(screen, tap.id)) {  // pressed look only: it acts on release, or saves when held
+    if (deckmenu::isPreset(screen, tap.id)) {  // pressed look only: it acts on release, or saves when held
         drawButton(tap.id, true);
         return;
     }
@@ -866,7 +866,7 @@ static void moveFocus(int dx, int dy) {
 // A button press on the controller: the press looks (yellow) for PAD_FLASH_MS. One at a time: a
 // second press inside that window first restores the earlier button (else -/+ stayed yellow).
 static void padPress(int id) {
-    if (id < 0 || deckmenu::isFav(screen, id)) return;  // favourites: padFavDown, on release
+    if (id < 0 || deckmenu::isPreset(screen, id)) return;  // favourites: padFavDown, on release
     if (padFlash >= 0 && padFlash != id) drawButton(padFlash);
     const Screen was = screen;
     press(id);
@@ -879,6 +879,7 @@ static void padPress(int id) {
 // A on a favourite: drawn pressed; it acts when A comes up (handlePad), or saves once held
 // PAD_HOLD_MS on Lights.
 static constexpr uint32_t PAD_HOLD_MS = 1000;
+static constexpr uint32_t HOLD_MS = 800;  // touch hold on a Lights favourite saves it (removed with the save logic)
 static void padFavDown(int id) {
     if (padFlash >= 0) {
         drawButton(padFlash);
@@ -939,11 +940,11 @@ static void handlePad() {
     const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
     const Screen was = screen;
     if (a) {
-        if (deckmenu::isFav(screen, focus)) padFavDown(focus);
+        if (deckmenu::isPreset(screen, focus)) padFavDown(focus);
         else padPress(focus);
     }
     if (padFav >= 0) {  // show() clears it, so it is a favourite of this screen
-        const int slot = deckmenu::favSlot(screen, padFav);
+        const int slot = deckmenu::presetSlot(screen, padFav);
         if (!n.btnA) {
             const int id = padFav;
             padFav = -1;
@@ -1261,15 +1262,15 @@ void loop() {
             tap.sy += y;
             tap.n++;
             if (millis() - tap.t0 >= SETTLE_MS && tap.n >= 3) act();
-        } else if (!tap.held && screen == Screen::Lights && tap.id >= 0 && deckmenu::isFav(screen, tap.id) &&
-                   millis() - tap.t0 >= deckmenu::HOLD_MS) {
+        } else if (!tap.held && screen == Screen::Lights && tap.id >= 0 && deckmenu::isPreset(screen, tap.id) &&
+                   millis() - tap.t0 >= HOLD_MS) {
             tap.held = true;  // saved once; the release then does nothing
-            saveFav(deckmenu::favSlot(screen, tap.id));
+            saveFav(deckmenu::presetSlot(screen, tap.id));
         }
     } else if (tap.down) {
         if (!tap.acted && tap.n > 0) act();  // a quick tap
         tap.down = false;
-        if (tap.id >= 0 && !tap.held && deckmenu::isFav(screen, tap.id)) applyFav(deckmenu::favSlot(screen, tap.id));
+        if (tap.id >= 0 && !tap.held && deckmenu::isPreset(screen, tap.id)) applyFav(deckmenu::presetSlot(screen, tap.id));
         if (tap.id >= 0) drawButton(tap.id);  // released: back to the normal look
     }
 

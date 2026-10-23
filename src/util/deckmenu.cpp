@@ -26,16 +26,17 @@ int count(Screen s) { return s == Screen::Menu ? static_cast<int>(M_N) : static_
 Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
     if (s == Screen::Menu) {
-        if (id < M_FAV0) return id < N_ITEMS ? mk(4 + (id % 3) * 106, 40 + (id / 3) * 46, 100, 40) : NONE;
-        return mk(4 + (id - M_FAV0) * 79, 134, 75, 44);
+        if (id < M_PRE0) return mk(4, 48, 312, 36);  // LIGHTS row
+        const int k = id - M_PRE0;
+        return mk(4 + (k % 2) * 158, 92 + (k / 2) * 46, 154, 42);
     }
     if (id == L_BACK) return mk(4, 2, 70, 36);
     if (id < L_TILE0) return mk(80 + (id - L_ZONE0) * 80, 2, 76, 36);
-    if (id < L_FAV0) {
+    if (id < L_PRE0) {
         const int i = id - L_TILE0;
         return mk(4 + (i % 4) * 79, 54 + (i / 4) * 48, 75, 44);
     }
-    if (id < L_MINUS) return mk(4 + (id - L_FAV0) * 79, 150, 75, 36);
+    if (id < L_MINUS) return mk(4 + (id - L_PRE0) * 79, 150, 75, 36);
     if (id == L_MINUS) return mk(4, 190, 96, 46);
     return mk(220, 190, 96, 46);  // L_PLUS
 }
@@ -80,11 +81,11 @@ int neighbour(Screen s, int from, int dx, int dy) {
     return best;
 }
 
-int favSlot(Screen s, int id) {
-    const int first = s == Screen::Menu ? static_cast<int>(M_FAV0) : static_cast<int>(L_FAV0);
+int presetSlot(Screen s, int id) {
+    const int first = s == Screen::Menu ? static_cast<int>(M_PRE0) : static_cast<int>(L_PRE0);
     return id >= first && id < first + 4 ? id - first : -1;
 }
 
-bool isFav(Screen s, int id) { return favSlot(s, id) >= 0; }
+bool isPreset(Screen s, int id) { return presetSlot(s, id) >= 0; }
 
 }  // namespace deckmenu
