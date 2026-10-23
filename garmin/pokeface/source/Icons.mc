@@ -5,7 +5,7 @@ import Toybox.Weather;
 
 // Small icons drawn with shapes, since the watch fonts have no heart, envelope or weather glyphs.
 module Icons {
-    enum { NONE, SUN, CLOUD, RAIN, SNOW, STORM, FOG }
+    enum { NONE, SUN, CLOUD, RAIN, SNOW, STORM, FOG, SAND }
 
     // Garmin's 50-odd weather conditions, in the six pictures the face has room for.
     function group(cond as Number or Null) as Number {
@@ -55,13 +55,14 @@ module Icons {
             case Weather.CONDITION_FOG:
             case Weather.CONDITION_HAZY:
             case Weather.CONDITION_MIST:
-            case Weather.CONDITION_DUST:
             case Weather.CONDITION_SMOKE:
+            case Weather.CONDITION_VOLCANIC_ASH:
+                return FOG;
+            case Weather.CONDITION_DUST:
             case Weather.CONDITION_HAZE:
             case Weather.CONDITION_SAND:
             case Weather.CONDITION_SANDSTORM:
-            case Weather.CONDITION_VOLCANIC_ASH:
-                return FOG;
+                return SAND;
         }
         return CLOUD;
     }
@@ -81,8 +82,8 @@ module Icons {
             }
             return;
         }
-        if (kind == FOG) {
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);   // white reads on the blue sky
+        if (kind == FOG || kind == SAND) {
+            dc.setColor(kind == SAND ? 0xFFAA55 : Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             for (var i = -4; i <= 4; i += 4) {
                 dc.drawLine(x - 7, y + i, x + 7, y + i);
             }

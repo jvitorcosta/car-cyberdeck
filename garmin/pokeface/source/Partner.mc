@@ -49,10 +49,57 @@ module Partner {
     // A run counts on the day it finished (start + duration, seconds). Some watches report the
     // start in Garmin's FIT epoch (1989) instead of Unix time: anything 10+ years old is moved up.
     function finishedToday(start as Number, duration as Number, now as Number, todayStart as Number) as Boolean {
-        if (start < now - 315360000) {
-            start += 631065600;
+        return Runs.startSecs(start, now) + duration >= todayStart;
+    }
+
+    // Monday 00:00 of this week, from today's 00:00 and CIQ's day_of_week.
+    function weekStart(todayStart as Number, dayOfWeek as Number) as Number {
+        return todayStart - row(dayOfWeek) * 86400;
+    }
+
+    // Emerald's status tags, most urgent first: PSN = watch battery low, PAR = phone disconnected,
+    // SLP = night with Body Battery low.
+    enum { BADGE_NONE, BADGE_PSN, BADGE_PAR, BADGE_SLP }
+
+    function badge(battery as Number, phone as Boolean, night as Boolean, bb as Number or Null) as Number {
+        if (battery <= 15) {
+            return BADGE_PSN;
         }
-        return start + duration >= todayStart;
+        if (!phone) {
+            return BADGE_PAR;
+        }
+        return night && bb != null && bb <= 25 ? BADGE_SLP : BADGE_NONE;
+    }
+
+    // The weekly Pokédex: distinct days (their 00:00, epoch seconds) from Monday to today that
+    // earned the reward.
+    function dexCount(days as Array<Number>, weekStart as Number, todayStart as Number) as Number {
+        var seen = {};
+        for (var i = 0; i < days.size(); i++) {
+            if (days[i] >= weekStart && days[i] <= todayStart) {
+                seen[days[i]] = true;
+            }
+        }
+        return seen.size();
+    }
+
+    // "A wild / shiny ... appeared!": shown is what today already showed (0 nothing, 1 wild,
+    // 2 shiny). Returns [the line to show on this wake, the new shown].
+    enum { APPEAR_NONE, APPEAR_WILD, APPEAR_SHINY }
+
+    function appear(shown as Number, earned as Boolean, shiny as Boolean) as Array {
+        if (earned && shiny && shown < 2) {
+            return [APPEAR_SHINY, 2];
+        }
+        if (earned && !shiny && shown < 1) {
+            return [APPEAR_WILD, 1];
+        }
+        return [APPEAR_NONE, shown];
+    }
+
+    // A reading taken at `when` (epoch seconds) is at most maxAge old.
+    function fresh(when as Number or Null, now as Number, maxAge as Number) as Boolean {
+        return when != null && now - when <= maxAge;
     }
 
     // The wrist-raise animation's frames, at most: about 10 s at 250 ms, the time the watch stays
