@@ -150,6 +150,8 @@ struct LyricsReading {
     uint32_t at = 0;          // millis() it came; 0: none yet
 };
 static LyricsReading song;
+static volatile bool lyricsNudge = false;         // loop(): poll now, the line shown changed; the task clears it
+static constexpr uint32_t LYRICS_NUDGE_MS = 300;  // least gap between a poll and a nudged one
 
 // A state is believed for a while after it came, so the black deck's odd dropped poll doesn't blank
 // the KARAOKE screen or dim its Menu item: on KARAOKE (a poll a second) for LYRICS_HOLD_MS after it
@@ -917,7 +919,8 @@ static void drawKaraokeBody(bool all) {
     const char* stateWord = karaoke::state(heard, song.wrongKey, d.playing, d);
     const bool isWord = stateWord[0] != 0;
     const char* big = isWord ? stateWord : karaoke::lyric(d, pos);
-    if (all || isWord != karaokeShownWord || strcmp(big, karaokeShownBig) != 0) {
+    const bool bigChanged = all || isWord != karaokeShownWord || strcmp(big, karaokeShownBig) != 0;
+    if (bigChanged) {
         snprintf(karaokeShownBig, sizeof(karaokeShownBig), "%s", big);
         karaokeShownWord = isWord;
         clearBg(KARAOKE_X, KARAOKE_BIG_Y, KARAOKE_W, KARAOKE_BIG_H);
@@ -929,6 +932,9 @@ static void drawKaraokeBody(bool all) {
         clearBg(KARAOKE_X, KARAOKE_NEXT_Y, KARAOKE_W, KARAOKE_NEXT_H);
         drawNext(next);
     }
+    // The line switched between polls (the position is interpolated) and the one after it isn't known
+    // until the next poll: ask for that one now. The area stays blank meanwhile, not a stale line.
+    if (bigChanged && !all && !isWord && next[0] == 0) lyricsNudge = true;
 
     // the progress line: the played part a solid bar, the rest a DIM hairline through its middle
     const int px = karaoke::cells(pos, hasTrack ? d.durationMs : 0, KARAOKE_W);
@@ -1571,8 +1577,10 @@ static void takeWeather() {
 // Its own task (core 1, idle priority like the weather; core 0 is the lights' and the controller's
 // link), started with the weather once WiFi is up. It polls only while a screen that shows it is up
 // (loop() keeps lyricsWant): the KARAOKE screen every second, every 5 s after ten misses in a row
-// (util/pollpace); the Menu every MENU_POLL_MS (enough to light or dim its KARAOKE item); at once
-// when either opens. Otherwise it sleeps. The black deck is at its fixed hotspot
+// (util/pollpace); the Menu every MENU_POLL_MS, every 30 s after those ten misses (enough to light or
+// dim its KARAOKE item); at once when either opens. Otherwise it sleeps. On KARAOKE loop() also
+// nudges an extra poll (lyricsNudge, at most one per LYRICS_NUDGE_MS) when the line shown changes
+// and the next one isn't known, so the dim line under it needn't wait for the next second's poll. The black deck is at its fixed hotspot
 // address (COMPANION_DECK) on the iPhone hotspot, else looked up by its mDNS name (DECK_MDNS_NAME)
 // and kept through blips (util/deckaddr). HTTP/1.0, 1.5 s timeouts, the body into a fixed
 // statejson::MAX_JSON buffer, util/stateparse. Each poll is published under lyricsMux; loop() polls
@@ -1583,6 +1591,7 @@ static LyricsReading lyricsPub;             // guarded by lyricsMux
 static volatile bool lyricsFresh = false;  // a poll was published; loop() clears it
 enum LyricsWant : uint8_t { WANT_NONE, WANT_MENU, WANT_KARAOKE };
 static volatile uint8_t lyricsWant = WANT_NONE;  // what the screen shown needs; loop() keeps it
+static pollpace::Pace lyricsPace;                 // only the lyrics task touches it (and lyricsHost)
 static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches these three
 static deckaddr::Keep lyricsAddr;
 static bool lyricsMdns = false;
@@ -1596,6 +1605,10 @@ static bool lyricsHost(char* out, size_t n) {
     }
     if (!lyricsMdns) lyricsMdns = MDNS.begin("cardeck-leds");
     if (lyricsAddr.addr() == 0) {
+        // each failed lookup holds the task for up to 1.5 s: while the deck stays away, not every poll
+        const uint32_t now = millis();
+        if (!lyricsPace.mayLookup(now)) return false;
+        lyricsPace.lookedUp(now);
         const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
         if (static_cast<uint32_t>(a) == 0) return false;
         lyricsAddr.found(static_cast<uint32_t>(a));
@@ -1644,7 +1657,7 @@ static int lyricsGet() {
 
 static void lyricsTask(void*) {
     static stateparse::Deck deck;  // static: ~650 B, off the task stack
-    pollpace::Pace pace;
+    pollpace::Pace& pace = lyricsPace;
     uint32_t lastPoll = 0;
     uint8_t was = WANT_NONE;  // what was wanted at the last poll
     for (;;) {
@@ -1655,11 +1668,16 @@ static void lyricsTask(void*) {
             continue;
         }
         const uint32_t now = millis();
-        const uint32_t every = want == WANT_MENU ? MENU_POLL_MS : pace.intervalMs();
-        if (want != was || now - lastPoll >= every) {
-            if (want != was) pace = pollpace::Pace();  // just opened: poll at once, at the fast pace
+        const uint32_t every = want == WANT_MENU ? pace.menuIntervalMs() : pace.intervalMs();
+        // a nudge only helps while the deck answers (a missing one is polled at its own pace)
+        const bool nudged = lyricsNudge && want == WANT_KARAOKE && pace.misses() == 0 && now - lastPoll >= LYRICS_NUDGE_MS;
+        if (want != was || now - lastPoll >= every || nudged) {
+            // KARAOKE just opened: poll at once, at the fast pace, and look the name up again at once.
+            // (The Menu keeps the misses so far, or its 30 s back-off would restart on every visit.)
+            if (want == WANT_KARAOKE && was != WANT_KARAOKE) pace = pollpace::Pace();
             was = want;
             lastPoll = now;
+            lyricsNudge = false;
             const int rc = lyricsGet();
             const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
             if (pace.misses() == 0 && !ok) Serial.printf("[lyrics] deck lost (rc=%d)\n", rc);
