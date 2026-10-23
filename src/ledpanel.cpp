@@ -379,16 +379,18 @@ static void drawChrome(const Rect& r, const char* s, uint8_t fontNo, bool presse
 }
 
 // A Menu list row ("> [LIGHTS]"): no border, the text left; the inverted bar when focused. Dimmed
-// (an item that won't open now): DIM text in a DIM border, the bar in DIM.
+// (an item that won't open now): DIM text in a DIM border, the bar in DIM; a press keeps that look
+// (only a second DIM outline inside the border), since it won't open: the message is the feedback.
 static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim = false) {
     uint16_t ink;
-    if (dim && !pressed) {
+    if (dim) {
         clearBg(r);
         if (inverted) {
             tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pal(termpal::DIM));
             ink = pal(termpal::BG);
         } else {
             tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::DIM));
+            if (pressed) tft.drawRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, pal(termpal::DIM));
             ink = pal(termpal::DIM);
         }
     } else {
