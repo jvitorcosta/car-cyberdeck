@@ -32,10 +32,10 @@ class ZonesView extends WatchUi.View {
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
             dc.fillRectangle(cx - 2, 0, 4, h);
             var busy = _deck.status.length() > 0;
-            var gone = _deck.links[0].equals("nolink");
-            var gone2 = _deck.links[1].equals("nolink");
-            var note = gone && gone2 ? "Not connected" : gone ? "Inside not connected"
-                     : gone2 ? "Outside not connected" : "";
+            var inGone = _deck.links[0].equals("nolink");
+            var outGone = _deck.links[1].equals("nolink");
+            var note = inGone && outGone ? "Not connected" : inGone ? "Inside not connected"
+                     : outGone ? "Outside not connected" : "";
             pill(dc, cx, 40, "BOTH", Graphics.COLOR_WHITE);
             pill(dc, cx, h - 32, busy ? _deck.status : note.length() > 0 ? note : "START: change",
                  busy || note.length() > 0 ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);

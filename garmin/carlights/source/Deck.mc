@@ -52,10 +52,15 @@ class Deck {
 
     // Reads both lights, the favourites and the links (when the app opens).
     function sync() as Void {
-        push(["/state", null, INSIDE]);
-        push(["/state", null, OUTSIDE]);
+        syncLooks();
         push(["/favs", null, FAVS]);
         push(["/status", null, FAVS]);
+    }
+
+    // Reads both lights only (after a favourite is applied: favs and links haven't changed).
+    function syncLooks() as Void {
+        push(["/state", null, INSIDE]);
+        push(["/state", null, OUTSIDE]);
     }
 
     // Applies favourite n (1..4) on the deck. The reply isn't a look; onReply re-syncs instead.
@@ -78,7 +83,7 @@ class Deck {
     }
 
     private function next() as Void {
-        if (_queue.size() == 0) {
+        if (_busy || _queue.size() == 0) {  // one request out at a time
             return;
         }
         var job = _queue[0];
@@ -114,7 +119,7 @@ class Deck {
             } else if (_path.equals("/status")) {
                 links = [linkOf(text, "inside="), linkOf(text, "outside=")];
             } else if (_zone == FAVS) {
-                sync();  // a favourite was applied: read the lights it set
+                syncLooks();  // a favourite was applied: read the lights it set
             } else if (_zone == BOTH) {
                 absorb(text, inside);
                 absorb(text, outside);
