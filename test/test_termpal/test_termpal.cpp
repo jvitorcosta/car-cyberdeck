@@ -20,10 +20,10 @@ void test_values() {
     TEST_ASSERT_EQUAL_HEX32(0x308A24, rgb(DIM, false));
     TEST_ASSERT_EQUAL_HEX32(0xFF3C28, rgb(ALERT, false));
     TEST_ASSERT_EQUAL_HEX32(0, rgb(BG, true));
-    TEST_ASSERT_EQUAL_HEX32(0xF08C00, rgb(TEXT, true));
-    TEST_ASSERT_EQUAL_HEX32(0xB06200, rgb(MID, true));
-    TEST_ASSERT_EQUAL_HEX32(0x8C4C00, rgb(DIM, true));
-    TEST_ASSERT_EQUAL_HEX32(0xE03418, rgb(ALERT, true));
+    TEST_ASSERT_EQUAL_HEX32(0xFF6600, rgb(TEXT, true));
+    TEST_ASSERT_EQUAL_HEX32(0xC84E00, rgb(MID, true));
+    TEST_ASSERT_EQUAL_HEX32(0xA03A00, rgb(DIM, true));
+    TEST_ASSERT_EQUAL_HEX32(0xFF2A1A, rgb(ALERT, true));
     TEST_ASSERT_EQUAL_HEX32(0x030503, scan(false));
     TEST_ASSERT_EQUAL_HEX32(0x050300, scan(true));
     TEST_ASSERT_EQUAL_HEX32(0xFF0090, tile(0xFF0090, false));
@@ -79,6 +79,13 @@ void test_night_warm() {
     }
 }
 
+// A night problem must read redder than the amber: ALERT's green/red is under half of MID's.
+void test_night_alert_redder() {
+    const double alert = static_cast<double>(green(rgb(ALERT, true))) / red(rgb(ALERT, true));
+    const double mid = static_cast<double>(green(rgb(MID, true))) / red(rgb(MID, true));
+    TEST_ASSERT_TRUE(alert < 0.5 * mid);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_values);
@@ -86,5 +93,6 @@ int main(int, char**) {
     RUN_TEST(test_contrast_thresholds);
     RUN_TEST(test_hues);
     RUN_TEST(test_night_warm);
+    RUN_TEST(test_night_alert_redder);
     return UNITY_END();
 }
