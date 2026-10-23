@@ -8,7 +8,8 @@
 //           OUTSIDE each keep their own look), the status line ("IN ON 50%  OUT --  LINK 1/2"),
 //           2x4 colour tiles (tap one to set it and turn on, double-tap the lit one to turn the
 //           lights off), the favourite slots (tap: apply; hold: save both lights' looks into it),
-//           and  -  [level: the colour at its intensity and the %, or OFF]  +
+//           and  -  [level: the colour at its intensity and the %, OFF, or MIX on BOTH while the
+//           two lights differ]  +
 // A press acts once it settles (its first ~40 ms averaged), a favourite on release (or, held on
 // Lights, saves while held), and a tap in a gap snaps to the nearest button. The iPhone's Bluetooth
 // must be off (Settings): each controller takes one connection.
@@ -41,6 +42,7 @@
 #include "net/clock.h"
 #include "net/remote_config.h"
 #include "net/wifi.h"
+#include "util/bothlook.h"
 #include "util/daynight.h"
 #include "util/deckmenu.h"
 #include "util/elkcmd.h"
@@ -63,13 +65,17 @@ using ledlook::N_SWATCH;
 using ledlook::Look;
 
 // The zone tabs are pages. BOTH is the general page: a change there goes to both lights (the
-// inside and outside looks become a copy of it). INSIDE and OUTSIDE each keep their own look and
-// change only their light. Voice works like the BOTH page.
+// inside and outside looks become a copy of it; while the lights differ, util/bothlook keeps each
+// one's own colour and level unless the change sets a colour). INSIDE and OUTSIDE each keep their
+// own look and change only their light. Voice works like the BOTH page.
 enum Target { BOTH, INSIDE, OUTSIDE };
 static Target target = BOTH;  // the page on screen
 
 static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
 static Look& cur() { return looks[target]; }
+// The BOTH page is on screen while the lights differ (after a favourite or the INSIDE / OUTSIDE
+// pages): it shows no selected colour and "MIX" for the level.
+static bool bothMixed() { return target == BOTH && bothlook::mixed(looks[INSIDE], looks[OUTSIDE]); }
 
 // Four favourites, each a pair of looks (inside, outside). NVS fav0..fav3, written on each save.
 static ledfavs::Fav favs[ledfavs::N_FAV];
@@ -131,12 +137,13 @@ static void push(int i) {
     }
 }
 
-// After the page's look changed: on BOTH it becomes both zones' look; then the lights it covers
-// get it.
-static void pushTargets() {
-    if (target == BOTH) looks[INSIDE] = looks[OUTSIDE] = looks[BOTH];
+// One change on `page` (a tap, Y, voice): on BOTH it goes to both lights (bothlook), on INSIDE or
+// OUTSIDE to that light's look only; then the lights it covers get their looks.
+static void change(Target page, const bothlook::Change& c) {
+    if (page == BOTH) bothlook::apply(c, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+    else bothlook::edit(&looks[page], c);
     for (int i = 0; i < N_CTRL; i++) {
-        if (target == BOTH || target == static_cast<Target>(i + 1)) push(i);
+        if (page == BOTH || page == static_cast<Target>(i + 1)) push(i);
     }
 }
 
@@ -336,7 +343,7 @@ static void drawFavSlot(const Rect& r, int slot, bool pressed, bool inverted) {
 
 static void drawTile(const Rect& r, int swatch, bool pressed) {
     const Swatch& s = SWATCHES[swatch];
-    const bool sel = cur().lit && swatch == cur().swatch;
+    const bool sel = !bothMixed() && cur().lit && swatch == cur().swatch;
     const int in = pressed ? 5 : 1;  // pressed: the colour shrinks inside a yellow ring
     const uint16_t fill = tint(s.screen);
     tft.fillRect(r.x, r.y, r.w, r.h, pal(termpal::BG));
@@ -379,7 +386,8 @@ static void drawButton(int id, bool pressed = false) {
     if (id == focus) drawFocus(id, true);  // on Lights its ring hugs the rect just drawn over
 }
 
-// The colour at its intensity (shown no darker than 25 % so it stays readable) and the %.
+// The colour at its intensity (shown no darker than 25 % so it stays readable) and the %; "MIX"
+// on BOTH while the lights differ (the STATUS line above has each light's %).
 static void drawLevel() {
     const Rect& r = deckmenu::LEVEL;
     const Look& l = cur();
@@ -387,6 +395,13 @@ static void drawLevel() {
     const int shade = l.pct < 25 ? 25 : l.pct;
     const uint16_t bg = pal(termpal::BG);
     tft.fillRect(r.x, r.y, r.w, r.h, bg);
+    tft.setTextDatum(MC_DATUM);
+    if (bothMixed()) {
+        tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
+        tft.setTextColor(pal(termpal::TEXT), bg);
+        label("MIX", r.x + r.w / 2, r.y + r.h / 2, 4);
+        return;
+    }
     uint16_t fill = bg, ink = pal(termpal::DIM);
     if (l.lit) {
         fill = tintAt(s.screen, shade);
@@ -397,7 +412,6 @@ static void drawLevel() {
     }
     char pct[8];
     snprintf(pct, sizeof(pct), "%u%%", l.pct);
-    tft.setTextDatum(MC_DATUM);
     tft.setTextColor(ink, fill);
     label(l.lit ? pct : "OFF", r.x + r.w / 2, r.y + r.h / 2, 4);
 }
@@ -691,15 +705,14 @@ static void load() {
 static int favId(int slot0) { return (screen == Screen::Menu ? static_cast<int>(M_FAV0) : L_FAV0) + slot0; }
 
 // Favourite slot0 (0..3) onto the lights: each light gets its saved look. The BOTH page copies
-// them when they match; otherwise it keeps its colour and level, lit if either light is, and the
-// Lights page's STATUS line tells the truth. An empty slot does nothing.
+// them when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
+// shows "MIX", and the Lights page's STATUS line tells the truth. An empty slot does nothing.
 static void applyFav(int slot0) {
     const ledfavs::Fav& f = favs[slot0];
     if (!f.set) return;
     looks[INSIDE] = f.in;
     looks[OUTSIDE] = f.out;
-    if (f.in == f.out) looks[BOTH] = f.in;
-    else looks[BOTH].lit = f.in.lit || f.out.lit;
+    looks[BOTH] = bothlook::seed(f.in, f.out);
     for (int i = 0; i < N_CTRL; i++) push(i);
     save();
     drawLooks();
@@ -777,18 +790,17 @@ static void pressLights(int id) {
         const bool doubleTap = l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
         lastTile = doubleTap ? -1 : tile;  // a third tap starts over
         lastTileMs = millis();
-        if (doubleTap) {
-            l.lit = false;
-        } else {
-            l.swatch = tile;
-            l.lit = true;
-        }
-        pushTargets();
+        bothlook::Change c;
+        if (doubleTap) c.power = 0;
+        else c.swatch = tile;
+        change(target, c);
         drawLooks();
     } else {  // L_MINUS / L_PLUS
-        const int pct = l.pct + (id == L_PLUS ? 10 : -10);
-        l.pct = static_cast<uint8_t>(pct < ledlook::MIN_PCT ? ledlook::MIN_PCT : pct > 100 ? 100 : pct);
-        pushTargets();
+        bothlook::Change c;
+        c.step = id == L_PLUS ? 1 : -1;
+        const bool wasMixed = bothMixed();
+        change(target, c);
+        if (bothMixed() != wasMixed) drawGrid();  // a step can bring mixed lights to one look
         drawLevel();
         drawStatus();
     }
@@ -950,9 +962,10 @@ static void handlePad() {
     if (x) padPress(L_ZONE0 + (target + 1) % 3);
     if (lb) padPress(L_MINUS);
     if (rb) padPress(L_PLUS);
-    if (y) {
-        cur().lit = !cur().lit;
-        pushTargets();
+    if (y) {  // on / off; on BOTH while the lights differ, off if either is on
+        bothlook::Change c;
+        c.power = (bothMixed() ? looks[INSIDE].lit || looks[OUTSIDE].lit : cur().lit) ? 0 : 1;
+        change(target, c);
         drawLooks();
         save();
     }
@@ -987,11 +1000,12 @@ static portMUX_TYPE voiceMux = portMUX_INITIALIZER_UNLOCKED;
 static char voiceReply[112];  // guarded by voiceMux, with replySeq
 static uint32_t replySeq = 0;
 
-// What /favs and /status read (they run on the server task): loop() copies it from its own state
-// after every pass, under stateMux, so a handler never sees a half-written favourite.
+// What /state, /favs and /status read (they run on the server task): loop() copies it from its own
+// state after every pass (and before each voice reply), under stateMux, so a handler never sees a
+// half-written look or favourite.
 struct Published {
+    Look looks[3];  // indexed by Target
     ledfavs::Fav favs[ledfavs::N_FAV];
-    bool lit[N_CTRL];
     bool up[N_CTRL];
 };
 static Published published;
@@ -999,11 +1013,9 @@ static portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
 
 static void publish() {
     Published p;
+    for (int i = 0; i < 3; i++) p.looks[i] = looks[i];
     for (int i = 0; i < ledfavs::N_FAV; i++) p.favs[i] = favs[i];
-    for (int i = 0; i < N_CTRL; i++) {
-        p.lit[i] = looks[i + 1].lit;
-        p.up[i] = linkUp(controllers[i]);
-    }
+    for (int i = 0; i < N_CTRL; i++) p.up[i] = linkUp(controllers[i]);
     portENTER_CRITICAL(&stateMux);
     published = p;
     portEXIT_CRITICAL(&stateMux);
@@ -1016,12 +1028,11 @@ static Published snapshot() {
     return p;
 }
 
-// A zone's look as one line ("Purple, 70 percent", "Inside: Lights off"). withLevel: say the %
-// too; a voice reply only does when the command changed it ("Purple, 20 percent" after a plain
-// "purple" sounded like the deck wanted a percentage).
-static void describe(char* out, size_t n, Target zone = BOTH, bool withLevel = true) {
+// Zone `zone`'s look `l` as one line ("Purple, 70 percent", "Inside: Lights off"). withLevel: say
+// the % too; a voice reply only does when the command changed it ("Purple, 20 percent" after a
+// plain "purple" sounded like the deck wanted a percentage).
+static void describe(char* out, size_t n, const Look& l, Target zone, bool withLevel = true) {
     static const char* prefix[] = {"", "Inside: ", "Outside: "};
-    const Look& l = looks[zone];
     if (!l.lit) snprintf(out, n, "%sLights off", prefix[zone]);
     else if (withLevel) snprintf(out, n, "%s%s, %u percent", prefix[zone], SWATCHES[l.swatch].name, l.pct);
     else snprintf(out, n, "%s%s", prefix[zone], SWATCHES[l.swatch].name);
@@ -1030,6 +1041,7 @@ static void describe(char* out, size_t n, Target zone = BOTH, bool withLevel = t
 // Hands loop()'s reply line to the waiting handler, tagged with its job's seq.
 static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
     Serial.printf("[voice] -> %s\n", line);
+    publish();  // a /state right after this reply already sees the change
     portENTER_CRITICAL(&voiceMux);
     memcpy(voiceReply, line, sizeof(line));
     replySeq = seq;
@@ -1038,7 +1050,8 @@ static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
 }
 
 // In loop(): applies one voice command to its zone's page, like a tap there: BOTH (no zone given)
-// copies to both lights; INSIDE or OUTSIDE changes only that light; a favourite sets both lights
+// goes to both lights (bothlook: while they differ each keeps its own look unless a colour is
+// given); INSIDE or OUTSIDE changes only that light; a favourite sets both lights
 // whatever the zone. The page on screen stays. Then answers the waiting handler.
 static void applyVoice(const VoiceJob& job) {
     const ledvoice::Command& c = job.c;
@@ -1049,23 +1062,15 @@ static void applyVoice(const VoiceJob& job) {
         answerVoice(line, job.seq);
         return;
     }
-    Look& l = looks[job.zone];
-    if (c.color >= 0) {
-        l.swatch = c.color;
-        l.lit = true;
-    }
-    if (c.power >= 0) l.lit = c.power == 1;
-    int pct = c.level >= 0 ? c.level : l.pct + 10 * c.levelStep;
-    l.pct = static_cast<uint8_t>(pct < ledlook::MIN_PCT ? ledlook::MIN_PCT : pct > 100 ? 100 : pct);
-    if (job.zone == BOTH) {
-        looks[INSIDE] = looks[OUTSIDE] = l;
-        for (int i = 0; i < N_CTRL; i++) push(i);
-    } else {
-        push(job.zone - 1);
-    }
+    bothlook::Change ch;
+    ch.swatch = c.color;
+    ch.power = c.power;
+    ch.level = c.level;
+    ch.step = c.levelStep;
+    change(job.zone, ch);
     save();
     drawLooks();  // on either screen; the page on Lights stays
-    describe(line, sizeof(line), job.zone, c.level >= 0 || c.levelStep != 0);
+    describe(line, sizeof(line), looks[job.zone], job.zone, c.level >= 0 || c.levelStep != 0);
     answerVoice(line, job.seq);
 }
 
@@ -1108,8 +1113,10 @@ static void handleSay() {
 static void handleState() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
     const String zone = server->arg("zone");
+    const Target z = zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH;
+    const Published p = snapshot();
     char line[64];
-    describe(line, sizeof(line), zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH);
+    describe(line, sizeof(line), p.looks[z], z);
     server->send(200, "text/plain", line);
 }
 
@@ -1133,7 +1140,8 @@ static void handleStatus() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
     const Published p = snapshot();
     char line[48];
-    lightstatus::reply(lightstatus::of(p.up[0], p.lit[0]), lightstatus::of(p.up[1], p.lit[1]), line, sizeof(line));
+    lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
+                       line, sizeof(line));
     server->send(200, "text/plain", line);
 }
 
