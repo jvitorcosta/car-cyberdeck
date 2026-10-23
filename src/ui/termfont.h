@@ -25,7 +25,9 @@ struct Font {                   // = GFXfont
 // SMALL 17 px: header lines, the Menu strip, small labels (colour names, levels, the Lights status
 // line); BODY 19 px: buttons, tabs, < BACK, the song row, the next lyric; TITLE 24 px: preset names,
 // the weather words, the level %, [-] / [+]; BIG 36 px: the clock, the temperature, the lyric line.
-// VT323 is drawn on a pixel grid and breaks up below 17 px; these four keep even strokes 1-bit.
+// VT323 is drawn on a pixel grid and breaks up below 17 px. At 24 and 36 px every stroke is an even
+// 2 / 3 px; 17 and 19 px are off its grid and keep some uneven stems (a 1 px stem next to a 2 px
+// one), the smallest sizes that still read cleanly: judged on the device.
 enum class Face : uint8_t { SMALL, BODY, TITLE, BIG };
 constexpr int N_FACES = 4;
 

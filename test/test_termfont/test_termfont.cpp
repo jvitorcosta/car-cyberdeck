@@ -127,7 +127,7 @@ void test_header_fits() {
     const int cap = termfont::capHeight(Face::SMALL), up = termfont::ascent(Face::SMALL);
     TEST_ASSERT_TRUE(HEADER_Y0 - (up - cap) >= 0);
     TEST_ASSERT_TRUE(HEADER_Y0 + 2 * HEADER_DY + cap + termfont::descent(Face::SMALL) <= deckmenu::HEADER.h - 3);
-    TEST_ASSERT_TRUE(HEADER_DY >= cap + 2);
+    TEST_ASSERT_TRUE(HEADER_DY >= cap + termfont::descent(Face::SMALL));  // descenders clear of the next caps
 }
 
 // The strip's widest line: both lights on in ORANGE at 100 % (the longest name), chips and cursor.
@@ -182,8 +182,18 @@ void test_strip_clock_and_lines_fit() {
 }
 
 void test_status_and_weather_fit() {
-    // the Lights status line sits in STATUS (12 rows between the tab rule and the colours)
-    TEST_ASSERT_TRUE(termfont::ascent(Face::SMALL) <= deckmenu::STATUS.h);
+    // the Lights status line sits on STATUS's bottom (12 rows between the tab rule and the colours):
+    // its ink, '/' included, stays inside, and nothing goes below the baseline (the clear is the rect)
+    const termfont::Font& f = termfont::font(Face::SMALL);
+    for (const char* s : {"IN ON 100%  OUT ON 100%  LINK 2/2", "IN OFF  OUT --  LINK 0/2", ">PURPURA APPLIED", ">INSIDE: NO LINK",
+                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">NO SYNCED LYRICS", ">WRONG KEY", ">STANDBY", ">NO SIGNAL"}) {
+        for (const char* p = s; *p; p++) {
+            const termfont::Glyph& g = f.glyph[static_cast<unsigned char>(*p) - f.first];
+            if (g.height == 0) continue;
+            TEST_ASSERT_TRUE_MESSAGE(-g.yOffset <= deckmenu::STATUS.h, s);
+            TEST_ASSERT_TRUE_MESSAGE(g.yOffset + g.height <= 0, s);
+        }
+    }
     fitsLeft(Face::SMALL, "IN ON 100%  OUT ON 100%  LINK 2/2", STATUS_TEXT_X, deckmenu::STATUS.w);
     for (int code : {0, 1, 3, 45, 51, 61, 71, 80, 85, 95, 999}) fitsLeft(Face::TITLE, weather::words(code), WEATHER_X, 320);
     fitsLeft(Face::BODY, "HI -10C  LO -20C", WEATHER_X, 320);

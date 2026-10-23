@@ -21,10 +21,11 @@ constexpr int STATUS_TEXT_X = 4;
 constexpr int WEATHER_X = 16, WEATHER_TAB_W = 100;
 
 // The Menu header: three SMALL lines, caps tops HEADER_Y0 + i * HEADER_DY, above the rule at y 41.
+// A line's pitch is its caps and its descent ('Q', ','), so no descender lands on the next line's caps.
 constexpr const char* HEADER_LINES[] = {"WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK", ">SET TERMINAL/INQUIRE",
                                         "HONDA CITY // CARDECK OS"};
 constexpr int N_HEADER = sizeof(HEADER_LINES) / sizeof(HEADER_LINES[0]);
-constexpr int HEADER_X = 8, HEADER_Y0 = 4, HEADER_DY = 12;
+constexpr int HEADER_X = 8, HEADER_Y0 = 2, HEADER_DY = 13;
 
 // The Menu strip: the clock (BIG) from STRIP_CLOCK_X with the temperature under its right end, then
 // the text lines (SMALL) from STRIP_TEXT_X to STRIP_RIGHT. On the lights' line a lit light's chip

@@ -46,6 +46,7 @@
 #include <WiFi.h>
 #include <cmath>
 #include <cstddef>
+#include <type_traits>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
 #pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
@@ -348,6 +349,20 @@ static_assert(sizeof(termfont::Font) == sizeof(GFXfont) && offsetof(termfont::Fo
                   offsetof(termfont::Font, glyph) == offsetof(GFXfont, glyph) && offsetof(termfont::Font, first) == offsetof(GFXfont, first) &&
                   offsetof(termfont::Font, last) == offsetof(GFXfont, last) && offsetof(termfont::Font, yAdvance) == offsetof(GFXfont, yAdvance),
               "termfont::Font is GFXfont");
+// and field for field the same types (pointers aside: termfont's point to const)
+static_assert(std::is_same<decltype(termfont::Glyph::bitmapOffset), decltype(GFXglyph::bitmapOffset)>::value &&
+                  std::is_same<decltype(termfont::Glyph::width), decltype(GFXglyph::width)>::value &&
+                  std::is_same<decltype(termfont::Glyph::height), decltype(GFXglyph::height)>::value &&
+                  std::is_same<decltype(termfont::Glyph::xAdvance), decltype(GFXglyph::xAdvance)>::value &&
+                  std::is_same<decltype(termfont::Glyph::xOffset), decltype(GFXglyph::xOffset)>::value &&
+                  std::is_same<decltype(termfont::Glyph::yOffset), decltype(GFXglyph::yOffset)>::value,
+              "termfont::Glyph's fields are GFXglyph's");
+static_assert(std::is_same<std::remove_const<std::remove_pointer<decltype(termfont::Font::bitmap)>::type>::type,
+                           std::remove_pointer<decltype(GFXfont::bitmap)>::type>::value &&
+                  std::is_same<decltype(termfont::Font::first), decltype(GFXfont::first)>::value &&
+                  std::is_same<decltype(termfont::Font::last), decltype(GFXfont::last)>::value &&
+                  std::is_same<decltype(termfont::Font::yAdvance), decltype(GFXfont::yAdvance)>::value,
+              "termfont::Font's fields are GFXfont's");
 
 // Draws s in face f at (x, y), in the text colour set, and returns the pen's travel (where text drawn
 // after it starts). `datum` is one of TFT_eSPI's nine (TL_DATUM .. BR_DATUM): its left / centre /
@@ -580,8 +595,11 @@ static void setMessage(const char* m, uint32_t ms = MESSAGE_MS) {
 }
 
 // Lights: the line under the tabs, "IN ON 50%  OUT --  LINK 1/2", or the message. SMALL, sat on the
-// rect's bottom: STATUS has 12 rows between the tab rule and the colours, and "/" stands 2 rows
-// above the caps (BODY's would need 15).
+// rect's bottom: STATUS has 12 rows (40..51) between the tab rule (39) and the colours, and SMALL's
+// "/" is 12 rows tall (BODY's would need 15), so the line fills them with no margin: "/" starts the
+// row under the rule. Rows 52-53 can't give it room, as a top-row colour's focus ring is drawn there.
+// The clear (the rect) covers all its ink: the line and the messages are capitals, digits and
+// "% / : - >", none below the baseline (test_termfont checks).
 static void drawStatus() {
     const Rect& r = deckmenu::STATUS;
     char line[48];
