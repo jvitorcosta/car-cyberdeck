@@ -624,6 +624,7 @@ static void typeHeader() {
         }
         clearBg(x, y, 6, 8);
     }
+    drawHeaderRule();  // drawAll(true) keeps the typed header, so the rule is part of it
 }
 
 static void drawGrid() {
