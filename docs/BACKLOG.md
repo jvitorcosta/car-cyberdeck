@@ -4,6 +4,23 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **Yellow deck menu** (built 2026-10-23, `feat/yellow-menu`, only compiled; the deck and watch
+  weren't connected). Flash with `pio run -e ledpanel -t upload`, sideload the watch app, then:
+  - it boots to the green Menu; LIGHTS opens, BACK returns; every tile, zone, `-` and `+` hits
+    where tapped; a controller switched off turns its part of STATUS into `--` within ~10 s;
+  - `/say` changes the lights while the Menu shows, and the strip follows;
+  - favourites: hold F1 on Lights saves it (flashes) and it survives a restart; a tap applies it;
+    an empty slot does nothing; `text=favourite 1` applies and answers, `favourite 3` says it is
+    empty; `/favs` returns 4 lines, `/status` returns `inside=… outside=…`; the slot drawing fits;
+  - Xbox: A tap applies, A held 1 s on Lights saves; **B is now Back** (was: BOTH page);
+  - night mode: a `-D NIGHT_TEST` build drops the backlight (~90/255) and dims the greens with no
+    bright frame, the 8 tiles stay distinguishable and the ink readable; the clock shows `--:--`
+    then `HH:MM` and refreshes each minute without flicker; a normal build switches by itself
+    around 18:00 and stays bright by day;
+  - fonts and layout (GLCD header at 8 px, strip positions) read well on the panel;
+  - watch: the Favourites page lists the deck's favourites, START applies F1 and BOTH shows the new
+    looks, and a controller switched off shows "Not connected" after reopening the app.
+
 - **Star Light Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
   USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/slzbg.bin` and
   `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): the night fills
@@ -83,6 +100,10 @@ the place to add it.
 
 ## Ideas
 
+- **Yellow deck menu, parts 3-7** (spec
+  `docs/superpowers/specs/2026-10-23-yellow-deck-menu-design.md`): Weather, Car over BLE (once the
+  Vgate iCar Pro BLE arrives), Heart, Music, LED effects. Parts 1-2 (menu, favourites, night mode)
+  are built.
 - **Car lights from the Garmin watch**: done 2026-10-22, see docs/leds-voice.md.
 - **Car lights from CarPlay** (researched 2026-10-23, wireless CarPlay in the City). In order:
   (1) Siri from the steering-wheel button running the "Honda" Shortcut. Nothing to build, so try

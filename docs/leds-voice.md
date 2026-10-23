@@ -9,9 +9,63 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 - `GET /state?k=<REMOTE_TOKEN>` answers the same line without changing anything.
 - Both take an optional `&zone=inside|outside`: then only that light's page changes (or is read),
   and the reply is prefixed: `Inside: Purple, 70 percent`. Without it, both lights (the BOTH page).
-- A wrong key gets 403; a phrase with nothing to do gets "Sorry, I didn't get a colour or a command".
+- `GET /favs?k=<REMOTE_TOKEN>` lists the four favourites, one line each, joined by newlines:
+  `1 pink 50 purple 100` (slot, inside colour and level, outside colour and level), `off 0` for a
+  light that was off, `3 -` for an empty slot.
+- `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on:
+  `inside=on outside=nolink`. Each word is `on`, `off` or `nolink`; a light the deck has no link
+  to is always `nolink`, whatever it last showed.
+- A wrong key gets 403 (on all four); a phrase with nothing to do gets "Sorry, I didn't get a colour or a command".
 - Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page
   on the deck's screen is left as it is.
+
+## On the deck
+
+The deck boots to a green-on-black terminal **Menu** (`ROBCO INDUSTRIES (TM) TERMLINK`), whatever
+page it last showed.
+
+- **Menu**: `[ LIGHTS ]` opens the Lights page. Below it are the favourite slots F1-F4 (tap one to
+  apply it). A strip at the bottom has the clock (`--:--` until the deck has the time) and, for
+  IN and OUT, a box: ON in the light's colour, OFF, or `--` when the deck has no link to it.
+- **Lights**: `< BACK` returns to the Menu. Then the pages BOTH / INSIDE / OUTSIDE, the status
+  line, the 2x4 colour tiles, the favourite slots, and `-` / level / `+`. Tap a tile to set the
+  colour and turn on; double-tap the lit one to turn off.
+- **Status line**: `IN ON 50%  OUT --  LINK 1/2`. Per light: `ON 50%`, `OFF`, or `--` (no link);
+  `LINK n/2` counts the linked lights. `ON` is what the deck last sent while connected, not a
+  reading from the controller (the LED controllers can't be read back).
+- **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the Menu, a green ring on
+  Lights), **A** presses, **B** is Back (to the Menu; on the Menu it does nothing). On Lights
+  only: **X** next page, **Y** this page's lights on/off, **LB / RB** `-` / `+`. B used to switch
+  to the BOTH page; use X for that now.
+
+## Favourites
+
+Four slots, each saving **both** lights' colour and level (inside and outside). They survive a
+reboot, and a restart still boots to the Menu.
+
+- **Apply**: tap a filled slot (Menu or Lights), or Xbox A on it. An empty slot does nothing.
+- **Save**: on the Lights page, hold a slot **0.8 s** (it flashes green when saved); with the
+  Xbox, hold A on the slot **1 s**. It stores the INSIDE and OUTSIDE looks as they are now.
+- **Voice**: "favourite one" ... "favourite four" (also `favorite`, `preset`, and digits:
+  "favourite 2"). It applies to both lights, whatever zone was asked, and replies e.g.
+  `Favourite 1: inside Pink 50 percent, outside Purple 100 percent`, or `Favourite 3 is empty`.
+- **Watch**: the Honda City app has a fourth page, **Favourites** (F1-F4 with the two dots each,
+  `F3 --` when empty). START there lists them; pick one to apply it.
+- If a favourite has different looks inside and outside, the BOTH page keeps its own look and the
+  status line shows the truth.
+
+## Night mode
+
+From **18:00 to 06:00** local time, once the deck has the time over WiFi, the screen goes to a
+dimmer green palette and the backlight to about a third. It changes only the screen, never the
+lights. Without WiFi (no `REMOTE_TOKEN`) there is no clock, so the deck stays in day mode.
+
+To check it without waiting for evening, build with the test hook, then clear it:
+
+```
+$env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
+Remove-Item Env:PLATFORMIO_BUILD_FLAGS
+```
 
 ## What it understands
 
@@ -23,6 +77,7 @@ English or Portuguese, any order, other words ignored (`src/util/ledvoice.h`):
 | Power | on, off / liga, desliga, acende, apaga |
 | Brighter / dimmer (10 % steps) | brighter, up, more / mais, aumenta, forte; dimmer, down, less / menos, diminui, fraco |
 | Level | a number (`50`, `50%`, rounded to 10), max/máximo, min/mínimo |
+| Favourite | favourite/favorite/preset + 1-4, as a word or digit ("favourite two", "favourite 2") |
 
 A colour also turns the lights on.
 
@@ -74,6 +129,11 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
   A colour or Off is sent for that zone (BOTH: both lights). Brightness opens a level screen whose
   fill rises and falls with UP/DOWN in 10 % steps; the deck gets the level 0.5 s after the last
   press.
+- **Favourites page** (fourth page): the deck's four favourites. START opens a list (F1..F4 with
+  their two dots, "None saved" if there are none); picking one applies it. Saving is done on the
+  deck, not the watch.
+- **Not connected**: when a light has no link, its page (and the BOTH pill) says "Not connected"
+  instead of a stale colour; the app reads this from `/status` when it opens.
 - **Glance**: a card for the watch face's glance loop with both lights' dots and levels, as of
   the last time the app ran (a glance can't make web requests). START on it opens the app.
 - Requests go one at a time from a short queue; every reply is read back into the screen, so it
