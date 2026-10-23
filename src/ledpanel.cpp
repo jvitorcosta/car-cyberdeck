@@ -19,6 +19,11 @@
 // drives it too: the D-pad moves the focus (an inverted bar on the Menu, a green ring on Lights),
 // A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
 // "Xbox controller input" below).
+// Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
+// palette goes to termpal's dim variant and the backlight to its night level. Without REMOTE_TOKEN
+// there is no WiFi, no clock, and the deck stays in day mode.
+// Test hook: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
+// mode whatever the time, to check the dimming without waiting for 18:00. Not set in platformio.ini.
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #pragma GCC diagnostic push
@@ -31,9 +36,12 @@
 #include <TFT_eSPI.h>
 #include <WebServer.h>
 #include "pins.h"
+#include "ui/backlight.h"
 #include "companion/touch.h"
+#include "net/clock.h"
 #include "net/remote_config.h"
 #include "net/wifi.h"
+#include "util/daynight.h"
 #include "util/deckmenu.h"
 #include "util/elkcmd.h"
 #include "util/ledfavs.h"
@@ -243,8 +251,11 @@ static uint16_t tintAt(uint32_t rgb, int pct) {
 static bool bright(uint32_t rgb, int pct = 100) {
     return (((rgb >> 16) & 0xFF) * 3 + ((rgb >> 8) & 0xFF) * 6 + (rgb & 0xFF)) / 10 * pct / 100 > 140;
 }
-// Text on a real colour: black on a bright one, white on a dark one.
-static uint16_t inkOn(uint32_t rgb, int pct = 100) { return tint(bright(rgb, pct) ? 0x000000 : 0xFFFFFF); }
+// Text on a real colour: black on a bright one, white on a dark one. Judged on the colour actually
+// drawn (dimmed at night), not the day one, or a tile that dimmed below the threshold keeps black ink.
+static uint16_t inkOn(uint32_t rgb, int pct = 100) {
+    return tint(bright(termpal::tile(rgb, night), pct) ? 0x000000 : 0xFFFFFF);
+}
 
 // drawString at a text size, back to size 1 after (fonts 2 and 4 scale with it too).
 static void label(const char* s, int x, int y, uint8_t fontNo, uint8_t size = 1) {
@@ -434,13 +445,25 @@ static void drawStripLights() {
     drawStripLight(1, 216, 258);
 }
 
+// The clock's minute of the day on screen (-1: not synced, "--:--"); updateDayNight keeps it.
+static int clockMin = -1;
+
+static void drawClock() {
+    const Rect& r = deckmenu::MENU_STRIP;
+    char s[16];  // room for any int, so -Wformat-truncation stays quiet
+    if (clockMin < 0) snprintf(s, sizeof(s), "--:--");
+    else snprintf(s, sizeof(s), "%02d:%02d", clockMin / 60, clockMin % 60);
+    tft.fillRect(r.x + 4, r.y + 2, 110, r.h - 2, pal(termpal::BG));  // left of the IN label, under the rule
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(pal(termpal::TEXT), pal(termpal::BG));
+    label(s, r.x + 8, r.y + r.h / 2, 1, 3);
+}
+
 static void drawStrip() {
     const Rect& r = deckmenu::MENU_STRIP;
     tft.fillRect(r.x, r.y, r.w, r.h, pal(termpal::BG));
     tft.drawFastHLine(r.x + 4, r.y + 1, r.w - 8, pal(termpal::MID));
-    tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(pal(termpal::TEXT), pal(termpal::BG));
-    label("--:--", r.x + 8, r.y + r.h / 2, 1, 3);  // the clock, once it is synced (night mode's)
+    drawClock();
     drawStripLights();
 }
 
@@ -1121,6 +1144,7 @@ static void voiceTask(void*) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     server->begin();
+    netclock::begin();  // SNTP, for night mode and the Menu's clock
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
@@ -1165,11 +1189,38 @@ static void vividGamma() {
     for (uint8_t v : NEG) tft.writedata(v);
 }
 
+// Night mode and the Menu's clock. Polled each second (a time() call) so the clock turns over on the
+// minute; the mode follows the clock. On a change the backlight drops before the repaint, so no
+// frame shows at day brightness.
+static void updateDayNight() {
+    static uint32_t checkedAt = 0;
+    static bool first = true;
+    if (!first && millis() - checkedAt < 1000) return;
+    first = false;
+    checkedAt = millis();
+    int m = 0;
+    const bool synced = netclock::minuteOfDay(&m);
+    const int minute = synced ? m : -1;
+    bool want = synced && daynight::isNight(m);
+#ifdef NIGHT_TEST
+    want = true;
+#endif
+    if (minute != clockMin) {
+        if (minute >= 0 && clockMin < 0) Serial.printf("[clock] synced, local %02d:%02d\n", m / 60, m % 60);
+        clockMin = minute;
+        if (want == night && screen == Screen::Menu) drawClock();
+    }
+    if (want == night) return;
+    night = want;
+    backlight::set(night);  // before the repaint
+    Serial.printf("[ui] night mode %s\n", night ? "on" : "off");
+    drawAll();
+}
+
 void setup() {
     Serial.begin(115200);
-    pinMode(PIN_BL, OUTPUT);
-    digitalWrite(PIN_BL, HIGH);
     tft.init();
+    backlight::begin();  // PWM, at the day level
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
     tft.setRotation(1);
     vividGamma();
@@ -1236,6 +1287,7 @@ void loop() {
     }
 
     handlePad();
+    updateDayNight();
 
     // BOOT held for 2 s: calibrate the touch again.
     static uint32_t bootSince = 0;
