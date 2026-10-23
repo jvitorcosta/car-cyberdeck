@@ -33,12 +33,17 @@ module Fmt {
         return metric ? (cm / 100000.0).format("%.1f") + " km" : (cm / 160934.4).format("%.1f") + " mi";
     }
 
-    // Whichever of sunrise / sunset comes next after now (epoch seconds), e.g. "↓18:02".
-    function nextSun(now as Number, rise as Number or Null, set as Number or Null, is24 as Boolean) as String {
+    // Whichever of today's sunrise, today's sunset or tomorrow's sunrise comes next after now
+    // (epoch seconds), e.g. "↓18:02".
+    function nextSun(now as Number, rise as Number or Null, set as Number or Null, riseTomorrow as Number or Null,
+                     is24 as Boolean) as String {
         var t = null;
         var mark = "";
         if (rise != null && rise > now) {
             t = rise;
+            mark = "↑";
+        } else if (riseTomorrow != null && riseTomorrow > now) {
+            t = riseTomorrow;
             mark = "↑";
         }
         if (set != null && set > now && (t == null || set < t)) {

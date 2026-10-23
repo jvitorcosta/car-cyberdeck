@@ -2,6 +2,8 @@
 // monkeydo <prg> fr255 -t while the simulator is open.
 import Toybox.Lang;
 import Toybox.Test;
+import Toybox.Time;
+import Toybox.Time.Gregorian;
 import Toybox.Weather;
 
 (:test)
@@ -92,7 +94,7 @@ function testFmtMissingValues(logger as Test.Logger) as Boolean {
     Test.assertEqual(Fmt.num(null), "--");
     Test.assertEqual(Fmt.temp(null, true), "--");
     Test.assertEqual(Fmt.dist(null, true), "--");
-    Test.assertEqual(Fmt.nextSun(0, null, null, true), "--");
+    Test.assertEqual(Fmt.nextSun(0, null, null, null, true), "--");
     Test.assertEqual(Fmt.num(64), "64");
     return true;
 }
@@ -117,9 +119,18 @@ function testFmtImperial(logger as Test.Logger) as Boolean {
 
 (:test)
 function testNextSun(logger as Test.Logger) as Boolean {
-    Test.assert(Fmt.nextSun(500, 1000, 5000, true).find("↑") == 0);
-    Test.assert(Fmt.nextSun(2000, 1000, 5000, true).find("↓") == 0);
-    Test.assertEqual(Fmt.nextSun(6000, 1000, 5000, true), "--");
+    Test.assert(Fmt.nextSun(500, 1000, 5000, 90000, true).find("↑") == 0);
+    Test.assert(Fmt.nextSun(2000, 1000, 5000, 90000, true).find("↓") == 0);
+    Test.assertEqual(Fmt.nextSun(6000, 1000, 5000, null, true), "--");
+    return true;
+}
+
+// After today's sunset the next one is tomorrow's sunrise, not "--".
+(:test)
+function testNextSunEvening(logger as Test.Logger) as Boolean {
+    var tomorrow = 90000;
+    var i = Gregorian.info(new Time.Moment(tomorrow), Time.FORMAT_SHORT);
+    Test.assertEqual(Fmt.nextSun(6000, 1000, 5000, tomorrow, true), "↑" + Fmt.clock(i.hour as Number, i.min as Number, true));
     return true;
 }
 
@@ -134,5 +145,26 @@ function testWeatherGroups(logger as Test.Logger) as Boolean {
     Test.assertEqual(Icons.group(Weather.CONDITION_SNOW), Icons.SNOW);
     Test.assertEqual(Icons.group(Weather.CONDITION_FOG), Icons.FOG);
     Test.assertEqual(Icons.group(null), Icons.NONE);
+    return true;
+}
+
+// A run counts on the day it finished, whatever epoch the watch reports its start in.
+(:test)
+function testRunFinishedToday(logger as Test.Logger) as Boolean {
+    var today = 1792713600;   // 2026-10-23 00:00 UTC
+    var now = today + 12 * 3600;
+    Test.assert(Partner.finishedToday(today + 7 * 3600, 1800, now, today));
+    Test.assert(!Partner.finishedToday(today - 5 * 3600, 1800, now, today));          // yesterday
+    Test.assert(Partner.finishedToday(today - 600, 1800, now, today));                // crossed midnight
+    Test.assert(Partner.finishedToday(today + 7 * 3600 - 631065600, 1800, now, today)); // FIT epoch
+    return true;
+}
+
+// The wrist-raise animation stops by itself even if the watch never says it went back to sleep.
+(:test)
+function testAnimationCap(logger as Test.Logger) as Boolean {
+    Test.assert(Partner.keepAnimating(1));
+    Test.assert(Partner.keepAnimating(Partner.MAX_FRAMES - 1));
+    Test.assert(!Partner.keepAnimating(Partner.MAX_FRAMES));
     return true;
 }

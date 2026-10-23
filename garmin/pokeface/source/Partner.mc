@@ -29,6 +29,23 @@ module Partner {
         return steps != null && goal != null && goal > 0 && steps >= goal;
     }
 
+    // A run counts on the day it finished (start + duration, seconds). Some watches report the
+    // start in Garmin's FIT epoch (1989) instead of Unix time: anything 10+ years old is moved up.
+    function finishedToday(start as Number, duration as Number, now as Number, todayStart as Number) as Boolean {
+        if (start < now - 315360000) {
+            start += 631065600;
+        }
+        return start + duration >= todayStart;
+    }
+
+    // The wrist-raise animation's frames, at most: about 10 s at 125 ms, the time the watch stays
+    // awake. It stops here even if the watch never says it went back to sleep.
+    const MAX_FRAMES = 80;
+
+    function keepAnimating(frames as Number) as Boolean {
+        return frames < MAX_FRAMES;
+    }
+
     function dayKey(y as Number, m as Number, d as Number) as Number {
         return y * 10000 + m * 100 + d;
     }

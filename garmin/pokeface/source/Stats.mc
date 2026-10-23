@@ -38,15 +38,17 @@ module Stats {
         return ActivityMonitor.getInfo();
     }
 
-    // [sunrise, sunset] today as epoch seconds, from where the weather was observed.
+    // [sunrise, sunset, tomorrow's sunrise] as epoch seconds, from where the weather was observed.
     function sun(cond as Weather.CurrentConditions or Null) as Array {
         var pos = cond != null ? cond.observationLocationPosition : null;
         if (pos == null) {
-            return [null, null];
+            return [null, null, null];
         }
         var today = Time.today();
         var rise = Weather.getSunrise(pos, today);
         var set = Weather.getSunset(pos, today);
-        return [rise != null ? rise.value() : null, set != null ? set.value() : null];
+        var next = Weather.getSunrise(pos, today.add(new Time.Duration(86400)));
+        return [rise != null ? rise.value() : null, set != null ? set.value() : null,
+                next != null ? next.value() : null];
     }
 }
