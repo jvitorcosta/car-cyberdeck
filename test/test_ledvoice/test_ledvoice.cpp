@@ -56,6 +56,36 @@ void test_nothing_to_do() {
     TEST_ASSERT_FALSE(ledvoice::parse("", &c));
 }
 
+void test_favourite_digit() {
+    const ledvoice::Command c = parsed("Favourite 2.");
+    TEST_ASSERT_EQUAL_INT(2, c.fav);
+    TEST_ASSERT_EQUAL_INT(-1, c.level);
+}
+void test_favourite_words_and_mishearings() {
+    TEST_ASSERT_EQUAL_INT(1, parsed("favorite one").fav);
+    TEST_ASSERT_EQUAL_INT(2, parsed("favourite to").fav);
+    TEST_ASSERT_EQUAL_INT(3, parsed("preset three").fav);
+    TEST_ASSERT_EQUAL_INT(4, parsed("favourite for").fav);
+    TEST_ASSERT_EQUAL_INT(4, parsed("Favourite four please").fav);
+}
+void test_filler_to_is_not_a_favourite() {
+    const ledvoice::Command c = parsed("set the lights to blue");
+    TEST_ASSERT_EQUAL_INT(-1, c.fav);
+    TEST_ASSERT_EQUAL_INT(4, c.color);
+}
+void test_favourite_without_slot() {
+    ledvoice::Command c;
+    TEST_ASSERT_FALSE(ledvoice::parse("favourite", &c));
+    TEST_ASSERT_EQUAL_INT(-1, c.fav);
+    TEST_ASSERT_FALSE(ledvoice::parse("favourite 7", &c));
+    TEST_ASSERT_EQUAL_INT(-1, c.fav);
+}
+void test_level_still_works() {
+    const ledvoice::Command c = parsed("blue 50%");
+    TEST_ASSERT_EQUAL_INT(50, c.level);
+    TEST_ASSERT_EQUAL_INT(-1, c.fav);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_colour_alone);
@@ -66,5 +96,10 @@ int main(int, char**) {
     RUN_TEST(test_yellow);
     RUN_TEST(test_siri_homophones);
     RUN_TEST(test_nothing_to_do);
+    RUN_TEST(test_favourite_digit);
+    RUN_TEST(test_favourite_words_and_mishearings);
+    RUN_TEST(test_filler_to_is_not_a_favourite);
+    RUN_TEST(test_favourite_without_slot);
+    RUN_TEST(test_level_still_works);
     return UNITY_END();
 }
