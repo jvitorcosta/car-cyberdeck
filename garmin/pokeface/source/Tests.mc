@@ -2,6 +2,7 @@
 // monkeydo <prg> fr255 -t while the simulator is open.
 import Toybox.Lang;
 import Toybox.Test;
+import Toybox.Weather;
 
 (:test)
 function testStages(logger as Test.Logger) as Boolean {
@@ -119,5 +120,19 @@ function testNextSun(logger as Test.Logger) as Boolean {
     Test.assert(Fmt.nextSun(500, 1000, 5000, true).find("↑") == 0);
     Test.assert(Fmt.nextSun(2000, 1000, 5000, true).find("↓") == 0);
     Test.assertEqual(Fmt.nextSun(6000, 1000, 5000, true), "--");
+    return true;
+}
+
+(:test)
+function testWeatherGroups(logger as Test.Logger) as Boolean {
+    Test.assertEqual(Icons.group(Weather.CONDITION_CLEAR), Icons.SUN);
+    Test.assertEqual(Icons.group(Weather.CONDITION_MOSTLY_CLEAR), Icons.SUN);
+    Test.assertEqual(Icons.group(Weather.CONDITION_PARTLY_CLOUDY), Icons.CLOUD);
+    Test.assertEqual(Icons.group(Weather.CONDITION_RAIN), Icons.RAIN);
+    Test.assertEqual(Icons.group(Weather.CONDITION_SCATTERED_SHOWERS), Icons.RAIN);
+    Test.assertEqual(Icons.group(Weather.CONDITION_THUNDERSTORMS), Icons.STORM);
+    Test.assertEqual(Icons.group(Weather.CONDITION_SNOW), Icons.SNOW);
+    Test.assertEqual(Icons.group(Weather.CONDITION_FOG), Icons.FOG);
+    Test.assertEqual(Icons.group(null), Icons.NONE);
     return true;
 }
