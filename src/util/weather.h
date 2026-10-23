@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 // Outside weather from Open-Meteo (free, no key): the companion's top strip and the yellow deck's
-// WEATHER screen. url() asks for the current reading and today's max/min. PURE, host-tested.
+// main screen. url() asks for the current reading and today's max/min. PURE, host-tested.
 namespace weather {
 enum class Icon { Sun, Moon, Cloud, Rain, Storm };
 struct Now { double tempC; int code; bool day; };

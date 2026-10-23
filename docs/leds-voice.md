@@ -22,15 +22,27 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 
 ## On the deck
 
-The deck boots to a green-on-black terminal **Menu** (`ROBCO INDUSTRIES (TM) TERMLINK`, typed out
-character by character in about half a second), whatever page it last showed. Every screen has faint
-scanlines and ALL CAPS bracket labels.
+The deck boots by typing the green-on-black RobCo welcome (`WELCOME TO ROBCO INDUSTRIES (TM)
+TERMLINK`, character by character in about half a second), then shows the **main screen**, whatever
+page it last showed. Every screen has faint scanlines and ALL CAPS bracket labels.
 
-- **Menu**: the `> [LIGHTS]` row opens the Lights page. Below it are the four preset blocks (see
-  "Presets"; tap one to apply it). A strip at the bottom shows what the lights are really doing, in
-  words: `IN PINK 40%  OUT PINK 100%` (`OFF` for a light that is off, `--` when the deck has no link
-  to it), ending in a blinking block cursor.
-- **Lights**: `< BACK` returns to the Menu. Then Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE,
+- **Main screen** (a dashboard, top to bottom):
+  - the header `ROBCO TERMLINK // HONDA CITY`;
+  - the clock big with the date under it (`FRI 23 OCT`; `--:--` and `--- -- ---` until WiFi has
+    synced the clock), and on the right the outside temperature big (`32C`, `--C` before the first
+    reading), the sky in words (`PARTLY CLOUDY`) and `HI 32 LO 26  MANAUS`. Where the car is comes
+    from the hotspot's public IP (ip-api.com, approximate), the weather from Open-Meteo, every 15 min.
+    A failed fetch keeps the last reading; `>OFFLINE` shows only when no reading ever came;
+  - `LIGHTS`: one row per light (`INSIDE`, `OUTSIDE`) with a chip of its colour, the colour name and
+    its level (`40%`); `OFF` (dim) for a light that is off, `-- NO LINK` when the deck has no link to
+    it (never its last colour);
+  - two big buttons: `> [LIGHTS]` opens the Lights page, `> [KARAOKE]` the black deck's lyrics
+    (dimmed while the black deck plays nothing with synced lyrics: a tap then says why);
+  - the strip: the trip line (`TRIP 12.4 KM  0:32`) and the song the black deck is playing
+    (`> Blinding Lights - The Weeknd`, or a dim `> --`), ending in a blinking block cursor.
+- There is no Weather page any more: its data is on the main screen. The presets are on the Lights
+  page only (and voice, the watch, `/presets`).
+- **Lights**: `< BACK` returns to the main screen. Then Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE,
   the status line, the 2x4 colour boxes (the chosen one shows a big colour chip), the presets, and
   a 10-cell level bar with `-` / `+` (its label is the %, `MIX` or `OFF`). Tap a tile to set the
   colour and turn on; double-tap the lit one to turn off.
@@ -42,11 +54,12 @@ scanlines and ALL CAPS bracket labels.
 - **Status line**: `IN ON 50%  OUT --  LINK 1/2`. Per light: `ON 50%`, `OFF`, or `--` (no link);
   `LINK n/2` counts the linked lights. `ON` is what the deck last sent while connected, not a
   reading from the controller (the LED controllers can't be read back).
-- **Messages**: a terminal line replaces the strip's text for 2.5 s when something happens:
-  `>ROSE APPLIED` (a preset, from any source), `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's
-  link changed). Then the strip comes back.
-- **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the Menu, a green ring on
-  Lights), **A** presses, **B** is Back (to the Menu; on the Menu it does nothing). On Lights
+- **Messages**: a terminal line replaces the song line (on Lights: the status line) for 2.5 s when
+  something happens: `>ROSE APPLIED` (a preset, from any source), `>INSIDE: NO LINK`,
+  `>OUTSIDE: LINKED` (a light's link changed), why KARAOKE won't open. Then the song comes back.
+- **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the main screen's two
+  buttons, left / right between them; a green ring on Lights), **A** presses, **B** is Back (to the
+  main screen; there it does nothing). On Lights
   only: **X** next page, **Y** this page's lights on/off, **LB / RB** `-` / `+`. B used to switch
   to the BOTH page; use X for that now.
 
@@ -62,7 +75,7 @@ on the deck and there is no hold-to-save. Each sets **both** lights, both on:
 | 3 | CALM | white 40 % | white 40 % |
 | 4 | PURPURA | purple 40 % | purple 100 % |
 
-- **Apply**: tap a preset (Menu or Lights), or Xbox A on it. That is all: no hold.
+- **Apply**: tap a preset on the Lights page, or Xbox A on it. That is all: no hold.
 - **Voice**: "rose", "fire", "calm" or "purpura", or "preset one" ... "preset four" (also
   `favourite`/`favorite`, and digits: "preset 2"). It applies to both lights, whatever zone was
   asked, and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
