@@ -33,6 +33,7 @@ bool playing();                     // a clip is still playing (its task and I2S
 void playTunes();
 void stopTunes();
 bool tunesPlaying();
+uint32_t tunesFailures();           // music-box starts whose audio didn't open, since boot
 // Muted by the deck's speaker button or the phone page: remembered across restarts (NVS). The
 // UI loop stops and starts the music box to match. Any task.
 void setTunesMuted(bool muted);

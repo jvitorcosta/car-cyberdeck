@@ -37,6 +37,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "util/interp.h"
 #include "util/netplan.h"
 #include "util/idlewait.h"
+#include "util/tunegate.h"
 #include "util/press.h"
 #include "board/s3/touch_ft6336.h"
 #include <Preferences.h>
@@ -295,37 +296,23 @@ static ota::View otaDemo(uint32_t ms) {
 #endif
 
 // The music box loops while "Waiting for a song..." is up, and stops (a short fade) as it
-// goes.
-// It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
-// starts with the same margin as a phone howl, stops when memory runs low, and then tries again
-// at most once a minute.
+// goes: util/tunegate decides (the same margin as a phone howl to start, stopping when memory
+// runs low, a minute's rest after that or after audio that didn't start).
 static void musicBox(bool want) {
-    constexpr uint32_t RETRY_MS = 60000;
-    static uint32_t gaveUpAt = 0;
-    static bool gaveUp = false;
-    if (!want) {
-        if (greeting::tunesPlaying()) greeting::stopTunes();
-        gaveUp = false;
-        return;
+    static tunegate::Gate gate;
+    const unsigned largest = (unsigned)mem::byteLargest();
+    const bool playing = greeting::tunesPlaying();
+    switch (gate.update({want, playing, !playing && greeting::playing(), greeting::tunesFailures(), largest,
+                         netplan::TLS_NEED + 12000, netplan::TLS_NEED + 4000},
+                        millis())) {
+    case tunegate::Act::Play: greeting::playTunes(); break;
+    case tunegate::Act::Stop:
+        if (want) Serial.printf("[tunes] low memory (largest %u): stopping\n", largest);
+        greeting::stopTunes();
+        break;
+    case tunegate::Act::AudioFailed: Serial.println("[tunes] audio didn't start: retry in 1 min"); break;
+    case tunegate::Act::None: break;
     }
-    if (greeting::tunesPlaying()) {
-        if (mem::byteLargest() < netplan::TLS_NEED + 4000) {
-            Serial.printf("[tunes] low memory (largest %u): stopping\n", (unsigned)mem::byteLargest());
-            greeting::stopTunes();
-            gaveUp = true;
-            gaveUpAt = millis();
-        }
-        return;
-    }
-    if (gaveUp && millis() - gaveUpAt < RETRY_MS) return;
-    if (greeting::playing()) return;   // a howl, or the last tune still fading: next pass
-    if (mem::byteLargest() < netplan::TLS_NEED + 12000) {
-        gaveUp = true;
-        gaveUpAt = millis();
-        return;
-    }
-    gaveUp = false;
-    greeting::playTunes();
 }
 
 // A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on

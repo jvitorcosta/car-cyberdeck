@@ -149,6 +149,7 @@ void play() {
 
 static std::atomic<bool> s_tunes{false};      // the music box's task is alive
 static std::atomic<bool> s_tunesStop{false};
+static std::atomic<uint32_t> s_tuneFailures{0};  // starts whose audio didn't open, since boot
 static portMUX_TYPE s_nameMux = portMUX_INITIALIZER_UNLOCKED;
 static char s_tuneName[32] = "";                // the tune playing (tuneTask writes, any task reads)
 
@@ -163,7 +164,12 @@ static_assert(musicbox::RATE == CLIP_RATE, "the music box plays at the clip rate
 // Like task(), but the music box never ends by itself: it plays until stopTunes() and its fade.
 static void tuneTask(void*) {
     xSemaphoreTake(s_output, portMAX_DELAY);
-    if (!s_tunesStop.load() && audiosink::open(CLIP_RATE)) {
+    bool opened = false;
+    if (!s_tunesStop.load()) {
+        opened = audiosink::open(CLIP_RATE);
+        if (!opened) s_tuneFailures.fetch_add(1);   // the UI rests a minute (util/tunegate)
+    }
+    if (opened) {
         const media::Blob text = tunesText();
         musicbox::Player box((const char*)text.data, text.size, esp_random());
         char name[32] = "";
@@ -209,6 +215,8 @@ void playTunes() {
 void stopTunes() { s_tunesStop.store(true); }
 
 bool tunesPlaying() { return s_tunes.load(); }
+
+uint32_t tunesFailures() { return s_tuneFailures.load(); }
 
 void tuneName(char* out, size_t n) {
     if (n == 0) return;
