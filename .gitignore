@@ -62,6 +62,6 @@ mcqueen*.png
 garmin/carlights/source/Secrets.mc
 garmin/carlights/bin/
 garmin/pokeface/bin/
-# Pokéface sprites: Nintendo's / the Smogon sprite project's art, fetched by tools/gen_pokeface.py, never committed
-pokeface-sprites/
-garmin/pokeface/resources/sprites/
+# Pokéface sprites and font: Nintendo's / pokeemerald-expansion's art, fetched by tools/gen_pokeface.py, never committed
+pokefont-src/
+garmin/pokeface/resources/gen/

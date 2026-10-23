@@ -8,119 +8,97 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen_pokeface as g  # noqa: E402
 
+PAL = [(0, 0, 0), (248, 64, 32), (16, 200, 16)] + [(0, 0, 0)] * 13
 
-def tagged(i, size=(8, 8)):
-    """A frame whose top-left pixel's red channel carries its index, so picks can be read back."""
-    im = Image.new("RGBA", size, (0, 0, 0, 0))
-    im.putpixel((0, 0), (i, 0, 0, 255))
+
+def paletted(w, h):
+    im = Image.new("P", (w, h), 0)
+    im.putpalette([c for rgb in PAL for c in rgb])
     return im
 
 
-class PickFrames(unittest.TestCase):
-    def test_pick_frames_spread(self):
-        got = [f.getpixel((0, 0))[0] for f in g.pick_frames([tagged(i) for i in range(12)], 6)]
-        self.assertEqual(got, [0, 2, 4, 6, 8, 10])
-
-    def test_short_gif_cycles(self):
-        got = [f.getpixel((0, 0))[0] for f in g.pick_frames([tagged(i) for i in range(4)], 6)]
-        self.assertEqual(got, [0, 1, 2, 3, 0, 1])
+class Palette(unittest.TestCase):
+    def test_read_jasc(self):
+        self.assertEqual(g.read_jasc("JASC-PAL\n0100\n2\n0 0 0\n248 64 32\n"), [(0, 0, 0), (248, 64, 32)])
 
 
-class Cut(unittest.TestCase):
-    def test_crop_union(self):
-        a = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
-        b = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
-        a.putpixel((10, 20), (255, 0, 0, 255))
-        b.putpixel((50, 70), (0, 255, 0, 255))
-        out = g.crop_union([a, b])
-        self.assertEqual([im.size for im in out], [(41, 51), (41, 51)])
-        self.assertEqual(out[0].getpixel((0, 0)), (255, 0, 0, 255))
-        self.assertEqual(out[1].getpixel((40, 50)), (0, 255, 0, 255))
+class Frames(unittest.TestCase):
+    def test_two_frame_stack(self):
+        im = paletted(64, 128)
+        im.putpixel((0, 0), 1)
+        im.putpixel((0, 64), 2)
+        f = g.frames(im)
+        self.assertEqual(len(f), 2)
+        self.assertEqual([f[0].getpixel((0, 0)), f[1].getpixel((0, 0))], [1, 2])
 
-    def test_halve_is_nearest(self):
-        im = Image.new("RGBA", (4, 4))
-        for y in range(4):
-            for x in range(4):
-                im.putpixel((x, y), (255, 0, 0, 255) if (x + y) % 2 else (0, 0, 255, 255))
-        out = g.halve(im)
-        self.assertEqual(out.size, (2, 2))
-        self.assertLessEqual(set(out.getdata()), {(255, 0, 0, 255), (0, 0, 255, 255)})
+    def test_single_frame_sheet(self):
+        im = paletted(64, 64)
+        im.putpixel((5, 5), 1)
+        f = g.frames(im)
+        self.assertEqual(len(f), 2)
+        self.assertEqual(f[0].tobytes(), f[1].tobytes())
+        self.assertEqual(g.sheet([g.colourise(x, PAL) for x in f]).size, (128, 64))
 
+    def test_colourise_index0_transparent(self):
+        im = paletted(2, 1)
+        im.putpixel((1, 0), 1)
+        out = g.colourise(im, PAL)
+        self.assertEqual(out.getpixel((0, 0))[3], 0)
+        self.assertEqual(out.getpixel((1, 0)), (255, 85, 0, 255))
 
-class Convert(unittest.TestCase):
-    def frames(self):
-        out = []
-        for i in range(3):
-            im = Image.new("RGBA", (96, 96), (0, 0, 0, 0))
-            for y in range(20, 60):
-                for x in range(30, 70):
-                    im.putpixel((x, y), (0x60, 0x10, 0xF0, 255))
-            out.append(im)
-        return out
-
-    def test_convert_full_size_keeps_pixels(self):
-        out = g.convert(self.frames(), half=False)
-        self.assertEqual(len(out), g.FRAMES)
-        self.assertEqual(out[0].size, (40, 40))
-        self.assertEqual(out[0].getpixel((0, 0)), (0x55, 0x00, 0xFF, 255))
-
-    def test_convert_half(self):
-        self.assertEqual(g.convert(self.frames(), half=True)[0].size, (20, 20))
-
-    def test_small_ones_full_big_ones_half(self):
-        half = {name: h for name, _, _, h, _ in g.POKEMON}
-        self.assertEqual(half, {"charmander": False, "charmeleon": False, "charizard": True,
-                                "charizard-megax": True, "charizard-megay": True})
-
-    def test_mega_y_is_the_still_gen5_sprite(self):
-        src = {name: s for name, _, _, _, s in g.POKEMON}
-        self.assertEqual(src["charizard-megay"], "https://play.pokemonshowdown.com/sprites/gen5/charizard-megay.png")
-        self.assertEqual(src["charmander"], "https://play.pokemonshowdown.com/sprites/gen5ani/charmander.gif")
+    def test_sheet_mirrors(self):
+        a = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        a.putpixel((0, 10), (255, 0, 0, 255))
+        s = g.sheet([a, a])
+        self.assertEqual(s.getpixel((63, 10)), (255, 0, 0, 255))
+        self.assertEqual(s.getpixel((127, 10)), (255, 0, 0, 255))
+        self.assertEqual(s.getpixel((0, 10))[3], 0)
 
 
-class Colour(unittest.TestCase):
-    def test_snap(self):
-        im = Image.new("RGBA", (2, 1))
-        im.putpixel((0, 0), (0x60, 0x10, 0xF0, 255))
-        im.putpixel((1, 0), (1, 2, 3, 100))
-        out = g.snap(im)
-        self.assertEqual(out.getpixel((0, 0)), (0x55, 0x00, 0xFF, 255))
-        self.assertEqual(out.getpixel((1, 0))[3], 0)
+class Font(unittest.TestCase):
+    def test_read_charmap(self):
+        self.assertEqual(g.read_charmap("'A' = BB\n'0' = A1\n@ a comment\n"), {"A": 0xBB, "0": 0xA1})
 
-    def test_darken(self):
-        im = Image.new("RGBA", (1, 1), (0xFF, 0xAA, 0x55, 255))
-        self.assertEqual(g.darken(im).getpixel((0, 0)), (0xAA, 0x55, 0x00, 255))
+    def test_read_widths(self):
+        src = "const u8 gFontNormalLatinGlyphWidths[] = {\n 3, 6,\n 5 };\nconst u8 gOther[] = { 9 };"
+        self.assertEqual(g.read_widths(src), [3, 6, 5])
+
+    def test_glyph_cut(self):
+        sheet = Image.new("RGBA", (256, 256), (255, 255, 255, 255))
+        code = 0xBB
+        x0, y0 = (code % 16) * 16, (code // 16) * 16
+        sheet.putpixel((x0 + 1, y0 + 2), g.FONT_INK + (255,))
+        gl = g.glyph(sheet, code, 6)
+        self.assertEqual(gl.width, 6)
+        self.assertEqual(gl.getpixel((1, 2)), (255, 255, 255, 255))
+        self.assertEqual(gl.getpixel((0, 0))[3], 0)
+
+    def test_degree_glyph_synthesised(self):
+        text, _ = g.bmfont({"°": g.degree(10)}, 1, "t")
+        self.assertIn("char id=176 ", text)
+
+    def test_bmfont_scale(self):
+        gl = Image.new("RGBA", (2, 3), (255, 255, 255, 255))
+        text, page = g.bmfont({"A": gl}, 2, "t")
+        self.assertIn("width=4 height=6", text)
+        self.assertIn("xadvance=6", text)
+        self.assertIn('file="t.png"', text)
+        self.assertGreaterEqual(page.height, 6)
 
 
-class Tail(unittest.TestCase):
-    def test_tail_is_the_flame_core_centre(self):
-        im = Image.new("RGBA", (40, 30), (255, 170, 0, 255))   # an orange body
-        for y in range(4, 9):
-            for x in range(30, 35):
-                im.putpixel((x, y), (255, 255, 0, 255))        # the yellow core
-        self.assertEqual(g.tail(im, blue=False), [12, -9])     # centre (32, 6) vs frame centre (20, 15)
+class Resources(unittest.TestCase):
+    def test_species(self):
+        self.assertEqual(len(g.SPECIES), 21)
+        self.assertEqual(g.SPECIES[0], ("blaziken", "BLAZIKEN"))
+        self.assertEqual(g.SPECIES[3], ("ho_oh", "HO-OH"))
+        self.assertEqual(g.SPECIES[20], ("zygarde", "ZYGARDE"))
 
-    def test_blue_tail_ignores_the_mouth_flames(self):
-        im = Image.new("RGBA", (50, 40), (0, 0, 0, 255))
-        for x, y in [(5, 5), (6, 5), (44, 24), (46, 26)]:      # mouth on the left, tail on the right
-            im.putpixel((x, y), (170, 255, 255, 255))
-        self.assertEqual(g.tail(im, blue=True), [20, 5])
-
-    def test_no_flame_found_points_at_the_top(self):
-        self.assertEqual(g.tail(Image.new("RGBA", (40, 30), (0, 0, 0, 255)), blue=False), [0, -15])
-
-
-class Xml(unittest.TestCase):
-    def test_tails_json(self):
-        xml = g.sprites_xml([[[1, 2]] * 6] * 5)
-        self.assertIn('<jsonData id="Tails">[[[1, 2], [1, 2], [1, 2], [1, 2], [1, 2], [1, 2]], ', xml)
-
-    def test_sprites_xml_lists_every_frame(self):
-        xml = g.sprites_xml([[[0, 0]] * 6] * 5)
-        self.assertIn('<bitmap id="Charmander0" filename="charmander_0.png" dithering="none"/>', xml)
-        self.assertIn('<bitmap id="MegaY5" filename="charizard-megay_5.png" dithering="none"/>', xml)
-        self.assertIn('<bitmap id="MegaXSleep" filename="charizard-megax_sleep.png" dithering="none"/>', xml)
-        self.assertEqual(xml.count("<bitmap "), 33)
+    def test_gen_xml(self):
+        xml = g.gen_xml()
+        self.assertEqual(xml.count("<bitmap "), 21)
+        self.assertEqual(xml.count("<font "), 3)
+        for s in ('id="Mon0"', 'id="Mon20"', 'id="EmeraldTime"', 'filename="emerald2.fnt"'):
+            self.assertIn(s, xml)
 
 
 if __name__ == "__main__":
