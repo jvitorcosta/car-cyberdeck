@@ -87,16 +87,15 @@ class Font(unittest.TestCase):
 
 
 class Field(unittest.TestCase):
-    def test_day_field_dithers_the_deck_colours(self):
+    def test_day_field_is_vivid_and_solid(self):
         im = g.field(night=False)
         self.assertEqual(im.size, (260, 260))
-        # sky: (168,216,248) as a checker of AAAAFF / AAFFFF
-        self.assertEqual({im.getpixel((10, 10)), im.getpixel((11, 10))}, {(0xAA, 0xAA, 0xFF), (0xAA, 0xFF, 0xFF)})
-        self.assertEqual(im.getpixel((10, 10)), im.getpixel((11, 11)))
-        # horizon band: solid 55AA55
-        self.assertEqual(im.getpixel((10, g.HORIZON)), (0x55, 0xAA, 0x55))
-        # grass: (136,200,120) as a checker of 55AA55 / AAFFAA
-        self.assertEqual({im.getpixel((10, 200)), im.getpixel((11, 200))}, {(0x55, 0xAA, 0x55), (0xAA, 0xFF, 0xAA)})
+        # solid colours, no checker: pale dithered colours washed out on the watch's screen
+        self.assertEqual(im.getpixel((10, 10)), (0x55, 0xAA, 0xFF))           # sky
+        self.assertEqual(im.getpixel((11, 10)), (0x55, 0xAA, 0xFF))
+        self.assertEqual(im.getpixel((10, g.HORIZON)), (0x00, 0x55, 0x00))    # horizon
+        self.assertEqual(im.getpixel((10, 200)), (0x00, 0xAA, 0x00))          # grass
+        self.assertEqual(im.getpixel((11, 200)), (0x00, 0xAA, 0x00))
 
     def test_night_field_is_dark(self):
         im = g.field(night=True)
@@ -107,11 +106,11 @@ class Field(unittest.TestCase):
         self.assertIn('<bitmap id="FieldDay" filename="field_day.png"', xml)
         self.assertIn('<bitmap id="FieldNight" filename="field_night.png"', xml)
 
-    def test_fields_carry_a_4_colour_palette(self):
+    def test_fields_carry_their_palette(self):
         xml = g.gen_xml()
         day = xml[xml.index('id="FieldDay"'):xml.index('id="FieldNight"')]
-        self.assertEqual(day.count("<color>"), 4)
-        for c in ("AAAAFF", "AAFFFF", "55AA55", "AAFFAA"):
+        self.assertEqual(day.count("<color>"), 3)
+        for c in ("55AAFF", "005500", "00AA00"):
             self.assertIn("<color>%s</color>" % c, day)
 
 

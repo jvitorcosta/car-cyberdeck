@@ -147,7 +147,7 @@ class PokefaceView extends WatchUi.WatchFace {
         var wn = dc.getTextWidthInPixels(_notes, _f1);
         var wb = dc.getTextWidthInPixels(_bat, _f1);
         var x = CX - (11 + wd + 10 + 16 + wn + 10 + 16 + wb) / 2;
-        dc.setColor(0x0055FF, Graphics.COLOR_TRANSPARENT);
+        dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
         if (_phone) {
             dc.fillCircle(x + 3, 54, 3);
         } else {
@@ -174,21 +174,23 @@ class PokefaceView extends WatchUi.WatchFace {
         // Its info box: name, Lv (day of the month), HP = Body Battery, EXP = steps
         var bx = 116;
         var by = 80;
-        var bi = night ? 0xFFFFAA : 0x555555;
+        var bi = night ? 0xFFFFAA : 0x000000;   // text in the battle box
         var bs = night ? 0x000000 : 0xAAAAAA;
         Battle.infoBox(dc, bx, by, 130, 80, night);
         Battle.text(dc, bx + 8, by + 15, _f2, Partner.NAMES[_species] as String, bi, bs, 2, Graphics.TEXT_JUSTIFY_LEFT);
         Battle.text(dc, bx + 8, by + 34, _f1, "Lv" + _lv, bi, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.text(dc, bx + 38, by + 34, _f1, "HP", 0xFFAA00, 0x555555, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.text(dc, bx + 38, by + 34, _f1, "HP", 0xFF5500, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
         Battle.bar(dc, bx + 54, by + 32, 62, _bbFrac, hpInk(Partner.hpColour(_bbValue)));
         Battle.text(dc, bx + 114, by + 47, _f1, "BB " + _bb, bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
-        Battle.text(dc, bx + 8, by + 60, _f1, "EXP", 0x55AAFF, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.bar(dc, bx + 34, by + 58, 82, _bar, 0x55AAFF);
+        Battle.text(dc, bx + 8, by + 60, _f1, "EXP", night ? 0x00AAFF : 0x0055FF, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.bar(dc, bx + 34, by + 58, 82, _bar, 0x00AAFF);
         Battle.text(dc, bx + 108, by + 71, _f1, _steps + " steps", bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
 
         // The dialogue box: heart rate | temperature, then distance. A row too wide for the round
         // edge (big numbers) drops to 1x rather than being cut.
         Battle.dialogue(dc, 0, 192, dc.getWidth(), 70, night);
+        bi = 0xFFFFFF;   // text in the dialogue box: white on navy
+        bs = 0x000000;
         var f = _f2;
         var px = 2;
         var whr = dc.getTextWidthInPixels(_hr, f);
@@ -200,7 +202,7 @@ class PokefaceView extends WatchUi.WatchFace {
             wt = dc.getTextWidthInPixels(_temp, f);
         }
         x = CX - (16 + whr + 20 + 14 + wt) / 2;
-        Icons.heart(dc, x + 6, 210, 0xFF5555);
+        Icons.heart(dc, x + 6, 210, 0xFF0055);
         Battle.text(dc, x + 16, 210, f, _hr, bi, bs, px, Graphics.TEXT_JUSTIFY_LEFT);
         x += 16 + whr + 20;
         Icons.thermometer(dc, x + 4, 210, bi);
@@ -227,7 +229,7 @@ class PokefaceView extends WatchUi.WatchFace {
 
     // Emerald's HP colours; unknown Body Battery leaves the bar empty.
     private function hpInk(c as Number) as Number or Null {
-        return c == Partner.HP_GREEN ? 0x55FFAA : (c == Partner.HP_YELLOW ? 0xFFFF55 : (c == Partner.HP_RED ? 0xFF5555 : null));
+        return c == Partner.HP_GREEN ? 0x00FF00 : (c == Partner.HP_YELLOW ? 0xFFAA00 : (c == Partner.HP_RED ? 0xFF0000 : null));
     }
 
     // Reads the watch's numbers and decides who is out; once a minute and on waking.

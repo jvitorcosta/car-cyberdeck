@@ -14,9 +14,9 @@ them at 2x).
 Font: Emerald's latin_normal sheet (16x16 cells in charmap order, widths from src/fonts.c) gives
 the GLYPHS as BMFont fonts: emerald1 (1x), emerald2 (2x) and emerald3 (3x, digits and ':' only,
 for the time).
-Field: the deck's Gen 3 battle background (src/ui/theme.cpp DAY / NIGHT sky, horizon, grass) as
-two 260x260 images, field_day / field_night. A colour between two of the watch's 64 becomes a
-2-pixel checker of both, the way GBA-era screens dithered. gen.xml lists all of them as resources.
+Field: the deck's battle background layout (sky, horizon band, grass) as two 260x260 images,
+field_day / field_night, in solid vivid colours: the deck's pale ones (and dithering them) washed
+out on the watch's reflective screen. gen.xml lists all of them as resources.
 """
 import os
 import re
@@ -40,15 +40,11 @@ SPECIES = [("blaziken", "BLAZIKEN"), ("sceptile", "SCEPTILE"), ("latias", "LATIA
            ("xerneas", "XERNEAS"), ("yveltal", "YVELTAL"), ("zygarde", "ZYGARDE")]
 GLYPHS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz :./-%°"
 TIME_GLYPHS = "0123456789:"
-# Field rows and colours: (a, b) is a checker of two watch colours, (a, a) a solid one
+# Field rows and colours (solid, vivid, not pale)
 HORIZON = 76            # the horizon band's middle row: sky above, grass below
 FIELD = {
-    False: {"sky": ((0xAA, 0xAA, 0xFF), (0xAA, 0xFF, 0xFF)),     # deck A8D8F8
-            "horizon": ((0x55, 0xAA, 0x55), (0x55, 0xAA, 0x55)),  # deck 60A858
-            "grass": ((0x55, 0xAA, 0x55), (0xAA, 0xFF, 0xAA))},   # deck 88C878
-    True: {"sky": ((0x00, 0x00, 0x55), (0x00, 0x55, 0x55)),      # deck 18284A
-           "horizon": ((0x00, 0x55, 0x00), (0x00, 0x55, 0x00)),   # deck 1E3A2A
-           "grass": ((0x00, 0x55, 0x00), (0x00, 0x00, 0x00))},    # deck 1F3B2B
+    False: {"sky": (0x55, 0xAA, 0xFF), "horizon": (0x00, 0x55, 0x00), "grass": (0x00, 0xAA, 0x00)},
+    True: {"sky": (0x00, 0x00, 0x55), "horizon": (0x00, 0x55, 0x55), "grass": (0x00, 0x55, 0x00)},
 }
 FONT_INK = (56, 56, 56)   # the letters' dark grey in latin_normal.png (the shadow is light grey, the cell blue)
 
@@ -139,9 +135,9 @@ def field(night):
     im = Image.new("RGB", (260, 260))
     c = FIELD[night]
     for y in range(260):
-        a, b = c["sky"] if y < HORIZON - 2 else (c["horizon"] if y < HORIZON + 2 else c["grass"])
+        colour = c["sky"] if y < HORIZON - 2 else (c["horizon"] if y < HORIZON + 2 else c["grass"])
         for x in range(260):
-            im.putpixel((x, y), a if (x + y) % 2 == 0 else b)
+            im.putpixel((x, y), colour)
     return im
 
 
@@ -149,8 +145,8 @@ def gen_xml():
     bitmaps = "\n".join('    <bitmap id="Mon%d" filename="mon%d.png" dithering="none"/>' % (i, i)
                         for i in range(len(SPECIES)))
     for rid, night in (("FieldDay", False), ("FieldNight", True)):
-        # its 4 colours as the palette: 2 bits a pixel on the watch instead of 8
-        colours = sorted({c for pair in FIELD[night].values() for c in pair})
+        # its 3 colours as the palette: 2 bits a pixel on the watch instead of 8
+        colours = sorted(set(FIELD[night].values()))
         bitmaps += ('\n    <bitmap id="%s" filename="field_%s.png" dithering="none"><palette>%s</palette></bitmap>'
                     % (rid, "night" if night else "day",
                        "".join("<color>%02X%02X%02X</color>" % c for c in colours)))
