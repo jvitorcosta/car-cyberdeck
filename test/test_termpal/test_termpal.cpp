@@ -20,9 +20,9 @@ void test_values() {
     TEST_ASSERT_EQUAL_HEX32(0x308A24, rgb(DIM, false));
     TEST_ASSERT_EQUAL_HEX32(0xFF3C28, rgb(ALERT, false));
     TEST_ASSERT_EQUAL_HEX32(0, rgb(BG, true));
-    TEST_ASSERT_EQUAL_HEX32(0xE09A00, rgb(TEXT, true));
-    TEST_ASSERT_EQUAL_HEX32(0xA06E00, rgb(MID, true));
-    TEST_ASSERT_EQUAL_HEX32(0x7A5400, rgb(DIM, true));
+    TEST_ASSERT_EQUAL_HEX32(0xF08C00, rgb(TEXT, true));
+    TEST_ASSERT_EQUAL_HEX32(0xB06200, rgb(MID, true));
+    TEST_ASSERT_EQUAL_HEX32(0x8C4C00, rgb(DIM, true));
     TEST_ASSERT_EQUAL_HEX32(0xE03418, rgb(ALERT, true));
     TEST_ASSERT_EQUAL_HEX32(0x030503, scan(false));
     TEST_ASSERT_EQUAL_HEX32(0x050300, scan(true));
@@ -71,11 +71,20 @@ void test_hues() {
     TEST_ASSERT_TRUE(luma(rgb(ALERT, true)) < luma(rgb(ALERT, false)));
 }
 
+// Night stays amber, not olive: every role but BG and ALERT has green at most 0.6 x red.
+void test_night_warm() {
+    for (Role r : {TEXT, MID, DIM}) {
+        const uint32_t n = rgb(r, true);
+        TEST_ASSERT_TRUE(green(n) * 10 <= red(n) * 6);
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_values);
     RUN_TEST(test_contrast_on_black);
     RUN_TEST(test_contrast_thresholds);
     RUN_TEST(test_hues);
+    RUN_TEST(test_night_warm);
     return UNITY_END();
 }

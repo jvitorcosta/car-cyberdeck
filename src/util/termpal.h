@@ -12,8 +12,9 @@ enum Role : uint8_t { BG, TEXT, MID, DIM, ALERT };
 
 // Day: BG 0x000000, TEXT 0xAAFF8C (17.4:1), MID 0x5ABE28 (8.8:1), DIM 0x308A24 (4.8:1),
 // ALERT 0xFF3C28 (5.9:1).
-// Night (amber): TEXT 0xE09A00 (8.8:1), MID 0xA06E00 (4.7:1), DIM 0x7A5400 (3.1:1),
-// ALERT 0xE03418 (4.7:1, a deeper red), BG 0.
+// Night (amber): TEXT 0xF08C00, MID 0xB06200, DIM 0x8C4C00 (3.1:1), ALERT 0xE03418 (4.7:1, a
+// deeper red), BG 0. The night greens sit well under red (at most 0.6x) so the amber reads warm,
+// not olive, on the panel.
 uint32_t rgb(Role r, bool night);
 // The scanline colour drawn over the screen: day 0x030503, night 0x050300.
 uint32_t scan(bool night);

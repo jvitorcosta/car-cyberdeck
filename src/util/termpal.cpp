@@ -18,7 +18,7 @@ double linear(uint32_t c8) {
 
 uint32_t rgb(Role r, bool night) {
     static const uint32_t DAY[] = {0x000000, 0xAAFF8C, 0x5ABE28, 0x308A24, 0xFF3C28};
-    static const uint32_t NIGHT[] = {0x000000, 0xE09A00, 0xA06E00, 0x7A5400, 0xE03418};
+    static const uint32_t NIGHT[] = {0x000000, 0xF08C00, 0xB06200, 0x8C4C00, 0xE03418};
     return night ? NIGHT[r] : DAY[r];
 }
 
