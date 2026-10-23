@@ -1,7 +1,8 @@
 // Car mic recorder for the voice agent test (NOT the firmware): docs/superpowers/plans/
-// 2026-10-23-voice-agent-1-mic-test.md. The screen shows the next phrase; hold BOOT to record
-// it (up to 4 s, into PSRAM); tap the screen's left half to redo the previous one, the right
-// half to skip. The clips are served over WiFi as WAV for tools/micrec_pull.py or the phone:
+// 2026-10-23-voice-agent-1-mic-test.md. Press BOOT once and it records the rest of the current
+// condition hands-free: per phrase a 3-2-1 countdown, a beep, 4 s of recording (into PSRAM), the
+// next phrase; it stops after the condition's 10th so music and windows can change. A screen tap
+// stops a run; when idle, tap the left half to go back one phrase (to redo it), the right to skip. The clips are served over WiFi as WAV for tools/micrec_pull.py or the phone:
 //   http://cardeck.local/?k=<REMOTE_TOKEN>   (or the address on screen)
 // PSRAM only: the clips are lost at power-off, so pull them before turning the car off.
 //   pio run -e micrec_s3 -t upload --upload-port COM12
@@ -22,7 +23,7 @@ static constexpr int PIN_BOOT = 0;   // the board's BOOT button, LOW while press
 static TFT_eSPI s_tft;
 static WebServer s_server(80);
 static int16_t* s_clips = nullptr;   // SLOTS x MAX_SAMPLES, PSRAM
-static int16_t* s_take = nullptr;    // the take in progress: a short tap never touches a slot
+static int16_t* s_take = nullptr;    // the take in progress: a stopped take never touches a slot
 static int s_len[micrec::SLOTS] = {};       // samples kept per slot, 0 = empty
 static uint8_t s_gainOf[micrec::SLOTS] = {};
 static int s_slot = 0;               // next slot to record; SLOTS = full
@@ -62,6 +63,9 @@ static void drawScreen() {
         snprintf(pos, sizeof pos, "%d/10   %s", micrec::phraseOf(s_slot) + 1,
                  s_len[s_slot] ? "(regravar)" : "");
         s_tft.drawString(pos, 10, 130, 4);
+        s_tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        snprintf(head, sizeof head, "BOOT: gravar a condicao %c", micrec::condition(s_slot));
+        s_tft.drawString(head, 10, 196, 2);
     }
     s_tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     s_tft.drawString("< voltar", 10, 176, 2);
@@ -79,15 +83,38 @@ static void drawLevel(int peak, uint32_t ms) {
     s_tft.fillRect(150, 162, (int)(160L * peak / 32768), 10, peak > 30000 ? TFT_RED : TFT_GREEN);
 }
 
-// Records while BOOT is held, then keeps the take in the current slot if it was long enough.
-static void record() {
+static void drawCount(int n) {
+    s_tft.fillRect(0, 150, 320, 60, TFT_BLACK);
+    s_tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    s_tft.drawString(String(n), 150, 150, 7);
+}
+
+static bool touched() {
+    int x, y;
+    return touchft::read(&x, &y);
+}
+
+// One phrase of a run: 3-2-1, a beep, MAX_MS of recording into the scratch take, a short rest.
+// The whole take is kept (it's a fixed window). False when a screen tap stopped the run.
+static bool runPhrase() {
+    drawScreen();
+    int shown = 0;
     const uint32_t t0 = millis();
+    micrec::Step st = micrec::stepAt(0);
+    for (; st.phase == micrec::Phase::Countdown; st = micrec::stepAt(millis() - t0)) {
+        if (st.count != shown) drawCount(shown = st.count);
+        if (touched()) return false;
+        delay(10);
+    }
+    s_tft.fillRect(0, 150, 320, 60, TFT_BLACK);
+    mic::beep(120, 880);
+    mic::flush();   // the beep and anything older stay out of the take
     int n = 0, peak = 0, framePeak = 0;
     double sum = 0;
     uint32_t lastDraw = 0;
+    const uint32_t r0 = millis();
     int16_t chunk[256];
-    mic::read(chunk, 256);   // drop what sat in the DMA buffers before the press
-    while (digitalRead(PIN_BOOT) == LOW) {
+    while (n < micrec::MAX_SAMPLES) {
         const size_t got = mic::read(chunk, 256);
         for (size_t i = 0; i < got && n < micrec::MAX_SAMPLES; i++) {
             const int v = chunk[i];
@@ -97,28 +124,37 @@ static void record() {
             if (abs(v) > framePeak) framePeak = abs(v);
         }
         if (millis() - lastDraw > 100) {
-            drawLevel(framePeak, millis() - t0);
+            drawLevel(framePeak, millis() - r0);
             framePeak = 0;
             lastDraw = millis();
+            if (touched()) return false;   // stopped mid-take: the slot keeps its old clip
         }
-        if (n >= micrec::MAX_SAMPLES) break;   // 4 s: stop here, keep what we have
     }
-    const uint32_t held = millis() - t0;
-    while (digitalRead(PIN_BOOT) == LOW) delay(10);   // capped take: wait for the release
-    int keep = micrec::samplesToKeep(held);
-    if (keep > n) keep = n;
-    if (keep == 0) {
-        drawScreen();
-        return;
-    }
-    memcpy(s_clips + (size_t)s_slot * micrec::MAX_SAMPLES, s_take, keep * sizeof(int16_t));
-    s_len[s_slot] = keep;
+    memcpy(s_clips + (size_t)s_slot * micrec::MAX_SAMPLES, s_take, n * sizeof(int16_t));
+    s_len[s_slot] = n;
     s_gainOf[s_slot] = mic::gain();
     char name[8];
     micrec::clipName(s_slot, name, sizeof name);
-    Serial.printf("[micrec] %s %.1f s peak %d rms %d\n", name, (double)keep / micrec::RATE, peak,
+    Serial.printf("[micrec] %s %.1f s peak %d rms %d\n", name, (double)n / micrec::RATE, peak,
                   n ? (int)sqrt(sum / n) : 0);
     s_slot++;
+    s_tft.fillRect(0, 150, 320, 60, TFT_BLACK);
+    delay(micrec::GAP_MS);
+    return true;
+}
+
+// A BOOT press records the rest of the current condition hands-free, then stops so the music and
+// the windows can be changed for the next one. A screen tap stops it.
+static void runSequence() {
+    const int end = micrec::runEnd(s_slot);
+    while (s_slot < end) {
+        if (!runPhrase()) {
+            Serial.println("[micrec] run stopped");
+            while (touched()) delay(10);   // don't let the stopping tap also step a slot
+            break;
+        }
+        if (s_online) s_server.handleClient();
+    }
     drawScreen();
 }
 
@@ -262,7 +298,10 @@ void loop() {
     if (s_online) s_server.handleClient();
     if (digitalRead(PIN_BOOT) == LOW && s_slot < micrec::SLOTS) {
         delay(20);   // debounce
-        if (digitalRead(PIN_BOOT) == LOW) record();
+        if (digitalRead(PIN_BOOT) == LOW) {
+            while (digitalRead(PIN_BOOT) == LOW) delay(10);   // start on the release
+            runSequence();
+        }
     }
     static bool wasDown = false;
     int x, y;

@@ -21,4 +21,16 @@ void wavHeader(uint8_t out[44], uint32_t dataBytes, uint32_t rate);
 // Samples a hold of heldMs keeps: 0 below MIN_MS, else capped at MAX_MS.
 int samplesToKeep(uint32_t heldMs);
 void clipName(int slot, char* out, size_t n);  // "A01".."D10"
+
+// Hands-free run: one BOOT press records the rest of the current condition, phrase by phrase:
+// a 3-2-1 countdown, a beep, MAX_MS of recording, a short rest, the next phrase.
+constexpr int COUNT_MS = 3000;
+constexpr int GAP_MS = 700;
+enum class Phase { Countdown, Record, Gap, Done };
+struct Step {
+    Phase phase;
+    int count;   // 3, 2, 1 during the countdown, else 0
+};
+Step stepAt(uint32_t msIntoPhrase);  // where a phrase is, ms after it started
+int runEnd(int slot);                // the slot a run started at `slot` stops before
 }

@@ -74,4 +74,18 @@ void clipName(int slot, char* out, size_t n) {
     snprintf(out, n, "%c%02d", condition(slot), slot % PHRASES + 1);
 }
 
+Step stepAt(uint32_t t) {
+    if (t < (uint32_t)COUNT_MS) return {Phase::Countdown, 3 - (int)(t / 1000)};
+    t -= COUNT_MS;
+    if (t < (uint32_t)MAX_MS) return {Phase::Record, 0};
+    t -= MAX_MS;
+    if (t < (uint32_t)GAP_MS) return {Phase::Gap, 0};
+    return {Phase::Done, 0};
+}
+
+int runEnd(int slot) {
+    if (slot >= SLOTS) return SLOTS;
+    return (slot / PHRASES + 1) * PHRASES;
+}
+
 }  // namespace micrec

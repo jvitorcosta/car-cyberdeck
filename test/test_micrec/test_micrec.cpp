@@ -60,11 +60,34 @@ void test_clip_names() {
     TEST_ASSERT_EQUAL_STRING("D10", s);
 }
 
+void test_a_phrase_counts_down_then_records_then_rests() {
+    using micrec::Phase;
+    TEST_ASSERT_EQUAL_INT((int)Phase::Countdown, (int)micrec::stepAt(0).phase);
+    TEST_ASSERT_EQUAL_INT(3, micrec::stepAt(0).count);
+    TEST_ASSERT_EQUAL_INT(2, micrec::stepAt(1000).count);
+    TEST_ASSERT_EQUAL_INT(1, micrec::stepAt(2999).count);
+    TEST_ASSERT_EQUAL_INT((int)Phase::Record, (int)micrec::stepAt(3000).phase);
+    TEST_ASSERT_EQUAL_INT((int)Phase::Record, (int)micrec::stepAt(3000 + micrec::MAX_MS - 1).phase);
+    TEST_ASSERT_EQUAL_INT((int)Phase::Gap, (int)micrec::stepAt(3000 + micrec::MAX_MS).phase);
+    TEST_ASSERT_EQUAL_INT((int)Phase::Done,
+                          (int)micrec::stepAt(3000 + micrec::MAX_MS + micrec::GAP_MS).phase);
+}
+
+void test_a_run_stops_at_the_end_of_its_condition() {
+    TEST_ASSERT_EQUAL_INT(10, micrec::runEnd(0));
+    TEST_ASSERT_EQUAL_INT(10, micrec::runEnd(7));    // started mid-condition: finish A only
+    TEST_ASSERT_EQUAL_INT(20, micrec::runEnd(10));
+    TEST_ASSERT_EQUAL_INT(40, micrec::runEnd(39));
+    TEST_ASSERT_EQUAL_INT(40, micrec::runEnd(40));   // full: nothing to run
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_slots_map_to_condition_and_phrase);
     RUN_TEST(test_wav_header_is_16k_mono_pcm);
     RUN_TEST(test_short_taps_are_dropped_and_long_holds_capped);
     RUN_TEST(test_clip_names);
+    RUN_TEST(test_a_phrase_counts_down_then_records_then_rests);
+    RUN_TEST(test_a_run_stops_at_the_end_of_its_condition);
     return UNITY_END();
 }
