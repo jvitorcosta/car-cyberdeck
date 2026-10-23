@@ -37,16 +37,14 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Investigate
 
-- **Dropped WiFi receive buffers.** The WiFi driver can't get a ~1.5 KB buffer (caps 0x1800)
-  and drops the frame; TCP resends it and every request still succeeds, but each drop adds
-  latency. Rate varies a lot by network and song: 1 800-4 900 in 5 min on the iPhone hotspot
-  (2026-10-08). Findings: it happens during every TLS request, plain polls included, not only
-  around track changes; only one TLS session was open at a time then (the old Spotify library
-  closed its client after each call; since 2026-10-21 the Spotify connection stays open, so
-  re-measure on the S3); even 218 B allocations fail, so the heap is
-  momentarily empty while a TLS session (~40 KB) is open on ~65 KB free. The levers left are
-  build-time settings fixed in the precompiled Arduino core (mbedTLS 16 KB input buffer, lwIP
-  TCP window, WiFi RX buffer count): they need the arduino-as-ESP-IDF-component build.
+- **Dropped WiFi receive buffers: not on the S3** (re-measured 2026-10-23, closed). A 30-min
+  serial capture on the home WiFi while Spotify played (20 songs: 20 art downloads, 34 lyrics
+  fetches, 439 polls over the kept-open connection): 0 failed allocations in 74 `[mem]` reports,
+  lowest free 154 KB, largest block never under 102 KB (TLS needs 20 KB). The 1 800-4 900 drops
+  per 5 min (2026-10-08) were the CYD's (~65 KB free), whose deck build is retired. So the
+  self-heal's "any failed allocation since the last good poll = starved" check (`nettask.cpp`)
+  can't turn an outage into a reboot loop on the S3; it stays as is (fix on `feat/obd`,
+  `1d44c44`, if a low-memory board ever runs the deck again). Logs: `.superpowers/debug/selfheal-s3*.log`.
 
 - **DMA for the S3 intro** (blocked, 2026-10-15): pushing frames by DMA from two buffers ran
   at ~36 ms a frame, but TFT_eSPI's `initDMA()` on this board left every later draw black, with
