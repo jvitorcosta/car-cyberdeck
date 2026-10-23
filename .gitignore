@@ -61,3 +61,6 @@ mcqueen*.png
 # Garmin watch app: the deck key, and build output
 garmin/carlights/source/Secrets.mc
 garmin/carlights/bin/
+
+# Car mic test recordings (the owner's voice): tools/micrec_pull.py, never committed
+micrec/
