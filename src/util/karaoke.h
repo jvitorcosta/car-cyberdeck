@@ -18,9 +18,9 @@ bool available(bool answered, bool playing, const stateparse::Deck& d);
 // The KARAOKE screen's word in place of the lyrics: ">WRONG KEY" (the deck turned the key down),
 // ">NO SIGNAL" (no state came), ">STANDBY" (paused, or no track), ">NO SYNCED LYRICS", or "" (sing).
 const char* state(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d);
-// Why the Menu's KARAOKE item doesn't open: ">WRONG KEY", ">NO SIGNAL", or ">NO SYNCED LYRICS"
-// (heard, but nothing synced plays).
-const char* whyNot(bool answered, bool wrongKey);
+// Why the Menu's KARAOKE item doesn't open: ">WRONG KEY", ">NO SIGNAL", ">STANDBY" (heard, but paused
+// or no track: what the KARAOKE screen would show) or ">NO SYNCED LYRICS" (heard, plays, nothing synced).
+const char* whyNot(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d);
 // The synced lyric line due at posMs: `line` from lineStartMs, `next` from nextStartMs (when
 // known, > 0); "" before the line, and for plain / instrumental / no lyrics.
 const char* lyric(const stateparse::Deck& d, uint32_t posMs);

@@ -29,9 +29,10 @@ const char* state(bool answered, bool wrongKey, bool playing, const stateparse::
     return "";
 }
 
-const char* whyNot(bool answered, bool wrongKey) {
+const char* whyNot(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d) {
     if (wrongKey) return ">WRONG KEY";
     if (!answered) return ">NO SIGNAL";
+    if (!playing || !d.track[0]) return ">STANDBY";
     return ">NO SYNCED LYRICS";
 }
 

@@ -1320,7 +1320,7 @@ static void press(int id) {
         if (karaokeReady()) {
             show(Screen::Karaoke);
         } else {
-            setMessage(karaoke::whyNot(lyricsHeard(), song.wrongKey));
+            setMessage(karaoke::whyNot(lyricsHeard(), song.wrongKey, song.deck.playing, song.deck));
             drawStripText();
         }
         break;
