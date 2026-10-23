@@ -102,10 +102,10 @@ sections with the owner's 2026-10-23 decisions below, which override it where th
 **Interfaces:**
 - deckmenu: rename `M_FAV0` → `M_PRE0`, `L_FAV0` → `L_PRE0`, `isFav` → `isPreset`, `favSlot` → `presetSlot`. Remove `HOLD_MS`, since there is no saving. Menu layout values:
   - `HEADER{0,0,320,44}` (three text lines);
-  - item slot i as a full-width row `{4, 48 + i*40, 312, 36}`, with at most 2 item slots;
+  - a single item slot, the LIGHTS row `{4, 48, 312, 36}` (one item until a later plan adds more);
   - preset k as a big block `{4 + (k%2)*158, 92 + (k/2)*46, 154, 42}`;
   - `MENU_STRIP{0,184,320,56}`.
-  - Enum ids: `M_ITEM0 = 0, M_PRE0 = 2, M_N = 6`.
+  - Enum ids: `M_ITEM0 = 0, M_PRE0 = 1, M_N = 5`.
   - Lights rects are unchanged (`L_PRE0 = 12`).
 - termpal: night becomes **amber**. Day is unchanged. Night `TEXT 0xB37B00`, `MID 0x6E4C00`, `DIM 0x372600`, `BG 0x000000`. `tile()` is unchanged (x70 % at night). Add `uint32_t scan(bool night)`, the scanline colour: day `0x031008`, night `0x0A0700`.
 - [ ] **Step 1: Write the failing tests:**
