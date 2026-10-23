@@ -310,3 +310,16 @@ function testFresh(logger as Test.Logger) as Boolean {
     Test.assert(!Partner.fresh(null, 1000, 900));
     return true;
 }
+
+// Which days (their 00:00) this week had a run finish: for the Pokédex.
+(:test)
+function testRunDays(logger as Test.Logger) as Boolean {
+    var week = T - 3 * 86400;
+    var acts = [[S, T + 3600, 1800, 5000], [S, T - 86400 + 3600, 1800, 5000], [S, week - 3600, 1800, 5000],
+                [Activity.SPORT_CYCLING, T - 2 * 86400 + 3600, 1800, 9000]];
+    var d = Runs.runDays(acts, T + 36000, T, week);
+    Test.assertEqual(d.size(), 2);
+    Test.assert(d.indexOf(T) >= 0);
+    Test.assert(d.indexOf(T - 86400) >= 0);
+    return true;
+}

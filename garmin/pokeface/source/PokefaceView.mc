@@ -6,7 +6,6 @@ import Toybox.System;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
 import Toybox.Timer;
-import Toybox.UserProfile;
 import Toybox.WatchUi;
 
 // true: the simulator steps through all 21 Pokémon, one per minute (Monday day, night, reward,
@@ -30,6 +29,14 @@ class PokefaceView extends WatchUi.WatchFace {
     private var _frames as Number = 0;    // frames played since this wake
     private var _minute as Number = -1;   // -1: read everything on the next update
     private var _species as Number = 0;
+    private var _night as Boolean = false;   // decided once a minute, for the field and the Pokémon alike
+    private var _runs as Array = [false, null, null, 0];   // Runs.summary: read on show / wake / new day
+    private var _runDays as Array<Number> = [] as Array<Number>;
+    private var _stepDays as Array<Number> = [] as Array<Number>;
+    private var _runsDay as Number = -1;   // the day (00:00) the history was last read
+    private var _week as Number = 0;       // this week's Monday 00:00
+    private var _earned as Boolean = false;
+    private var _dex as Number = 0;
     private var _rise as Number or Null;   // today's sunrise / sunset, epoch seconds
     private var _set as Number or Null;
 
@@ -67,11 +74,13 @@ class PokefaceView extends WatchUi.WatchFace {
 
     // The face just appeared (back from a menu or an activity): someone is looking.
     function onShow() as Void {
+        readRuns();
         _minute = -1;
         animate();
     }
 
     function onExitSleep() as Void {
+        readRuns();
         _minute = -1;
         animate();
     }
@@ -117,7 +126,7 @@ class PokefaceView extends WatchUi.WatchFace {
             _minute = clock.min;
             refresh(clock, is24);
         }
-        var night = DEMO ? (clock.min % 21) % 3 == 1 : !Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
+        var night = _night;
         var ink = Battle.ink(night);
         var shade = Battle.shade(night);
         if (_field == null || night != _fieldNight) {   // only the current field is loaded
@@ -265,7 +274,33 @@ class PokefaceView extends WatchUi.WatchFace {
         _dist = Fmt.dist(act.distance, set.distanceUnits == System.UNIT_METRIC);
         _bar = Partner.barFraction(act.steps, act.stepGoal);
 
+        if (Time.today().value() != _runsDay) {
+            readRuns();   // a new day: today's runs start over
+        }
         decide(clock, act);
+        var today = Time.today().value();
+        var days = [] as Array<Number>;   // a fresh list: addAll would grow the cached ones every minute
+        days.addAll(_runDays);
+        days.addAll(_stepDays);
+        if (_earned) {
+            days.add(today);
+        }
+        _dex = Partner.dexCount(days, _week, today);
+    }
+
+    // The runs (today's latest, this week's km) and the step-goal days, from the watch's history:
+    // read when the face appears or wakes (that includes coming back from a run) and on a new day,
+    // not every minute.
+    private function readRuns() as Void {
+        var now = Time.now().value();
+        var today = Time.today().value();
+        var dow = Gregorian.info(Time.now(), Time.FORMAT_SHORT).day_of_week as Number;
+        _week = Partner.weekStart(today, dow);
+        var acts = Stats.activities();
+        _runs = Runs.summary(acts, now, today, _week);
+        _runDays = Runs.runDays(acts, now, today, _week);
+        _stepDays = Stats.stepGoalDays();
+        _runsDay = today;
     }
 
     // Today's Pokémon, its 128 px square's top-left at (-2, 64); frame 0 unless it's animating.
@@ -280,29 +315,11 @@ class PokefaceView extends WatchUi.WatchFace {
         if (DEMO) {
             var i = clock.min % 21;
             _species = i;
+            _night = i % 3 == 1;
             return;
         }
-        var earned = Partner.earned(act.steps, act.stepGoal, false) || ranToday();
-        var day = Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
-        _species = Partner.who(dow, day, earned);
-    }
-
-    // A run finished today, from the watch's activity history.
-    private function ranToday() as Boolean {
-        if (!(UserProfile has :getUserActivityHistory)) {
-            return false;
-        }
-        var it = UserProfile.getUserActivityHistory();
-        var now = Time.now().value();
-        var today = Time.today().value();
-        var a = it != null ? it.next() : null;
-        while (a != null) {
-            if (a.type == Activity.SPORT_RUNNING && a.startTime != null
-                    && Partner.finishedToday(a.startTime.value(), a.duration != null ? a.duration.value() : 0, now, today)) {
-                return true;
-            }
-            a = it.next();
-        }
-        return false;
+        _earned = Partner.earned(act.steps, act.stepGoal, _runs[0] as Boolean);
+        _night = !Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
+        _species = Partner.who(dow, !_night, _earned);
     }
 }

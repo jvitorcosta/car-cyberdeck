@@ -3,6 +3,7 @@ import Toybox.ActivityMonitor;
 import Toybox.Lang;
 import Toybox.SensorHistory;
 import Toybox.Time;
+import Toybox.UserProfile;
 import Toybox.Weather;
 
 // The device's numbers for the face. Each returns null when the watch doesn't have it (no phone,
@@ -15,10 +16,45 @@ module Stats {
         }
         var it = ActivityMonitor.getHeartRateHistory(1, true);
         var s = it != null ? it.next() : null;
-        if (s != null && s.heartRate != null && s.heartRate != ActivityMonitor.INVALID_HR_SAMPLE) {
-            return s.heartRate;
+        if (s != null && s.heartRate != null && s.heartRate != ActivityMonitor.INVALID_HR_SAMPLE
+                && Partner.fresh(s.when != null ? s.when.value() : null, Time.now().value(), 900)) {
+            return s.heartRate;   // a reading older than 15 minutes (watch off the wrist) shows as "--"
         }
         return null;
+    }
+
+    // The activity history as [type, start, duration s, metres] rows (Runs reads them).
+    function activities() as Array<Array> {
+        var rows = [] as Array<Array>;
+        if (!(Toybox has :UserProfile) || !(UserProfile has :getUserActivityHistory)) {
+            return rows;
+        }
+        var it = UserProfile.getUserActivityHistory();
+        var a = it != null ? it.next() : null;
+        while (a != null) {
+            if (a.startTime != null) {
+                rows.add([a.type, a.startTime.value(), a.duration != null ? a.duration.value() : 0,
+                          a.distance != null ? a.distance : 0]);
+            }
+            a = it.next();
+        }
+        return rows;
+    }
+
+    // The past days (their 00:00, epoch seconds; the watch keeps about 7) whose steps reached the goal.
+    function stepGoalDays() as Array<Number> {
+        var days = [] as Array<Number>;
+        if (!(ActivityMonitor has :getHistory)) {
+            return days;
+        }
+        var h = ActivityMonitor.getHistory();
+        for (var i = 0; h != null && i < h.size(); i++) {
+            var d = h[i];
+            if (d != null && d.startOfDay != null && Partner.earned(d.steps, d.stepGoal, false)) {
+                days.add(d.startOfDay.value());
+            }
+        }
+        return days;
     }
 
     function bodyBattery() as Number or Null {

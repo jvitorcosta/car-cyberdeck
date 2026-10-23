@@ -45,6 +45,26 @@ module Runs {
         return [ran, lastM, lastS, week];
     }
 
+    // The days (their 00:00, epoch seconds) from weekStart to today on which a run finished.
+    function runDays(acts as Array<Array>, now as Number, todayStart as Number, weekStart as Number) as Array<Number> {
+        var days = [] as Array<Number>;
+        for (var i = 0; i < acts.size(); i++) {
+            var a = acts[i];
+            if (a[0] != Activity.SPORT_RUNNING) {
+                continue;
+            }
+            var end = startSecs(a[1] as Number, now) + (a[2] as Number);
+            if (end < weekStart || end > now) {
+                continue;
+            }
+            var day = end >= todayStart ? todayStart : todayStart - ((todayStart - end + 86399) / 86400) * 86400;
+            if (days.indexOf(day) < 0) {
+                days.add(day);
+            }
+        }
+        return days;
+    }
+
     function level(weekMeters as Number) as Number {
         return weekMeters / 1000;
     }
