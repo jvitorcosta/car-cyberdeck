@@ -4,21 +4,19 @@
 void setUp() {}
 void tearDown() {}
 
+static uint32_t luma(uint32_t c) { return (77 * ((c >> 16) & 0xFF) + 151 * ((c >> 8) & 0xFF) + 28 * (c & 0xFF)) >> 8; }
+
 void test_termpal() {
     using namespace termpal;
     TEST_ASSERT_EQUAL_HEX32(0x3CFF7A, rgb(TEXT, false));
     const uint32_t d = rgb(TEXT, false), n = rgb(TEXT, true);
     TEST_ASSERT_TRUE(n != d);
     TEST_ASSERT_EQUAL_HEX32(0xB37B00, n);
-    // Amber: no blue in any night role, and none brighter than day's brightest channel (the
-    // brief's "day's red channel" cannot hold: day red is 0x3C, below amber's 0xB3).
-    const uint32_t dayMax = (d >> 8) & 0xFF;
-    for (int r = BG; r <= DIM; r++) {
-        const uint32_t c = rgb(static_cast<Role>(r), true);
-        TEST_ASSERT_EQUAL_HEX32(0, c & 0xFF);
-        TEST_ASSERT_TRUE(((c >> 16) & 0xFF) <= dayMax);
-        TEST_ASSERT_TRUE(((c >> 8) & 0xFF) <= dayMax);
-    }
+    // Night is dimmer (by luma), and amber: no blue in any night role.
+    TEST_ASSERT_TRUE(luma(n) < luma(d));
+    TEST_ASSERT_TRUE(luma(rgb(MID, true)) < luma(n));
+    TEST_ASSERT_TRUE(luma(rgb(DIM, true)) < luma(rgb(MID, true)));
+    for (int r = BG; r <= DIM; r++) TEST_ASSERT_EQUAL_HEX32(0, rgb(static_cast<Role>(r), true) & 0xFF);
     TEST_ASSERT_EQUAL_HEX32(0x6E4C00, rgb(MID, true));
     TEST_ASSERT_EQUAL_HEX32(0x372600, rgb(DIM, true));
     TEST_ASSERT_EQUAL_HEX32(0x031008, scan(false));

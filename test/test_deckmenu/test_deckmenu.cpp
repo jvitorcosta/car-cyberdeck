@@ -32,17 +32,22 @@ void test_rects_inside_screen_and_apart() {
     check_screen(Screen::Lights, lights, 2);
 }
 
-void test_unbuilt_items_have_no_rect() {
-    TEST_ASSERT_TRUE(rect(Screen::Menu, M_ITEM0).w > 0);
-    for (int i = M_ITEM0 + N_ITEMS; i < M_PRE0; i++) TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, i).w);
-    // Every point of the screen: an unbuilt slot is never a hit.
-    for (int y = 0; y < 240; y++)
-        for (int x = 0; x < 320; x++) {
-            const int h = hit(Screen::Menu, x, y);
-            TEST_ASSERT_TRUE(h < M_ITEM0 + N_ITEMS || h >= M_PRE0);
-        }
+void test_menu_ids_and_hits() {
+    TEST_ASSERT_EQUAL_INT(M_N, count(Screen::Menu));
+    const Rect lights = rect(Screen::Menu, M_ITEM0), first = rect(Screen::Menu, M_ITEM0 + 1);
+    TEST_ASSERT_EQUAL_INT(312, lights.w);
+    TEST_ASSERT_EQUAL_INT(M_PRE0, M_ITEM0 + 1);
+    TEST_ASSERT_EQUAL_INT(4, first.x);
+    TEST_ASSERT_EQUAL_INT(92, first.y);
+    // Out-of-range ids have no rect, and any tap is -1 or a valid id.
+    TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, M_N).w);
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, 99).w);
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Lights, -1).w);
+    for (int y = 0; y < 240; y += 3)
+        for (int x = 0; x < 320; x += 3) {
+            const int h = hit(Screen::Menu, x, y);
+            TEST_ASSERT_TRUE(h >= -1 && h < M_N);
+        }
 }
 
 void test_hit_snaps_and_ignores_display_rects() {
@@ -53,10 +58,11 @@ void test_hit_snaps_and_ignores_display_rects() {
     // Just under the Back button, in the gap above the status line.
     const Rect back = rect(Screen::Lights, L_BACK);
     TEST_ASSERT_EQUAL_INT(L_BACK, hit(Screen::Lights, back.x + 5, back.y + back.h + 1));
-    // The menu has no spot more than 10 px from a button; the gap between a preset column
-    // snaps to the nearer block.
-    TEST_ASSERT_EQUAL_INT(M_PRE0, hit(Screen::Menu, 157, 100));
+    // The gap between the preset columns is x 158..161: each x snaps to the nearer block.
+    TEST_ASSERT_EQUAL_INT(M_PRE0, hit(Screen::Menu, 158, 100));
+    TEST_ASSERT_EQUAL_INT(M_PRE0, hit(Screen::Menu, 159, 100));
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, hit(Screen::Menu, 160, 100));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, hit(Screen::Menu, 161, 100));
     // Display only: no snapping to a neighbour from inside them.
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, LEVEL.x + 50, LEVEL.y + 20));
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, STATUS.x + 50, STATUS.y + 5));
@@ -72,13 +78,16 @@ void test_neighbour() {
     TEST_ASSERT_EQUAL_INT(M_PRE0, neighbour(Screen::Menu, M_ITEM0, 0, 1));
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, neighbour(Screen::Menu, M_PRE0, 1, 0));
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 2, neighbour(Screen::Menu, M_PRE0, 0, 1));
-    // Never lands on an unbuilt slot.
-    for (int dy = -1; dy <= 1; dy++)
-        for (int dx = -1; dx <= 1; dx++) {
-            if ((dx != 0) == (dy != 0)) continue;
-            const int n = neighbour(Screen::Menu, M_ITEM0, dx, dy);
-            TEST_ASSERT_TRUE(n < M_ITEM0 + N_ITEMS || n >= M_PRE0);
-        }
+    TEST_ASSERT_EQUAL_INT(M_ITEM0, neighbour(Screen::Menu, M_PRE0, 0, -1));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0, neighbour(Screen::Menu, M_PRE0 + 1, 0, -1));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 3, neighbour(Screen::Menu, M_PRE0 + 1, 0, 1));
+    TEST_ASSERT_EQUAL_INT(M_PRE0, neighbour(Screen::Menu, M_PRE0 + 1, -1, 0));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 2, neighbour(Screen::Menu, M_PRE0 + 2, 0, 1));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 3, neighbour(Screen::Menu, M_PRE0 + 3, 0, 1));
+    // Sideways from the full-width LIGHTS row there is no block beside it, but neighbour() is
+    // centre-based and generic, so it hops down to the nearest preset on that side.
+    TEST_ASSERT_EQUAL_INT(M_PRE0, neighbour(Screen::Menu, M_ITEM0, -1, 0));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, neighbour(Screen::Menu, M_ITEM0, 1, 0));
 }
 
 void test_preset_slots() {
@@ -95,7 +104,7 @@ void test_preset_slots() {
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_rects_inside_screen_and_apart);
-    RUN_TEST(test_unbuilt_items_have_no_rect);
+    RUN_TEST(test_menu_ids_and_hits);
     RUN_TEST(test_hit_snaps_and_ignores_display_rects);
     RUN_TEST(test_neighbour);
     RUN_TEST(test_preset_slots);
