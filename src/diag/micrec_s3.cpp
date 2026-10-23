@@ -162,7 +162,13 @@ static void handleClip() {
     WiFiClient c = s_server.client();
     c.write(hdr, sizeof hdr);
     const uint8_t* p = (const uint8_t*)(s_clips + (size_t)i * micrec::MAX_SAMPLES);
-    for (uint32_t off = 0; off < bytes; off += 4096) c.write(p + off, min<uint32_t>(4096, bytes - off));
+    for (uint32_t off = 0; off < bytes; off += 4096) {
+        const uint32_t n = min<uint32_t>(4096, bytes - off);
+        if (c.write(p + off, n) != n) {   // the phone or PC went away: the pull tool retries
+            Serial.printf("[micrec] %s cut at %u of %u bytes\n", name, (unsigned)off, (unsigned)bytes);
+            return;
+        }
+    }
 }
 
 static void handleManifest() {
@@ -193,17 +199,10 @@ static void handleGain() {
     s_server.send(204);
 }
 
-static void connectWifi() {
-    WiFi.mode(WIFI_STA);
-    for (int i = 0; i < WIFI_NETWORK_COUNT && WiFi.status() != WL_CONNECTED; i++) {
-        WiFi.begin(WIFI_NETWORKS[i].ssid, WIFI_NETWORKS[i].pass);
-        for (uint32_t t = millis(); millis() - t < 8000 && WiFi.status() != WL_CONNECTED;) delay(100);
-    }
-    s_online = WiFi.status() == WL_CONNECTED;
-    if (!s_online) {
-        Serial.println("[micrec] no WiFi: recording still works, serving waits for a reboot");
-        return;
-    }
+// Starts serving once WiFi is up. The deck may boot before the hotspot does, and a reboot would
+// wipe the clips, so loop() keeps retrying in the background (WiFi.begin doesn't block).
+static void startServing() {
+    s_online = true;
     MDNS.begin("cardeck");
     s_server.on("/", HTTP_GET, handleRoot);
     s_server.on("/clip", HTTP_GET, handleClip);
@@ -211,6 +210,21 @@ static void connectWifi() {
     s_server.on("/gain", HTTP_POST, handleGain);
     s_server.begin();
     Serial.printf("[micrec] serving at http://%s/?k=...\n", WiFi.localIP().toString().c_str());
+    drawScreen();
+}
+
+static void wifiLoop() {
+    static uint32_t lastTry = 0;
+    static int net = -1;
+    if (s_online || WiFi.status() == WL_CONNECTED) {
+        if (!s_online) startServing();
+        return;
+    }
+    if (net >= 0 && millis() - lastTry < 8000) return;   // give each network 8 s
+    net = (net + 1) % WIFI_NETWORK_COUNT;
+    lastTry = millis();
+    WiFi.disconnect();
+    WiFi.begin(WIFI_NETWORKS[net].ssid, WIFI_NETWORKS[net].pass);
 }
 
 void setup() {
@@ -235,8 +249,7 @@ void setup() {
         return;
     }
     touchft::begin();
-    drawScreen();
-    connectWifi();
+    WiFi.mode(WIFI_STA);
     drawScreen();
 }
 
@@ -245,6 +258,7 @@ void loop() {
         delay(1000);
         return;
     }
+    wifiLoop();
     if (s_online) s_server.handleClient();
     if (digitalRead(PIN_BOOT) == LOW && s_slot < micrec::SLOTS) {
         delay(20);   // debounce
