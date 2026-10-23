@@ -60,3 +60,14 @@ Deck sync, settings in Garmin Connect, new layouts, new Pokémon.
 - Exact badge drawing (size, rounded tag), weather particle counts and speeds, pace formatting details, and storage keys.
 - How the "appeared!" state and the weekly DEX are stored, as long as they survive a restart and reset correctly at midnight / on Monday.
 - Pure functions plus unit tests for: weekly km and its bar fraction, pace, which badge shows, DEX counting and its Monday reset, and when the "appeared!" line shows.
+
+## As built (2026-10-23)
+
+- **Status tag:** it sits at the left of the steps row in the info box, not beside "Lv". The Lv row holds the HP bar, and in the DEX/BB row the tag ran into "BB nn".
+- **Run card:** "8.2 km 5:13/km" only fits at 1× on the dialogue's lower row (about 170 px at 2×, where the round edge leaves about 116), so it shows at 1×.
+- **"appeared!" line:** "A wild / shiny NAME" and "appeared!" each take a row, at 2× where `Fit` allows, otherwise 1×. The font gained "!".
+- **Weather:** 60 particles while awake: white 2 px rain streaks, 3×3 snow, 10×2 orange sand dashes.
+- **Pokédex:** each day value is bucketed to the nearest local midnight counted back from today, so the step history's UTC-midnight stamps and the runs' local midnights agree.
+- **Run distances:** turned into whole metres.
+- **Memory:** about 24 KB of 124 KB in the simulator.
+- **Unverified until a real run on the watch:** the unit of `UserActivity.distance` (assumed metres) and whether `History.startOfDay` is local or UTC midnight. The simulator has no activity history.

@@ -71,13 +71,16 @@ module Partner {
         return night && bb != null && bb <= 25 ? BADGE_SLP : BADGE_NONE;
     }
 
-    // The weekly Pokédex: distinct days (their 00:00, epoch seconds) from Monday to today that
-    // earned the reward.
+    // The weekly Pokédex: distinct days from Monday to today that earned the reward. Each day value
+    // (epoch seconds) goes to the nearest local midnight, counted back from today: the watch's
+    // step history may stamp days at UTC midnight, hours away from the runs' local midnights.
     function dexCount(days as Array<Number>, weekStart as Number, todayStart as Number) as Number {
+        var last = (todayStart - weekStart + 43200) / 86400;   // Monday's index (today is 0)
         var seen = {};
         for (var i = 0; i < days.size(); i++) {
-            if (days[i] >= weekStart && days[i] <= todayStart) {
-                seen[days[i]] = true;
+            var back = todayStart - days[i] + 43200;
+            if (back >= 0 && back / 86400 <= last) {
+                seen[back / 86400] = true;
             }
         }
         return seen.size();

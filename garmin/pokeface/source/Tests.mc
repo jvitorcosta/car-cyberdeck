@@ -323,3 +323,23 @@ function testRunDays(logger as Test.Logger) as Boolean {
     Test.assert(d.indexOf(T - 86400) >= 0);
     return true;
 }
+
+// The two day sources may mark a day a few hours apart (step history at UTC midnight, runs at
+// local midnight): days are bucketed to the nearest local midnight, not compared exactly.
+(:test)
+function testDexBucketsNearbyMidnights(logger as Test.Logger) as Boolean {
+    var week = T - 3 * 86400;
+    Test.assertEqual(Partner.dexCount([T - 3 * 3600, T], week, T), 1);        // today, from both sources
+    Test.assertEqual(Partner.dexCount([week - 3 * 3600], week, T), 1);        // Monday, stamped at UTC midnight
+    Test.assertEqual(Partner.dexCount([week - 86400 - 3 * 3600], week, T), 0); // last Sunday stays out
+    return true;
+}
+
+// A watch that reports run distance with decimals still gives whole metres.
+(:test)
+function testSummaryWholeMetres(logger as Test.Logger) as Boolean {
+    var r = Runs.summary([[S, T + 3600, 1800, 5000.6]], T + 36000, T, T - 3 * 86400);
+    Test.assertEqual(r[3], 5000);
+    Test.assertEqual(r[1], 5000);
+    return true;
+}

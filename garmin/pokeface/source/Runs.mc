@@ -30,14 +30,15 @@ module Runs {
             if (start > now) {
                 continue;
             }
+            var meters = (a[3] as Numeric).toNumber();   // some watches report decimals
             if (end >= weekStart) {
-                week += a[3] as Number;
+                week += meters;
             }
             if (end >= todayStart) {
                 ran = true;
                 if (end > lastEnd) {
                     lastEnd = end;
-                    lastM = a[3];
+                    lastM = meters;
                     lastS = a[2];
                 }
             }

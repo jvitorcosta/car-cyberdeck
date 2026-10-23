@@ -13,10 +13,12 @@ import Toybox.WatchUi;
 // then Tuesday ...). Never ship it on.
 const DEMO = false;
 
-// Emerald's battle screen (layout "B, your Pokémon"), top to bottom over the deck-coloured field:
-// the time; phone, weekday + date, notifications, battery; weather, high / low, next sun; the
-// Pokémon on its platform beside its battle box (name, Lv = day of the month, HP = Body Battery,
-// EXP = steps); the dialogue box with heart rate, temperature and distance.
+// Emerald's battle screen (layout "B, your Pokémon"), top to bottom over the field: the time;
+// phone, weekday + date, notifications, battery; weather, high / low, next sun; the Pokémon on
+// its platform (the reward shiny after a run) beside its battle box (name, Lv = this week's
+// running km, HP = Body Battery, DEX, EXP toward the weekly km goal, a status tag, steps); the
+// dialogue box with heart rate, temperature and distance or today's run, or "A wild ... appeared!"
+// on the wake after the reward. Weather moves over the field while awake.
 // In low power the Pokémon holds one frame; a wrist raise plays its 2-frame idle for the few
 // seconds the watch stays awake. The watch's numbers are read once a minute and
 // on waking (refresh); animation frames only redraw them, to spare the battery.
