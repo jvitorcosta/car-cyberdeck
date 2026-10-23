@@ -1,22 +1,24 @@
 // The yellow deck (CYD) as the car's control screen: a RobCo-style terminal (green on black) that
 // drives the car's two ELK-family LED controllers. Two screens, laid out by util/deckmenu:
 //   Menu (boot): the header, the menu items as [ BRACKETED ] buttons (part 1 builds one, LIGHTS),
-//           a row of favourite slots F1-F4 (empty until they are built), and a strip at the
-//           bottom with the clock and each light's state (IN / OUT: ON in its colour, OFF, or --
-//           when the deck has no link to it)
+//           a row of favourite slots F1-F4 (tap one to apply it), and a strip at the bottom with
+//           the clock and each light's state (IN / OUT: ON in its colour, OFF, or -- when the deck
+//           has no link to it)
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE (BOTH sets both lights together; INSIDE and
 //           OUTSIDE each keep their own look), the status line ("IN ON 50%  OUT --  LINK 1/2"),
 //           2x4 colour tiles (tap one to set it and turn on, double-tap the lit one to turn the
-//           lights off), the favourite slots, and  -  [level: the colour at its intensity and
-//           the %, or OFF]  +
-// A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
-// button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
-// Each page's colour, intensity and power, and the page last shown, survive a reboot (NVS); the
-// deck still boots to the Menu. Touch calibration (resistive panel) runs on first boot, or with
-// BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say over WiFi (see
-// "Voice" below), on either screen. An Xbox controller (BLE) drives it too: the D-pad moves the
-// focus (an inverted bar on the Menu, a green ring on Lights), A presses, B goes back to the Menu;
-// on Lights X is the next page, Y on/off, LB / RB - / + (see "Xbox controller input" below).
+//           lights off), the favourite slots (tap: apply; hold: save both lights' looks into it),
+//           and  -  [level: the colour at its intensity and the %, or OFF]  +
+// A press acts once it settles (its first ~40 ms averaged), a favourite on release (or, held on
+// Lights, saves while held), and a tap in a gap snaps to the nearest button. The iPhone's Bluetooth
+// must be off (Settings): each controller takes one connection.
+// Each page's colour, intensity and power, the page last shown and the favourites survive a reboot
+// (NVS); the deck still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
+// or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
+// /favs and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
+// drives it too: the D-pad moves the focus (an inverted bar on the Menu, a green ring on Lights),
+// A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
+// "Xbox controller input" below).
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #pragma GCC diagnostic push
@@ -34,6 +36,7 @@
 #include "net/wifi.h"
 #include "util/deckmenu.h"
 #include "util/elkcmd.h"
+#include "util/ledfavs.h"
 #include "util/ledlook.h"
 #include "util/ledvoice.h"
 #include "util/lightstatus.h"
@@ -59,6 +62,9 @@ static Target target = BOTH;  // the page on screen
 
 static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
 static Look& cur() { return looks[target]; }
+
+// Four favourites, each a pair of looks (inside, outside). NVS fav0..fav3, written on each save.
+static ledfavs::Fav favs[ledfavs::N_FAV];
 
 using deckmenu::Rect;
 using deckmenu::Screen;
@@ -266,17 +272,55 @@ static void drawChrome(const Rect& r, const char* s, uint8_t fontNo, bool presse
     label(s, r.x + r.w / 2, r.y + r.h / 2, fontNo);
 }
 
-// A favourite slot. Task 6 fills them; for now each is an empty DIM box (inverted under the Menu's
-// focus bar).
-static void drawFavSlot(const Rect& r, int slot, bool inverted) {
+// The slot (0..3) shown TEXT-green for FAV_FLASH_MS after a save, since favFlashAt (loop ends it).
+static constexpr uint32_t FAV_FLASH_MS = 300;
+static int favFlash = -1;
+static uint32_t favFlashAt = 0;
+
+// A favourite slot: "F1", then per light (inside, outside) a square in its colour (an outline when
+// off) over its level ("50", or OFF). An empty one reads "F3 --" in DIM. Inverted under the Menu's
+// focus bar, yellow when pressed, green while flashing after a save.
+static void drawFavSlot(const Rect& r, int slot, bool pressed, bool inverted) {
+    const ledfavs::Fav& f = favs[slot];
     const uint16_t bg = pal(termpal::BG);
     tft.fillRect(r.x, r.y, r.w, r.h, bg);
-    if (inverted) tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pal(termpal::TEXT));
-    else tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::DIM));
-    static const char* const NAME[] = {"F1", "F2", "F3", "F4"};
+    uint16_t fill = bg, ink = pal(f.set ? termpal::TEXT : termpal::DIM);
+    const bool filled = slot == favFlash || pressed || inverted;
+    if (filled) {
+        fill = pressed && slot != favFlash ? tint(PRESSED) : pal(termpal::TEXT);
+        ink = bg;
+        tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, fill);
+    } else {
+        tft.drawRect(r.x, r.y, r.w, r.h, pal(f.set ? termpal::MID : termpal::DIM));
+    }
+    const int cy = r.y + r.h / 2;
+    char s[16];
+    snprintf(s, sizeof(s), "F%d%s", slot + 1, f.set ? "" : " --");
+    tft.setTextColor(ink, fill);
+    if (!f.set) {
+        tft.setTextDatum(MC_DATUM);
+        label(s, r.x + r.w / 2, cy, 1, 2);
+        return;
+    }
+    tft.setTextDatum(ML_DATUM);
+    label(s, r.x + 5, cy, 1, 2);
+    // two 20 px columns right of the name; "100" in GLCD is 18 px
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(inverted ? bg : pal(termpal::DIM), inverted ? pal(termpal::TEXT) : bg);
-    label(NAME[slot & 3], r.x + r.w / 2, r.y + r.h / 2, 1, 2);
+    const Look* sides[] = {&f.in, &f.out};
+    for (int k = 0; k < 2; k++) {
+        const Look& l = *sides[k];
+        const int cx = r.x + 42 + k * 21;
+        if (l.lit) {
+            tft.fillRect(cx - 5, cy - 11, 10, 10, tint(SWATCHES[l.swatch].screen));
+            if (filled) tft.drawRect(cx - 6, cy - 12, 12, 12, bg);  // apart from the fill (green on green)
+            snprintf(s, sizeof(s), "%u", l.pct);
+        } else {
+            tft.drawRect(cx - 5, cy - 11, 10, 10, filled ? ink : pal(termpal::DIM));
+            snprintf(s, sizeof(s), "OFF");
+        }
+        tft.setTextColor(filled || l.lit ? ink : pal(termpal::DIM), fill);
+        label(s, cx, cy + 7, 1);
+    }
 }
 
 static void drawTile(const Rect& r, int swatch, bool pressed) {
@@ -302,7 +346,7 @@ static void drawButtonBody(int id, bool pressed) {
     if (screen == Screen::Menu) {
         static const char* const ITEM[deckmenu::N_ITEMS] = {"[ LIGHTS ]"};  // in deckmenu::Item order
         if (id < M_FAV0) drawChrome(r, ITEM[id - M_ITEM0], 2, pressed, id == focus);
-        else drawFavSlot(r, deckmenu::favSlot(screen, id), id == focus);
+        else drawFavSlot(r, deckmenu::favSlot(screen, id), pressed, id == focus);
         return;
     }
     if (id == L_BACK) {
@@ -313,7 +357,7 @@ static void drawButtonBody(int id, bool pressed) {
     } else if (id < L_FAV0) {
         drawTile(r, id - L_TILE0, pressed);
     } else if (id < L_MINUS) {
-        drawFavSlot(r, deckmenu::favSlot(screen, id), false);
+        drawFavSlot(r, deckmenu::favSlot(screen, id), pressed, false);  // focus: the ring
     } else {
         drawChrome(r, id == L_MINUS ? "-" : "+", 4, pressed, false);
     }
@@ -610,13 +654,54 @@ static void load() {
         savedLooks[i] = l;
     }
     target = savedTarget = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
+    for (int i = 0; i < ledfavs::N_FAV; i++) {  // missing or invalid: an empty slot
+        snprintf(key, sizeof(key), "fav%d", i);
+        uint8_t b[ledfavs::BYTES];
+        favs[i] = {};
+        if (prefs.isKey(key) && prefs.getBytesLength(key) == sizeof(b) && prefs.getBytes(key, b, sizeof(b)) == sizeof(b)) {
+            ledfavs::decode(b, &favs[i]);
+        }
+    }
+}
+
+// The favourite slot's button on the current screen.
+static int favId(int slot0) { return (screen == Screen::Menu ? static_cast<int>(M_FAV0) : L_FAV0) + slot0; }
+
+// Favourite slot0 (0..3) onto the lights: each light gets its saved look. The BOTH page copies
+// them when they match; otherwise it keeps its colour and level, lit if either light is, and the
+// Lights page's STATUS line tells the truth. An empty slot does nothing.
+static void applyFav(int slot0) {
+    const ledfavs::Fav& f = favs[slot0];
+    if (!f.set) return;
+    looks[INSIDE] = f.in;
+    looks[OUTSIDE] = f.out;
+    if (f.in == f.out) looks[BOTH] = f.in;
+    else looks[BOTH].lit = f.in.lit || f.out.lit;
+    for (int i = 0; i < N_CTRL; i++) push(i);
+    save();
+    drawLooks();
+}
+
+// Both lights' looks into slot0, written at once (saves are rare, unlike +/-); the slot flashes.
+static void saveFav(int slot0) {
+    favs[slot0] = {true, looks[INSIDE], looks[OUTSIDE]};
+    uint8_t b[ledfavs::BYTES];
+    ledfavs::encode(favs[slot0], b);
+    char key[8];
+    snprintf(key, sizeof(key), "fav%d", slot0);
+    prefs.putBytes(key, b, sizeof(b));
+    Serial.printf("[fav] saved F%d\n", slot0 + 1);
+    favFlash = slot0;
+    favFlashAt = millis();
+    drawButton(favId(slot0));
 }
 
 // A press is averaged over its first SETTLE_MS (a fingertip's first readings jump around) and acts
 // once; a tap shorter than that acts on release with what it had.
+// A favourite acts on release instead (see loop), and `held` marks one that saved while held.
 static constexpr uint32_t SETTLE_MS = 40;
 static struct {
-    bool down = false, acted = false;
+    bool down = false, acted = false, held = false;
     uint32_t t0 = 0;
     long sx = 0, sy = 0;
     int n = 0, id = -1;  // id: the button drawn pressed
@@ -626,6 +711,14 @@ static struct {
 static constexpr uint32_t PAD_FLASH_MS = 150;
 static int padFlash = -1;
 static uint32_t padFlashAt = 0;
+// A favourite under a held A (it acts on release, see handlePad), since padFavAt; padFavSaved once
+// the hold saved it.
+static int padFav = -1;
+static uint32_t padFavAt = 0;
+static bool padFavSaved = false;
+
+// Whether button `id` is under a finger or a controller press right now (drawn yellow).
+static bool pressedNow(int id) { return (tap.down && tap.id == id) || padFlash == id || padFav == id; }
 
 // Switches to screen `s`: the focus goes to its first button (none without a controller), and a
 // press still drawn yellow is forgotten (its id means another button there).
@@ -633,6 +726,7 @@ static void show(Screen s) {
     screen = s;
     tap.id = -1;
     padFlash = -1;
+    padFav = -1;
     focus = padUp ? homeFocus() : -1;
     drawAll();
 }
@@ -644,7 +738,7 @@ static void pressLights(int id) {
         show(Screen::Menu);
         return;
     }
-    if (deckmenu::isFav(screen, id)) return;  // the favourites come with Task 6
+    if (deckmenu::isFav(screen, id)) return;  // favourites act on release (loop, handlePad)
     if (id < L_TILE0) {  // another page: show its look
         target = static_cast<Target>(id - L_ZONE0);
         drawZones();
@@ -684,7 +778,7 @@ static void press(int id) {
         pressLights(id);
         return;
     }
-    if (id < M_ITEM0 || id >= M_ITEM0 + deckmenu::N_ITEMS) return;  // the favourites come with Task 6
+    if (id < M_ITEM0 || id >= M_ITEM0 + deckmenu::N_ITEMS) return;  // favourites act on release
     switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
     case deckmenu::LIGHTS: show(Screen::Lights); break;
     }
@@ -696,8 +790,8 @@ static void act() {
     tap.id = deckmenu::hit(screen, x, y);
     Serial.printf("[tap] %d,%d -> button %d\n", x, y, tap.id);
     if (tap.id < 0) return;
-    if (deckmenu::isFav(screen, tap.id)) {  // not built yet: no press look either
-        tap.id = -1;
+    if (deckmenu::isFav(screen, tap.id)) {  // pressed look only: it acts on release, or saves when held
+        drawButton(tap.id, true);
         return;
     }
     const Screen was = screen;
@@ -707,6 +801,7 @@ static void act() {
 
 // ---- Xbox controller input ----
 //   D-pad: move the focus (held: repeats; the sticks are ignored)    A: press the focused button
+//   (a favourite applies when A comes up; held PAD_HOLD_MS on Lights, it saves instead)
 //   B: back to the Menu (on the Menu: nothing)
 //   Lights only: X next page    Y this page's lights on/off    LB / RB: - / +
 
@@ -717,13 +812,13 @@ static void setFocus(int to) {
     if (to == old) return;
     focus = to;
     if (screen == Screen::Menu) {
-        if (old >= 0) drawButton(old, padFlash == old);
-        if (to >= 0) drawButton(to, padFlash == to);
+        if (old >= 0) drawButton(old, pressedNow(old));
+        if (to >= 0) drawButton(to, pressedNow(to));
         return;
     }
     if (old >= 0) {
         drawFocus(old, false);
-        drawButton(old, padFlash == old);
+        drawButton(old, pressedNow(old));
     }
     if (to >= 0) drawFocus(to, true);
 }
@@ -736,7 +831,7 @@ static void moveFocus(int dx, int dy) {
 // A button press on the controller: the press looks (yellow) for PAD_FLASH_MS. One at a time: a
 // second press inside that window first restores the earlier button (else -/+ stayed yellow).
 static void padPress(int id) {
-    if (id < 0 || deckmenu::isFav(screen, id)) return;  // the favourites come with Task 6
+    if (id < 0 || deckmenu::isFav(screen, id)) return;  // favourites: padFavDown, on release
     if (padFlash >= 0 && padFlash != id) drawButton(padFlash);
     const Screen was = screen;
     press(id);
@@ -746,11 +841,30 @@ static void padPress(int id) {
     padFlashAt = millis();
 }
 
+// A on a favourite: drawn pressed; it acts when A comes up (handlePad), or saves once held
+// PAD_HOLD_MS on Lights.
+static constexpr uint32_t PAD_HOLD_MS = 1000;
+static void padFavDown(int id) {
+    if (padFlash >= 0) {
+        drawButton(padFlash);
+        padFlash = -1;
+    }
+    padFav = id;
+    padFavAt = millis();
+    padFavSaved = false;
+    drawButton(id, true);
+}
+
 static void handlePad() {
     const bool is = xbox.isConnected() && !xbox.isWaitingForFirstNotification();
     if (is != padUp) {
         padUp = is;
         Serial.printf("[pad] %s\n", is ? "connected" : "gone");
+        if (!is && padFav >= 0) {  // gone with A held: nothing applies
+            const int id = padFav;
+            padFav = -1;
+            drawButton(id);
+        }
         setFocus(is ? homeFocus() : -1);
     }
     if (padFlash >= 0 && millis() - padFlashAt > PAD_FLASH_MS) {
@@ -789,7 +903,22 @@ static void handlePad() {
     const bool a = edge(n.btnA, pA), b = edge(n.btnB, pB), x = edge(n.btnX, pX), y = edge(n.btnY, pY);
     const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
     const Screen was = screen;
-    if (a) padPress(focus);
+    if (a) {
+        if (deckmenu::isFav(screen, focus)) padFavDown(focus);
+        else padPress(focus);
+    }
+    if (padFav >= 0) {  // show() clears it, so it is a favourite of this screen
+        const int slot = deckmenu::favSlot(screen, padFav);
+        if (!n.btnA) {
+            const int id = padFav;
+            padFav = -1;
+            if (!padFavSaved) applyFav(slot);
+            drawButton(id);
+        } else if (!padFavSaved && screen == Screen::Lights && millis() - padFavAt >= PAD_HOLD_MS) {
+            padFavSaved = true;  // once; the release then does nothing
+            saveFav(slot);
+        }
+    }
     if (was != Screen::Lights || screen != Screen::Lights) return;  // the rest is the Lights page's
     if (b) {
         show(Screen::Menu);
@@ -812,6 +941,8 @@ static void handlePad() {
 // ("Purple, 70 percent"). Without a zone it acts like the BOTH page (Siri: spoken zone words are
 // ignored); &zone=inside|outside (the Garmin app) acts on that zone's page only.
 // GET /state?k=[&zone=] answers that zone's line (level included) without changing anything.
+// "favourite 2" applies that favourite to both lights and answers its line. GET /favs?k= lists the
+// four favourites (one ledfavs::wireLine each), GET /status?k= each light's state.
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
 // the state) and the handler waits for loop()'s reply. Each job carries a sequence number that the
 // reply echoes, so a request that timed out (loop busy, e.g. calibrating) can't answer the next
@@ -829,8 +960,38 @@ static remotegate::Gate gate(REMOTE_TOKEN);
 static QueueHandle_t voiceQueue = nullptr;
 static SemaphoreHandle_t voiceDone = nullptr;
 static portMUX_TYPE voiceMux = portMUX_INITIALIZER_UNLOCKED;
-static char voiceReply[64];  // guarded by voiceMux, with replySeq
+// 112: the longest favourite line ("Favourite 1: inside Orange 100 percent, outside ...") fits.
+static char voiceReply[112];  // guarded by voiceMux, with replySeq
 static uint32_t replySeq = 0;
+
+// What /favs and /status read (they run on the server task): loop() copies it from its own state
+// after every pass, under stateMux, so a handler never sees a half-written favourite.
+struct Published {
+    ledfavs::Fav favs[ledfavs::N_FAV];
+    bool lit[N_CTRL];
+    bool up[N_CTRL];
+};
+static Published published;
+static portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
+
+static void publish() {
+    Published p;
+    for (int i = 0; i < ledfavs::N_FAV; i++) p.favs[i] = favs[i];
+    for (int i = 0; i < N_CTRL; i++) {
+        p.lit[i] = looks[i + 1].lit;
+        p.up[i] = linkUp(controllers[i]);
+    }
+    portENTER_CRITICAL(&stateMux);
+    published = p;
+    portEXIT_CRITICAL(&stateMux);
+}
+
+static Published snapshot() {
+    portENTER_CRITICAL(&stateMux);
+    const Published p = published;
+    portEXIT_CRITICAL(&stateMux);
+    return p;
+}
 
 // A zone's look as one line ("Purple, 70 percent", "Inside: Lights off"). withLevel: say the %
 // too; a voice reply only does when the command changed it ("Purple, 20 percent" after a plain
@@ -843,11 +1004,28 @@ static void describe(char* out, size_t n, Target zone = BOTH, bool withLevel = t
     else snprintf(out, n, "%s%s", prefix[zone], SWATCHES[l.swatch].name);
 }
 
+// Hands loop()'s reply line to the waiting handler, tagged with its job's seq.
+static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
+    Serial.printf("[voice] -> %s\n", line);
+    portENTER_CRITICAL(&voiceMux);
+    memcpy(voiceReply, line, sizeof(line));
+    replySeq = seq;
+    portEXIT_CRITICAL(&voiceMux);
+    xSemaphoreGive(voiceDone);
+}
+
 // In loop(): applies one voice command to its zone's page, like a tap there: BOTH (no zone given)
-// copies to both lights; INSIDE or OUTSIDE changes only that light. The page on screen stays.
-// Then answers the waiting handler.
+// copies to both lights; INSIDE or OUTSIDE changes only that light; a favourite sets both lights
+// whatever the zone. The page on screen stays. Then answers the waiting handler.
 static void applyVoice(const VoiceJob& job) {
     const ledvoice::Command& c = job.c;
+    char line[sizeof(voiceReply)];
+    if (c.fav >= 1 && c.fav <= ledfavs::N_FAV) {  // "favourite 2": both lights, whatever zone was asked
+        applyFav(c.fav - 1);
+        ledfavs::describe(favs[c.fav - 1], c.fav, line, sizeof(line));
+        answerVoice(line, job.seq);
+        return;
+    }
     Look& l = looks[job.zone];
     if (c.color >= 0) {
         l.swatch = c.color;
@@ -864,14 +1042,8 @@ static void applyVoice(const VoiceJob& job) {
     }
     save();
     drawLooks();  // on either screen; the page on Lights stays
-    char line[64];
     describe(line, sizeof(line), job.zone, c.level >= 0 || c.levelStep != 0);
-    Serial.printf("[voice] -> %s\n", line);
-    portENTER_CRITICAL(&voiceMux);
-    memcpy(voiceReply, line, sizeof(line));
-    replySeq = job.seq;
-    portEXIT_CRITICAL(&voiceMux);
-    xSemaphoreGive(voiceDone);
+    answerVoice(line, job.seq);
 }
 
 static void handleSay() {
@@ -891,7 +1063,7 @@ static void handleSay() {
         server->send(503, "text/plain", "The deck is busy, try again");
         return;
     }
-    char line[64] = "";
+    char line[sizeof(voiceReply)] = "";
     const uint32_t until = millis() + 1500;
     bool answered = false;
     while (!answered && static_cast<int32_t>(until - millis()) > 0 &&
@@ -915,6 +1087,30 @@ static void handleState() {
     const String zone = server->arg("zone");
     char line[64];
     describe(line, sizeof(line), zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH);
+    server->send(200, "text/plain", line);
+}
+
+// The four favourites, one wireLine each ("1 pink 50 pink 100", "3 -"), joined by \n.
+static void handleFavs() {
+    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    const Published p = snapshot();
+    char body[ledfavs::N_FAV * 32] = "";
+    size_t len = 0;
+    for (int i = 0; i < ledfavs::N_FAV && len < sizeof(body); i++) {
+        char l[32];
+        ledfavs::wireLine(p.favs[i], i + 1, l, sizeof(l));
+        const int k = snprintf(body + len, sizeof(body) - len, "%s%s", i ? "\n" : "", l);
+        if (k > 0) len += static_cast<size_t>(k);
+    }
+    server->send(200, "text/plain", body);
+}
+
+// Each light on, off or out of reach: "inside=on outside=nolink".
+static void handleStatus() {
+    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    const Published p = snapshot();
+    char line[48];
+    lightstatus::reply(lightstatus::of(p.up[0], p.lit[0]), lightstatus::of(p.up[1], p.lit[1]), line, sizeof(line));
     server->send(200, "text/plain", line);
 }
 
@@ -949,6 +1145,8 @@ static void beginVoice() {
     server = new WebServer(80);
     server->on("/say", HTTP_ANY, handleSay);
     server->on("/state", HTTP_GET, handleState);
+    server->on("/favs", HTTP_GET, handleFavs);
+    server->on("/status", HTTP_GET, handleStatus);
     xTaskCreatePinnedToCore(voiceTask, "voice", 6144, nullptr, 0, &voiceHandle, 1);
 }
 
@@ -989,6 +1187,7 @@ void setup() {
     // 8 KB: the Xbox library's connect, discovery and subscribe (std::function, std::string) run on
     // this task too; the [mem] line shows what's left.
     xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);
+    publish();
     beginVoice();
 }
 
@@ -997,17 +1196,28 @@ void loop() {
     // The panel reports a phantom press at power-up (raw x=0): ignore the first second.
     const bool down = touch::read(&x, &y) && millis() > 1000;
     if (down) {
-        if (!tap.down) tap = {true, false, millis(), 0, 0, 0, -1};
+        if (!tap.down) tap = {true, false, false, millis(), 0, 0, 0, -1};
         if (!tap.acted) {
             tap.sx += x;
             tap.sy += y;
             tap.n++;
             if (millis() - tap.t0 >= SETTLE_MS && tap.n >= 3) act();
+        } else if (!tap.held && screen == Screen::Lights && tap.id >= 0 && deckmenu::isFav(screen, tap.id) &&
+                   millis() - tap.t0 >= deckmenu::HOLD_MS) {
+            tap.held = true;  // saved once; the release then does nothing
+            saveFav(deckmenu::favSlot(screen, tap.id));
         }
     } else if (tap.down) {
         if (!tap.acted && tap.n > 0) act();  // a quick tap
-        if (tap.id >= 0) drawButton(tap.id);  // released: back to the normal look
         tap.down = false;
+        if (tap.id >= 0 && !tap.held && deckmenu::isFav(screen, tap.id)) applyFav(deckmenu::favSlot(screen, tap.id));
+        if (tap.id >= 0) drawButton(tap.id);  // released: back to the normal look
+    }
+
+    if (favFlash >= 0 && millis() - favFlashAt > FAV_FLASH_MS) {
+        const int id = favId(favFlash);
+        favFlash = -1;
+        drawButton(id, pressedNow(id));
     }
 
     VoiceJob voice;
@@ -1054,5 +1264,6 @@ void loop() {
             drawLightState();  // STATUS on Lights, IN / OUT on the Menu: "--" while it's gone
         }
     }
+    publish();  // for /favs and /status
     delay(10);
 }
