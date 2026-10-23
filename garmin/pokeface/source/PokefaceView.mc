@@ -119,7 +119,7 @@ class PokefaceView extends WatchUi.WatchFace {
                 _frame = clock.min;
             }
         }
-        var night = !Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
+        var night = DEMO ? (clock.min % 21) % 3 == 1 : !Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
         var ink = night ? 0xFFFFFF : 0x555555;       // text on the field
         var shade = night ? 0x555555 : 0xAAAAAA;     // its shadow
         Battle.field(dc, night);
