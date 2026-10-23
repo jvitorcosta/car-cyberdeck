@@ -1,8 +1,8 @@
 // The yellow deck (CYD) as the car's control screen: a RobCo-style terminal (green on black, amber
 // at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Three
 // screens, laid out by util/deckmenu:
-//   Menu (boot, after the RobCo welcome types out): a dashboard of stacked bands. The header line
-//           (ROBCO TERMLINK // HONDA CITY); the clock big with the date under it ("FRI 23 OCT"), and
+//   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands. The header line
+//           (CYBERDECK // HONDA CITY); the clock big with the date under it ("FRI 23 OCT"), and
 //           right of it the outside temperature big, the sky in words and "HI 32 LO 26  MANAUS"
 //           (see "Weather" below); LIGHTS: a row per light with its colour chip, colour name and
 //           level (OFF, or -- NO LINK when the deck has no link to it); the two items "> [LIGHTS]"

@@ -18,7 +18,7 @@ Open items, not scheduled. Newest decisions first within each section.
     "purpura" as "purple": say "preset four" for that one;
   - Xbox: A applies a preset; **B is now Back** (was: BOTH page);
   - restyle: scanlines, the `> [LIGHTS]` row, the Pip-Boy tabs, the colour boxes with the big chip, the
-    10-cell level bar (%, MIX, OFF) read well; the typed RobCo boot takes ~0.5 s (then ~0.4 s to
+    10-cell level bar (%, MIX, OFF) read well; the typed boot takes ~0.5 s (then ~0.4 s to
     read it) and a `/say` during it isn't lost; the block cursor blinks after the song line;
   - main screen (dashboard, 2026-10-23): header line; clock + date (`FRI 23 OCT`) left, temperature,
     sky and `HI 32 LO 26  MANAUS` right (`--C` / `>OFFLINE` without a reading); LIGHTS rows with

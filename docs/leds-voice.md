@@ -22,12 +22,11 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 
 ## On the deck
 
-The deck boots by typing the green-on-black RobCo welcome (`WELCOME TO ROBCO INDUSTRIES (TM)
-TERMLINK`, character by character in about half a second), then shows the **main screen**, whatever
+The deck boots by typing the green-on-black welcome (`WELCOME TO CYBERDECK`, character by character in about half a second), then shows the **main screen**, whatever
 page it last showed. Every screen has faint scanlines and ALL CAPS bracket labels.
 
 - **Main screen** (a dashboard, top to bottom):
-  - the header `ROBCO TERMLINK // HONDA CITY`;
+  - the header `CYBERDECK // HONDA CITY`;
   - the clock big with the date under it (`FRI 23 OCT`; `--:--` and `--- -- ---` until WiFi has
     synced the clock), and on the right the outside temperature big (`32C`, `--C` before the first
     reading), the sky in words (`PARTLY CLOUDY`) and `HI 32 LO 26  MANAUS`. Where the car is comes

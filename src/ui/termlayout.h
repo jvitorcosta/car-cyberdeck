@@ -19,7 +19,7 @@ constexpr int STATUS_TEXT_X = 4;
 
 // The boot: three SMALL lines typed out on a blank screen, caps tops BOOT_Y0 + i * BOOT_DY. A line's
 // pitch is its caps and its descent ('Q', ','), so no descender lands on the next line's caps.
-constexpr const char* BOOT_LINES[] = {"WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK", ">SET TERMINAL/INQUIRE",
+constexpr const char* BOOT_LINES[] = {"WELCOME TO CYBERDECK", ">SET TERMINAL/INQUIRE",
                                       "HONDA CITY // CARDECK OS"};
 constexpr int N_BOOT = sizeof(BOOT_LINES) / sizeof(BOOT_LINES[0]);
 constexpr int BOOT_X = 8, BOOT_Y0 = 2, BOOT_DY = 13;
@@ -30,7 +30,7 @@ constexpr int BOOT_X = 8, BOOT_Y0 = 2, BOOT_DY = 13;
 // ledpanel's text() places them.
 constexpr int DASH_X = 8, DASH_RIGHT = 312;
 // the header: one line (SMALL) and its rule
-constexpr const char* DASH_TITLE = "ROBCO TERMLINK // HONDA CITY";
+constexpr const char* DASH_TITLE = "CYBERDECK // HONDA CITY";
 constexpr int DASH_TITLE_Y = 5, HEADER_RULE_Y = 20;
 // the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the temperature (BIG) with the
 // sky in words (SMALL) under it right of it, right-aligned; then the HI / LO line (SMALL) across

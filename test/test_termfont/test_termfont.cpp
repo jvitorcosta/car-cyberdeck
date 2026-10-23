@@ -136,7 +136,7 @@ void test_chrome_fits() {
     for (const char* s : {"100%", "MIX", "OFF"}) fitsCentred(Face::TITLE, s, deckmenu::LEVEL.w);
 }
 
-// The boot's typed RobCo lines: on screen, none over the next.
+// The boot's typed lines: on screen, none over the next.
 void test_boot_lines_fit() {
     for (const char* s : BOOT_LINES) fitsLeft(Face::SMALL, s, BOOT_X, 320);
     const int cap = termfont::capHeight(Face::SMALL), up = termfont::ascent(Face::SMALL);
