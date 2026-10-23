@@ -84,6 +84,17 @@ the place to add it.
 ## Ideas
 
 - **Car lights from the Garmin watch**: done 2026-10-22, see docs/leds-voice.md.
+- **Car lights from CarPlay** (researched 2026-10-23, wireless CarPlay in the City). In order:
+  (1) Siri from the steering-wheel button running the "Honda" Shortcut. Nothing to build, so try
+  it on the next drive. Wireless CarPlay uses 5 GHz and the decks 2.4 GHz, so the hotspot should
+  hold; keep Maximize Compatibility on. (2) Tap buttons via a Shortcuts widget on the CarPlay
+  dashboard (iOS 26 widgets). This is unproven. Apple's CarPlay guide says a widget can't open a
+  non-CarPlay app, and only in-widget buttons work (Music play/pause, Reminders). A Shortcuts
+  button that runs a URL in place *might* work. Test with one shortcut ("Honda Red", Get Contents
+  of `/say?k=…&text=red`) before making a set, and if it works keep it to 4-5 colours plus Off.
+  (3) A real CarPlay app ("driving task" category) needs a Mac, a $99/yr developer account and
+  Apple's approval of the CarPlay entitlement, and offers only fixed list/grid templates (no music
+  wave).
 
 - **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
   Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
