@@ -103,6 +103,7 @@ void test_menu_items_fit() {
         TEST_ASSERT_EQUAL_INT(154, r.w);
         for (const char* s : {"> [LIGHTS]", "> [KARAOKE]"}) fitsLeft(Face::BODY, s, ROW_TEXT_X, r.w);
         TEST_ASSERT_TRUE(termfont::capHeight(Face::BODY) <= r.h - 2 * MARGIN);
+        TEST_ASSERT_TRUE(r.h == 44 && r.y + r.h <= 240 - MARGIN);  // at the bottom, 4 px off the edge
     }
     // KARAOKE's LIVE tag: inside the item at its right edge, clear of the item's text, its caps
     // LIVE_PAD from the label's edges
@@ -176,24 +177,24 @@ void test_dash_clock_and_weather_fit() {
     for (const char* s : {"--C", "-10C", "32C", "40C"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
     for (int code : {0, 1, 3, 45, 51, 61, 71, 80, 85, 95, 999}) fitsRight(Face::SMALL, weather::words(code), DASH_RIGHT, DASH_SPLIT);
     for (const char* s : {"PARTLY CLOUDY", "THUNDERSTORM", "SNOW SHOWERS"}) fitsRight(Face::SMALL, s, DASH_RIGHT, DASH_SPLIT);
-    // the HI / LO line across the band, with the longest city a reading holds (23 characters)
-    char s[48];
-    dashtext::hiLo(true, -9, -12, "ABCDEFGHIJKLMNOPQRSTUVW", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI -9 LO -12  ABCDEFGHIJKLMNOPQRSTUVW", s);
-    fitsRight(Face::SMALL, s, DASH_RIGHT, 4);
-    dashtext::hiLo(true, -10, -20, "ABCDEFGHIJKLMNOPQRSTUVW", s, sizeof(s));
-    fitsRight(Face::SMALL, s, DASH_RIGHT, 4);
-    fitsRight(Face::SMALL, ">OFFLINE", DASH_RIGHT, 4);
-    // rows: the clock over the date over the HI / LO line, between the header rule and the band's
+    // rows: the clock over the date, both over the band's last row (trip, HI / LO, messages), all
+    // between the header rule and the band's
     const Rows clock = fromCapTop(Face::BIG, CLOCK_Y), date = fromCapTop(Face::SMALL, DATE_Y);
-    const Rows words = fromCapTop(Face::SMALL, WORDS_Y), hiLo = fromCapTop(Face::SMALL, HILO_Y);
+    const Rows words = fromCapTop(Face::SMALL, WORDS_Y), row = fromBase(Face::SMALL, TRIP_ROW_BASE);
     between(HEADER_RULE_Y, clock, CLOCK_RULE_Y, "clock");
     above(clock, date, "clock over the date");
     above(clock, words, "temperature over the sky");
-    above(date, hiLo, "date over HI / LO");
-    above(words, hiLo, "sky over HI / LO");
-    between(HEADER_RULE_Y, hiLo, CLOCK_RULE_Y, "HI / LO");
+    above(date, row, "date over the trip row");
+    above(words, row, "sky over the trip row");
+    between(HEADER_RULE_Y, row, CLOCK_RULE_Y, "trip row");
     TEST_ASSERT_TRUE(CLOCK_RULE_Y >= deckmenu::CLOCK_BAND.y && CLOCK_RULE_Y < deckmenu::LIGHTS_BAND.y + 2);
+    // the caps spaced evenly: rule, clock, date, row, rule (within a row of each other)
+    const int gaps[] = {CLOCK_Y - (HEADER_RULE_Y + 1), DATE_Y - (CLOCK_Y + termfont::capHeight(Face::BIG)),
+                        (TRIP_ROW_BASE - termfont::capHeight(Face::SMALL)) - (DATE_Y + termfont::capHeight(Face::SMALL)),
+                        CLOCK_RULE_Y - TRIP_ROW_BASE};
+    for (int g : gaps) {
+        for (int h : gaps) TEST_ASSERT_TRUE(g - h <= 1 && h - g <= 1);
+    }
     // the split clears: the left column's clear ends before the right column's ink starts
     TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "-10C"));
 }
@@ -224,34 +225,48 @@ void test_dash_lights_fit() {
     }
     // the chip as tall as TITLE's caps, on them
     TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::TITLE), LIGHT_CHIP_H);
-    // the band's rule above the items
+    // the band's rule inside the band, above the items
+    TEST_ASSERT_TRUE(LIGHTS_RULE_Y < deckmenu::LIGHTS_BAND.y + deckmenu::LIGHTS_BAND.h);
     TEST_ASSERT_TRUE(LIGHTS_RULE_Y < deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0).y);
 }
 
-void test_dash_strip_fits() {
+// The clock band's last row: the trip line (block cursor after it) left, the HI / LO line right, or a
+// message (cursor after it) across both.
+void test_dash_trip_row_fits() {
     // the longest trip line, the block cursor after it
     tripmeter::Trip t;
     t.seconds = 99 * 3600 + 59 * 60;
     t.meters = 999900;
     t.hasDistance = true;
-    char s[40];
-    tripmeter::line(t, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("TRIP 999.9 KM  99:59", s);
-    TEST_ASSERT_TRUE(DASH_X + termfont::advance(Face::SMALL, s) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
-    // every message on the line under it, the block cursor after it
-    tripmeter::last(t, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", s);
-    for (const char* m : {static_cast<const char*>(s), ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED",
+    char trip[40];
+    tripmeter::line(t, trip, sizeof(trip));
+    TEST_ASSERT_EQUAL_STRING("TRIP 999.9 KM  99:59", trip);
+    TEST_ASSERT_TRUE(DASH_X + termfont::advance(Face::SMALL, trip) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
+    // beside it, the HI / LO line with the longest temperatures: without the city it always fits ...
+    char s[48];
+    dashtext::hiLo(true, -10, -20, nullptr, s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("HI -10 LO -20", s);
+    TEST_ASSERT_TRUE(besideTrip(trip, s));
+    for (const char* w : {"HI -- LO --", ">OFFLINE"}) TEST_ASSERT_TRUE_MESSAGE(besideTrip(trip, w), w);
+    // ... the usual city fits too ...
+    dashtext::hiLo(true, -10, -20, "Manaus", s, sizeof(s));
+    TEST_ASSERT_TRUE(besideTrip(trip, s));
+    dashtext::hiLo(true, 32, 26, "Manaus", s, sizeof(s));
+    TEST_ASSERT_TRUE(besideTrip("TRIP 12.4 KM  0:32", s));
+    // ... but the longest city a reading holds (23 characters) can't: ledpanel drops it
+    dashtext::hiLo(true, -10, -20, "ABCDEFGHIJKLMNOPQRSTUVW", s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("HI -10 LO -20  ABCDEFGHIJKLMNOPQRSTUVW", s);
+    TEST_ASSERT_FALSE(besideTrip(trip, s));
+    // where besideTrip holds, the HI / LO line starts at least the usual margin after the cursor
+    TEST_ASSERT_TRUE(TRIP_GAP >= MARGIN);
+    // every message across the row, the block cursor after it
+    char last[40];
+    tripmeter::last(t, last, sizeof(last));
+    TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", last);
+    for (const char* m : {static_cast<const char*>(last), ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED",
                           ">LIGHTS: NO LINK", ">WRONG KEY", ">NO SIGNAL", ">STANDBY"}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
-    // rows: the rule, the trip line, the message line, all on screen
-    const Rows trip = fromBase(Face::SMALL, TRIP_BASE), line = fromBase(Face::SMALL, MSG_BASE);
-    const deckmenu::Rect item = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0);
-    TEST_ASSERT_TRUE(STRIP_RULE_Y >= deckmenu::MENU_STRIP.y && item.y + item.h < STRIP_RULE_Y);
-    between(STRIP_RULE_Y, trip, 240, "trip");
-    above(trip, line, "trip over the message");
-    TEST_ASSERT_TRUE(line.bottom <= 239);
 }
 
 void test_status_fits() {
@@ -304,7 +319,7 @@ int main() {
     RUN_TEST(test_dash_header_fits);
     RUN_TEST(test_dash_clock_and_weather_fit);
     RUN_TEST(test_dash_lights_fit);
-    RUN_TEST(test_dash_strip_fits);
+    RUN_TEST(test_dash_trip_row_fits);
     RUN_TEST(test_status_fits);
     RUN_TEST(test_karaoke_pitches);
     RUN_TEST(test_wrap_with_a_face);

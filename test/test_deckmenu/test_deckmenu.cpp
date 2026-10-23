@@ -27,23 +27,23 @@ static void check_screen(Screen s, const Rect* shown, int nShown) {
 }
 
 void test_rects_inside_screen_and_apart() {
-    const Rect menu[] = {HEADER, CLOCK_BAND, LIGHTS_BAND, MENU_STRIP};
+    const Rect menu[] = {HEADER, CLOCK_BAND, LIGHTS_BAND};
     const Rect lights[] = {STATUS, LEVEL};
     const Rect karaoke[] = {KARAOKE_BODY};
-    check_screen(Screen::Menu, menu, 4);
+    check_screen(Screen::Menu, menu, 3);
     check_screen(Screen::Lights, lights, 2);
     check_screen(Screen::Karaoke, karaoke, 1);
 }
 
-// The dashboard: header, clock + weather, lights, the two items, the strip, top to bottom.
+// The dashboard: header, clock + weather (with the trip row), lights, then the two items at the
+// bottom, top to bottom.
 void test_menu_bands_stack() {
     TEST_ASSERT_TRUE(HEADER.y == 0 && HEADER.y + HEADER.h == CLOCK_BAND.y);
     TEST_ASSERT_EQUAL_INT(CLOCK_BAND.y + CLOCK_BAND.h, LIGHTS_BAND.y);
     const Rect items = rect(Screen::Menu, M_ITEM0);
     TEST_ASSERT_TRUE(LIGHTS_BAND.y + LIGHTS_BAND.h <= items.y);
-    TEST_ASSERT_TRUE(items.y + items.h <= MENU_STRIP.y);
-    TEST_ASSERT_EQUAL_INT(240, MENU_STRIP.y + MENU_STRIP.h);
-    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND, MENU_STRIP}) TEST_ASSERT_TRUE(r.x == 0 && r.w == 320);
+    TEST_ASSERT_EQUAL_INT(236, items.y + items.h);  // 4 px off the screen's bottom, as off its sides
+    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND}) TEST_ASSERT_TRUE(r.x == 0 && r.w == 320);
 }
 
 void test_menu_ids_and_hits() {
@@ -53,16 +53,16 @@ void test_menu_ids_and_hits() {
     TEST_ASSERT_EQUAL_INT(2, M_N);
     // LIGHTS and KARAOKE side by side, finger-sized.
     const Rect lights = rect(Screen::Menu, M_ITEM0 + LIGHTS), karaoke = rect(Screen::Menu, M_ITEM0 + KARAOKE);
-    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 162 && lights.w == 154 && lights.h == 36);
-    TEST_ASSERT_TRUE(karaoke.x == 162 && karaoke.y == 162 && karaoke.w == 154 && karaoke.h == 36);
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 80, 180));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 240, 180));
+    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 192 && lights.w == 154 && lights.h == 44);
+    TEST_ASSERT_TRUE(karaoke.x == 162 && karaoke.y == 192 && karaoke.w == 154 && karaoke.h == 44);
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 80, 214));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 240, 214));
     // the gap between them (x 158..161) snaps to the nearer
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 159, 180));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 180));
-    // just above and below the row, between the bands, still the item
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 80, 159));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 240, 200));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 159, 214));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 214));
+    // just above the row (under the lights band) and below it (the screen's last rows), still the item
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 80, 189));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 240, 239));
     // Out-of-range ids have no rect, and any tap is -1 or a valid id.
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, M_N).w);
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, 99).w);
@@ -86,7 +86,7 @@ void test_hit_snaps_and_ignores_display_rects() {
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, LEVEL.x + 50, LEVEL.y + 20));
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, STATUS.x + 50, STATUS.y + 5));
     // The dashboard's bands are display only, even the rows next to the items.
-    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND, MENU_STRIP}) {
+    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND}) {
         for (int y = r.y; y < r.y + r.h; y++)
             for (int x = 0; x < 320; x += 7) TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, x, y));
     }

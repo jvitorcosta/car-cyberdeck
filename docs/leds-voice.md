@@ -35,18 +35,19 @@ the panel would turn teal.
   - the header `CYBERDECK // HONDA CITY`;
   - the clock big with the date under it (`FRI 23 OCT`; `--:--` and `--- -- ---` until WiFi has
     synced the clock), and on the right the outside temperature big (`32C`, `--C` before the first
-    reading), the sky in words (`PARTLY CLOUDY`) and `HI 32 LO 26  MANAUS`. Where the car is comes
-    from the hotspot's public IP (ip-api.com, approximate), the weather from Open-Meteo, every 15 min.
+    reading) and the sky in words (`PARTLY CLOUDY`); under them one row: the trip line
+    (`TRIP 12.4 KM  0:32`) ending in a blinking block cursor on the left, and `HI 32 LO 26  MANAUS`
+    (dim) on the right. A message takes that whole row while it shows (see Messages). If a long city
+    wouldn't clear the trip line, the row shows `HI 32 LO 26` without it. Where the car is comes from
+    the hotspot's public IP (ip-api.com, approximate), the weather from Open-Meteo, every 15 min.
     A failed fetch keeps the last reading; `>OFFLINE` shows only when no reading ever came;
   - the lights, no label: one row per light (`INSIDE`, `OUTSIDE`), evenly spaced, with a chip of its
     colour, the colour name and its level (`40%`); `OFF` (dim) for a light that is off, `-- NO LINK`
     (red) when the deck has no link to it (never its last colour);
-  - two big buttons: `> [LIGHTS]` opens the Lights page, `> [KARAOKE]` the black deck's lyrics.
-    KARAOKE is bright with a small inverted `LIVE` tag at its right edge while the black deck plays
-    a song with synced lyrics, and dim (no tag) otherwise: a tap then says why;
-  - the strip: the trip line (`TRIP 12.4 KM  0:32`) ending in a blinking block cursor, and under it
-    the message line, empty unless a message shows (see Messages). The song itself is on the
-    Karaoke page only.
+  - at the bottom, two big buttons (44 px tall): `> [LIGHTS]` opens the Lights page, `> [KARAOKE]`
+    the black deck's lyrics. KARAOKE is bright with a small inverted `LIVE` tag at its right edge
+    while the black deck plays a song with synced lyrics, and dim (no tag) otherwise: a tap then
+    says why. The song itself is on the Karaoke page only.
 - There is no Weather page any more: its data is on the main screen. The presets are on the Lights
   page only (and voice, the watch, `/presets`).
 - **Lights**: `< BACK` (the same boxed button as on Karaoke) returns to the main screen. Then
@@ -66,10 +67,11 @@ the panel would turn teal.
   and level are on the main screen (on Lights: the tiles and the level bar of its page). What the
   deck shows as on is what it last sent while connected, not a reading from the controller (the
   LED controllers can't be read back).
-- **Messages**: a terminal line shows on the main screen's message line (on Lights: in place of the
-  status line) for 2.5 s when something happens: `>ROSE APPLIED` (a preset, from any source),
-  `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's link changed), why KARAOKE won't open; the
-  blinking cursor moves to its end. Then the line empties (on Lights: the status line comes back).
+- **Messages**: a terminal line shows on the main screen in place of the trip / HI-LO row (on
+  Lights: in place of the status line) for 2.5 s when something happens: `>ROSE APPLIED` (a preset,
+  from any source), `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's link changed), why KARAOKE
+  won't open (`>LAST TRIP ...` at boot, 6 s); the blinking cursor moves to its end. Then the trip
+  and HI / LO come back (on Lights: the status line).
 - **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the main screen's two
   buttons, left / right between them; a green ring on Lights), **A** presses, **B** is Back (to the
   main screen; there it does nothing). On Lights only: **X** next page, **Y** this page's lights

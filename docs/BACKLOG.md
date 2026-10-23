@@ -24,19 +24,21 @@ Open items, not scheduled. Newest decisions first within each section.
   - Lights page: the colour names are the presets' size and `YELLOW` / `ORANGE` / `PURPLE` fit their
     boxes clear of the border; the preset chips (12 px, two per preset) tell the looks apart;
     `< BACK` is the same box on Lights and Karaoke; Karaoke's song row is in capitals;
-  - main screen (dashboard, 2026-10-23): header line; clock + date (`FRI 23 OCT`) left, temperature,
-    sky and `HI 32 LO 26  MANAUS` right (`--C` / `>OFFLINE` without a reading); two evenly spaced
-    light rows (no LIGHTS label) with real colours, chip and level (`OFF` dim, `-- NO LINK`); the
-    two buttons are easy to hit and D-pad left / right moves between them; without the Xbox
-    controller neither button is inverted (no focus bar), with it the bar shows; the trip line and
-    no song anywhere on the main screen; no Weather page left;
+  - main screen (dashboard, layout B 2026-10-23): header line; clock + date (`FRI 23 OCT`) left,
+    temperature and sky right (`--C` without a reading); under them one row, the trip line + cursor
+    left and `HI 32 LO 26  MANAUS` (dim) right (`>OFFLINE` without a reading), neither touching the
+    other; no strip under the buttons any more; two evenly spaced light rows (no LIGHTS label), with
+    more air than before, real colours, chip and level (`OFF` dim, `-- NO LINK`); the two 44 px
+    buttons at the bottom are easy to hit and D-pad left / right moves between them; without the
+    Xbox controller neither button is inverted (no focus bar), with it the bar shows; no song
+    anywhere on the main screen; no Weather page left;
   - KARAOKE: while the black deck plays a song with synced lyrics it turns bright with a small
     inverted `LIVE` tag at its right edge within ~5 s, and dims (no tag) within ~20 s of the song
     stopping; the tag reads on the focus bar, while pressed (yellow) and at night; dimmed, a tap
-    shows why in the message line;
-  - messages: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` show ~2.5 s on the message
-    line under the trip line, the cursor jumps to their end, then the line empties and the cursor
-    goes back after the trip line;
+    shows why on the trip row;
+  - messages: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (and `>LAST TRIP ...` at boot)
+    take the whole trip / HI-LO row ~2.5 s with the cursor at their end, then the trip and HI / LO
+    come back with the cursor after the trip line, nothing left over from the message;
   - colours: by day MID and DIM read green, not teal, and the dim texts (date, HI / LO, `OFF`, a
     dimmed KARAOKE) read from the driver's seat;
   - night mode: a `-D NIGHT_TEST` build drops the backlight (~90/255) and the screen is **amber**

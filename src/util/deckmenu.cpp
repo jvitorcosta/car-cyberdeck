@@ -12,7 +12,7 @@ bool inside(const Rect& r, int x, int y) { return x >= r.x && x < r.x + r.w && y
 
 bool displayOnly(Screen s, int x, int y) {
     if (s == Screen::Menu) {
-        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(LIGHTS_BAND, x, y) || inside(MENU_STRIP, x, y);
+        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(LIGHTS_BAND, x, y);
     }
     if (s == Screen::Karaoke) return inside(KARAOKE_BODY, x, y);
     return inside(STATUS, x, y) || inside(LEVEL, x, y);
@@ -32,7 +32,7 @@ int count(Screen s) {
 
 Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
-    if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 158, 162, 154, 36);  // LIGHTS, KARAOKE
+    if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 158, 192, 154, 44);  // LIGHTS, KARAOKE
     if (s == Screen::Karaoke) return mk(4, 2, 70, 36);                        // K_BACK, where Lights has its Back
     if (id == L_BACK) return mk(4, 2, 70, 36);
     if (id < L_TILE0) return mk(80 + (id - L_ZONE0) * 80, 2, 76, 36);
