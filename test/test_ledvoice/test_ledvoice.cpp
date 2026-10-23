@@ -85,6 +85,26 @@ void test_level_still_works() {
     TEST_ASSERT_EQUAL_INT(50, c.level);
     TEST_ASSERT_EQUAL_INT(-1, c.fav);
 }
+// Filler between "favourite" and its number ("number", "no.") must not cancel the slot: only a
+// command word does.
+void test_favourite_with_filler_before_the_number() {
+    ledvoice::Command c = parsed("Favourite number 2.");
+    TEST_ASSERT_EQUAL_INT(2, c.fav);
+    TEST_ASSERT_EQUAL_INT(-1, c.level);
+    c = parsed("favorite no. 2");
+    TEST_ASSERT_EQUAL_INT(2, c.fav);
+    TEST_ASSERT_EQUAL_INT(-1, c.level);
+}
+void test_a_command_word_cancels_the_slot() {
+    ledvoice::Command c = parsed("favourite blue 50");
+    TEST_ASSERT_EQUAL_INT(-1, c.fav);
+    TEST_ASSERT_EQUAL_INT(4, c.color);
+    TEST_ASSERT_EQUAL_INT(50, c.level);
+    c = parsed("blue favourite 7");
+    TEST_ASSERT_EQUAL_INT(4, c.color);
+    TEST_ASSERT_EQUAL_INT(-1, c.fav);
+    TEST_ASSERT_EQUAL_INT(-1, c.level);
+}
 
 int main(int, char**) {
     UNITY_BEGIN();
@@ -101,5 +121,7 @@ int main(int, char**) {
     RUN_TEST(test_filler_to_is_not_a_favourite);
     RUN_TEST(test_favourite_without_slot);
     RUN_TEST(test_level_still_works);
+    RUN_TEST(test_favourite_with_filler_before_the_number);
+    RUN_TEST(test_a_command_word_cancels_the_slot);
     return UNITY_END();
 }

@@ -120,13 +120,13 @@ inline bool parse(const char* text, Command* out) {
             armed = true;  // not a command by itself: "favourite" alone parses to nothing
             continue;
         }
-        armed = false;  // any other command word means no slot is coming
         if ((v = lookup(w, COLORS, LEDVOICE_N(COLORS))) >= 0) out->color = v;
         else if ((v = lookup(w, POWER, LEDVOICE_N(POWER))) >= 0) out->power = v;
         else if ((v = lookup(w, LEVELS, LEDVOICE_N(LEVELS))) >= 0) out->level = v;
         else if ((v = lookup(w, ZONES, LEDVOICE_N(ZONES))) >= 0) out->zone = v;
         else if ((v = lookup(w, STEPS, LEDVOICE_N(STEPS))) >= 0) out->levelStep = v == UP ? 1 : -1;
-        else continue;  // a word that isn't a command ("set", "the", "lights", "please")
+        else continue;  // not a command ("set", "the", "please", or "number" in "favourite number 2"): stays armed
+        armed = false;  // a command word means no slot is coming
         any = true;
     }
     return any;
