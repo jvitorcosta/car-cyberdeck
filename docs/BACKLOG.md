@@ -76,8 +76,8 @@ the place to add it.
 
 ## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
 
-The companion with an OBD gauge cluster, kept for later. **The branch exists only in the owner's
-local checkout, not on GitHub**: 41 commits on an older main, 55 behind main as of 2026-10-23.
+The companion with an OBD gauge cluster, kept for later, on the branch `feat/obd` (pushed to
+GitHub as a backup on 2026-10-23, no PR): 41 commits on an older main, 56 behind as of that day.
 
 - **What it has:** the gauge cluster (RPM arc, speed, coolant, km/l, battery and the crank dip)
   read from an ELM327 over Bluetooth Classic, **seen working in the Honda City on 2026-10-19**;
