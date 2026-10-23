@@ -610,8 +610,10 @@ static void drawHeader() {
     drawRule(HEADER_RULE_Y);
 }
 
-// The clock's minute of the day on screen (-1: not synced, "--:--"); updateDayNight keeps it.
+// The clock's minute of the day on screen (-1: not synced, "--:--") and its date, read together
+// (netclock::localNow) so they never straddle midnight; updateDayNight keeps them.
 static int clockMin = -1;
+static int clockY = 0, clockMonth = 0, clockDay = 0;
 
 // The clock band's left: the clock (BIG, TEXT) and under it the date (SMALL, MID: "FRI 23 OCT",
 // "--- -- ---" before the clock synced). The date only turns over with a minute, so both go together.
@@ -619,10 +621,8 @@ static void drawClock() {
     char s[16];  // room for any int, so -Wformat-truncation stays quiet
     if (clockMin < 0) snprintf(s, sizeof(s), "--:--");
     else snprintf(s, sizeof(s), "%02d:%02d", clockMin / 60, clockMin % 60);
-    int y = 0, month = 0, day = 0;
-    const bool known = clockMin >= 0 && netclock::localDate(&y, &month, &day);
     char date[16];
-    dashtext::date(known, y, month, day, date, sizeof(date));
+    dashtext::date(clockMin >= 0, clockY, clockMonth, clockDay, date, sizeof(date));
     const int top = HEADER_RULE_Y + 1;
     clearBg(RULE_X0, top, DASH_SPLIT - RULE_X0, inkTop(Face::SMALL, HILO_Y) - top);  // down to the HI / LO line
     tft.setTextColor(pal(termpal::TEXT));
@@ -747,7 +747,7 @@ static void blinkCursor() {
 static bool songLive() { return lyricsHeard() && song.deck.playing && song.deck.track[0]; }
 static char songShown[sizeof(stateparse::Deck::track) + sizeof(stateparse::Deck::artist) + 8];
 
-static void songText(char* out, size_t n) { dashtext::song(songLive() ? song.deck.track : "", song.deck.artist, out, n); }
+static void songText(bool live, char* out, size_t n) { dashtext::song(live ? song.deck.track : "", song.deck.artist, out, n); }
 
 // The strip's second line: the message while one shows (TEXT), else the song (MID; "> --" in DIM),
 // cut to SONG_W with "..". Case kept, accents folded (the font is ASCII only). Then the cursor.
@@ -758,10 +758,11 @@ static void drawSongLine() {
         placeCursor(DASH_X + text(message, DASH_X, SONG_BASE, Face::SMALL, BL_DATUM));
         return;
     }
-    songText(songShown, sizeof(songShown));
+    const bool live = songLive();  // once: the hold can run out between two looks
+    songText(live, songShown, sizeof(songShown));
     static karaoke::Line fit[1];  // static: 160 B, off the loop's stack
     const int n = karaoke::wrap(songShown, static_cast<int>(Face::SMALL), termfont::widthOf, SONG_W, 1, fit);
-    tft.setTextColor(pal(songLive() ? termpal::MID : termpal::DIM));
+    tft.setTextColor(pal(live ? termpal::MID : termpal::DIM));
     placeCursor(DASH_X + (n > 0 ? text(fit[0].s, DASH_X, SONG_BASE, Face::SMALL, BL_DATUM) : 0));
 }
 
@@ -1736,7 +1737,7 @@ static void lyricsTick() {
         if (message[0] || (!fresh && millis() - songAt < 1000)) return;
         songAt = millis();
         char s[sizeof(songShown)];
-        songText(s, sizeof(s));
+        songText(songLive(), s, sizeof(s));
         if (strcmp(s, songShown) != 0) drawSongLine();
         return;
     }
@@ -1948,7 +1949,6 @@ static void voiceTask(void*) {
 static void beginVoice() {
     if (!gate.enabled()) {
         Serial.println("[voice] off (REMOTE_TOKEN empty)");
-        weatherOff = true;  // no WiFi without it
         return;
     }
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
@@ -1985,16 +1985,19 @@ static void updateDayNight() {
     if (!first && millis() - checkedAt < 1000) return;
     first = false;
     checkedAt = millis();
-    int m = 0;
-    const bool synced = netclock::minuteOfDay(&m);
+    int m = 0, y = 0, month = 0, day = 0;
+    const bool synced = netclock::localNow(&m, &y, &month, &day);
     const int minute = synced ? m : -1;
     bool want = synced && daynight::isNight(m);
 #ifdef NIGHT_TEST
     want = true;
 #endif
-    if (minute != clockMin) {
+    if (minute != clockMin || day != clockDay) {
         if (minute >= 0 && clockMin < 0) Serial.printf("[clock] synced, local %02d:%02d\n", m / 60, m % 60);
         clockMin = minute;
+        clockY = y;
+        clockMonth = month;
+        clockDay = day;
         if (want == night && screen == Screen::Menu) drawClock();
     }
     if (want == night) return;
@@ -2020,6 +2023,7 @@ void setup() {
     if (!loadCalibration() || digitalRead(PIN_BOOT) == LOW) calibrate();
     typeBoot();  // before the tasks start: nothing else draws while it types
     showLastTrip();  // after the typing, so its few seconds start when the Menu shows
+    weatherOff = !gate.enabled();  // no REMOTE_TOKEN, no WiFi: the first draw already says >OFFLINE
     drawAll();
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
