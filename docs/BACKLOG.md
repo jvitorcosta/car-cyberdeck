@@ -7,9 +7,10 @@ Open items, not scheduled. Newest decisions first within each section.
 - **Yellow deck menu** (built 2026-10-23, `feat/yellow-menu`, only compiled; the deck and watch
   weren't connected). Flash with `pio run -e ledpanel -t upload`, sideload the watch app, then:
   - it boots to the main screen (dashboard); LIGHTS opens, BACK returns; every tile, zone, `-` and
-    `+` hits where tapped; a controller switched off turns its part of STATUS into `--` and its
-    dashboard row into `-- NO LINK` within ~10 s;
-  - `/say` changes the lights while the main screen shows, and its LIGHTS rows follow;
+    `+` hits where tapped; a controller switched off turns the Lights status line from `LINK 2/2`
+    (green) into `OUTSIDE: NO LINK` / `INSIDE: NO LINK` (both off: `NO LINK`) in red, and its
+    dashboard row into `-- NO LINK` (red) within ~10 s;
+  - `/say` changes the lights while the main screen shows, and its two light rows follow;
   - presets: tapping ROSE / FIRE / CALM / PURPURA on Lights applies both lights
     (no hold, nothing saved); Xbox A on one applies it; `/presets` returns 4 lines
     (`1 ROSE pink 40 pink 100` ...) and `/status` returns `inside=… outside=…`; the blocks fit;
@@ -17,18 +18,30 @@ Open items, not scheduled. Newest decisions first within each section.
     (`Rose: inside Pink 40 percent, outside Pink 100 percent`); "rose 50" is only ROSE. Siri may hear
     "purpura" as "purple": say "preset four" for that one;
   - Xbox: A applies a preset; **B is now Back** (was: BOTH page);
-  - restyle: scanlines, the `> [LIGHTS]` row, the Pip-Boy tabs, the colour boxes with the big chip, the
-    10-cell level bar (%, MIX, OFF) read well; the typed boot takes ~0.5 s (then ~0.4 s to
-    read it) and a `/say` during it isn't lost; the block cursor blinks after the song line;
+  - restyle: scanlines, the `> [LIGHTS]` row, the Pip-Boy tabs, the colour boxes, the 10-cell
+    level bar (%, MIX, OFF) read well; the typed boot takes ~0.5 s (then ~0.4 s to read it) and a
+    `/say` during it isn't lost; the block cursor blinks after the trip line;
+  - Lights page: the colour names are the presets' size and `YELLOW` / `ORANGE` / `PURPLE` fit their
+    boxes clear of the border; the preset chips (12 px, two per preset) tell the looks apart;
+    `< BACK` is the same box on Lights and Karaoke; Karaoke's song row is in capitals;
   - main screen (dashboard, 2026-10-23): header line; clock + date (`FRI 23 OCT`) left, temperature,
-    sky and `HI 32 LO 26  MANAUS` right (`--C` / `>OFFLINE` without a reading); LIGHTS rows with
-    real colours, chip and level (`OFF` dim, `-- NO LINK`); the two buttons are easy to hit and
-    D-pad left / right moves between them; the trip line; the black deck's song (`> --` dim when
-    nothing plays) changes within ~5 s of a new track; no Weather page left;
-  - messages: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` show ~2.5 s in place of the
-    song line and the song comes back;
+    sky and `HI 32 LO 26  MANAUS` right (`--C` / `>OFFLINE` without a reading); two evenly spaced
+    light rows (no LIGHTS label) with real colours, chip and level (`OFF` dim, `-- NO LINK`); the
+    two buttons are easy to hit and D-pad left / right moves between them; without the Xbox
+    controller neither button is inverted (no focus bar), with it the bar shows; the trip line and
+    no song anywhere on the main screen; no Weather page left;
+  - KARAOKE: while the black deck plays a song with synced lyrics it turns bright with a small
+    inverted `LIVE` tag at its right edge within ~5 s, and dims (no tag) within ~20 s of the song
+    stopping; the tag reads on the focus bar, while pressed (yellow) and at night; dimmed, a tap
+    shows why in the message line;
+  - messages: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` show ~2.5 s on the message
+    line under the trip line, the cursor jumps to their end, then the line empties and the cursor
+    goes back after the trip line;
+  - colours: by day MID and DIM read green, not teal, and the dim texts (date, HI / LO, `OFF`, a
+    dimmed KARAOKE) read from the driver's seat;
   - night mode: a `-D NIGHT_TEST` build drops the backlight (~90/255) and the screen is **amber**
-    (no green left, no bright frame), the 8 tiles stay distinguishable and the ink readable; the
+    (no green left, no bright frame: night TEXT is brighter than before, so watch the switch), the
+    8 tiles stay distinguishable and the ink readable, the dimmest (night DIM) included; the
     clock shows `--:--` then `HH:MM` (and the date) and refreshes each minute without flicker; a normal build
     switches by itself around 18:00 and stays bright green by day;
   - fonts and layout (VT323, the dashboard's bands) read well on the panel;
