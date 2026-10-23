@@ -92,9 +92,31 @@ class Colour(unittest.TestCase):
         self.assertEqual(g.darken(im).getpixel((0, 0)), (0xAA, 0x55, 0x00, 255))
 
 
+class Tail(unittest.TestCase):
+    def test_tail_is_the_flame_core_centre(self):
+        im = Image.new("RGBA", (40, 30), (255, 170, 0, 255))   # an orange body
+        for y in range(4, 9):
+            for x in range(30, 35):
+                im.putpixel((x, y), (255, 255, 0, 255))        # the yellow core
+        self.assertEqual(g.tail(im, blue=False), [12, -9])     # centre (32, 6) vs frame centre (20, 15)
+
+    def test_blue_tail_ignores_the_mouth_flames(self):
+        im = Image.new("RGBA", (50, 40), (0, 0, 0, 255))
+        for x, y in [(5, 5), (6, 5), (44, 24), (46, 26)]:      # mouth on the left, tail on the right
+            im.putpixel((x, y), (170, 255, 255, 255))
+        self.assertEqual(g.tail(im, blue=True), [20, 5])
+
+    def test_no_flame_found_points_at_the_top(self):
+        self.assertEqual(g.tail(Image.new("RGBA", (40, 30), (0, 0, 0, 255)), blue=False), [0, -15])
+
+
 class Xml(unittest.TestCase):
+    def test_tails_json(self):
+        xml = g.sprites_xml([[[1, 2]] * 6] * 5)
+        self.assertIn('<jsonData id="Tails">[[[1, 2], [1, 2], [1, 2], [1, 2], [1, 2], [1, 2]], ', xml)
+
     def test_sprites_xml_lists_every_frame(self):
-        xml = g.sprites_xml()
+        xml = g.sprites_xml([[[0, 0]] * 6] * 5)
         self.assertIn('<bitmap id="Charmander0" filename="charmander_0.png" dithering="none"/>', xml)
         self.assertIn('<bitmap id="MegaY5" filename="charizard-megay_5.png" dithering="none"/>', xml)
         self.assertIn('<bitmap id="MegaXSleep" filename="charizard-megax_sleep.png" dithering="none"/>', xml)

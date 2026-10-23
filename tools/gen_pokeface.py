@@ -4,15 +4,17 @@ Run: python tools/gen_pokeface.py
 Takes the Pokémon Black/White animated sprites of Charmander, Charmeleon and Charizard, and the
 Smogon sprite project's Black/White-style Mega Charizard X, from Pokémon Showdown's gen5ani set.
 Showdown has no animated one of Mega Y in that style, so Mega Y is its still gen5 sprite (all
-frames the same; only the drawn flame moves). They are fetched once into pokeface-sprites/ (git-ignored); the art is Nintendo's / Game
-Freak's / Creatures' and the Smogon artists', used on João's own watch, never committed. Spec:
-docs/superpowers/specs/2026-10-23-pokeface-watch-face-design.md.
+frames the same; only the drawn flame moves). They are fetched once into pokeface-sprites/
+(git-ignored); the art is Nintendo's / Game Freak's / Creatures' and the Smogon artists', used on
+João's own watch, never committed. Spec: docs/superpowers/specs/2026-10-23-pokeface-watch-face-design.md.
 
-Each GIF gives FRAMES evenly spaced frames, cropped to the box all of them share, and snapped to the Forerunner 255's 64
-colours. Charizard and the Megas are scaled down 2x with nearest-neighbour sampling (blocky,
-never blurred); Charmander and Charmeleon stay full size, so all of them come out about the same
-size. Charizard and the Megas also get a "sleep" frame: frame 0, one colour level darker. The
-frames and sprites.xml (their resource ids) land in the git-ignored sprites folder.
+Each source gives FRAMES evenly spaced frames, cropped to the box all of them share, and snapped
+to the Forerunner 255's 64 colours. Charizard and the Megas are scaled down 2x with
+nearest-neighbour sampling (blocky, never blurred); Charmander and Charmeleon stay full size, so
+all of them come out about the same size. Charizard and the Megas also get a "sleep" frame:
+frame 0, one colour level darker. The frames and sprites.xml (their resource ids, plus "Tails":
+where each frame's tail flame burns, so the face can draw its Body Battery flame there) land in
+the git-ignored sprites folder.
 """
 import os
 import urllib.request
@@ -74,14 +76,31 @@ def darken(img):
     return out
 
 
-def sprites_xml():
+def tail(img, blue):
+    """[dx, dy] from the frame's centre to its tail flame: the middle of the flame's bright core
+    (yellow; Mega X's pale blue, on its tail side so the mouth flames don't count). Without one,
+    the top of the frame."""
+    core = (170, 255, 255, 255) if blue else (255, 255, 0, 255)
+    w, h = img.size
+    pts = [(x, y) for y in range(h) for x in range(w)
+           if img.getpixel((x, y)) == core and (not blue or x > w * 0.6)]
+    if not pts:
+        return [0, -(h // 2)]
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    return [(min(xs) + max(xs)) // 2 - w // 2, (min(ys) + max(ys)) // 2 - h // 2]
+
+
+def sprites_xml(tails):
+    """The resource file: every frame's bitmap, and Tails[pokemon][frame] = tail()."""
     rows = []
     for name, rid, sleep, _, _ in POKEMON:
         rows += ['    <bitmap id="%s%d" filename="%s_%d.png" dithering="none"/>' % (rid, i, name, i)
                  for i in range(FRAMES)]
         if sleep:
             rows.append('    <bitmap id="%sSleep" filename="%s_sleep.png" dithering="none"/>' % (rid, name))
-    return "<drawables>\n" + "\n".join(rows) + "\n</drawables>\n"
+    json = "[" + ", ".join("[" + ", ".join("[%d, %d]" % tuple(t) for t in f) + "]" for f in tails) + "]"
+    return ("<resources>\n<drawables>\n" + "\n".join(rows) + "\n</drawables>\n"
+            + '<jsonData id="Tails">' + json + "</jsonData>\n</resources>\n")
 
 
 def convert(frames, half):
@@ -102,17 +121,19 @@ def fetch(name, url):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
+    tails = []
     for name, _, sleep, half, url in POKEMON:
         with Image.open(fetch(name, url)) as gif:
             frames = [f.convert("RGBA") for f in ImageSequence.Iterator(gif)]
         out = convert(frames, half)
+        tails.append([tail(f, name == "charizard-megax") for f in out])
         for i, f in enumerate(out):
             f.save(os.path.join(OUT, "%s_%d.png" % (name, i)))
         if sleep:
             darken(out[0]).save(os.path.join(OUT, name + "_sleep.png"))
         print("%-16s %d frames in the source -> %d x %dx%d" % (name, len(frames), FRAMES, *out[0].size))
     with open(os.path.join(OUT, "sprites.xml"), "w", encoding="utf-8") as f:
-        f.write(sprites_xml())
+        f.write(sprites_xml(tails))
 
 
 if __name__ == "__main__":
