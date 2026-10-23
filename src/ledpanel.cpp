@@ -56,6 +56,8 @@
 #include "util/remotegate.h"
 #include "util/termpal.h"
 #include "util/touchcal.h"
+#include "util/tripclock.h"
+#include "util/tripmeter.h"
 
 static TFT_eSPI tft;
 static Preferences prefs;
@@ -441,15 +443,18 @@ static void drawLevel() {
 // A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS line
 // or the Menu strip's text for MESSAGE_MS since messageAt; loop() then puts the usual line back. A
 // newer message replaces it, and so does a screen change (show() drops it), so none outlives its
-// screen. Only loop() touches it.
+// screen. Only loop() touches it (and setup(), before loop() starts).
 static constexpr uint32_t MESSAGE_MS = 2500;
+static constexpr uint32_t LAST_TRIP_MS = 6000;  // the boot's ">LAST TRIP ..." is worth longer to read
 static char message[32] = "";  // "" when none
 static uint32_t messageAt = 0;
+static uint32_t messageMs = MESSAGE_MS;
 
 // Sets the message; the caller redraws what shows it (drawLightState, or drawLooks that ends in it).
-static void setMessage(const char* m) {
+static void setMessage(const char* m, uint32_t ms = MESSAGE_MS) {
     snprintf(message, sizeof(message), "%s", m);
     messageAt = millis();
+    messageMs = ms;
 }
 
 // Lights: the line under the tabs, "IN ON 50%  OUT --  LINK 1/2", or the message.
@@ -490,10 +495,11 @@ static void placeCursor(int x) {
 // of the light's colour before each colour name, or the message, then the cursor. GLCD x1: the
 // longest line ("IN ORANGE 100%  OUT ORANGE 100%" plus two chips) is 202 px.
 static constexpr int STRIP_TEXT_X = 108;
+static constexpr int TRIP_Y = 226;  // the trip line's middle: under the colours line (y 212), above the strip's foot (240)
 static void drawStripText() {
     const Rect& r = deckmenu::MENU_STRIP;
     const int cy = r.y + r.h / 2;
-    clearBg(STRIP_TEXT_X, r.y + 2, r.x + r.w - STRIP_TEXT_X, r.h - 2);  // under the rule
+    clearBg(STRIP_TEXT_X, r.y + 2, r.x + r.w - STRIP_TEXT_X, TRIP_Y - 5 - (r.y + 2));  // under the rule, above the trip line
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(pal(termpal::TEXT));
     if (message[0]) {
@@ -549,12 +555,28 @@ static void drawClock() {
     label(s, r.x + 8, r.y + r.h / 2, 1, 3);
 }
 
+// The trip meter: time since the first loop() pass (the car started the deck), kilometres once a
+// speed feeds it. The Menu strip's second line shows it; tripTick() redraws that line when its
+// text would change (every minute, or every 0.1 km).
+static tripmeter::Meter tripMeter;
+
+static void drawTrip() {
+    const Rect& r = deckmenu::MENU_STRIP;
+    char s[40];
+    tripmeter::line(tripMeter.trip(), s, sizeof(s));
+    clearBg(STRIP_TEXT_X, TRIP_Y - 5, r.x + r.w - STRIP_TEXT_X, 10);
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(pal(termpal::TEXT));
+    tft.drawString(s, STRIP_TEXT_X, TRIP_Y, 1);
+}
+
 static void drawStrip() {
     const Rect& r = deckmenu::MENU_STRIP;
     clearBg(r);
     tft.drawFastHLine(r.x + 4, r.y + 1, r.w - 8, pal(termpal::MID));
     drawClock();
     drawStripText();
+    drawTrip();
 }
 
 // The Menu header: three terminal lines, the last in MID, and a rule. The boot types them out.
@@ -564,6 +586,11 @@ static constexpr int N_HEADER = sizeof(HEADER_LINES) / sizeof(HEADER_LINES[0]);
 static constexpr int HEADER_X = 8, HEADER_Y0 = 4, HEADER_DY = 12;
 static uint16_t headerInk(int i) { return pal(i == N_HEADER - 1 ? termpal::MID : termpal::TEXT); }
 
+static void drawHeaderRule() {
+    const Rect& r = deckmenu::HEADER;
+    tft.drawFastHLine(r.x + 4, r.y + r.h - 3, r.w - 8, pal(termpal::MID));
+}
+
 static void drawHeader() {
     const Rect& r = deckmenu::HEADER;
     clearBg(r);
@@ -572,7 +599,7 @@ static void drawHeader() {
         tft.setTextColor(headerInk(i));
         tft.drawString(HEADER_LINES[i], HEADER_X, HEADER_Y0 + i * HEADER_DY, 1);
     }
-    tft.drawFastHLine(r.x + 4, r.y + r.h - 3, r.w - 8, pal(termpal::MID));
+    drawHeaderRule();
 }
 
 // The RobCo boot: on a blank screen the header's lines type out one character every TYPE_MS behind
@@ -814,6 +841,73 @@ static void load() {
     }
     target = savedTarget = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
     // fav0..fav3 (the saved favourites of earlier builds) stay in NVS, unread.
+}
+
+// ---- Trip meter: the clock, the OBD hook and the NVS record ("trip", 9 bytes) ----
+static tripclock::Clock tripClock;
+static uint32_t tripStartMs = 0;  // millis() of the first tick, 0: not started
+static uint32_t tripSpeedAt = 0;  // millis() of the last tripSpeed() call, 0: none yet
+static uint8_t tripSaved[tripmeter::RECORD_BYTES];
+static bool tripSavedValid = false;
+
+// The OBD link will call this with each speed reading (km/h); it integrates the speed over the time
+// since the previous call (the first one counts from the trip start). Nothing calls it yet and no
+// speed is faked, so the strip shows "--" km. A long gap (the link dropped) holds the last speed
+// across it; the link should report staleness before that matters.
+static void tripSpeed(uint16_t kmh) __attribute__((unused));
+static void tripSpeed(uint16_t kmh) {
+    const uint32_t now = millis();
+    const uint32_t from = tripSpeedAt ? tripSpeedAt : tripStartMs ? tripStartMs : now;
+    tripMeter.addSpeed(kmh, now - from);
+    tripSpeedAt = now ? now : 1;
+}
+
+// The previous trip from NVS, as a message when it lasted a minute or more (shorter ones are a
+// bench test or a failed start). Called once, before the first draw.
+static void showLastTrip() {
+    uint8_t buf[tripmeter::RECORD_BYTES + 1];
+    const size_t len = prefs.getBytesLength("trip");
+    if (len != tripmeter::RECORD_BYTES || prefs.getBytes("trip", buf, sizeof(buf)) != len) return;
+    tripmeter::Trip t;
+    if (!tripmeter::decode(buf, len, &t) || t.seconds < 60) return;
+    char m[sizeof(message)];
+    tripmeter::last(t, m, sizeof(m));
+    setMessage(m, LAST_TRIP_MS);
+}
+
+// Each loop pass: once a second the seconds, and the strip line if its text changed; once a minute
+// the NVS record (when it differs from the last one written).
+static void tripTick() {
+    const uint32_t now = millis();
+    if (!tripStartMs) {
+        tripStartMs = now ? now : 1;  // not now|1: that can be 1 ms ahead of now
+        tripClock = tripclock::Clock(tripStartMs);
+    }
+    static uint32_t checkedAt = 0;
+    if (checkedAt && now - checkedAt < 1000) return;
+    checkedAt = now | 1;
+    tripMeter.setSeconds(tripClock.seconds(now));
+    const tripmeter::Trip t = tripMeter.trip();
+    // the line shows minutes and tenths of a km: redraw only when one of them moved
+    static bool shown = false;
+    static tripmeter::Trip on;
+    if (!shown || t.seconds / 60 != on.seconds / 60 || t.meters / 100 != on.meters / 100 || t.hasDistance != on.hasDistance) {
+        shown = true;
+        on = t;
+        if (screen == Screen::Menu) drawTrip();
+    }
+    static uint32_t savedAt = 0;
+    if (!savedAt) savedAt = now | 1;
+    if (now - savedAt >= 60000) {
+        savedAt = now | 1;
+        uint8_t buf[tripmeter::RECORD_BYTES];
+        tripmeter::encode(t, buf);
+        if (!tripSavedValid || memcmp(buf, tripSaved, sizeof(buf)) != 0) {
+            prefs.putBytes("trip", buf, sizeof(buf));
+            memcpy(tripSaved, buf, sizeof(buf));
+            tripSavedValid = true;
+        }
+    }
 }
 
 // Preset slot0 (0..3) onto the lights: each light gets the preset's look. The BOTH page copies them
@@ -1303,6 +1397,7 @@ void setup() {
     pinMode(PIN_BOOT, INPUT_PULLUP);
     if (!loadCalibration() || digitalRead(PIN_BOOT) == LOW) calibrate();
     typeHeader();  // before the tasks start: nothing else draws while it types
+    showLastTrip();  // after the typing, so its few seconds start when the Menu shows
     drawAll(true);  // the typed header stays on screen
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
@@ -1337,7 +1432,7 @@ void loop() {
 
     // the message has had its time: the usual line comes back (show() already dropped one from
     // another screen)
-    if (message[0] && millis() - messageAt >= MESSAGE_MS) {
+    if (message[0] && millis() - messageAt >= messageMs) {
         message[0] = 0;
         drawLightState();
     }
@@ -1359,6 +1454,7 @@ void loop() {
 
     handlePad();
     updateDayNight();
+    tripTick();
     blinkCursor();
 
     // BOOT held for 2 s: calibrate the touch again.
