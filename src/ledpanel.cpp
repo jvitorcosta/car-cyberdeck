@@ -1,17 +1,22 @@
 // The yellow deck (CYD) as the car's control screen: a RobCo-style terminal (green on black, amber
-// at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Two
+// at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Three
 // screens, laid out by util/deckmenu:
-//   Menu (boot, after the header types out): the header, the menu items as list rows ("> [LIGHTS]";
-//           part 1 builds one), the four presets ROSE / FIRE / CALM / PURPURA (tap one to apply
-//           it), and a strip at the bottom with the clock and each light's state ("IN PINK 40%
-//           OUT --": its colour, a chip of it and its %, OFF, or -- when the deck has no link to
-//           it) ending in a blinking block cursor
+//   Menu (boot, after the header types out): the header, the menu items side by side on one row
+//           ("> [LIGHTS]", "> [WEATHER]"), the four presets ROSE / FIRE / CALM / PURPURA (tap one
+//           to apply it), and a strip at the bottom with the clock (the outside temperature under
+//           it, "24C" or "--C") and each light's state ("IN PINK 40% OUT --": its colour, a chip of
+//           it and its %, OFF, or -- when the deck has no link to it) ending in a blinking block
+//           cursor
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
 //           together; INSIDE and OUTSIDE each keep their own look), the status line ("IN ON 50%
 //           OUT --  LINK 1/2"), 2x4 colour buttons (tap one to set it and turn on, double-tap the
 //           lit one to turn the lights off), the four presets (tap: apply),
 //           and  [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two
 //           lights differ]  [+]
+//   Weather: < BACK, the title tab WEATHER, the temperature big, the sky in words ("PARTLY CLOUDY"),
+//           today's HI / LO, the city, and "UPDATED 12:30" (or NO DATA YET / >OFFLINE). Where the
+//           car is comes from the hotspot's public IP (ip-api.com, approximate), the weather from
+//           Open-Meteo, both over plain http every 15 min (see "Weather" below)
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
 // The STATUS line on Lights and the strip's text on the Menu show a terminal message for 2.5 s
@@ -20,8 +25,8 @@
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
 // /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
-// drives it too: the D-pad moves the focus (an inverted bar on the Menu, a TEXT ring on Lights),
-// A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
+// drives it too: the D-pad moves the focus (an inverted bar on the Menu, a TEXT ring on Lights and
+// Weather), A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
 // "Xbox controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
 // palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
@@ -30,6 +35,8 @@
 // mode whatever the time, to check the dimming without waiting for 18:00. Not set in platformio.ini.
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
+#include <HTTPClient.h>
+#include <cmath>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
 #pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
@@ -49,15 +56,19 @@
 #include "util/daynight.h"
 #include "util/deckmenu.h"
 #include "util/elkcmd.h"
+#include "util/geoip.h"
 #include "util/ledlook.h"
 #include "util/ledpresets.h"
 #include "util/ledvoice.h"
 #include "util/lightstatus.h"
+#include "util/readguard.h"
 #include "util/remotegate.h"
 #include "util/termpal.h"
+#include "util/text.h"
 #include "util/touchcal.h"
 #include "util/tripclock.h"
 #include "util/tripmeter.h"
+#include "util/weather.h"
 
 static TFT_eSPI tft;
 static Preferences prefs;
@@ -92,11 +103,28 @@ using deckmenu::L_TILE0;
 using deckmenu::L_PRE0;
 using deckmenu::L_MINUS;
 using deckmenu::L_PLUS;
+using deckmenu::W_BACK;
 
 static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Menu
 // The palette: every colour goes through termpal with this flag, so night mode only flips it and
 // redraws.
 static bool night = false;
+
+// The outside weather (see "Weather" below): the weather task publishes each try under weatherMux
+// and raises weatherFresh; loop() copies it into `wx`, which is all the drawing reads.
+struct WeatherReading {
+    bool ok = false;      // a reading came (the fields below hold the last good one)
+    bool failed = false;  // the last try failed (no network, no answer)
+    double tempC = 0;
+    int code = 0;
+    bool day = true;
+    bool daily = false;   // maxC / minC came too
+    double maxC = 0, minC = 0;
+    char city[24] = "";
+    int at = -1;          // local minute of the day it came; -1: the clock wasn't synced
+};
+static WeatherReading wx;
+static bool weatherOff = false;  // no REMOTE_TOKEN: no WiFi, so no weather (">OFFLINE")
 
 // ---- BLE ----
 
@@ -241,7 +269,11 @@ static bool padUp = false;  // an Xbox controller is connected and reporting
 static void drawFocus(int id, bool on);
 
 // Where the focus starts on each screen: the first item, or the colour the page shows.
-static int homeFocus() { return screen == Screen::Menu ? static_cast<int>(M_ITEM0) : L_TILE0 + cur().swatch; }
+static int homeFocus() {
+    if (screen == Screen::Menu) return M_ITEM0;
+    if (screen == Screen::Weather) return W_BACK;
+    return L_TILE0 + cur().swatch;
+}
 
 // ---- Drawing ----
 // GLCD (font 1) is the terminal's monospace font, for small text; button labels use font 2 (and 4
@@ -391,12 +423,12 @@ static void drawButtonBody(int id, bool pressed) {
     const Rect r = deckmenu::rect(screen, id);
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
-        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]"};  // in deckmenu::Item order
+        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [WEATHER]"};  // in deckmenu::Item order
         if (id < M_PRE0) drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus);
         else drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed, id == focus);
         return;
     }
-    if (id == L_BACK) {
+    if (screen == Screen::Weather || id == L_BACK) {  // W_BACK: the Weather screen's only button
         drawChrome(r, "< BACK", 2, pressed, false);
         drawTabRule(r.x - 2, r.x + r.w + 2);  // its focus ring crosses the rule too
     } else if (id < L_TILE0) {
@@ -544,6 +576,24 @@ static void blinkCursor() {
 // The clock's minute of the day on screen (-1: not synced, "--:--"); updateDayNight keeps it.
 static int clockMin = -1;
 
+// The temperature as shown: "24C", "--C" before the first reading (GLCD has no degree sign).
+static void tempText(char* out, size_t n) {
+    if (wx.ok) snprintf(out, n, "%dC", static_cast<int>(lround(wx.tempC)));
+    else snprintf(out, n, "--C");
+}
+
+// The Menu strip's temperature: GLCD under the clock (its digits end at y 224), right edge under the
+// clock's (x 98). stripTemp is the text on screen: a new reading redraws it only when it differs.
+static char stripTemp[16] = "";
+static void drawStripTemp() {
+    const Rect& r = deckmenu::MENU_STRIP;
+    tempText(stripTemp, sizeof(stripTemp));
+    clearBg(r.x + 40, 227, 66, 11);
+    tft.setTextDatum(MR_DATUM);
+    tft.setTextColor(pal(termpal::TEXT));
+    tft.drawString(stripTemp, r.x + 98, 232, 1);
+}
+
 static void drawClock() {
     const Rect& r = deckmenu::MENU_STRIP;
     char s[16];  // room for any int, so -Wformat-truncation stays quiet
@@ -553,6 +603,7 @@ static void drawClock() {
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(pal(termpal::TEXT));
     label(s, r.x + 8, r.y + r.h / 2, 1, 3);
+    drawStripTemp();  // the clear above took it
 }
 
 // The trip meter: time since the first loop() pass (the car started the deck), kilometres once a
@@ -639,7 +690,7 @@ static void drawZones() {
 // Menu strip's text.
 static void drawLightState() {
     if (screen == Screen::Lights) drawStatus();
-    else drawStripText();
+    else if (screen == Screen::Menu) drawStripText();
 }
 
 // After a look changed (a tap, voice, the watch, Y): everything that shows it.
@@ -651,11 +702,11 @@ static void drawLooks() {
     drawLightState();
 }
 
-// Lights only (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
+// Lights and Weather (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
 // the 2 px gap around the button, apart from the lit colour's bar inside it. Off: the gap's
 // scanlined bg again (the caller redraws the button, and with it any rule the ring crossed).
 static void drawFocus(int id, bool on) {
-    if (id < 0 || screen != Screen::Lights) return;
+    if (id < 0 || screen == Screen::Menu) return;
     const Rect r = deckmenu::rect(screen, id);
     if (on) {
         tft.drawRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, pal(termpal::TEXT));
@@ -666,6 +717,44 @@ static void drawFocus(int id, bool on) {
     clearBg(r.x - 2, r.y + r.h, r.w + 4, 2);
     clearBg(r.x - 2, r.y, 2, r.h);
     clearBg(r.x + r.w, r.y, 2, r.h);
+}
+
+// The Weather screen's title: the current Pip-Boy tab right of < BACK (display only, no button).
+static constexpr Rect WEATHER_TAB{80, 2, 100, 36};
+
+// The Weather screen's body (deckmenu::WEATHER_BODY), from `wx`: the temperature big (font 4 at x2,
+// 52 px), the sky in words, today's HI / LO, the city in MID, and when it came (or why nothing did).
+static void drawWeatherBody() {
+    const Rect& r = deckmenu::WEATHER_BODY;
+    clearBg(r);
+    constexpr int X = 16;
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(pal(termpal::TEXT));
+    char s[40];
+    tempText(s, sizeof(s));
+    label(s, X, r.y + 10, 4, 2);
+    if (wx.ok) label(weather::words(wx.code), X, r.y + 70, 4);
+    if (wx.ok && wx.daily)
+        snprintf(s, sizeof(s), "HI %dC  LO %dC", static_cast<int>(lround(wx.maxC)), static_cast<int>(lround(wx.minC)));
+    else snprintf(s, sizeof(s), "HI --C  LO --C");
+    label(s, X, r.y + 104, 2);
+    if (wx.city[0]) {
+        char folded[sizeof(wx.city)], city[sizeof(wx.city)];
+        txt::asciiFold(wx.city, folded, sizeof(folded));  // "Sao Paulo": the fonts are ASCII only
+        upper(folded, city, sizeof(city));
+        tft.setTextColor(pal(termpal::MID));
+        label(city, X, r.y + 126, 2);
+    }
+    if (wx.ok && wx.at >= 0) snprintf(s, sizeof(s), "UPDATED %02d:%02d", wx.at / 60, wx.at % 60);
+    else if (wx.ok) snprintf(s, sizeof(s), "UPDATED --:--");
+    else snprintf(s, sizeof(s), "%s", wx.failed || weatherOff ? ">OFFLINE" : "NO DATA YET");
+    tft.setTextColor(pal(wx.ok ? termpal::DIM : termpal::TEXT));
+    label(s, X, r.y + 168, 1);
+}
+
+static void drawWeather() {
+    drawTab(WEATHER_TAB, "WEATHER", false, true);
+    drawWeatherBody();
 }
 
 // Redraws the current screen in the current palette. keepHeader (boot, right after typeHeader):
@@ -684,6 +773,8 @@ static void drawAll(bool keepHeader = false) {
     }
     if (screen == Screen::Menu) {
         drawStrip();
+    } else if (screen == Screen::Weather) {
+        drawWeather();
     } else {
         drawLevel();
         drawStatus();
@@ -1017,6 +1108,10 @@ static void press(int id) {
         pressLights(id);
         return;
     }
+    if (screen == Screen::Weather) {
+        if (id == W_BACK) show(Screen::Menu);
+        return;
+    }
     if (deckmenu::isPreset(screen, id)) {
         applyPreset(deckmenu::presetSlot(screen, id));
         return;
@@ -1024,6 +1119,7 @@ static void press(int id) {
     if (id < M_ITEM0 || id >= M_ITEM0 + deckmenu::N_ITEMS) return;
     switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
     case deckmenu::LIGHTS: show(Screen::Lights); break;
+    case deckmenu::WEATHER: show(Screen::Weather); break;
     }
 }
 
@@ -1040,7 +1136,7 @@ static void act() {
 
 // ---- Xbox controller input ----
 //   D-pad: move the focus (held: repeats; the sticks are ignored)    A: press the focused button
-//   B: back to the Menu (on the Menu: nothing)
+//   B: back to the Menu (from Lights or Weather; on the Menu: nothing)
 //   Lights only: X next page    Y this page's lights on/off    LB / RB: - / +
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
@@ -1123,11 +1219,12 @@ static void handlePad() {
     const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
     const Screen was = screen;
     if (a) padPress(focus);
-    if (was != Screen::Lights || screen != Screen::Lights) return;  // the rest is the Lights page's
-    if (b) {
+    if (screen != was) return;  // A changed the screen: the other buttons wait for their next press
+    if (b && screen != Screen::Menu) {
         show(Screen::Menu);
         return;
     }
+    if (screen != Screen::Lights) return;  // the rest is the Lights page's
     if (x) padPress(L_ZONE0 + (target + 1) % 3);
     if (lb) padPress(L_MINUS);
     if (rb) padPress(L_PLUS);
@@ -1137,6 +1234,130 @@ static void handlePad() {
         change(target, c);
         drawLooks();
         save();
+    }
+}
+
+// ---- Weather: where the car is (ip-api.com) and its weather (Open-Meteo), over the hotspot ----
+// Its own task (core 1, idle priority like the voice server, which it never blocks): once WiFi is
+// up, at start and every 15 min, GET the place (once per boot, again while it fails), then the
+// weather, both plain http (no TLS on a heap shared with NimBLE, WiFi and the server), 5 s
+// timeouts, the body into a fixed 2 KB buffer. Each try is published under weatherMux; a failed
+// try keeps the last good reading and comes again in 2 min. loop() polls weatherFresh to redraw.
+// The place is the phone's public IP's: approximate (the operator's city, sometimes a
+// neighbour's), which is fine for the weather.
+static constexpr uint32_t WEATHER_EVERY_MS = 15 * 60 * 1000, WEATHER_RETRY_MS = 2 * 60 * 1000;
+static TaskHandle_t weatherHandle = nullptr;
+static portMUX_TYPE weatherMux = portMUX_INITIALIZER_UNLOCKED;
+static WeatherReading weatherPub;           // guarded by weatherMux
+static volatile bool weatherFresh = false;  // a try was published; loop() clears it
+static char weatherBody[2048];              // only the weather task touches it
+
+// GET `url` into weatherBody (cut at 2 KB, always terminated); the HTTP status, negative without an
+// answer. HTTP/1.0, so the body is never chunked.
+static int weatherGet(const char* url) {
+    weatherBody[0] = 0;
+    WiFiClient c;
+    HTTPClient h;
+    h.setTimeout(5000);
+    h.setConnectTimeout(5000);
+    h.useHTTP10(true);
+    if (!h.begin(c, url)) return -1;
+    const int rc = h.GET();
+    size_t len = 0;
+    if (rc == 200) {
+        WiFiClient* s = h.getStreamPtr();
+        readguard::Guard g(millis(), 5000, 8000);
+        while (len < sizeof(weatherBody) - 1 && (h.connected() || s->available())) {
+            const int a = s->available();
+            if (a <= 0) {
+                if (g.check(millis()) != readguard::State::Ok) break;
+                vTaskDelay(pdMS_TO_TICKS(5));
+                continue;
+            }
+            size_t want = sizeof(weatherBody) - 1 - len;
+            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
+            len += s->readBytes(weatherBody + len, want);
+            g.onData(millis());
+        }
+    }
+    weatherBody[len] = 0;
+    h.end();
+    return rc;
+}
+
+static void publishWeather(const WeatherReading& r) {
+    portENTER_CRITICAL(&weatherMux);
+    weatherPub = r;
+    portEXIT_CRITICAL(&weatherMux);
+    weatherFresh = true;
+}
+
+static void weatherTask(void*) {
+    geoip::Place place{};
+    bool placed = false;
+    WeatherReading r;  // the last good reading, with this try's outcome
+    for (;;) {
+        bool ok = false;
+        if (!net::isOnline()) {
+            Serial.println("[weather] offline");
+        } else {
+            if (!placed) {
+                const int rc = weatherGet(geoip::URL);
+                placed = rc == 200 && geoip::parse(weatherBody, &place);
+                if (placed) Serial.printf("[weather] place %s (%s, %s)\n", place.city, place.lat, place.lon);
+                else Serial.printf("[weather] place failed (http %d)\n", rc);
+            }
+            if (placed) {
+                char url[256];
+                weather::url(place.lat, place.lon, url, sizeof(url));
+                const int rc = weatherGet(url);
+                weather::Now now;
+                if (rc == 200 && weather::parse(weatherBody, &now)) {
+                    ok = true;
+                    r.ok = true;
+                    r.tempC = now.tempC;
+                    r.code = now.code;
+                    r.day = now.day;
+                    r.daily = weather::parseDaily(weatherBody, &r.maxC, &r.minC);
+                    snprintf(r.city, sizeof(r.city), "%s", place.city);
+                    int m = 0;
+                    r.at = netclock::minuteOfDay(&m) ? m : -1;
+                    Serial.printf("[weather] %s %.1fC %s, hi %.1f lo %.1f%s  (heap %u)\n", r.city, r.tempC,
+                                  weather::words(r.code), r.maxC, r.minC, r.daily ? "" : " (no daily)",
+                                  static_cast<unsigned>(ESP.getFreeHeap()));
+                } else {
+                    Serial.printf("[weather] forecast failed (http %d)\n", rc);
+                }
+            }
+        }
+        r.failed = !ok;
+        publishWeather(r);
+        if (!ok) Serial.println("[weather] retry in 2 min");
+        vTaskDelay(pdMS_TO_TICKS(ok ? WEATHER_EVERY_MS : WEATHER_RETRY_MS));
+    }
+}
+
+// From the voice task, once WiFi is up. 6 KB: HTTPClient and its Strings; the [mem] line shows
+// what's left.
+static void beginWeather() {
+    if (weatherHandle) return;
+    xTaskCreatePinnedToCore(weatherTask, "weather", 6144, nullptr, 0, &weatherHandle, 1);
+}
+
+// In loop(): takes a published try and redraws what shows it, if on screen. The strip's
+// temperature only when its text changed.
+static void takeWeather() {
+    if (!weatherFresh) return;
+    weatherFresh = false;  // before the copy: a try published meanwhile raises it again
+    portENTER_CRITICAL(&weatherMux);
+    wx = weatherPub;
+    portEXIT_CRITICAL(&weatherMux);
+    if (screen == Screen::Weather) {
+        drawWeatherBody();
+    } else if (screen == Screen::Menu) {
+        char t[sizeof(stripTemp)];
+        tempText(t, sizeof(t));
+        if (strcmp(t, stripTemp) != 0) drawStripTemp();
     }
 }
 
@@ -1322,6 +1543,7 @@ static void voiceTask(void*) {
     }
     server->begin();
     netclock::begin();  // SNTP, for night mode and the Menu's clock
+    beginWeather();
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
@@ -1339,6 +1561,7 @@ static void voiceTask(void*) {
 static void beginVoice() {
     if (!gate.enabled()) {
         Serial.println("[voice] off (REMOTE_TOKEN empty)");
+        weatherOff = true;  // no WiFi without it
         return;
     }
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
@@ -1457,14 +1680,16 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, loop %u\n", static_cast<unsigned>(ESP.getFreeHeap()),
-                      static_cast<unsigned>(ESP.getMinFreeHeap()),
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, loop %u\n",
+                      static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
+                      weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 
     handlePad();
+    takeWeather();
     updateDayNight();
     tripTick();
     blinkCursor();
