@@ -91,6 +91,10 @@ class Font(unittest.TestCase):
         self.assertEqual(gl.getpixel((1, 2)), (255, 255, 255, 255))
         self.assertEqual(gl.getpixel((0, 0))[3], 0)
 
+    def test_glyphs_cover_the_appeared_line(self):
+        for c in "A wild appeared! shiny":
+            self.assertIn(c, g.GLYPHS)
+
     def test_degree_glyph_synthesised(self):
         text, _ = g.bmfont({"°": g.degree(10)}, 1, "t")
         self.assertIn("char id=176 ", text)

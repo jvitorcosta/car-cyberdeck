@@ -38,7 +38,7 @@ SPECIES = [("blaziken", "BLAZIKEN"), ("sceptile", "SCEPTILE"), ("latias", "LATIA
            ("arceus", "ARCEUS"), ("giratina", "GIRATINA"), ("dialga", "DIALGA"),
            ("solgaleo", "SOLGALEO"), ("lunala", "LUNALA"), ("necrozma", "NECROZMA"),
            ("xerneas", "XERNEAS"), ("yveltal", "YVELTAL"), ("zygarde", "ZYGARDE")]
-GLYPHS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz :./-%°"
+GLYPHS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz :./-%°!"
 TIME_GLYPHS = "0123456789:"
 REWARDS = list(range(2, len(SPECIES), 3))   # each weekday's reward legendary: also drawn shiny (mon<i>s.png)
 # Field rows and colours (solid, vivid, not pale)

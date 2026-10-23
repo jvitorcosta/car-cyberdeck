@@ -13,8 +13,12 @@ class Sprite {
                   Rez.Drawables.Mon12, Rez.Drawables.Mon13, Rez.Drawables.Mon14, Rez.Drawables.Mon15,
                   Rez.Drawables.Mon16, Rez.Drawables.Mon17, Rez.Drawables.Mon18, Rez.Drawables.Mon19,
                   Rez.Drawables.Mon20];
+    // The weekday rewards (every third species) in their shiny colours
+    const SHINIES = [Rez.Drawables.Shiny2, Rez.Drawables.Shiny5, Rez.Drawables.Shiny8, Rez.Drawables.Shiny11,
+                     Rez.Drawables.Shiny14, Rez.Drawables.Shiny17, Rez.Drawables.Shiny20];
 
     private var _species as Number = -1;
+    private var _shiny as Boolean = false;
     private var _sheet as WatchUi.BitmapResource or Null;
     private var _scale as Graphics.AffineTransform;
 
@@ -23,13 +27,16 @@ class Sprite {
         _scale.scale(2.0, 2.0);
     }
 
-    function show(species as Number) as Void {
-        if (species == _species) {
+    // shiny only applies to a reward (species % 3 == 2), which has a shiny sheet.
+    function show(species as Number, shiny as Boolean) as Void {
+        shiny = shiny && species % 3 == 2;
+        if (species == _species && shiny == _shiny) {
             return;
         }
         _sheet = null;   // let the old one go before loading the new
-        _sheet = WatchUi.loadResource(MONS[species]) as WatchUi.BitmapResource;
+        _sheet = WatchUi.loadResource(shiny ? SHINIES[species / 3] : MONS[species]) as WatchUi.BitmapResource;
         _species = species;
+        _shiny = shiny;
     }
 
     // Frame `frame` (of 2) with its top-left at (x, y), 128x128 on screen.

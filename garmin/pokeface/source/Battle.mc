@@ -59,6 +59,48 @@ module Battle {
         dc.fillRectangle(x, y + 5, w, h - 5);
     }
 
+    // An Emerald status tag (PSN purple, PAR yellow, SLP grey) with its left edge at x, centred on
+    // y; returns its width (0 for none).
+    function badge(dc as Dc, x as Number, y as Number, kind as Number, font as Graphics.FontType) as Number {
+        if (kind == Partner.BADGE_NONE) {
+            return 0;
+        }
+        var label = kind == Partner.BADGE_PSN ? "PSN" : (kind == Partner.BADGE_PAR ? "PAR" : "SLP");
+        var w = dc.getTextWidthInPixels(label, font) + 6;
+        dc.setColor(kind == Partner.BADGE_PSN ? 0xAA00AA : (kind == Partner.BADGE_PAR ? 0xAAAA00 : 0x555555),
+                    Graphics.COLOR_TRANSPARENT);
+        dc.fillRoundedRectangle(x, y - 5, w, 11, 2);
+        text(dc, x + 3, y, font, label, 0xFFFFFF, 0x000000, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        return w;
+    }
+
+    // Emerald's battle weather over the field while the watch is awake: rain streaks, falling snow,
+    // a sandstorm's dashes. `frame` moves them; nothing for other weather.
+    function weather(dc as Dc, kind as Number, frame as Number, night as Boolean) as Void {
+        if (kind == Icons.RAIN || kind == Icons.STORM) {
+            dc.setColor(night ? 0x5555AA : 0xAAFFFF, Graphics.COLOR_TRANSPARENT);
+            for (var i = 0; i < 24; i++) {
+                var x = (i * 37 + frame * 9) % 270;
+                var y = (i * 53 + frame * 14) % 190;
+                dc.drawLine(x, y, x - 4, y + 9);
+            }
+        } else if (kind == Icons.SNOW) {
+            dc.setColor(0xFFFFFF, Graphics.COLOR_TRANSPARENT);
+            for (var i = 0; i < 24; i++) {
+                var x = (i * 41 + (frame % 4) * 3) % 260;
+                var y = (i * 31 + frame * 6) % 190;
+                dc.fillRectangle(x, y, 2, 2);
+            }
+        } else if (kind == Icons.SAND) {
+            dc.setColor(0xFFAA55, Graphics.COLOR_TRANSPARENT);
+            for (var i = 0; i < 28; i++) {
+                var x = (i * 47 + frame * 22) % 270;
+                var y = 20 + (i * 29) % 170;
+                dc.drawLine(x - 6, y, x, y);
+            }
+        }
+    }
+
     // Emerald text: the shadow `px` down and right, then the letters.
     function text(dc as Dc, x as Number, y as Number, font as Graphics.FontType, s as String, colour as Number,
                   shadow as Number, px as Number, justify as Number) as Void {

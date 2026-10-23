@@ -1,5 +1,6 @@
 import Toybox.Activity;
 import Toybox.ActivityMonitor;
+import Toybox.Application;
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.System;
@@ -36,6 +37,10 @@ class PokefaceView extends WatchUi.WatchFace {
     private var _runsDay as Number = -1;   // the day (00:00) the history was last read
     private var _week as Number = 0;       // this week's Monday 00:00
     private var _earned as Boolean = false;
+    private var _shiny as Boolean = false;   // the reward, earned with a run today
+    private var _badge as Number = Partner.BADGE_NONE;
+    private var _woke as Boolean = false;    // decide the "appeared!" line at the next refresh
+    private var _appear as Number = Partner.APPEAR_NONE;   // shown while this wake's animation runs
     private var _dex as Number = 0;
     private var _rise as Number or Null;   // today's sunrise / sunset, epoch seconds
     private var _set as Number or Null;
@@ -75,12 +80,14 @@ class PokefaceView extends WatchUi.WatchFace {
     // The face just appeared (back from a menu or an activity): someone is looking.
     function onShow() as Void {
         readRuns();
+        _woke = true;
         _minute = -1;
         animate();
     }
 
     function onExitSleep() as Void {
         readRuns();
+        _woke = true;
         _minute = -1;
         animate();
     }
@@ -104,6 +111,7 @@ class PokefaceView extends WatchUi.WatchFace {
     }
 
     private function stopAnimating() as Void {
+        _appear = Partner.APPEAR_NONE;   // the "appeared!" line lasts one wake
         if (_timer != null) {
             _timer.stop();
             _timer = null;
@@ -136,6 +144,9 @@ class PokefaceView extends WatchUi.WatchFace {
             _fieldNight = night;
         }
         dc.drawBitmap(0, 0, _field);
+        if (_timer != null) {
+            Battle.weather(dc, _weather, _frame, night);   // only while awake
+        }
 
         // The time, big
         Battle.text(dc, CX, 28, _fTime, Fmt.clock(clock.hour, clock.min, is24), ink, shade, 3,
@@ -176,7 +187,8 @@ class PokefaceView extends WatchUi.WatchFace {
         }
         small(dc, x, 67, _sunText, ink, shade);
 
-        // Its info box: name, Lv (day of the month), HP = Body Battery, EXP = steps
+        // Its info box: name, Lv (this week's running km), HP = Body Battery, then the Pokédex, a
+        // status tag and Body Battery, EXP toward the weekly km goal, steps
         var bx = 116;
         var by = 80;
         var bi = night ? 0xFFFFAA : 0x000000;   // text in the battle box
@@ -186,16 +198,24 @@ class PokefaceView extends WatchUi.WatchFace {
         Battle.text(dc, bx + 8, by + 34, _f1, "Lv" + _lv, bi, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
         Battle.text(dc, bx + 38, by + 34, _f1, "HP", 0xFF5500, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
         Battle.bar(dc, bx + 54, by + 32, 62, _bbFrac, hpInk(Partner.hpColour(_bbValue)));
+        var dex = "DEX " + _dex + "/7";
+        Battle.text(dc, bx + 8, by + 47, _f1, dex, bi, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.badge(dc, bx + 8 + dc.getTextWidthInPixels(dex, _f1) + 5, by + 47, _badge, _f1);
         Battle.text(dc, bx + 114, by + 47, _f1, "BB " + _bb, bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
         Battle.text(dc, bx + 8, by + 60, _f1, "EXP", night ? 0x00AAFF : 0x0055FF, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
         Battle.bar(dc, bx + 34, by + 58, 82, _bar, 0x00AAFF);
         Battle.text(dc, bx + 108, by + 71, _f1, _steps + " steps", bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
 
-        // The dialogue box: heart rate | temperature, then distance. A row too wide for the round
+        // The dialogue box: heart rate | temperature, then distance (or today's run card); on the
+        // wake after the reward, "A wild / shiny ... appeared!" instead. A row too wide for the round
         // edge (big numbers) drops to 1x rather than being cut.
         Battle.dialogue(dc, 0, 192, dc.getWidth(), 70, night);
         bi = 0xFFFFFF;   // text in the dialogue box: white on navy
         bs = 0x000000;
+        if (_appear != Partner.APPEAR_NONE && _timer != null) {
+            appeared(dc, bi, bs);
+            return;
+        }
         var f = _f2;
         var px = 2;
         var whr = dc.getTextWidthInPixels(_hr, f);
@@ -224,6 +244,22 @@ class PokefaceView extends WatchUi.WatchFace {
         x = CX - (16 + wdist) / 2;
         Icons.feet(dc, x + 5, 234, bi);
         Battle.text(dc, x + 16, 234, f, _dist, bi, bs, px, Graphics.TEXT_JUSTIFY_LEFT);
+    }
+
+    // "A wild LATIAS / appeared!" on the dialogue box's two rows, 2x where it fits, else 1x.
+    private function appeared(dc as Dc, ink as Number, shade as Number) as Void {
+        var rows = [(_appear == Partner.APPEAR_SHINY ? "A shiny " : "A wild ") + (Partner.NAMES[_species] as String),
+                    "appeared!"];
+        var ys = [210, 234];
+        for (var i = 0; i < 2; i++) {
+            var f = _f2;
+            var px = 2;
+            if (!Fit.fits(dc.getTextWidthInPixels(rows[i], f), ys[i] - 10, ys[i] + 9, 4)) {
+                f = _f1;
+                px = 1;
+            }
+            Battle.text(dc, CX, ys[i], f, rows[i], ink, shade, px, Graphics.TEXT_JUSTIFY_CENTER);
+        }
     }
 
     // A 1x piece of a small line at (x, y); returns where it ends.
@@ -259,7 +295,6 @@ class PokefaceView extends WatchUi.WatchFace {
         var now = Gregorian.info(Time.now(), Time.FORMAT_MEDIUM);
         var dow = Gregorian.info(Time.now(), Time.FORMAT_SHORT).day_of_week as Number;
         _day = Fmt.weekday(dow) + " " + now.day.toString();
-        _lv = now.day.toString();
         _batPct = System.getSystemStats().battery.toNumber();
         _bat = _batPct.toString() + "%";
         _notes = set.notificationCount.toString();
@@ -271,13 +306,32 @@ class PokefaceView extends WatchUi.WatchFace {
         _bbValue = bb;
         _bbFrac = bb != null ? (bb < 0 ? 0 : (bb > 100 ? 100 : bb)) / 100.0 : 0.0;
         _steps = Fmt.num(act.steps);
-        _dist = Fmt.dist(act.distance, set.distanceUnits == System.UNIT_METRIC);
-        _bar = Partner.barFraction(act.steps, act.stepGoal);
+        var metricDist = set.distanceUnits == System.UNIT_METRIC;
+        _dist = Fmt.dist(act.distance, metricDist);
 
         if (Time.today().value() != _runsDay) {
             readRuns();   // a new day: today's runs start over
         }
         decide(clock, act);
+        var ran = _runs[0] as Boolean;
+        _shiny = _earned && ran;
+        _lv = Runs.level(_runs[3] as Number).toString();
+        _bar = Runs.expFraction(_runs[3] as Number);
+        if (ran) {
+            _dist = Runs.card(_runs[1] as Number or Null, _runs[2] as Number or Null, metricDist);
+        }
+        _badge = Partner.badge(_batPct, _phone, _night, bb);
+        if (_woke) {   // the first refresh of a wake: does the reward get its line?
+            _woke = false;
+            var today = Time.today().value();
+            var stored = Application.Storage.getValue("appear") as Array or Null;
+            var shown = stored != null && stored.size() == 2 && stored[0] == today ? stored[1] as Number : 0;
+            var a = Partner.appear(shown, _earned, _shiny);
+            _appear = a[0] as Number;
+            if (a[1] != shown) {
+                Application.Storage.setValue("appear", [today, a[1]] as Application.PropertyValueType);
+            }
+        }
         var today = Time.today().value();
         var days = [] as Array<Number>;   // a fresh list: addAll would grow the cached ones every minute
         days.addAll(_runDays);
@@ -305,7 +359,7 @@ class PokefaceView extends WatchUi.WatchFace {
 
     // Today's Pokémon, its 128 px square's top-left at (-2, 64); frame 0 unless it's animating.
     private function drawPartner(dc as Dc) as Void {
-        _sprite.show(_species);
+        _sprite.show(_species, _shiny);
         _sprite.draw(dc, -2, 64, _timer != null ? _frame : 0);
     }
 
