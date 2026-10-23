@@ -1,8 +1,10 @@
 // Car mic recorder for the voice agent test (NOT the firmware): docs/superpowers/plans/
-// 2026-10-23-voice-agent-1-mic-test.md. Press BOOT once and it records the rest of the current
-// condition hands-free: per phrase a 3-2-1 countdown, a beep, 4 s of recording (into PSRAM), the
-// next phrase; it stops after the condition's 10th so music and windows can change. A screen tap
-// stops a run; when idle, tap the left half to go back one phrase (to redo it), the right to skip. The clips are served over WiFi as WAV for tools/micrec_pull.py or the phone:
+// 2026-10-23-voice-agent-1-mic-test.md. Hands-free from boot: after 5 s it records all 40 phrases
+// in order, per phrase a 3-2-1 countdown, a beep, 4 s of recording (into PSRAM), the next phrase,
+// with a 20 s break before conditions B, C and D to change the music and windows. A screen tap
+// pauses; while paused, tap the left third to go back a phrase (to redo it), the middle to
+// resume, the right to skip. The clips are served over WiFi as WAV for tools/micrec_pull.py or
+// the phone:
 //   http://cardeck.local/?k=<REMOTE_TOKEN>   (or the address on screen)
 // PSRAM only: the clips are lost at power-off, so pull them before turning the car off.
 //   pio run -e micrec_s3 -t upload --upload-port COM12
@@ -19,7 +21,6 @@
 #include "pins.h"
 #include "../util/black/micrec.h"
 
-static constexpr int PIN_BOOT = 0;   // the board's BOOT button, LOW while pressed
 static TFT_eSPI s_tft;
 static WebServer s_server(80);
 static int16_t* s_clips = nullptr;   // SLOTS x MAX_SAMPLES, PSRAM
@@ -28,6 +29,7 @@ static int s_len[micrec::SLOTS] = {};       // samples kept per slot, 0 = empty
 static uint8_t s_gainOf[micrec::SLOTS] = {};
 static int s_slot = 0;               // next slot to record; SLOTS = full
 static bool s_online = false;
+static bool s_paused = false;        // a tap pauses the run; the middle third resumes
 
 // The built-in fonts are ASCII: fold Portuguese accents for the screen (the web page keeps them).
 static String ascii(const char* s) {
@@ -63,13 +65,17 @@ static void drawScreen() {
         snprintf(pos, sizeof pos, "%d/10   %s", micrec::phraseOf(s_slot) + 1,
                  s_len[s_slot] ? "(regravar)" : "");
         s_tft.drawString(pos, 10, 130, 4);
-        s_tft.setTextColor(TFT_GREEN, TFT_BLACK);
-        snprintf(head, sizeof head, "BOOT: gravar a condicao %c", micrec::condition(s_slot));
-        s_tft.drawString(head, 10, 196, 2);
     }
     s_tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
-    s_tft.drawString("< voltar", 10, 176, 2);
-    s_tft.drawString("pular >", 260, 176, 2);
+    if (s_paused) {
+        s_tft.drawString("< voltar", 10, 176, 2);
+        if (s_slot < micrec::SLOTS) {
+            s_tft.drawString("continuar", 130, 176, 2);
+            s_tft.drawString("pular >", 260, 176, 2);
+        }
+    } else if (s_slot < micrec::SLOTS) {
+        s_tft.drawString("toque na tela para pausar", 10, 176, 2);
+    }
     String addr = s_online ? ("http://" + WiFi.localIP().toString() + "/?k=...") : String("sem WiFi");
     s_tft.drawString(addr, 10, 216, 2);
 }
@@ -88,6 +94,8 @@ static void drawCount(int n) {
     s_tft.setTextColor(TFT_CYAN, TFT_BLACK);
     s_tft.drawString(String(n), 150, 150, 7);
 }
+
+static void wifiLoop();
 
 static bool touched() {
     int x, y;
@@ -143,19 +151,60 @@ static bool runPhrase() {
     return true;
 }
 
-// A BOOT press records the rest of the current condition hands-free, then stops so the music and
-// the windows can be changed for the next one. A screen tap stops it.
-static void runSequence() {
-    const int end = micrec::runEnd(s_slot);
-    while (s_slot < end) {
-        if (!runPhrase()) {
-            Serial.println("[micrec] run stopped");
-            while (touched()) delay(10);   // don't let the stopping tap also step a slot
-            break;
-        }
+// A timed wait with a big countdown (the start, the breaks between conditions). False when a tap
+// paused it.
+static bool waitScreen(const String& title, const String& detail, int ms) {
+    s_tft.fillScreen(TFT_BLACK);
+    s_tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    s_tft.drawString(title, 10, 20, 4);
+    s_tft.drawString(detail, 10, 60, 2);
+    s_tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+    s_tft.drawString("toque na tela para pausar", 10, 216, 2);
+    int shown = -1;
+    for (const uint32_t t0 = millis(); millis() - t0 < (uint32_t)ms;) {
+        const int left = (int)((ms - (millis() - t0) + 999) / 1000);
+        if (left != shown) drawCount(shown = left);
+        if (touched()) return false;
+        wifiLoop();
         if (s_online) s_server.handleClient();
+        delay(10);
     }
+    return true;
+}
+
+static void pauseRun() {
+    s_paused = true;
+    Serial.println("[micrec] paused");
     drawScreen();
+    while (touched()) delay(10);   // the pausing tap doesn't also count as a choice
+}
+
+// One step of the hands-free run: the start or a break when due, then the next phrase.
+static void runStep() {
+    static bool started = false;
+    if (!started) {
+        started = true;
+        if (!waitScreen("Gravacao automatica", "comeca em instantes", micrec::START_MS)) {
+            pauseRun();
+            return;
+        }
+    } else if (micrec::breakBefore(s_slot) && s_len[s_slot - 1]) {
+        char title[32];
+        snprintf(title, sizeof title, "Pausa: condicao %c", micrec::condition(s_slot));
+        if (!waitScreen(title, ascii(micrec::conditionText(s_slot)), micrec::BREAK_MS)) {
+            pauseRun();
+            return;
+        }
+    }
+    if (!runPhrase()) {
+        pauseRun();
+        return;
+    }
+    if (s_slot >= micrec::SLOTS) {
+        Serial.println("[micrec] all 40 clips recorded");
+        s_paused = true;   // a redo then waits for "continuar" instead of starting by itself
+        drawScreen();
+    }
 }
 
 static bool keyOk() {
@@ -268,7 +317,6 @@ void setup() {
     delay(1500);
     Serial.println("\n[micrec] start");
     board::begin();
-    pinMode(PIN_BOOT, INPUT_PULLUP);
     s_tft.init();
     s_tft.invertDisplay(true);
     s_tft.setRotation(1);
@@ -296,19 +344,25 @@ void loop() {
     }
     wifiLoop();
     if (s_online) s_server.handleClient();
-    if (digitalRead(PIN_BOOT) == LOW && s_slot < micrec::SLOTS) {
-        delay(20);   // debounce
-        if (digitalRead(PIN_BOOT) == LOW) {
-            while (digitalRead(PIN_BOOT) == LOW) delay(10);   // start on the release
-            runSequence();
-        }
+    if (!s_paused && s_slot < micrec::SLOTS) {
+        runStep();
+        return;
     }
     static bool wasDown = false;
     int x, y;
     const bool down = touchft::read(&x, &y);
     if (down && !wasDown) {
-        if (x < 160 && s_slot > 0) s_slot--;
-        else if (x >= 160 && s_slot < micrec::SLOTS) s_slot++;
+        switch (micrec::tapAt(x)) {
+            case micrec::Tap::Back:
+                if (s_slot > 0) s_slot--;
+                break;
+            case micrec::Tap::Resume:
+                if (s_slot < micrec::SLOTS) s_paused = false;
+                break;
+            case micrec::Tap::Skip:
+                if (s_slot < micrec::SLOTS) s_slot++;
+                break;
+        }
         drawScreen();
     }
     wasDown = down;

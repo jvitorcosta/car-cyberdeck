@@ -81,6 +81,23 @@ void test_a_run_stops_at_the_end_of_its_condition() {
     TEST_ASSERT_EQUAL_INT(40, micrec::runEnd(40));   // full: nothing to run
 }
 
+void test_screen_thirds_are_back_resume_skip() {
+    TEST_ASSERT_EQUAL_INT((int)micrec::Tap::Back, (int)micrec::tapAt(0));
+    TEST_ASSERT_EQUAL_INT((int)micrec::Tap::Back, (int)micrec::tapAt(105));
+    TEST_ASSERT_EQUAL_INT((int)micrec::Tap::Resume, (int)micrec::tapAt(106));
+    TEST_ASSERT_EQUAL_INT((int)micrec::Tap::Resume, (int)micrec::tapAt(213));
+    TEST_ASSERT_EQUAL_INT((int)micrec::Tap::Skip, (int)micrec::tapAt(214));
+    TEST_ASSERT_EQUAL_INT((int)micrec::Tap::Skip, (int)micrec::tapAt(319));
+}
+
+void test_a_break_comes_before_every_condition_but_the_first() {
+    TEST_ASSERT_FALSE(micrec::breakBefore(0));
+    TEST_ASSERT_FALSE(micrec::breakBefore(5));
+    TEST_ASSERT_TRUE(micrec::breakBefore(10));
+    TEST_ASSERT_TRUE(micrec::breakBefore(30));
+    TEST_ASSERT_FALSE(micrec::breakBefore(40));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_slots_map_to_condition_and_phrase);
@@ -89,5 +106,7 @@ int main() {
     RUN_TEST(test_clip_names);
     RUN_TEST(test_a_phrase_counts_down_then_records_then_rests);
     RUN_TEST(test_a_run_stops_at_the_end_of_its_condition);
+    RUN_TEST(test_screen_thirds_are_back_resume_skip);
+    RUN_TEST(test_a_break_comes_before_every_condition_but_the_first);
     return UNITY_END();
 }

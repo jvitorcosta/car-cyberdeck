@@ -301,7 +301,7 @@ class Scoring(unittest.TestCase):
   transcripts with personal content beyond the ten phrases)
 
 - [ ] **Step 1: Owner records in the car** with the recorder flashed: conditions A–D in order, ten
-  phrases each: one BOOT press per condition records its ten phrases hands-free (3-2-1, beep, 4 s each); start a run only when it's safe (or a passenger presses it). Spotify volume for
+  phrases each: it starts by itself 5 s after power-on and runs all 40 hands-free (3-2-1, beep, 4 s each) with a 20 s break before B, C and D to change music and windows; power it on only when it's safe to talk (a screen tap pauses). Spotify volume for
   B/D set by hand on the phone.
 - [ ] **Step 2: Pull before turning the car off** — PC or laptop on the hotspot:
   `python tools/micrec_pull.py 172.20.10.10 <REMOTE_TOKEN>` (or `cardeck.local`). If no PC is in

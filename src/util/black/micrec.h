@@ -22,10 +22,16 @@ void wavHeader(uint8_t out[44], uint32_t dataBytes, uint32_t rate);
 int samplesToKeep(uint32_t heldMs);
 void clipName(int slot, char* out, size_t n);  // "A01".."D10"
 
-// Hands-free run: one BOOT press records the rest of the current condition, phrase by phrase:
-// a 3-2-1 countdown, a beep, MAX_MS of recording, a short rest, the next phrase.
+// Hands-free run from boot: phrase by phrase, a 3-2-1 countdown, a beep, MAX_MS of recording, a
+// short rest, the next phrase; BREAK_MS between conditions to change the music and windows.
 constexpr int COUNT_MS = 3000;
 constexpr int GAP_MS = 700;
+constexpr int START_MS = 5000;    // after boot, before the first phrase
+constexpr int BREAK_MS = 20000;   // before conditions B, C and D
+bool breakBefore(int slot);       // true at the first phrase of B, C and D
+// A screen tap while paused, by thirds of the 320-px width; any tap while running pauses.
+enum class Tap { Back, Resume, Skip };
+Tap tapAt(int x);
 enum class Phase { Countdown, Record, Gap, Done };
 struct Step {
     Phase phase;

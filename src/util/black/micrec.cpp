@@ -83,6 +83,14 @@ Step stepAt(uint32_t t) {
     return {Phase::Done, 0};
 }
 
+bool breakBefore(int slot) { return inRange(slot) && slot > 0 && slot % PHRASES == 0; }
+
+Tap tapAt(int x) {
+    if (x < 106) return Tap::Back;
+    if (x < 214) return Tap::Resume;
+    return Tap::Skip;
+}
+
 int runEnd(int slot) {
     if (slot >= SLOTS) return SLOTS;
     return (slot / PHRASES + 1) * PHRASES;
