@@ -378,11 +378,11 @@ static int text(const char* s, int x, int y, Face f, uint8_t datum) {
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
 static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night)); }
-// A real colour (a chip, the pressed yellow), dimmed with the palette at night.
 // A terminal message's colour: ALERT for a problem (a lost link, the wrong key), else TEXT.
 static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
 static uint16_t msgInk(const char* m) { return pal(isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
 
+// A real colour (a chip, the pressed yellow), dimmed with the palette at night.
 static uint16_t tint(uint32_t rgb) { return c565(termpal::tile(rgb, night)); }
 static constexpr uint32_t PRESSED = 0xFFFF00;  // under the finger, until release
 
