@@ -4,7 +4,7 @@ import Toybox.WatchUi;
 
 // The zone pages, all in the "filled" look (see Fill): BOTH shows inside (left) and outside
 // (right) as two columns filled up to their brightness; INSIDE and OUTSIDE fill the whole face.
-// A fourth page lists the deck's 4 favourites. A controller that isn't linked says "Not connected".
+// A fourth page lists the deck's named presets. A controller that isn't linked says "Not connected".
 // Page dots on the right; the status shows while something is being sent or failed.
 class ZonesView extends WatchUi.View {
     var page as Number = BOTH;  // opens on BOTH: every zone is one press away from it
@@ -39,8 +39,8 @@ class ZonesView extends WatchUi.View {
             pill(dc, cx, 40, "BOTH", Graphics.COLOR_WHITE);
             pill(dc, cx, h - 32, busy ? _deck.status : note.length() > 0 ? note : "START: change",
                  busy || note.length() > 0 ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
-        } else if (page == FAVS) {
-            favourites(dc, cx, h);
+        } else if (page == PRESETS) {
+            presets(dc, cx, h);
         } else {
             // one zone: its colour filled up from the bottom to its brightness
             var l = _deck.look(page);
@@ -52,7 +52,7 @@ class ZonesView extends WatchUi.View {
                       busy ? _deck.status : gone ? "Not connected" : "START: change", busy || gone);
         }
 
-        // page dots on the right: BOTH, INSIDE, OUTSIDE, FAVOURITES from top to bottom
+        // page dots on the right: BOTH, INSIDE, OUTSIDE, PRESETS from top to bottom
         // (black-rimmed, so they read on a coloured half too)
         for (var i = 0; i < 4; i++) {
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
@@ -62,23 +62,29 @@ class ZonesView extends WatchUi.View {
         }
     }
 
-    // The Favourites page: FAVOURITES on top, a row per slot (F1 and its two dots, or "F3 --"
-    // when empty), and the hint or status at the bottom.
-    private function favourites(dc as Dc, cx as Number, h as Number) as Void {
-        pill(dc, cx, 40, "FAVOURITES", Graphics.COLOR_WHITE);
-        for (var i = 0; i < 4; i++) {
+    // The Presets page: PRESETS on top, a row per preset (its name and its two dots), and the hint
+    // or status at the bottom. "No presets yet" when /presets hasn't answered.
+    private function presets(dc as Dc, cx as Number, h as Number) as Void {
+        pill(dc, cx, 40, "PRESETS", Graphics.COLOR_WHITE);
+        var list = _deck.presets;
+        if (list.size() == 0) {
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, cx, Graphics.FONT_SMALL, "No presets yet",
+                        Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
+        for (var i = 0; i < list.size() && i < 4; i++) {
             var y = 82 + i * 32;
-            var fav = _deck.favs[i];
-            dc.setColor(fav != null ? Graphics.COLOR_WHITE : Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx - 62, y, Graphics.FONT_SMALL, "F" + (i + 1) + (fav != null ? "" : " --"),
+            var p = list[i] as Array;
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx - 62, y, Graphics.FONT_SMALL, p[0] as String,
                         Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
-            if (fav != null) {
-                new FavDots(fav as Array).paint(dc, cx + 18, cx + 54, y, 11);
-            }
+            new FavDots(p.slice(1, null)).paint(dc, cx + 36, cx + 66, y, 11);
         }
         var busy = _deck.status.length() > 0;
-        pill(dc, cx, h - 32, busy ? _deck.status : "START: apply",
-             busy ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
+        if (busy || list.size() > 0) {
+            pill(dc, cx, h - 32, busy ? _deck.status : "START: apply",
+                 busy ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
+        }
     }
 
     // Text on a black rounded pill centred on (x, y).

@@ -2,9 +2,9 @@ import Toybox.Lang;
 import Toybox.WatchUi;
 
 // The zone pages' buttons:
-//   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE -> FAVOURITES
-//   START:     that zone's list (colours, Brightness >, Off); on FAVOURITES the list of saved
-//              favourites to apply                                  BACK: leave
+//   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE -> PRESETS
+//   START:     that zone's list (colours, Brightness >, Off); on PRESETS the list of the deck's
+//              presets to apply                                  BACK: leave
 class ZonesDelegate extends WatchUi.BehaviorDelegate {
     private var _deck as Deck;
     private var _view as ZonesView;
@@ -29,8 +29,8 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
 
     function onSelect() as Boolean {
         var zone = _view.page;
-        if (zone == FAVS) {
-            return favourites();
+        if (zone == PRESETS) {
+            return presets();
         }
         var menu = new WatchUi.Menu2({:title => ["Both", "Inside", "Outside"][zone] as String});
         for (var i = 0; i < COLORS.size(); i++) {
@@ -45,37 +45,32 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
-    // The Favourites list: an item per saved slot (label F1, "Pink 50 / Pink 100", the two dots);
-    // a single "None saved" when the deck has none.
-    private function favourites() as Boolean {
-        var menu = new WatchUi.Menu2({:title => "Favourites"});
-        var any = false;
-        for (var i = 0; i < 4; i++) {
-            var f = _deck.favs[i];
-            if (f != null) {
-                var fav = f as Array;
-                menu.addItem(new WatchUi.IconMenuItem("F" + (i + 1),
-                    say(fav[0] as Number, fav[1] as Number, fav[2] as Boolean) + " / "
-                    + say(fav[3] as Number, fav[4] as Number, fav[5] as Boolean),
-                    i + 1, new FavDots(fav), {}));
-                any = true;
-            }
+    // The Presets list: an item per preset (its name, "Pink 40 / Pink 100", the two dots). Nothing
+    // opens while the deck hasn't sent any.
+    private function presets() as Boolean {
+        if (_deck.presets.size() == 0) {
+            return true;
         }
-        if (!any) {
-            menu.addItem(new WatchUi.MenuItem("None saved", null, :none, {}));
+        var menu = new WatchUi.Menu2({:title => "Presets"});
+        for (var i = 0; i < _deck.presets.size(); i++) {
+            var p = _deck.presets[i] as Array;
+            menu.addItem(new WatchUi.IconMenuItem(p[0] as String,
+                say(p[1] as Number, p[2] as Number, p[3] as Boolean) + " / "
+                + say(p[4] as Number, p[5] as Number, p[6] as Boolean),
+                i + 1, new FavDots(p.slice(1, null)), {}));
         }
-        WatchUi.pushView(menu, new FavMenuDelegate(_deck), WatchUi.SLIDE_LEFT);
+        WatchUi.pushView(menu, new PresetMenuDelegate(_deck), WatchUi.SLIDE_LEFT);
         return true;
     }
 
-    // "Pink 50" or "Off" for one light of a favourite.
+    // "Pink 40" or "Off" for one light of a preset.
     private function say(color as Number, pct as Number, lit as Boolean) as String {
         return lit ? ((COLORS[color] as Array)[0] as String) + " " + pct : "Off";
     }
 }
 
-// The Favourites list: a favourite is applied on the deck and the list returns to the pages.
-class FavMenuDelegate extends WatchUi.Menu2InputDelegate {
+// The Presets list: a preset is applied on the deck and the list returns to the pages.
+class PresetMenuDelegate extends WatchUi.Menu2InputDelegate {
     private var _deck as Deck;
 
     function initialize(deck as Deck) {
@@ -85,8 +80,8 @@ class FavMenuDelegate extends WatchUi.Menu2InputDelegate {
 
     function onSelect(item as WatchUi.MenuItem) as Void {
         var id = item.getId();
-        if (id instanceof Number) {  // "None saved" has a symbol id and does nothing
-            _deck.applyFav(id);
+        if (id instanceof Number) {  // the preset's number on the deck
+            _deck.applyPreset(id);
             WatchUi.popView(WatchUi.SLIDE_RIGHT);
         }
     }

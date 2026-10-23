@@ -16,9 +16,9 @@ const COLORS = [
 // Zones, as the deck names them. BOTH changes both lights; its reply describes both.
 enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
 
-// The Favourites page, and the marker on a job that isn't about one zone (/favs, /status, and the
-// /say that applies a favourite: no zone param, and its reply must not be read as a look).
-const FAVS = 3;
+// The Presets page, and the marker on a job that isn't about one zone (/presets, /status, and the
+// /say that applies a preset: no zone param, and its reply must not be read as a look).
+const PRESETS = 3;
 
 // One light's look as the watch knows it.
 class Look {
@@ -34,9 +34,10 @@ class Deck {
     var inside as Look = new Look();
     var outside as Look = new Look();
     var status as String = "";  // "Sending...", "No answer", ...; "" when all is well
-    // The deck's 4 favourites: null (empty slot) or [inColor, inPct, inLit, outColor, outPct, outLit],
-    // the colours as indices into COLORS (found by word: the deck's order differs).
-    var favs as Array = [null, null, null, null];
+    // The deck's fixed presets, in its order: [name, inColor, inPct, inLit, outColor, outPct, outLit],
+    // the colours as indices into COLORS (found by word: the deck's order differs). Empty until
+    // /presets answers (and if it never does).
+    var presets as Array = [];
     // Each controller's link, [inside, outside]: "on" | "off" | "nolink", "" until the deck answers.
     var links as Array<String> = ["", ""];
 
@@ -50,22 +51,22 @@ class Deck {
         push(["/say", text, zone]);
     }
 
-    // Reads both lights, the favourites and the links (when the app opens).
+    // Reads both lights, the presets and the links (when the app opens).
     function sync() as Void {
         syncLooks();
-        push(["/favs", null, FAVS]);
-        push(["/status", null, FAVS]);
+        push(["/presets", null, PRESETS]);
+        push(["/status", null, PRESETS]);
     }
 
-    // Reads both lights only (after a favourite is applied: favs and links haven't changed).
+    // Reads both lights only (after a preset is applied: the presets and links haven't changed).
     function syncLooks() as Void {
         push(["/state", null, INSIDE]);
         push(["/state", null, OUTSIDE]);
     }
 
-    // Applies favourite n (1..4) on the deck. The reply isn't a look; onReply re-syncs instead.
-    function applyFav(n as Number) as Void {
-        push(["/say", "favourite " + n, FAVS]);
+    // Applies preset n (its number on the deck) via /say. The reply isn't a look; onReply re-syncs instead.
+    function applyPreset(n as Number) as Void {
+        push(["/say", "preset " + n, PRESETS]);
     }
 
     function look(zone as Number) as Look {
@@ -114,12 +115,12 @@ class Deck {
         if (code == 200 && data != null) {
             status = "";
             var text = data.toString();
-            if (_path.equals("/favs")) {
-                readFavs(text);
+            if (_path.equals("/presets")) {
+                readPresets(text);
             } else if (_path.equals("/status")) {
                 links = [linkOf(text, "inside="), linkOf(text, "outside=")];
-            } else if (_zone == FAVS) {
-                syncLooks();  // a favourite was applied: read the lights it set
+            } else if (_zone == PRESETS) {
+                syncLooks();  // a preset was applied: read the lights it set
             } else if (_zone == BOTH) {
                 absorb(text, inside);
                 absorb(text, outside);
@@ -127,7 +128,7 @@ class Deck {
                 absorb(text, look(_zone));
             }
             // for the glance: the last state the deck reported, [colour, pct, lit] per light
-            if (!_path.equals("/favs") && !_path.equals("/status")) {
+            if (!_path.equals("/presets") && !_path.equals("/status")) {
                 Application.Storage.setValue("in", [inside.color, inside.pct, inside.lit]);
                 Application.Storage.setValue("out", [outside.color, outside.pct, outside.lit]);
             }
@@ -149,20 +150,24 @@ class Deck {
         next();
     }
 
-    // "1 pink 50 pink 100" / "2 off 0 blue 80" / "3 -" per line, to favs (slot n at index n - 1).
-    private function readFavs(text as String) as Void {
-        var out = [null, null, null, null] as Array;
-        var lines = split(text, "\n");
+    // "1 ROSE pink 40 pink 100" / "4 PURPURA off 0 purple 100" per line, to presets in the deck's
+    // order. The number isn't kept: the menu sends the preset's position, which is the same.
+    private function readPresets(text as String) as Void {
+        var out = [] as Array;
+        var lines = split(text, "
+");
         for (var i = 0; i < lines.size(); i++) {
             var t = split(lines[i], " ");
             var n = t.size() > 0 ? t[0].toNumber() : null;
-            if (n == null || n < 1 || n > 4 || t.size() < 5) {
-                continue;  // "3 -" (empty) or noise
+            var inPct = t.size() >= 6 ? t[3].toNumber() : null;
+            var outPct = t.size() >= 6 ? t[5].toNumber() : null;
+            if (n == null || inPct == null || outPct == null) {
+                continue;  // noise or a trailing blank line
             }
-            out[n - 1] = [colorOf(t[1]), t[2].toNumber(), !t[1].equals("off"),
-                          colorOf(t[3]), t[4].toNumber(), !t[3].equals("off")];
+            out.add([t[1], colorOf(t[2]), inPct, !t[2].equals("off"),
+                     colorOf(t[4]), outPct, !t[4].equals("off")]);
         }
-        favs = out;
+        presets = out;
     }
 
     // The COLORS index for a colour word (0 for "off" or anything unknown: the light isn't lit then).

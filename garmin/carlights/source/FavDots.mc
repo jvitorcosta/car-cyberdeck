@@ -2,11 +2,11 @@ import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.WatchUi;
 
-// A favourite's two lights as two dots side by side, inside then outside, each in its colour (dark
-// grey when that light is off). The icon of a Favourites list item; the page draws the same dots
+// A preset's two lights as two dots side by side, inside then outside, each in its colour (dark
+// grey when that light is off). The icon of a Presets list item; the page draws the same dots
 // per row through paint().
 class FavDots extends WatchUi.Drawable {
-    private var _fav as Array;  // [inColor, inPct, inLit, outColor, outPct, outLit], as in Deck.favs
+    private var _fav as Array;  // [inColor, inPct, inLit, outColor, outPct, outLit], a Deck.presets entry without its name
 
     function initialize(fav as Array) {
         Drawable.initialize({});
