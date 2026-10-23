@@ -7,14 +7,6 @@ using lightstatus::State;
 void setUp() {}
 void tearDown() {}
 
-static ledlook::Look look(int swatch, uint8_t pct, bool lit) {
-    ledlook::Look l;
-    l.swatch = swatch;
-    l.pct = pct;
-    l.lit = lit;
-    return l;
-}
-
 void test_no_link_never_on() {
     TEST_ASSERT_EQUAL_INT((int)State::NoLink, (int)lightstatus::of(false, true));
     TEST_ASSERT_EQUAL_INT((int)State::NoLink, (int)lightstatus::of(false, false));
@@ -28,29 +20,23 @@ void test_words() {
     TEST_ASSERT_EQUAL_STRING("on", lightstatus::word(State::On));
 }
 
-void test_line() {
-    const ledlook::Look pink50 = look(2, 50, true);
-    const ledlook::Look pink100 = look(2, 100, true);
-    char buf[64];
-
-    lightstatus::line(pink50, true, pink100, true, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("IN ON 50%  OUT ON 100%  LINK 2/2", buf);
-
-    lightstatus::line(pink50, true, pink100, false, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("IN ON 50%  OUT --  LINK 1/2", buf);
-
-    lightstatus::line(look(2, 50, false), true, pink100, false, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("IN OFF  OUT --  LINK 1/2", buf);
-
-    lightstatus::line(pink50, false, pink100, false, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("IN --  OUT --  LINK 0/2", buf);
+// The Lights page's status line: just the link state; a light down is named, in ALERT.
+void test_link() {
+    char buf[24];
+    TEST_ASSERT_FALSE(lightstatus::link(true, true, buf, sizeof buf));
+    TEST_ASSERT_EQUAL_STRING("LINK 2/2", buf);
+    TEST_ASSERT_TRUE(lightstatus::link(true, false, buf, sizeof buf));
+    TEST_ASSERT_EQUAL_STRING("OUTSIDE: NO LINK", buf);
+    TEST_ASSERT_TRUE(lightstatus::link(false, true, buf, sizeof buf));
+    TEST_ASSERT_EQUAL_STRING("INSIDE: NO LINK", buf);
+    TEST_ASSERT_TRUE(lightstatus::link(false, false, buf, sizeof buf));
+    TEST_ASSERT_EQUAL_STRING("NO LINK", buf);
 }
 
-void test_line_cut_to_buffer() {
+void test_link_cut_to_buffer() {
     char buf[8];
-    const ledlook::Look l = look(2, 50, true);
-    lightstatus::line(l, true, l, true, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_UINT(7, strlen(buf));
+    TEST_ASSERT_TRUE(lightstatus::link(true, false, buf, sizeof buf));
+    TEST_ASSERT_EQUAL_STRING("OUTSIDE", buf);
 }
 
 void test_reply() {
@@ -88,8 +74,8 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_link_never_on);
     RUN_TEST(test_words);
-    RUN_TEST(test_line);
-    RUN_TEST(test_line_cut_to_buffer);
+    RUN_TEST(test_link);
+    RUN_TEST(test_link_cut_to_buffer);
     RUN_TEST(test_reply);
     RUN_TEST(test_messages);
     RUN_TEST(test_is_alert);

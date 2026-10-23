@@ -14,9 +14,14 @@ constexpr int ROW_TEXT_X = 8;
 constexpr const char* LIVE_TAG = "LIVE";
 constexpr int LIVE_PAD = 3, LIVE_RIGHT = 6;
 
-// A Lights colour button (75x44): the chip left, as tall as before but 20 wide (was 28 square) so the
-// name (SMALL) fits right of it.
-constexpr int TILE_CHIP_X = 5, TILE_CHIP_W = 20, TILE_CHIP_H = 28, TILE_TEXT_X = 29;
+// A Lights colour button (75x44): the chip left, 16x28, so the name fits right of it in BODY, the
+// preset names' face ("ORANGE", "PURPLE", "YELLOW" are the widest).
+constexpr int TILE_CHIP_X = 4, TILE_CHIP_W = 16, TILE_CHIP_H = 28, TILE_TEXT_X = 24;
+
+// A Lights preset (75x36): the name (BODY, caps top PRESET_NAME_Y) centred over two PRESET_CHIP px
+// square chips (inside, outside) PRESET_CHIP_GAP apart, their top PRESET_CHIP_Y; all from the rect's
+// top / centre.
+constexpr int PRESET_NAME_Y = 4, PRESET_CHIP = 12, PRESET_CHIP_GAP = 6, PRESET_CHIP_Y = 20;
 
 // The Lights status line (SMALL, in deckmenu::STATUS).
 constexpr int STATUS_TEXT_X = 4;

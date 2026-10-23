@@ -49,18 +49,23 @@ the panel would turn teal.
     Karaoke page only.
 - There is no Weather page any more: its data is on the main screen. The presets are on the Lights
   page only (and voice, the watch, `/presets`).
-- **Lights**: `< BACK` returns to the main screen. Then Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE,
-  the status line, the 2x4 colour boxes (the chosen one shows a big colour chip), the presets, and
-  a 10-cell level bar with `-` / `+` (its label is the %, `MIX` or `OFF`). Tap a tile to set the
-  colour and turn on; double-tap the lit one to turn off.
+- **Lights**: `< BACK` (the same boxed button as on Karaoke) returns to the main screen. Then
+  Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE, the status line, the 2x4 colour boxes (a colour
+  chip and the name; the chosen one is the inverted box), the presets (the name over two colour
+  chips, inside and outside), and a 10-cell level bar with `-` / `+` (its label is the %, `MIX` or
+  `OFF`). Colour and preset names share one size. Tap a tile to set the colour and turn on;
+  double-tap the lit one to turn off. The Karaoke page's song row is in capitals like the rest of
+  the chrome; the lyrics keep their case.
 - **BOTH while the lights differ** (after a preset like ROSE, whose lights differ, or after the
   INSIDE / OUTSIDE pages): no tile is ringed and the level box says `MIX`. On/off (Y,
   voice "off", the watch's Off) and `-` / `+` (LB / RB, "brighter" / "dimmer") act on each light's
   own look, so each keeps its colour and level; a spoken level ("50%") sets both to that level and
   keeps each colour. A colour (a tile, or spoken) sets both lights to it, as usual.
-- **Status line**: `IN ON 50%  OUT --  LINK 1/2`. Per light: `ON 50%`, `OFF`, or `--` (no link);
-  `LINK n/2` counts the linked lights. `ON` is what the deck last sent while connected, not a
-  reading from the controller (the LED controllers can't be read back).
+- **Status line**: just the link state. `LINK 2/2` while the deck holds both lights; when one is
+  down, in red, `OUTSIDE: NO LINK` or `INSIDE: NO LINK`, or `NO LINK` for both. Each light's colour
+  and level are on the main screen (on Lights: the tiles and the level bar of its page). What the
+  deck shows as on is what it last sent while connected, not a reading from the controller (the
+  LED controllers can't be read back).
 - **Messages**: a terminal line shows on the main screen's message line (on Lights: in place of the
   status line) for 2.5 s when something happens: `>ROSE APPLIED` (a preset, from any source),
   `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's link changed), why KARAOKE won't open; the
@@ -94,7 +99,7 @@ on the deck and there is no hold-to-save. Each sets **both** lights, both on:
   START there lists them by name; pick one to apply it. "No presets yet" shows if `/presets` didn't
   answer.
 - Presets with different looks inside and outside make the BOTH page show `MIX` (see "BOTH while
-  the lights differ" above) and the status line shows each light.
+  the lights differ" above); the main screen shows each light's colour and level.
 
 ## Night mode
 

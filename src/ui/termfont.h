@@ -23,10 +23,9 @@ struct Font {                   // = GFXfont
 };
 
 // SMALL 17 px: the boot lines, the dashboard's header, date, weather words, HI / LO, LIGHTS label and
-// strip (trip, messages), the KARAOKE item's LIVE tag, small labels (the Lights colour names, the
-// Lights status line);
-// BODY 19 px: buttons and the Menu items, tabs, < BACK, INSIDE / OUTSIDE, the Lights preset names,
-// the KARAOKE song row, the next lyric; TITLE 24 px: the lights band's colour names and levels, the
+// strip (trip, messages), the KARAOKE item's LIVE tag, the Lights status line;
+// BODY 19 px: buttons and the Menu items, tabs, < BACK, INSIDE / OUTSIDE, the Lights colour and
+// preset names, the KARAOKE song row, the next lyric; TITLE 24 px: the lights band's colour names and levels, the
 // Lights level %, [-] / [+]; BIG 36 px: the clock, the temperature, the lyric line.
 // VT323 is drawn on a pixel grid and breaks up below 17 px. At 24 and 36 px every stroke is an even
 // 2 / 3 px; 17 and 19 px are off its grid and keep some uneven stems (a 1 px stem next to a 2 px

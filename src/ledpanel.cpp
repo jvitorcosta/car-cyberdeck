@@ -11,9 +11,9 @@
 //           ending in a blinking block cursor, and under it the message line (empty but for a
 //           message). The song itself is on the Karaoke screen only
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
-//           together; INSIDE and OUTSIDE each keep their own look), the status line ("IN ON 50%
-//           OUT --  LINK 1/2"), 2x4 colour buttons (tap one to set it and turn on, double-tap the
-//           lit one to turn the lights off), the four presets (tap: apply),
+//           together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK 2/2",
+//           or "OUTSIDE: NO LINK" in ALERT), 2x4 colour buttons (tap one to set it and turn on,
+//           double-tap the lit one to turn the lights off), the four presets (tap: apply),
 //           and  [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two
 //           lights differ]  [+]
 //   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
@@ -461,20 +461,23 @@ static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
     if (onBar) tft.drawRect(x - 1, y - 1, w + 2, h + 2, pal(termpal::BG));
 }
 
-// A Lights preset block (75x36): the name (BODY: TITLE's "PURPURA" is too wide for the slot) over
-// two small chips (inside, outside); yellow when pressed. The Xbox focus is the ring around it.
+// A Lights preset block (75x36): the name (BODY, the colour names' face too: TITLE's "PURPURA" is too
+// wide for the slot) over two chips big enough to tell apart at a glance (inside, outside); yellow
+// when pressed. The Xbox focus is the ring around it.
 static void drawPresetSlot(const Rect& r, int slot, bool pressed) {
     const ledpresets::Preset& p = ledpresets::PRESETS[slot];
     const uint16_t ink = drawBox(r, pressed, false, 1, pal(termpal::TEXT));
     const Look* sides[] = {&p.in, &p.out};
     tft.setTextColor(ink);
-    const int cx = r.x + r.w / 2;
-    text(p.name, cx, r.y + 4, Face::BODY, TC_DATUM);
-    for (int k = 0; k < 2; k++) drawChip(cx - 11 + k * 14, r.y + r.h - 12, 8, 8, *sides[k], pressed);
+    const int cx = r.x + r.w / 2, x0 = cx - (2 * PRESET_CHIP + PRESET_CHIP_GAP) / 2;
+    text(p.name, cx, r.y + PRESET_NAME_Y, Face::BODY, TC_DATUM);
+    for (int k = 0; k < 2; k++) {
+        drawChip(x0 + k * (PRESET_CHIP + PRESET_CHIP_GAP), r.y + PRESET_CHIP_Y, PRESET_CHIP, PRESET_CHIP, *sides[k], pressed);
+    }
 }
 
 // A colour button: a box with a MID border, a tall chip of the colour (left, centred) and its name
-// (SMALL: "ORANGE" is 41 px, what the 75 px button has right of the chip).
+// (BODY, the preset names' face: "YELLOW" is 47 px, what the 75 px button has right of the chip).
 // The lit colour is the inverted bar, chip kept; the Xbox focus is a separate ring around it.
 static void drawTile(const Rect& r, int swatch, bool pressed) {
     const Swatch& s = SWATCHES[swatch];
@@ -486,7 +489,7 @@ static void drawTile(const Rect& r, int swatch, bool pressed) {
     char name[12];
     upper(s.name, name, sizeof(name));
     tft.setTextColor(ink);
-    text(name, r.x + TILE_TEXT_X, r.y + r.h / 2, Face::SMALL, ML_DATUM);
+    text(name, r.x + TILE_TEXT_X, r.y + r.h / 2, Face::BODY, ML_DATUM);
 }
 
 // Lights' zone tabs are Pip-Boy tabs: a TEXT rule under the tab row, the current tab a TEXT bar
@@ -550,7 +553,7 @@ static void drawButton(int id, bool pressed = false) {
 
 // The block bar: 10 cells, one filled per 10 % (the terminal's full block), the rest outlined (its
 // shade block; the font's ASCII table has neither glyph), and the % under it (TITLE). "MIX" on BOTH
-// while the lights differ (the STATUS line above has each light's %), "OFF" in DIM when off.
+// while the lights differ (the main screen's lights band has each light's %), "OFF" in DIM when off.
 static void drawLevel() {
     const Rect& r = deckmenu::LEVEL;
     const Look& l = cur();
@@ -571,10 +574,10 @@ static void drawLevel() {
     text(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, Face::TITLE, MC_DATUM);
 }
 
-// A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS line,
-// or on the Menu's message line, for MESSAGE_MS since messageAt; loop() then puts the usual line back. A
-// newer message replaces it, and so does a screen change (show() drops it), so none outlives its
-// screen. Only loop() touches it (and setup(), before loop() starts).
+// A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS
+// line, or on the Menu's message line, for MESSAGE_MS since messageAt; loop() then puts the usual
+// line back. A newer message replaces it, and so does a screen change (show() drops it), so none
+// outlives its screen. Only loop() touches it (and setup(), before loop() starts).
 static constexpr uint32_t MESSAGE_MS = 2500;
 static constexpr uint32_t LAST_TRIP_MS = 6000;  // the boot's ">LAST TRIP ..." is worth longer to read
 static char message[32] = "";  // "" when none
@@ -588,18 +591,19 @@ static void setMessage(const char* m, uint32_t ms = MESSAGE_MS) {
     messageMs = ms;
 }
 
-// Lights: the line under the tabs, "IN ON 50%  OUT --  LINK 1/2", or the message. SMALL, sat on the
-// rect's bottom: STATUS has 12 rows (40..51) between the tab rule (39) and the colours, and SMALL's
-// "/" is 12 rows tall (BODY's would need 15), so the line fills them with no margin: "/" starts the
-// row under the rule. Rows 52-53 can't give it room, as a top-row colour's focus ring is drawn there.
-// The clear (the rect) covers all its ink: the line and the messages are capitals, digits and
-// "% / : - >", none below the baseline (test_termfont checks).
+// Lights: the line under the tabs, just the link state ("LINK 2/2" in TEXT; "OUTSIDE: NO LINK",
+// "INSIDE: NO LINK" or "NO LINK" in ALERT), or the message. SMALL, sat on the rect's bottom: STATUS
+// has 12 rows (40..51) between the tab rule (39) and the colours, and SMALL's "/" is 12 rows tall
+// (BODY's would need 15), so the line fills them with no margin: "/" starts the row under the rule.
+// Rows 52-53 can't give it room, as a top-row colour's focus ring is drawn there. The clear (the
+// rect) covers all its ink: the line and the messages are capitals, digits and "% / : - >", none
+// below the baseline (test_termfont checks).
 static void drawStatus() {
     const Rect& r = deckmenu::STATUS;
-    char line[48];
-    lightstatus::line(looks[INSIDE], linkUp(controllers[0]), looks[OUTSIDE], linkUp(controllers[1]), line, sizeof(line));
+    char line[24];
+    const bool down = lightstatus::link(linkUp(controllers[0]), linkUp(controllers[1]), line, sizeof(line));
     clearBg(r);
-    tft.setTextColor(message[0] ? msgInk(message) : pal(termpal::TEXT));
+    tft.setTextColor(message[0] ? msgInk(message) : pal(down ? termpal::ALERT : termpal::TEXT));
     text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
 }
 
@@ -825,7 +829,7 @@ static void drawZones() {
     for (int id = L_ZONE0; id < L_TILE0; id++) drawButton(id);
 }
 
-// What shows the lights' state on the current screen: Lights' STATUS line (the message too), the
+// What shows the lights' links on the current screen: Lights' STATUS line (the message too), the
 // Menu's lights band.
 static void drawLightState() {
     if (screen == Screen::Lights) drawStatus();
@@ -839,13 +843,15 @@ static void drawMessage() {
     else if (screen == Screen::Menu) drawMessageLine();
 }
 
-// After a look changed (a tap, voice, the watch, Y): everything that shows it.
+// After a look changed (a tap, voice, the watch, Y): everything that shows it (Lights' STATUS line
+// shows only the links).
 static void drawLooks() {
     if (screen == Screen::Lights) {
         drawGrid();
         drawLevel();
+    } else if (screen == Screen::Menu) {
+        drawLightsBand();
     }
-    drawLightState();
 }
 
 // Lights and Karaoke (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
@@ -866,15 +872,16 @@ static void drawFocus(int id, bool on) {
 }
 
 // ---- Karaoke screen: the black deck's song, its synced lyrics big ----
-// The top row: < BACK and right of it the song as "TITLE - ARTIST" (BODY, MID). The body
+// The top row: < BACK (the same boxed button as Lights') and right of it the song as
+// "TITLE - ARTIST" (BODY, MID, in capitals like the rest of the chrome). The body
 // (deckmenu::KARAOKE_BODY): the lyric line due now big (BIG, TEXT, centred, word-wrapped over up
 // to 3 lines, ".." on the 3rd; a line too long for that in TITLE over up to 4), the next line under
-// it (BODY, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). Texts
-// keep their case (lyrics read better than caps) and are accent-folded (the font is ASCII only).
-// Without a song to sing along the big text is the state word in DIM (>NO SYNCED LYRICS, >STANDBY,
-// >NO SIGNAL; >WRONG KEY, a problem, in ALERT) and the screen stays. The line switches at its start time: karaoke
-// interpolates the position between polls and lyricsTick looks every KARAOKE_TICK_MS. Each part is
-// redrawn only when what it shows changed.
+// it (BODY, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). The
+// lyrics keep their case (they read better than caps); all texts are accent-folded (the font is
+// ASCII only). Without a song to sing along the big text is the state word in DIM (>NO SYNCED
+// LYRICS, >STANDBY, >NO SIGNAL; >WRONG KEY, a problem, in ALERT) and the screen stays. The line
+// switches at its start time: karaoke interpolates the position between polls and lyricsTick looks
+// every KARAOKE_TICK_MS. Each part is redrawn only when what it shows changed.
 static constexpr uint32_t KARAOKE_TICK_MS = 50;
 // The areas' sizes and pitches are termlayout's (test_termfont checks each face's lines fit them).
 static constexpr int KARAOKE_X = 4, KARAOKE_CX = 160;
@@ -946,6 +953,7 @@ static void drawKaraokeBody(bool all) {
         static char folded[sizeof(songText)];
         static karaoke::Line fit[1];
         txt::asciiFold(songText, folded, sizeof(folded));
+        upper(folded, folded, sizeof(folded));
         const int n = karaoke::wrap(folded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_SONG_W, 1, fit);
         clearBg(KARAOKE_SONG_X, 2, KARAOKE_SONG_W, 36);
         tft.setTextColor(pal(termpal::MID));
@@ -1238,7 +1246,8 @@ static void tripTick() {
 
 // Preset slot0 (0..3) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
-// shows "MIX", and the Lights page's STATUS line tells the truth. From a tap, A, voice or the watch.
+// shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
+// the watch.
 static void applyPreset(int slot0) {
     const ledpresets::Preset& p = ledpresets::PRESETS[slot0];
     looks[INSIDE] = p.in;
@@ -1249,8 +1258,8 @@ static void applyPreset(int slot0) {
     char m[sizeof(message)];
     lightstatus::applied(p.name, m, sizeof(m));
     setMessage(m);
-    drawLooks();  // on Lights its STATUS line shows the message too
-    if (screen == Screen::Menu) drawMessage();
+    drawLooks();
+    drawMessage();  // Lights' STATUS line, the Menu's message line
 }
 
 // A press is averaged over its first SETTLE_MS (a fingertip's first readings jump around) and acts
@@ -1325,7 +1334,6 @@ static void pressLights(int id) {
         change(target, c);
         if (bothMixed() != wasMixed) drawGrid();  // a step can bring mixed lights to one look
         drawLevel();
-        drawStatus();
     }
     save();
 }

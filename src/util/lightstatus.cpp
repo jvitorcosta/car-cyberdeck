@@ -25,20 +25,12 @@ const char* word(State s) {
     return "nolink";
 }
 
-// One light's part of the line: what the strip is doing, or "--" when the deck can't reach it.
-static void part(const ledlook::Look& l, bool up, char* out, size_t n) {
-    switch (of(up, l.lit)) {
-    case State::On:     snprintf(out, n, "ON %d%%", (int)l.pct); break;
-    case State::Off:    snprintf(out, n, "OFF"); break;
-    case State::NoLink: snprintf(out, n, "--"); break;
-    }
-}
-
-void line(const ledlook::Look& in, bool inUp, const ledlook::Look& out, bool outUp, char* buf, size_t n) {
-    char inPart[16], outPart[16];
-    part(in, inUp, inPart, sizeof inPart);
-    part(out, outUp, outPart, sizeof outPart);
-    snprintf(buf, n, "IN %s  OUT %s  LINK %d/2", inPart, outPart, (int)inUp + (int)outUp);
+bool link(bool inUp, bool outUp, char* buf, size_t n) {
+    if (inUp && outUp) snprintf(buf, n, "LINK 2/2");
+    else if (inUp) snprintf(buf, n, "OUTSIDE: NO LINK");
+    else if (outUp) snprintf(buf, n, "INSIDE: NO LINK");
+    else snprintf(buf, n, "NO LINK");
+    return !(inUp && outUp);
 }
 
 void applied(const char* presetName, char* buf, size_t n) { snprintf(buf, n, ">%s APPLIED", presetName); }

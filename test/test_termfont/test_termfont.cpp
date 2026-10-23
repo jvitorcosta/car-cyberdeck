@@ -116,8 +116,15 @@ void test_menu_items_fit() {
 
 void test_preset_names_fit() {
     const deckmenu::Rect lights = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_PRE0);
-    TEST_ASSERT_EQUAL_INT(75, lights.w);
+    TEST_ASSERT_TRUE(lights.w == 75 && lights.h == 36);
     for (int i = 0; i < ledpresets::N; i++) fitsCentred(Face::BODY, ledpresets::PRESETS[i].name, lights.w);
+    // the name over the two chips (12-14 px squares), the chips' 1 px edge on a bar clear of the
+    // name's ink and the margin, the pair centred within the margins
+    TEST_ASSERT_TRUE(PRESET_CHIP >= 12 && PRESET_CHIP <= 14);
+    TEST_ASSERT_TRUE(fromCapTop(Face::BODY, PRESET_NAME_Y).bottom < PRESET_CHIP_Y - 1);
+    TEST_ASSERT_TRUE(PRESET_NAME_Y >= MARGIN);  // the names are capitals: their ink starts at the caps
+    TEST_ASSERT_TRUE(PRESET_CHIP_Y + PRESET_CHIP <= lights.h - MARGIN);
+    TEST_ASSERT_TRUE(2 * PRESET_CHIP + PRESET_CHIP_GAP <= lights.w - 2 * MARGIN);
 }
 
 void test_colour_names_fit() {
@@ -125,12 +132,13 @@ void test_colour_names_fit() {
     TEST_ASSERT_EQUAL_INT(75, r.w);
     TEST_ASSERT_TRUE(TILE_CHIP_X + TILE_CHIP_W + MARGIN <= TILE_TEXT_X);
     TEST_ASSERT_TRUE(TILE_CHIP_H <= r.h - 2 * MARGIN);
+    TEST_ASSERT_TRUE(TILE_CHIP_X >= MARGIN && TILE_CHIP_W == 16 && TILE_CHIP_H == 28);
     for (const ledlook::Swatch& s : ledlook::SWATCHES) {
         char name[16];
         size_t i = 0;
         for (; s.name[i]; i++) name[i] = static_cast<char>(toupper(static_cast<unsigned char>(s.name[i])));
         name[i] = 0;
-        fitsLeft(Face::SMALL, name, TILE_TEXT_X, r.w);
+        fitsLeft(Face::BODY, name, TILE_TEXT_X, r.w);  // one face with the preset names
     }
 }
 
@@ -244,7 +252,7 @@ void test_status_fits() {
     // the Lights status line sits on STATUS's bottom (12 rows between the tab rule and the colours):
     // its ink, '/' included, stays inside, and nothing goes below the baseline (the clear is the rect)
     const termfont::Font& f = termfont::font(Face::SMALL);
-    for (const char* s : {"IN ON 100%  OUT ON 100%  LINK 2/2", "IN OFF  OUT --  LINK 0/2", ">PURPURA APPLIED", ">INSIDE: NO LINK",
+    for (const char* s : {"LINK 2/2", "OUTSIDE: NO LINK", "INSIDE: NO LINK", "NO LINK", ">PURPURA APPLIED", ">INSIDE: NO LINK",
                           ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">NO SYNCED LYRICS", ">WRONG KEY", ">STANDBY", ">NO SIGNAL"}) {
         for (const char* p = s; *p; p++) {
             const termfont::Glyph& g = f.glyph[static_cast<unsigned char>(*p) - f.first];
@@ -253,7 +261,7 @@ void test_status_fits() {
             TEST_ASSERT_TRUE_MESSAGE(g.yOffset + g.height <= 0, s);
         }
     }
-    fitsLeft(Face::SMALL, "IN ON 100%  OUT ON 100%  LINK 2/2", STATUS_TEXT_X, deckmenu::STATUS.w);
+    for (const char* s : {"OUTSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED"}) fitsLeft(Face::SMALL, s, STATUS_TEXT_X, deckmenu::STATUS.w);
 }
 
 // The lyric areas: a face's lines at its pitch don't overlap, and the most lines fit their area.
