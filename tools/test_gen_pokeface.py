@@ -86,6 +86,35 @@ class Font(unittest.TestCase):
         self.assertGreaterEqual(page.height, 6)
 
 
+class Field(unittest.TestCase):
+    def test_day_field_dithers_the_deck_colours(self):
+        im = g.field(night=False)
+        self.assertEqual(im.size, (260, 260))
+        # sky: (168,216,248) as a checker of AAAAFF / AAFFFF
+        self.assertEqual({im.getpixel((10, 10)), im.getpixel((11, 10))}, {(0xAA, 0xAA, 0xFF), (0xAA, 0xFF, 0xFF)})
+        self.assertEqual(im.getpixel((10, 10)), im.getpixel((11, 11)))
+        # horizon band: solid 55AA55
+        self.assertEqual(im.getpixel((10, g.HORIZON)), (0x55, 0xAA, 0x55))
+        # grass: (136,200,120) as a checker of 55AA55 / AAFFAA
+        self.assertEqual({im.getpixel((10, 200)), im.getpixel((11, 200))}, {(0x55, 0xAA, 0x55), (0xAA, 0xFF, 0xAA)})
+
+    def test_night_field_is_dark(self):
+        im = g.field(night=True)
+        self.assertTrue(all(max(im.getpixel((x, y))) <= 0x55 for x, y in [(10, 10), (11, 10), (10, 200), (11, 200)]))
+
+    def test_gen_xml_has_fields(self):
+        xml = g.gen_xml()
+        self.assertIn('<bitmap id="FieldDay" filename="field_day.png"', xml)
+        self.assertIn('<bitmap id="FieldNight" filename="field_night.png"', xml)
+
+    def test_fields_carry_a_4_colour_palette(self):
+        xml = g.gen_xml()
+        day = xml[xml.index('id="FieldDay"'):xml.index('id="FieldNight"')]
+        self.assertEqual(day.count("<color>"), 4)
+        for c in ("AAAAFF", "AAFFFF", "55AA55", "AAFFAA"):
+            self.assertIn("<color>%s</color>" % c, day)
+
+
 class Resources(unittest.TestCase):
     def test_species(self):
         self.assertEqual(len(g.SPECIES), 21)
@@ -95,7 +124,7 @@ class Resources(unittest.TestCase):
 
     def test_gen_xml(self):
         xml = g.gen_xml()
-        self.assertEqual(xml.count("<bitmap "), 21)
+        self.assertEqual(xml.count("<bitmap "), 23)
         self.assertEqual(xml.count("<font "), 3)
         for s in ('id="Mon0"', 'id="Mon20"', 'id="EmeraldTime"', 'filename="emerald2.fnt"', 'filename="emerald3.fnt"'):
             self.assertIn(s, xml)

@@ -122,6 +122,36 @@ module Icons {
         dc.drawLine(x + 6, y - 4, x, y + 1);
     }
 
+    // A battery 13x7 centred on (x, y), filled to pct (red at 20 % or less).
+    function battery(dc as Dc, x as Number, y as Number, pct as Number, ink as Number) as Void {
+        dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
+        dc.drawRectangle(x - 7, y - 3, 12, 7);
+        dc.fillRectangle(x + 5, y - 1, 2, 3);
+        var fill = 8 * (pct < 0 ? 0 : (pct > 100 ? 100 : pct)) / 100;
+        if (fill > 0) {
+            dc.setColor(pct <= 20 ? 0xFF5555 : 0x55AA55, Graphics.COLOR_TRANSPARENT);
+            dc.fillRectangle(x - 5, y - 1, fill, 3);
+        }
+    }
+
+    // A thermometer about 6x14, centred on (x, y).
+    function thermometer(dc as Dc, x as Number, y as Number, ink as Number) as Void {
+        dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
+        dc.drawRoundedRectangle(x - 2, y - 7, 5, 11, 2);
+        dc.setColor(0xFF5555, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(x, y + 4, 3);
+        dc.fillRectangle(x - 1, y - 2, 2, 5);
+    }
+
+    // Two footprints about 12x14, centred on (x, y): distance walked.
+    function feet(dc as Dc, x as Number, y as Number, ink as Number) as Void {
+        dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
+        dc.fillEllipse(x - 3, y + 2, 2, 4);
+        dc.fillEllipse(x + 3, y - 3, 2, 4);
+        dc.fillCircle(x - 3, y + 7, 1);
+        dc.fillCircle(x + 3, y + 2, 1);
+    }
+
     // Sunrise (up) or sunset (down): a small arrow over a horizon line.
     function sunArrow(dc as Dc, x as Number, y as Number, up as Boolean) as Void {
         dc.setColor(0xFFAA00, Graphics.COLOR_TRANSPARENT);

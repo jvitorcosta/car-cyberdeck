@@ -13,9 +13,10 @@ import Toybox.WatchUi;
 // then Tuesday ...). Never ship it on.
 const DEMO = false;
 
-// Layout "A, all at once", top to bottom: weather + next sunrise/sunset; weekday, date, phone,
-// notifications, battery; the time; the partner with heart rate + temperature on its left and
-// Body Battery + calories on its right; the step bar; steps and distance.
+// Emerald's battle screen (layout "B, your Pokémon"), top to bottom over the deck-coloured field:
+// the time; phone, weekday + date, notifications, battery; weather, high / low, next sun; the
+// Pokémon on its platform beside its battle box (name, Lv = day of the month, HP = Body Battery,
+// EXP = steps); the dialogue box with heart rate, temperature and distance.
 // In low power the Pokémon holds one frame; a wrist raise plays its 2-frame idle for the few
 // seconds the watch stays awake. The watch's numbers are read once a minute and
 // on waking (refresh); animation frames only redraw them, to spare the battery.
@@ -45,7 +46,9 @@ class PokefaceView extends WatchUi.WatchFace {
     private var _phone as Boolean = false;
     private var _hr as String = "--";
     private var _bb as String = "--";
-    private var _kcal as String = "--";
+    private var _batPct as Number = 0;
+    private var _field as WatchUi.BitmapResource or Null;   // today's battle field, day or night
+    private var _fieldNight as Boolean = false;
     private var _steps as String = "--";
     private var _dist as String = "--";
     private var _lv as String = "";
@@ -119,9 +122,15 @@ class PokefaceView extends WatchUi.WatchFace {
             }
         }
         var night = DEMO ? (clock.min % 21) % 3 == 1 : !Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
-        var ink = night ? 0xFFFFFF : 0x555555;       // text on the field
-        var shade = night ? 0x555555 : 0xAAAAAA;     // its shadow
-        Battle.field(dc, night);
+        var ink = Battle.ink(night);
+        var shade = Battle.shade(night);
+        if (_field == null || night != _fieldNight) {   // only the current field is loaded
+            _field = null;
+            _field = WatchUi.loadResource(night ? Rez.Drawables.FieldNight : Rez.Drawables.FieldDay)
+                     as WatchUi.BitmapResource;
+            _fieldNight = night;
+        }
+        dc.drawBitmap(0, 0, _field);
 
         // The time, big
         Battle.text(dc, CX, 28, _fTime, Fmt.clock(clock.hour, clock.min, is24), ink, shade, 3,
@@ -131,28 +140,31 @@ class PokefaceView extends WatchUi.WatchFace {
         Battle.platform(dc, 62, 182, night);
         drawPartnerAt(dc, CX, SPRITE_Y);
 
-        // Two small lines (over the Pokémon, so it never hides them): weekday + date, phone, notifications, battery; weather, high / low, next sun.
-        // Each is measured with the same sizes it is drawn with, then centred.
-        var wl = dc.getTextWidthInPixels(_day, _f1) + 6 + 8 + 6 + 14 + dc.getTextWidthInPixels(_notes, _f1) + 6
-                 + dc.getTextWidthInPixels(_bat, _f1);
-        var x = CX - wl / 2;
-        x = small(dc, x, 54, _day, ink, shade) + 6;
+        // Two small lines, over the Pokémon so it never hides them, each centred:
+        //   phone dot, weekday + date | envelope, notifications | battery
+        //   weather, high / low | sunrise or sunset arrow, its time
+        var wd = dc.getTextWidthInPixels(_day, _f1);
+        var wn = dc.getTextWidthInPixels(_notes, _f1);
+        var wb = dc.getTextWidthInPixels(_bat, _f1);
+        var x = CX - (11 + wd + 10 + 16 + wn + 10 + 16 + wb) / 2;
         dc.setColor(0x0055FF, Graphics.COLOR_TRANSPARENT);
         if (_phone) {
             dc.fillCircle(x + 3, 54, 3);
         } else {
             dc.drawCircle(x + 3, 54, 3);
         }
-        x += 8 + 6;
+        x = small(dc, x + 11, 54, _day, ink, shade) + 10;
         Icons.envelope(dc, x + 6, 54, ink);
-        x = small(dc, x + 14, 54, _notes, ink, shade) + 6;
-        small(dc, x, 54, _bat, ink, shade);
+        x = small(dc, x + 16, 54, _notes, ink, shade) + 10;
+        Icons.battery(dc, x + 7, 54, _batPct, ink);
+        small(dc, x + 16, 54, _bat, ink, shade);
 
         var hasSun = _sunMark.length() > 0;
-        wl = 18 + dc.getTextWidthInPixels(_hiLo, _f1) + 6 + (hasSun ? 12 : 0) + dc.getTextWidthInPixels(_sunText, _f1);
-        x = CX - wl / 2;
+        var wh = dc.getTextWidthInPixels(_hiLo, _f1);
+        var ws = dc.getTextWidthInPixels(_sunText, _f1);
+        x = CX - (21 + wh + 10 + (hasSun ? 12 : 0) + ws) / 2;
         Icons.weather(dc, x + 8, 67, _weather);
-        x = small(dc, x + 18, 67, _hiLo, ink, shade) + 6;
+        x = small(dc, x + 21, 67, _hiLo, ink, shade) + 10;
         if (hasSun) {
             Icons.sunArrow(dc, x + 5, 67, _sunMark.equals("↑"));
             x += 12;
@@ -162,47 +174,49 @@ class PokefaceView extends WatchUi.WatchFace {
         // Its info box: name, Lv (day of the month), HP = Body Battery, EXP = steps
         var bx = 116;
         var by = 80;
-        Battle.infoBox(dc, bx, by, 130, 80);
-        Battle.text(dc, bx + 8, by + 15, _f2, Partner.NAMES[_species] as String, 0x555555, 0xAAAAAA, 2,
-                    Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.text(dc, bx + 8, by + 34, _f1, "Lv" + _lv, 0x555555, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        var bi = night ? 0xFFFFAA : 0x555555;
+        var bs = night ? 0x000000 : 0xAAAAAA;
+        Battle.infoBox(dc, bx, by, 130, 80, night);
+        Battle.text(dc, bx + 8, by + 15, _f2, Partner.NAMES[_species] as String, bi, bs, 2, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.text(dc, bx + 8, by + 34, _f1, "Lv" + _lv, bi, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
         Battle.text(dc, bx + 38, by + 34, _f1, "HP", 0xFFAA00, 0x555555, 1, Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.bar(dc, bx + 54, by + 32, 66, _bbFrac, hpInk(Partner.hpColour(_bbValue)));
-        Battle.text(dc, bx + 120, by + 47, _f1, "BB " + _bb, 0x555555, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_RIGHT);
-        Battle.text(dc, bx + 8, by + 60, _f1, "EXP", 0x0055FF, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.bar(dc, bx + 34, by + 58, 86, _bar, 0x55AAFF);
-        Battle.text(dc, bx + 120, by + 71, _f1, _steps + "  " + _dist, 0x555555, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_RIGHT);
+        Battle.bar(dc, bx + 54, by + 32, 62, _bbFrac, hpInk(Partner.hpColour(_bbValue)));
+        Battle.text(dc, bx + 114, by + 47, _f1, "BB " + _bb, bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
+        Battle.text(dc, bx + 8, by + 60, _f1, "EXP", 0x55AAFF, bs, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.bar(dc, bx + 34, by + 58, 82, _bar, 0x55AAFF);
+        Battle.text(dc, bx + 108, by + 71, _f1, _steps + " steps", bi, bs, 1, Graphics.TEXT_JUSTIFY_RIGHT);
 
-        // The battle menu: heart rate and temperature, then calories. A row too wide for the round
+        // The dialogue box: heart rate | temperature, then distance. A row too wide for the round
         // edge (big numbers) drops to 1x rather than being cut.
-        Battle.menuBox(dc, 0, 192, dc.getWidth(), 70);
+        Battle.dialogue(dc, 0, 192, dc.getWidth(), 70, night);
         var f = _f2;
         var px = 2;
         var whr = dc.getTextWidthInPixels(_hr, f);
         var wt = dc.getTextWidthInPixels(_temp, f);
-        if (!Fit.fits(16 + whr + 18 + wt, 197, 216, 4)) {
+        if (!Fit.fits(16 + whr + 20 + 14 + wt, 200, 219, 4)) {
             f = _f1;
             px = 1;
             whr = dc.getTextWidthInPixels(_hr, f);
             wt = dc.getTextWidthInPixels(_temp, f);
         }
-        var x1 = CX - (16 + whr + 18 + wt) / 2;
-        Icons.heart(dc, x1 + 6, 207, 0xFF5555);
-        Battle.text(dc, x1 + 16, 207, f, _hr, 0xFFFFFF, 0x555555, px, Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.text(dc, x1 + 16 + whr + 18, 207, f, _temp, 0xFFFFFF, 0x555555, px, Graphics.TEXT_JUSTIFY_LEFT);
+        x = CX - (16 + whr + 20 + 14 + wt) / 2;
+        Icons.heart(dc, x + 6, 210, 0xFF5555);
+        Battle.text(dc, x + 16, 210, f, _hr, bi, bs, px, Graphics.TEXT_JUSTIFY_LEFT);
+        x += 16 + whr + 20;
+        Icons.thermometer(dc, x + 4, 210, bi);
+        Battle.text(dc, x + 14, 210, f, _temp, bi, bs, px, Graphics.TEXT_JUSTIFY_LEFT);
 
         f = _f2;
         px = 2;
-        var wu = dc.getTextWidthInPixels("kcal", _f1);
-        var wk = dc.getTextWidthInPixels(_kcal, f);
-        if (!Fit.fits(wk + 2 + wu, 221, 240, 4)) {
+        var wdist = dc.getTextWidthInPixels(_dist, f);
+        if (!Fit.fits(16 + wdist, 225, 244, 4)) {
             f = _f1;
             px = 1;
-            wk = dc.getTextWidthInPixels(_kcal, f);
+            wdist = dc.getTextWidthInPixels(_dist, f);
         }
-        var x2 = CX - (wk + 2 + wu) / 2;
-        Battle.text(dc, x2, 231, f, _kcal, 0xFFFFFF, 0x555555, px, Graphics.TEXT_JUSTIFY_LEFT);
-        Battle.text(dc, x2 + wk + 2, 235, _f1, "kcal", 0xFFFFFF, 0x555555, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        x = CX - (16 + wdist) / 2;
+        Icons.feet(dc, x + 5, 234, bi);
+        Battle.text(dc, x + 16, 234, f, _dist, bi, bs, px, Graphics.TEXT_JUSTIFY_LEFT);
     }
 
     // A 1x piece of a small line at (x, y); returns where it ends.
@@ -230,7 +244,7 @@ class PokefaceView extends WatchUi.WatchFace {
         var mark = next.substring(0, 1);
         _sunMark = mark.equals("↑") || mark.equals("↓") ? mark : "";
         _sunText = _sunMark.length() > 0 ? next.substring(1, null) : next;
-        _hiLo = (cond != null ? Fmt.temp(cond.highTemperature, metric) : "--") + " "
+        _hiLo = (cond != null ? Fmt.temp(cond.highTemperature, metric) : "--") + "/"
                 + (cond != null ? Fmt.temp(cond.lowTemperature, metric) : "--");
         _weather = Icons.group(cond != null ? cond.condition : null);
         _temp = cond != null ? Fmt.temp(cond.temperature, metric) : "--";
@@ -239,7 +253,8 @@ class PokefaceView extends WatchUi.WatchFace {
         var dow = Gregorian.info(Time.now(), Time.FORMAT_SHORT).day_of_week as Number;
         _day = Fmt.weekday(dow) + " " + now.day.toString();
         _lv = now.day.toString();
-        _bat = System.getSystemStats().battery.toNumber().toString() + "%";
+        _batPct = System.getSystemStats().battery.toNumber();
+        _bat = _batPct.toString() + "%";
         _notes = set.notificationCount.toString();
         _phone = set.phoneConnected;
 
@@ -248,7 +263,6 @@ class PokefaceView extends WatchUi.WatchFace {
         _bb = Fmt.num(bb);
         _bbValue = bb;
         _bbFrac = bb != null ? (bb < 0 ? 0 : (bb > 100 ? 100 : bb)) / 100.0 : 0.0;
-        _kcal = Fmt.num(act.calories);
         _steps = Fmt.num(act.steps);
         _dist = Fmt.dist(act.distance, set.distanceUnits == System.UNIT_METRIC);
         _bar = Partner.barFraction(act.steps, act.stepGoal);
