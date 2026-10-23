@@ -46,11 +46,21 @@ class PokefaceView extends WatchUi.WatchFace {
     private var _hr as String = "--";
     private var _bb as String = "--";
     private var _kcal as String = "--";
-    private var _stepsLine as String = "--";
+    private var _steps as String = "--";
+    private var _dist as String = "--";
+    private var _lv as String = "";
+    private var _bbValue as Number or Null;
+    private var _bbFrac as Float = 0.0;
     private var _bar as Float = 0.0;
+    private var _f1 as Graphics.FontType;   // Emerald's font at 1x, 2x, and 3x digits for the time
+    private var _f2 as Graphics.FontType;
+    private var _fTime as Graphics.FontType;
 
     function initialize() {
         WatchFace.initialize();
+        _f1 = WatchUi.loadResource(Rez.Fonts.Emerald1) as Graphics.FontType;
+        _f2 = WatchUi.loadResource(Rez.Fonts.Emerald2) as Graphics.FontType;
+        _fTime = WatchUi.loadResource(Rez.Fonts.EmeraldTime) as Graphics.FontType;
     }
 
     // The face just appeared (back from a menu or an activity): someone is looking.
@@ -109,60 +119,86 @@ class PokefaceView extends WatchUi.WatchFace {
                 _frame = clock.min;
             }
         }
-        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-        dc.clear();
+        var night = !Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
+        var ink = night ? 0xFFFFFF : 0x555555;       // text on the field
+        var shade = night ? 0x555555 : 0xAAAAAA;     // its shadow
+        Battle.field(dc, night);
 
-        // Weather, today's high / low, and the next sunrise or sunset
+        // The time, big
+        Battle.text(dc, CX, 28, _fTime, Fmt.clock(clock.hour, clock.min, is24), ink, shade, 3,
+                    Graphics.TEXT_JUSTIFY_CENTER);
+
+        // One small line: weekday + date, phone, notifications, battery, weather, high / low, next sun
         var hasSun = _sunMark.length() > 0;
-        var w1 = dc.getTextWidthInPixels(_hiLo, Graphics.FONT_XTINY);
-        var ws = dc.getTextWidthInPixels(_sunText, Graphics.FONT_XTINY);
-        var x1 = CX - (20 + w1 + (hasSun ? 14 : 0) + ws) / 2;
-        Icons.weather(dc, x1 + 8, 24, _weather);
-        text(dc, x1 + 20, 24, _hiLo, Graphics.COLOR_LT_GRAY, Graphics.TEXT_JUSTIFY_LEFT);
-        if (hasSun) {
-            Icons.sunArrow(dc, x1 + 20 + w1 + 6, 24, _sunMark.equals("↑"));
+        var parts = [_day, _notes, _bat, _hiLo, _sunText];
+        var w = 12 + 12 + 6 + 16 + (hasSun ? 12 : 0) + 5 * 6;   // icons and gaps
+        for (var i = 0; i < parts.size(); i++) {
+            w += dc.getTextWidthInPixels(parts[i] as String, _f1);
         }
-        text(dc, x1 + 20 + w1 + (hasSun ? 14 : 0), 24, _sunText, Graphics.COLOR_LT_GRAY, Graphics.TEXT_JUSTIFY_LEFT);
-
-        // Weekday + date, phone dot, notifications, battery
-        var w2 = dc.getTextWidthInPixels(_day, Graphics.FONT_XTINY);
-        var wn = dc.getTextWidthInPixels(_notes, Graphics.FONT_XTINY);
-        var wb = dc.getTextWidthInPixels(_bat, Graphics.FONT_XTINY);
-        var x2 = CX - (w2 + 14 + 6 + 18 + wn + 10 + wb) / 2;
-        text(dc, x2, 48, _day, Graphics.COLOR_WHITE, Graphics.TEXT_JUSTIFY_LEFT);
-        x2 += w2 + 10;
-        dc.setColor(0x00AAFF, Graphics.COLOR_TRANSPARENT);
+        var x = CX - w / 2;
+        x = small(dc, x, _day, ink, shade) + 6;
+        dc.setColor(0x0055FF, Graphics.COLOR_TRANSPARENT);
         if (_phone) {
-            dc.fillCircle(x2, 48, 3);
+            dc.fillCircle(x + 3, 58, 3);
         } else {
-            dc.drawCircle(x2, 48, 3);
+            dc.drawCircle(x + 3, 58, 3);
         }
-        x2 += 14;
-        Icons.envelope(dc, x2, 48);
-        text(dc, x2 + 9, 48, _notes, Graphics.COLOR_LT_GRAY, Graphics.TEXT_JUSTIFY_LEFT);
-        text(dc, x2 + 9 + wn + 10, 48, _bat, Graphics.COLOR_LT_GRAY, Graphics.TEXT_JUSTIFY_LEFT);
+        x += 12;
+        Icons.envelope(dc, x + 6, 58, ink);
+        x = small(dc, x + 14, _notes, ink, shade) + 6;
+        x = small(dc, x, _bat, ink, shade) + 6;
+        Icons.weather(dc, x + 8, 58, _weather);
+        x = small(dc, x + 18, _hiLo, ink, shade) + 6;
+        if (hasSun) {
+            Icons.sunArrow(dc, x + 6, 58, _sunMark.equals("↑"));
+            x += 12;
+        }
+        small(dc, x, _sunText, ink, shade);
 
-        // The time
-        textIn(dc, CX, 90, Fmt.clock(clock.hour, clock.min, is24), Graphics.COLOR_WHITE,
-               Graphics.TEXT_JUSTIFY_CENTER, Graphics.FONT_NUMBER_MEDIUM);
-
-        // The partner, with heart rate + temperature left and Body Battery + calories right
+        // The Pokémon on its platform
+        Battle.platform(dc, 62, 182, night);
         drawPartnerAt(dc, CX, SPRITE_Y);
-        var whr = dc.getTextWidthInPixels(_hr, Graphics.FONT_XTINY);
-        Icons.heart(dc, 92 - whr - 10, 140, 0xFF5555);
-        text(dc, 92, 140, _hr, Graphics.COLOR_WHITE, Graphics.TEXT_JUSTIFY_RIGHT);
-        text(dc, 92, 162, _temp, Graphics.COLOR_WHITE, Graphics.TEXT_JUSTIFY_RIGHT);
-        text(dc, 168, 140, "BB " + _bb, 0x55AAFF, Graphics.TEXT_JUSTIFY_LEFT);
-        text(dc, 168, 162, _kcal + " kcal", Graphics.COLOR_WHITE, Graphics.TEXT_JUSTIFY_LEFT);
 
-        // Steps against the goal
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.fillRoundedRectangle(75, 192, 110, 5, 2);
-        if (_bar > 0.0) {
-            dc.setColor(0xFFAA00, Graphics.COLOR_TRANSPARENT);
-            dc.fillRoundedRectangle(75, 192, (110 * _bar).toNumber(), 5, 2);
-        }
-        text(dc, CX, 212, _stepsLine, Graphics.COLOR_LT_GRAY, Graphics.TEXT_JUSTIFY_CENTER);
+        // Its info box: name, Lv (day of the month), HP = Body Battery, EXP = steps
+        var bx = 116;
+        var by = 80;
+        Battle.infoBox(dc, bx, by, 130, 80);
+        Battle.text(dc, bx + 8, by + 15, _f2, Partner.NAMES[_species] as String, 0x555555, 0xAAAAAA, 2,
+                    Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.text(dc, bx + 8, by + 34, _f1, "Lv" + _lv, 0x555555, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.text(dc, bx + 38, by + 34, _f1, "HP", 0xFFAA00, 0x555555, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.bar(dc, bx + 54, by + 32, 66, _bbFrac, hpInk(Partner.hpColour(_bbValue)));
+        Battle.text(dc, bx + 120, by + 47, _f1, "BB " + _bb, 0x555555, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_RIGHT);
+        Battle.text(dc, bx + 8, by + 60, _f1, "EXP", 0x0055FF, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.bar(dc, bx + 34, by + 58, 86, _bar, 0x55AAFF);
+        Battle.text(dc, bx + 120, by + 71, _f1, _steps, 0x555555, 0xAAAAAA, 1, Graphics.TEXT_JUSTIFY_RIGHT);
+
+        // The battle menu: heart rate, temperature / calories, distance
+        Battle.menuBox(dc, 0, 192, dc.getWidth(), 70);
+        var whr = dc.getTextWidthInPixels(_hr, _f2);
+        var wt = dc.getTextWidthInPixels(_temp, _f2);
+        var x1 = CX - (16 + whr + 18 + wt) / 2;
+        Icons.heart(dc, x1 + 6, 211, 0xFF5555);
+        Battle.text(dc, x1 + 16, 211, _f2, _hr, 0xFFFFFF, 0x555555, 2, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.text(dc, x1 + 16 + whr + 18, 211, _f2, _temp, 0xFFFFFF, 0x555555, 2, Graphics.TEXT_JUSTIFY_LEFT);
+        var wk = dc.getTextWidthInPixels(_kcal, _f2);
+        var wu = dc.getTextWidthInPixels("kcal", _f1);
+        var wd = dc.getTextWidthInPixels(_dist, _f2);
+        var x2 = CX - (wk + 2 + wu + 12 + wd) / 2;
+        Battle.text(dc, x2, 233, _f2, _kcal, 0xFFFFFF, 0x555555, 2, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.text(dc, x2 + wk + 2, 237, _f1, "kcal", 0xFFFFFF, 0x555555, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        Battle.text(dc, x2 + wk + 2 + wu + 12, 233, _f2, _dist, 0xFFFFFF, 0x555555, 2, Graphics.TEXT_JUSTIFY_LEFT);
+    }
+
+    // A 1x piece of the small line at x; returns where it ends.
+    private function small(dc as Dc, x as Number, s as String, ink as Number, shade as Number) as Number {
+        Battle.text(dc, x, 58, _f1, s, ink, shade, 1, Graphics.TEXT_JUSTIFY_LEFT);
+        return x + dc.getTextWidthInPixels(s, _f1);
+    }
+
+    // Emerald's HP colours; unknown Body Battery leaves the bar empty.
+    private function hpInk(c as Number) as Number or Null {
+        return c == Partner.HP_GREEN ? 0x55FFAA : (c == Partner.HP_YELLOW ? 0xFFFF55 : (c == Partner.HP_RED ? 0xFF5555 : null));
     }
 
     // Reads the watch's numbers and decides who is out; once a minute and on waking.
@@ -180,12 +216,13 @@ class PokefaceView extends WatchUi.WatchFace {
         _sunMark = mark.equals("↑") || mark.equals("↓") ? mark : "";
         _sunText = _sunMark.length() > 0 ? next.substring(1, null) : next;
         _hiLo = (cond != null ? Fmt.temp(cond.highTemperature, metric) : "--") + " "
-                + (cond != null ? Fmt.temp(cond.lowTemperature, metric) : "--") + "  ";
+                + (cond != null ? Fmt.temp(cond.lowTemperature, metric) : "--");
         _weather = Icons.group(cond != null ? cond.condition : null);
         _temp = cond != null ? Fmt.temp(cond.temperature, metric) : "--";
 
         var now = Gregorian.info(Time.now(), Time.FORMAT_MEDIUM);
         _day = (now.day_of_week as String).toUpper() + " " + now.day.toString();
+        _lv = now.day.toString();
         _bat = System.getSystemStats().battery.toNumber().toString() + "%";
         _notes = set.notificationCount.toString();
         _phone = set.phoneConnected;
@@ -193,8 +230,11 @@ class PokefaceView extends WatchUi.WatchFace {
         _hr = Fmt.num(Stats.heartRate());
         var bb = Stats.bodyBattery();
         _bb = Fmt.num(bb);
+        _bbValue = bb;
+        _bbFrac = bb != null ? (bb < 0 ? 0 : (bb > 100 ? 100 : bb)) / 100.0 : 0.0;
         _kcal = Fmt.num(act.calories);
-        _stepsLine = Fmt.num(act.steps) + " · " + Fmt.dist(act.distance, set.distanceUnits == System.UNIT_METRIC);
+        _steps = Fmt.num(act.steps);
+        _dist = Fmt.dist(act.distance, set.distanceUnits == System.UNIT_METRIC);
         _bar = Partner.barFraction(act.steps, act.stepGoal);
 
         decide(clock, act);
@@ -202,7 +242,7 @@ class PokefaceView extends WatchUi.WatchFace {
 
     function drawPartnerAt(dc as Dc, cx as Number, cy as Number) as Void {
         _sprite.show(_species);
-        _sprite.draw(dc, 14, 86, _timer != null ? _frame : 0);
+        _sprite.draw(dc, -2, 64, _timer != null ? _frame : 0);
     }
 
     // Who is out: the weekday's day or night Pokémon, or its reward once a run or the step goal is done.
@@ -235,16 +275,5 @@ class PokefaceView extends WatchUi.WatchFace {
             a = it.next();
         }
         return false;
-    }
-
-    // One line of small text, vertically centred on y.
-    function text(dc as Dc, x as Number, y as Number, s as String, color as Number, justify as Number) as Void {
-        textIn(dc, x, y, s, color, justify, Graphics.FONT_XTINY);
-    }
-
-    function textIn(dc as Dc, x as Number, y as Number, s as String, color as Number, justify as Number,
-                    font as Graphics.FontType) as Void {
-        dc.setColor(color, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(x, y, font, s, justify | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 }

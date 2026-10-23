@@ -37,8 +37,11 @@ class Sprite {
         if (_sheet == null) {
             return;
         }
-        dc.drawBitmap2(x, y, _sheet, {
-            :bitmapX => (frame % 2) * SIZE, :bitmapY => 0, :bitmapWidth => SIZE, :bitmapHeight => SIZE,
+        // The transform scales the source offset too, so frame 1 (64 px into the sheet) would land
+        // 128 px to the right: start it that much further left.
+        var sx = (frame % 2) * SIZE;
+        dc.drawBitmap2(x - sx * 2, y, _sheet, {
+            :bitmapX => sx, :bitmapY => 0, :bitmapWidth => SIZE, :bitmapHeight => SIZE,
             :transform => _scale, :filterMode => Graphics.FILTER_MODE_POINT
         });
     }

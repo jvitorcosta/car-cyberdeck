@@ -115,8 +115,8 @@ module Icons {
         dc.fillPolygon([[x - 6, y - 1], [x + 6, y - 1], [x, y + 6]]);
     }
 
-    function envelope(dc as Dc, x as Number, y as Number) as Void {
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+    function envelope(dc as Dc, x as Number, y as Number, ink as Number) as Void {
+        dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
         dc.drawRectangle(x - 6, y - 4, 13, 9);
         dc.drawLine(x - 6, y - 4, x, y + 1);
         dc.drawLine(x + 6, y - 4, x, y + 1);

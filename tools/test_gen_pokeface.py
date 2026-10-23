@@ -97,7 +97,7 @@ class Resources(unittest.TestCase):
         xml = g.gen_xml()
         self.assertEqual(xml.count("<bitmap "), 21)
         self.assertEqual(xml.count("<font "), 3)
-        for s in ('id="Mon0"', 'id="Mon20"', 'id="EmeraldTime"', 'filename="emerald2.fnt"'):
+        for s in ('id="Mon0"', 'id="Mon20"', 'id="EmeraldTime"', 'filename="emerald2.fnt"', 'filename="emerald3.fnt"'):
             self.assertIn(s, xml)
 
 

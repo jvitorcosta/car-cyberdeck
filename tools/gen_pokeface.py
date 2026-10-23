@@ -12,7 +12,7 @@ index 0 transparent, snapped to the Forerunner 255's 64 colours and mirrored to 
 two frames sit side by side in one 128x64 sheet, mon<i>.png, in SPECIES order (the watch draws
 them at 2x).
 Font: Emerald's latin_normal sheet (16x16 cells in charmap order, widths from src/fonts.c) gives
-the GLYPHS as BMFont fonts: emerald1 (1x), emerald2 (2x) and emerald4 (4x, digits and ':' only,
+the GLYPHS as BMFont fonts: emerald1 (1x), emerald2 (2x) and emerald3 (3x, digits and ':' only,
 for the time). gen.xml lists all of them as resources.
 """
 import os
@@ -126,7 +126,7 @@ def gen_xml():
                         for i in range(len(SPECIES)))
     fonts = ('    <font id="Emerald1" filename="emerald1.fnt" antialias="false"/>\n'
              '    <font id="Emerald2" filename="emerald2.fnt" antialias="false"/>\n'
-             '    <font id="EmeraldTime" filename="emerald4.fnt" antialias="false"/>')
+             '    <font id="EmeraldTime" filename="emerald3.fnt" antialias="false"/>')
     return ("<resources>\n<drawables>\n" + bitmaps + "\n</drawables>\n<fonts>\n" + fonts
             + "\n</fonts>\n</resources>\n")
 
@@ -169,7 +169,7 @@ def main():
     glyphs["°"] = degree(16)
     missing = [c for c in GLYPHS if c not in glyphs]
     print("glyphs:", len(glyphs), "missing:", missing)
-    for scale, name, chars in [(1, "emerald1", GLYPHS), (2, "emerald2", GLYPHS), (4, "emerald4", TIME_GLYPHS)]:
+    for scale, name, chars in [(1, "emerald1", GLYPHS), (2, "emerald2", GLYPHS), (3, "emerald3", TIME_GLYPHS)]:
         text, page = bmfont({c: glyphs[c] for c in chars if c in glyphs}, scale, name)
         page.save(os.path.join(OUT, name + ".png"))
         with open(os.path.join(OUT, name + ".fnt"), "w", encoding="utf-8") as f:
