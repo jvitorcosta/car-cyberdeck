@@ -61,6 +61,18 @@ class Frames(unittest.TestCase):
         self.assertEqual(s.getpixel((0, 10))[3], 0)
 
 
+class Strict(unittest.TestCase):
+    def test_colourise_rejects_rgba(self):
+        with self.assertRaises(ValueError):
+            g.colourise(Image.new("RGBA", (2, 2)), PAL)
+
+    def test_colourise_rejects_index_beyond_palette(self):
+        im = paletted(2, 1)
+        im.putpixel((1, 0), 5)
+        with self.assertRaises(ValueError):
+            g.colourise(im, PAL[:3])
+
+
 class Font(unittest.TestCase):
     def test_read_charmap(self):
         self.assertEqual(g.read_charmap("'A' = BB\n'0' = A1\n@ a comment\n"), {"A": 0xBB, "0": 0xA1})
@@ -121,6 +133,12 @@ class Field(unittest.TestCase):
 
 
 class Resources(unittest.TestCase):
+    def test_gen_xml_has_shiny_rewards(self):
+        xml = g.gen_xml()
+        self.assertIn('<bitmap id="Shiny2" filename="mon2s.png"', xml)
+        self.assertIn('filename="mon20s.png"', xml)
+        self.assertEqual(g.REWARDS, [2, 5, 8, 11, 14, 17, 20])
+
     def test_species(self):
         self.assertEqual(len(g.SPECIES), 21)
         self.assertEqual(g.SPECIES[0], ("blaziken", "BLAZIKEN"))
@@ -129,7 +147,7 @@ class Resources(unittest.TestCase):
 
     def test_gen_xml(self):
         xml = g.gen_xml()
-        self.assertEqual(xml.count("<bitmap "), 23)
+        self.assertEqual(xml.count("<bitmap "), 30)
         self.assertEqual(xml.count("<font "), 3)
         for s in ('id="Mon0"', 'id="Mon20"', 'id="EmeraldTime"', 'filename="emerald2.fnt"', 'filename="emerald3.fnt"'):
             self.assertIn(s, xml)

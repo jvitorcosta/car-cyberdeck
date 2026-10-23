@@ -10,7 +10,7 @@ committed. Spec: docs/superpowers/specs/2026-10-23-pokeface-emerald-design.md.
 Pokémon: each anim_front.png (two 64x64 frames, stacked) gets its normal.pal colours, palette
 index 0 transparent, snapped to the Forerunner 255's 64 colours and mirrored to face right; the
 two frames sit side by side in one 128x64 sheet, mon<i>.png, in SPECIES order (the watch draws
-them at 2x).
+them at 2x). The REWARDS also get a shiny sheet, mon<i>s.png, from their shiny.pal.
 Font: Emerald's latin_normal sheet (16x16 cells in charmap order, widths from src/fonts.c) gives
 the GLYPHS as BMFont fonts: emerald1 (1x), emerald2 (2x) and emerald3 (3x, digits and ':' only,
 for the time).
@@ -40,6 +40,7 @@ SPECIES = [("blaziken", "BLAZIKEN"), ("sceptile", "SCEPTILE"), ("latias", "LATIA
            ("xerneas", "XERNEAS"), ("yveltal", "YVELTAL"), ("zygarde", "ZYGARDE")]
 GLYPHS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz :./-%°"
 TIME_GLYPHS = "0123456789:"
+REWARDS = list(range(2, len(SPECIES), 3))   # each weekday's reward legendary: also drawn shiny (mon<i>s.png)
 # Field rows and colours (solid, vivid, not pale)
 HORIZON = 76            # the horizon band's middle row: sky above, grass below
 FIELD = {
@@ -70,6 +71,11 @@ def frames(sheet):
 
 def colourise(frame, pal):
     """Palette indices -> RGBA in the watch's colours; index 0 is the see-through background."""
+    if frame.mode != "P":
+        raise ValueError("sprite frame is %s, not palette-indexed (P)" % frame.mode)
+    top = max(frame.get_flattened_data())
+    if top >= len(pal):
+        raise ValueError("sprite uses index %d beyond its %d-colour palette" % (top, len(pal)))
     out = Image.new("RGBA", frame.size)
     out.putdata([(0, 0, 0, 0) if i == 0 else tuple(_level(c) for c in pal[i]) + (255,)
                  for i in frame.get_flattened_data()])
@@ -144,6 +150,8 @@ def field(night):
 def gen_xml():
     bitmaps = "\n".join('    <bitmap id="Mon%d" filename="mon%d.png" dithering="none"/>' % (i, i)
                         for i in range(len(SPECIES)))
+    bitmaps += "".join('\n    <bitmap id="Shiny%d" filename="mon%ds.png" dithering="none"/>' % (i, i)
+                       for i in REWARDS)
     for rid, night in (("FieldDay", False), ("FieldNight", True)):
         # its 3 colours as the palette: 2 bits a pixel on the watch instead of 8
         colours = sorted(set(FIELD[night].values()))
@@ -182,6 +190,9 @@ def main():
             two = frames(src)
             print("%-10s source %dx%d mode %s" % (name, src.width, src.height, src.mode))
         sheet([colourise(f, pal) for f in two]).save(os.path.join(OUT, "mon%d.png" % i))
+        if i in REWARDS:
+            shiny = read_jasc(_text("graphics/pokemon/%s/shiny.pal" % folder))
+            sheet([colourise(f, shiny) for f in two]).save(os.path.join(OUT, "mon%ds.png" % i))
 
     charmap = read_charmap(_text("charmap.txt"))
     widths = read_widths(_text("src/fonts.c"))
