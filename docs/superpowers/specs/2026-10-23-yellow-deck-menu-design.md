@@ -136,6 +136,13 @@ MENU ──A/tap──► LIGHTS ──Back/B──► MENU
 - **No scanlines, glow or flicker** in this version (cost and readability). They can be a later
   polish.
 
+> **2026-10-23 (owner): the terminal look goes further, superseding "No scanlines" above.** Faint
+> scanlines, ALL CAPS bracket labels, a `> [LIGHTS]` row, Pip-Boy tabs for the zones, bordered colour
+> boxes with a big colour chip, a 10-cell level bar (%, MIX or OFF), a typed RobCo boot (~0.5 s) and a
+> blinking block cursor on the Menu strip. Status messages (`>ROSE APPLIED`, `>INSIDE: NO LINK`,
+> `>OUTSIDE: LINKED`) replace the strip's text for 2.5 s. The strip shows the real colours
+> (`IN PINK 40%  OUT PINK 100%`; `OFF`, `--`).
+
 ### Night mode
 
 - Same rule and code as the black deck: `util/daynight` (18:00-06:00), `net/clock` (SNTP, the
@@ -149,6 +156,9 @@ MENU ──A/tap──► LIGHTS ──Back/B──► MENU
   that looks wrong at night in practice (booting with no hotspot), revisit. The deck gets the
   hotspot within seconds in the car, so it shouldn't matter.
 - Night mode changes the **screen only**, never the car's LEDs.
+
+> **2026-10-23 (owner): amber at night.** The night palette is amber on black instead of dimmed green
+> (nothing stays green at night); the backlight rule is unchanged.
 
 ### The Lights page
 
@@ -188,6 +198,22 @@ The layout has to make room for:
   outside Pink 100 percent", or "Favourite 3 is empty". English Siri mishears words, so the parser
   should take the likely mishearings, as it already does for colours. **Builder's call:** which
   ones, based on tests with the Shortcut.
+
+> **2026-10-23 (owner): fixed named presets replace saved favourites.** The four slots are no longer
+> saved from the deck (no hold-to-save, no NVS slots, no empty slots). They are fixed, both lights on:
+>
+> | # | Name | Inside | Outside |
+> |---|---|---|---|
+> | 1 | ROSE | pink 40 % | pink 100 % |
+> | 2 | FIRE | red 50 % | red 100 % |
+> | 3 | CALM | white 40 % | white 40 % |
+> | 4 | PURPURA | purple 40 % | purple 100 % |
+>
+> Voice: "rose", "fire", "calm", "purpura" (the owner's spelling, the one non-English name) or
+> "preset/favourite + one..four / 1..4"; a preset ignores the rest of the phrase, and the reply is e.g.
+> "Rose: inside Pink 40 percent, outside Pink 100 percent". `GET /presets?k=` replaces `/favs`
+> (`1 ROSE pink 40 pink 100`, four lines). The watch's fourth page is PRESETS (names and two dots).
+> Presets are the Menu's main element (four blocks under the LIGHTS row).
 
 ### The deck's HTTP API
 

@@ -9,61 +9,75 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 - `GET /state?k=<REMOTE_TOKEN>` answers the same line without changing anything.
 - Both take an optional `&zone=inside|outside`: then only that light's page changes (or is read),
   and the reply is prefixed: `Inside: Purple, 70 percent`. Without it, both lights (the BOTH page).
-- `GET /favs?k=<REMOTE_TOKEN>` lists the four favourites, one line each, joined by newlines:
-  `1 pink 50 purple 100` (slot, inside colour and level, outside colour and level), `off 0` for a
-  light that was off, `3 -` for an empty slot.
+- `GET /presets?k=<REMOTE_TOKEN>` lists the four presets, one line each, joined by newlines:
+  `1 ROSE pink 40 pink 100` (slot, name, inside colour and level, outside colour and level). The
+  list is fixed, so it never changes between calls.
 - `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on:
   `inside=on outside=nolink`. Each word is `on`, `off` or `nolink`; a light the deck has no link
   to is always `nolink`, whatever it last showed.
-- All four reply in plain text (`text/plain`). A wrong key gets 403 (on all four); a phrase with
+- All of them reply in plain text (`text/plain`). A wrong key gets 403 "Wrong key" (on all of them); a phrase with
   nothing to do gets "Sorry, I didn't get a colour or a command".
 - Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page
   on the deck's screen is left as it is.
 
 ## On the deck
 
-The deck boots to a green-on-black terminal **Menu** (`ROBCO INDUSTRIES (TM) TERMLINK`), whatever
-page it last showed.
+The deck boots to a green-on-black terminal **Menu** (`ROBCO INDUSTRIES (TM) TERMLINK`, typed out
+character by character in about half a second), whatever page it last showed. Every screen has faint
+scanlines and ALL CAPS bracket labels.
 
-- **Menu**: `[ LIGHTS ]` opens the Lights page. Below it are the favourite slots F1-F4 (tap one to
-  apply it). A strip at the bottom has the clock (`--:--` until the deck has the time) and, for
-  IN and OUT, a box: ON in the light's colour, OFF, or `--` when the deck has no link to it.
-- **Lights**: `< BACK` returns to the Menu. Then the pages BOTH / INSIDE / OUTSIDE, the status
-  line, the 2x4 colour tiles, the favourite slots, and `-` / level / `+`. Tap a tile to set the
+- **Menu**: the `> [LIGHTS]` row opens the Lights page. Below it are the four preset blocks (see
+  "Presets"; tap one to apply it). A strip at the bottom shows what the lights are really doing, in
+  words: `IN PINK 40%  OUT PINK 100%` (`OFF` for a light that is off, `--` when the deck has no link
+  to it), ending in a blinking block cursor.
+- **Lights**: `< BACK` returns to the Menu. Then Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE,
+  the status line, the 2x4 colour boxes (the chosen one shows a big colour chip), the presets, and
+  a 10-cell level bar with `-` / `+` (its label is the %, `MIX` or `OFF`). Tap a tile to set the
   colour and turn on; double-tap the lit one to turn off.
-- **BOTH while the lights differ** (after a favourite like "pink, inside 50 %, outside 100 %", or
-  after the INSIDE / OUTSIDE pages): no tile is ringed and the level box says `MIX`. On/off (Y,
+- **BOTH while the lights differ** (after a preset like ROSE, whose lights differ, or after the
+  INSIDE / OUTSIDE pages): no tile is ringed and the level box says `MIX`. On/off (Y,
   voice "off", the watch's Off) and `-` / `+` (LB / RB, "brighter" / "dimmer") act on each light's
   own look, so each keeps its colour and level; a spoken level ("50%") sets both to that level and
   keeps each colour. A colour (a tile, or spoken) sets both lights to it, as usual.
 - **Status line**: `IN ON 50%  OUT --  LINK 1/2`. Per light: `ON 50%`, `OFF`, or `--` (no link);
   `LINK n/2` counts the linked lights. `ON` is what the deck last sent while connected, not a
   reading from the controller (the LED controllers can't be read back).
+- **Messages**: a terminal line replaces the strip's text for 2.5 s when something happens:
+  `>ROSE APPLIED` (a preset, from any source), `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's
+  link changed). Then the strip comes back.
 - **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the Menu, a green ring on
   Lights), **A** presses, **B** is Back (to the Menu; on the Menu it does nothing). On Lights
   only: **X** next page, **Y** this page's lights on/off, **LB / RB** `-` / `+`. B used to switch
   to the BOTH page; use X for that now.
 
-## Favourites
+## Presets
 
-Four slots, each saving **both** lights' colour and level (inside and outside). They survive a
-reboot, and a restart still boots to the Menu.
+Four fixed presets replace the old saved favourites. They are in the firmware, so nothing is saved
+on the deck and there is no hold-to-save. Each sets **both** lights, both on:
 
-- **Apply**: tap a filled slot (Menu or Lights), or Xbox A on it. An empty slot does nothing.
-- **Save**: on the Lights page, hold a slot **0.8 s** (it flashes green when saved); with the
-  Xbox, hold A on the slot **1 s**. It stores the INSIDE and OUTSIDE looks as they are now.
-- **Voice**: "favourite one" ... "favourite four" (also `favorite`, `preset`, and digits:
-  "favourite 2"). It applies to both lights, whatever zone was asked, and replies e.g.
-  `Favourite 1: inside Pink 50 percent, outside Purple 100 percent`, or `Favourite 3 is empty`.
-- **Watch**: the Honda City app has a fourth page, **Favourites** (F1-F4 with the two dots each,
-  `F3 --` when empty). START there lists them; pick one to apply it.
-- If a favourite has different looks inside and outside, the BOTH page shows `MIX` (see "BOTH
-  while the lights differ" above) and the status line shows each light.
+| # | Name | Inside | Outside |
+|---|---|---|---|
+| 1 | ROSE | pink 40 % | pink 100 % |
+| 2 | FIRE | red 50 % | red 100 % |
+| 3 | CALM | white 40 % | white 40 % |
+| 4 | PURPURA | purple 40 % | purple 100 % |
+
+- **Apply**: tap a preset (Menu or Lights), or Xbox A on it. That is all: no hold.
+- **Voice**: "rose", "fire", "calm" or "purpura", or "preset one" ... "preset four" (also
+  `favourite`/`favorite`, and digits: "preset 2"). It applies to both lights, whatever zone was
+  asked, and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
+  `Rose: inside Pink 40 percent, outside Pink 100 percent`. Siri may hear "purpura" as "purple",
+  which is the colour; say "preset four" for that one.
+- **Watch**: the Honda City app has a fourth page, **PRESETS** (the names with the two dots each).
+  START there lists them by name; pick one to apply it. "No presets yet" shows if `/presets` didn't
+  answer.
+- Presets with different looks inside and outside make the BOTH page show `MIX` (see "BOTH while
+  the lights differ" above) and the status line shows each light.
 
 ## Night mode
 
-From **18:00 to 06:00** local time, once the deck has the time over WiFi, the screen goes to a
-dimmer green palette and the backlight to about a third. It changes only the screen, never the
+From **18:00 to 06:00** local time, once the deck has the time over WiFi, the screen goes to an
+amber palette (dimmer than the day green, with nothing left green) and the backlight to about a third. It changes only the screen, never the
 lights. Without WiFi (no `REMOTE_TOKEN`) there is no clock, so the deck stays in day mode.
 
 To check it without waiting for evening, build with the test hook, then clear it:
@@ -83,7 +97,7 @@ English or Portuguese, any order, other words ignored (`src/util/ledvoice.h`):
 | Power | on, off / liga, desliga, acende, apaga |
 | Brighter / dimmer (10 % steps) | brighter, up, more / mais, aumenta, forte; dimmer, down, less / menos, diminui, fraco |
 | Level | a number (`50`, `50%`, rounded to 10), max/máximo, min/mínimo |
-| Favourite | favourite/favorite/preset + 1-4, as a word or digit ("favourite two", "favourite 2") |
+| Preset | rose, fire, calm, purpura; or preset/favourite/favorite + 1-4, as a word or digit ("preset two", "preset 2") |
 
 A colour also turns the lights on.
 
@@ -135,9 +149,8 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
   A colour or Off is sent for that zone (BOTH: both lights). Brightness opens a level screen whose
   fill rises and falls with UP/DOWN in 10 % steps; the deck gets the level 0.5 s after the last
   press.
-- **Favourites page** (fourth page): the deck's four favourites. START opens a list (F1..F4 with
-  their two dots, "None saved" if there are none); picking one applies it. Saving is done on the
-  deck, not the watch.
+- **PRESETS page** (fourth page): the deck's four presets, names with their two dots. START opens a
+  list by name ("No presets yet" if the deck didn't answer); picking one applies it.
 - **Not connected**: when a light has no link, its page's bottom line says "Not connected" (on
   BOTH: "Inside not connected", "Outside not connected", or "Not connected" for both) in orange in
   place of the "START: change" hint. The page still shows that light's last known colour. The app

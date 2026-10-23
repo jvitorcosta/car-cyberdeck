@@ -9,16 +9,24 @@ Open items, not scheduled. Newest decisions first within each section.
   - it boots to the green Menu; LIGHTS opens, BACK returns; every tile, zone, `-` and `+` hits
     where tapped; a controller switched off turns its part of STATUS into `--` within ~10 s;
   - `/say` changes the lights while the Menu shows, and the strip follows;
-  - favourites: hold F1 on Lights saves it (flashes) and it survives a restart; a tap applies it;
-    an empty slot does nothing; `text=favourite 1` applies and answers, `favourite 3` says it is
-    empty; `/favs` returns 4 lines, `/status` returns `inside=… outside=…`; the slot drawing fits;
-  - Xbox: A tap applies, A held 1 s on Lights saves; **B is now Back** (was: BOTH page);
-  - night mode: a `-D NIGHT_TEST` build drops the backlight (~90/255) and dims the greens with no
-    bright frame, the 8 tiles stay distinguishable and the ink readable; the clock shows `--:--`
-    then `HH:MM` and refreshes each minute without flicker; a normal build switches by itself
-    around 18:00 and stays bright by day;
+  - presets: tapping ROSE / FIRE / CALM / PURPURA on the Menu and on Lights applies both lights
+    (no hold, nothing saved); Xbox A on one applies it; `/presets` returns 4 lines
+    (`1 ROSE pink 40 pink 100` ...) and `/status` returns `inside=… outside=…`; the blocks fit;
+  - voice: "rose", "fire", "calm", "purpura" and "preset one".."four" apply and answer
+    (`Rose: inside Pink 40 percent, outside Pink 100 percent`); "rose 50" is only ROSE. Siri may hear
+    "purpura" as "purple": say "preset four" for that one;
+  - Xbox: A applies a preset; **B is now Back** (was: BOTH page);
+  - restyle: scanlines, the `> [LIGHTS]` row, the Pip-Boy tabs, the colour boxes with the big chip, the
+    10-cell level bar (%, MIX, OFF) read well; the typed RobCo boot takes ~0.5 s and a `/say` during
+    it isn't lost; the block cursor blinks on the menu strip;
+  - messages: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` show ~2.5 s and the strip
+    comes back; the strip shows real colours (`IN PINK 40%  OUT PINK 100%`, `OFF`, `--`);
+  - night mode: a `-D NIGHT_TEST` build drops the backlight (~90/255) and the screen is **amber**
+    (no green left, no bright frame), the 8 tiles stay distinguishable and the ink readable; the
+    clock shows `--:--` then `HH:MM` and refreshes each minute without flicker; a normal build
+    switches by itself around 18:00 and stays bright green by day;
   - fonts and layout (GLCD header at 8 px, strip positions) read well on the panel;
-  - watch: the Favourites page lists the deck's favourites, START applies F1 and BOTH shows the new
+  - watch: the PRESETS page lists the four names, START applies ROSE and BOTH shows the new
     looks, and a controller switched off shows "Not connected" after reopening the app.
 
 - **Star Light Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
