@@ -38,9 +38,9 @@ the panel would turn teal.
     reading), the sky in words (`PARTLY CLOUDY`) and `HI 32 LO 26  MANAUS`. Where the car is comes
     from the hotspot's public IP (ip-api.com, approximate), the weather from Open-Meteo, every 15 min.
     A failed fetch keeps the last reading; `>OFFLINE` shows only when no reading ever came;
-  - `LIGHTS`: one row per light (`INSIDE`, `OUTSIDE`) with a chip of its colour, the colour name and
-    its level (`40%`); `OFF` (dim) for a light that is off, `-- NO LINK` when the deck has no link to
-    it (never its last colour);
+  - the lights, no label: one row per light (`INSIDE`, `OUTSIDE`), evenly spaced, with a chip of its
+    colour, the colour name and its level (`40%`); `OFF` (dim) for a light that is off, `-- NO LINK`
+    (red) when the deck has no link to it (never its last colour);
   - two big buttons: `> [LIGHTS]` opens the Lights page, `> [KARAOKE]` the black deck's lyrics.
     KARAOKE is bright with a small inverted `LIVE` tag at its right edge while the black deck plays
     a song with synced lyrics, and dim (no tag) otherwise: a tap then says why;

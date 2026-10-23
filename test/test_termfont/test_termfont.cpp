@@ -207,15 +207,21 @@ void test_dash_lights_fit() {
                                      DASH_RIGHT - termfont::width(Face::TITLE, "100%"), name);
     }
     for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(Face::TITLE, s, LIGHT_NAME_X, DASH_RIGHT + MARGIN);
-    fitsLeft(Face::SMALL, "LIGHTS", DASH_X, 316);
-    // rows: the label, then the two rows, between the band's rules
-    const Rows label = fromCapTop(Face::SMALL, LIGHTS_LABEL_Y);
+    // rows: the two rows between the band's rules (no label: the rows say what they are)
     const Rows row0 = fromBase(Face::TITLE, LIGHT_ROW_BASE), row1 = fromBase(Face::TITLE, LIGHT_ROW_BASE + LIGHT_ROW_DY);
     TEST_ASSERT_TRUE(fromBase(Face::BODY, LIGHT_ROW_BASE).top >= row0.top);  // TITLE is the taller face
-    between(CLOCK_RULE_Y, label, LIGHTS_RULE_Y, "LIGHTS");
-    above(label, row0, "label over INSIDE");
+    between(CLOCK_RULE_Y, row0, LIGHTS_RULE_Y, "INSIDE");
     above(row0, row1, "INSIDE over OUTSIDE");
     between(CLOCK_RULE_Y, row1, LIGHTS_RULE_Y, "OUTSIDE");
+    // spaced evenly: the gaps above, between and below the rows' caps (what the eye sees: names,
+    // digits, %) within a row of each other
+    const int cap = termfont::capHeight(Face::TITLE);
+    const int gapTop = (LIGHT_ROW_BASE - cap) - (CLOCK_RULE_Y + 1);
+    const int gapMid = (LIGHT_ROW_BASE + LIGHT_ROW_DY - cap) - LIGHT_ROW_BASE;
+    const int gapBottom = LIGHTS_RULE_Y - (LIGHT_ROW_BASE + LIGHT_ROW_DY);
+    for (int g : {gapTop, gapMid, gapBottom}) {
+        for (int h : {gapTop, gapMid, gapBottom}) TEST_ASSERT_TRUE(g - h <= 1 && h - g <= 1);
+    }
     // the chip as tall as TITLE's caps, on them
     TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::TITLE), LIGHT_CHIP_H);
     // the band's rule above the items

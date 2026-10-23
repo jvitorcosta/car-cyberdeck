@@ -4,7 +4,7 @@
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands. The header line
 //           (CYBERDECK // HONDA CITY); the clock big with the date under it ("FRI 23 OCT"), and
 //           right of it the outside temperature big, the sky in words and "HI 32 LO 26  MANAUS"
-//           (see "Weather" below); LIGHTS: a row per light with its colour chip, colour name and
+//           (see "Weather" below); a row per light with its colour chip, colour name and
 //           level (OFF, or -- NO LINK when the deck has no link to it); the two items "> [LIGHTS]"
 //           and "> [KARAOKE]" (the second with a LIVE tag while the black deck plays a song with
 //           synced lyrics, dimmed otherwise: a tap then only says why); and the strip: the trip line
@@ -684,15 +684,14 @@ static void drawWeather() {
     text(wxShown[2], DASH_RIGHT, HILO_Y, Face::SMALL, TR_DATUM);
 }
 
-// The lights band: the label (SMALL, DIM), then a row per light: its name (BODY, MID) and what
-// lightstatus::of says of it: on, a chip of its colour, the colour name (TITLE, TEXT) and its level
-// right-aligned; off, a DIM outlined chip and OFF in DIM; no link, "-- NO LINK" in DIM and no chip
-// (never its last look: the deck can't tell what a light it has lost shows).
+// The lights band: a row per light, no label (the rows name the lights, and the clock leads): its
+// name (BODY, MID) and what lightstatus::of says of it: on, a chip of its colour, the colour name
+// (TITLE, TEXT) and its level right-aligned; off, a DIM outlined chip and OFF in DIM; no link,
+// "-- NO LINK" in ALERT and no chip (never its last look: the deck can't tell what a light it has
+// lost shows).
 static void drawLightsBand() {
     const int top = CLOCK_RULE_Y + 1;
     clearBg(RULE_X0, top, RULE_X1 - RULE_X0, LIGHTS_RULE_Y - top);
-    tft.setTextColor(pal(termpal::DIM));
-    text("LIGHTS", DASH_X, LIGHTS_LABEL_Y, Face::SMALL, TL_DATUM);
     for (int i = 0; i < N_CTRL; i++) {
         const int base = LIGHT_ROW_BASE + i * LIGHT_ROW_DY;
         const Look& l = looks[i + 1];

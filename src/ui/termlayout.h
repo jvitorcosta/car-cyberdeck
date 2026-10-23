@@ -45,10 +45,10 @@ constexpr int DASH_TITLE_Y = 5, HEADER_RULE_Y = 20;
 // sky in words (SMALL) under it right of it, right-aligned; then the HI / LO line (SMALL) across
 constexpr int DASH_SPLIT = 160;
 constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, HILO_Y = 74, CLOCK_RULE_Y = 90;
-// the lights: the label (SMALL), then a row per light LIGHT_ROW_DY apart: its name (BODY), a chip of
-// its colour as tall as TITLE's caps, the colour name and the level right-aligned (TITLE), all on
-// one baseline
-constexpr int LIGHTS_LABEL_Y = 96, LIGHT_ROW_BASE = 125, LIGHT_ROW_DY = 22, LIGHTS_RULE_Y = 156;
+// the lights: no label (the rows name the lights), a row per light LIGHT_ROW_DY apart, spaced evenly
+// between the rules by their caps (12, 12 and 13 rows): its name (BODY), a chip of its colour as tall
+// as TITLE's caps, the colour name and the level right-aligned (TITLE), all on one baseline
+constexpr int LIGHT_ROW_BASE = 117, LIGHT_ROW_DY = 26, LIGHTS_RULE_Y = 156;
 constexpr int LIGHT_CHIP_X = 84, LIGHT_CHIP_W = 18, LIGHT_CHIP_H = 14, LIGHT_NAME_X = 108;
 // the strip under the items: the trip line, then the message line (empty unless a message shows);
 // the block cursor (a SMALL cell) ends the trip line, or the message while one shows, by DASH_RIGHT
