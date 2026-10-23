@@ -153,6 +153,18 @@ Xbox (RT/LT) ──BLE──▶ yellow deck ──HTTP over hotspot──▶ bla
   often can't set volume on iOS devices (`supports_volume` false): then it **pauses** while he
   talks and resumes after.
 
+## Evals and tracing (v1, my call)
+
+Both are part of v1, because the model choice depends on them and they are the portfolio's proof.
+
+- **Eval harness:** recorded car clips (starting with the mic-test recordings) each paired with the
+  expected action. One command replays them through the pipeline (or text-only, for quick prompt
+  checks) and reports action accuracy, **wrong-action rate**, "asked when it should have", p50/p95
+  latency per stage and cost per command, per model (free model, Haiku, Sonnet). Every mistake she
+  makes in the car becomes a new case.
+- **Tracing:** one trace per command with each stage's timing, the transcript, the model, tokens,
+  the tool picked and the cost; a small page with p50/p95 per stage and spend against US$10.
+
 ## Security and cost
 
 - `/talk` needs `REMOTE_TOKEN`. The deck authenticates to the server with its own shared secret over
