@@ -12,6 +12,7 @@ bool inside(const Rect& r, int x, int y) { return x >= r.x && x < r.x + r.w && y
 
 bool displayOnly(Screen s, int x, int y) {
     if (s == Screen::Menu) return inside(HEADER, x, y) || inside(MENU_STRIP, x, y);
+    if (s == Screen::Weather) return inside(WEATHER_BODY, x, y);
     return inside(STATUS, x, y) || inside(LEVEL, x, y);
 }
 
@@ -21,15 +22,20 @@ Rect mk(int x, int y, int w, int h) {
 
 }  // namespace
 
-int count(Screen s) { return s == Screen::Menu ? static_cast<int>(M_N) : static_cast<int>(L_N); }
+int count(Screen s) {
+    if (s == Screen::Menu) return M_N;
+    if (s == Screen::Weather) return W_N;
+    return L_N;
+}
 
 Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
     if (s == Screen::Menu) {
-        if (id < M_PRE0) return mk(4, 48, 312, 36);  // LIGHTS row
+        if (id < M_PRE0) return mk(4 + (id - M_ITEM0) * 158, 48, 154, 36);  // LIGHTS, WEATHER
         const int k = id - M_PRE0;
         return mk(4 + (k % 2) * 158, 92 + (k / 2) * 46, 154, 42);
     }
+    if (s == Screen::Weather) return mk(4, 2, 70, 36);  // W_BACK, where Lights has its Back
     if (id == L_BACK) return mk(4, 2, 70, 36);
     if (id < L_TILE0) return mk(80 + (id - L_ZONE0) * 80, 2, 76, 36);
     if (id < L_PRE0) {
@@ -82,6 +88,7 @@ int neighbour(Screen s, int from, int dx, int dy) {
 }
 
 int presetSlot(Screen s, int id) {
+    if (s == Screen::Weather) return -1;
     const int first = s == Screen::Menu ? static_cast<int>(M_PRE0) : static_cast<int>(L_PRE0);
     return id >= first && id < first + 4 ? id - first : -1;
 }
