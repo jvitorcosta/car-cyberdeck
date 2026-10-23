@@ -1,27 +1,44 @@
 import Toybox.Lang;
 
-// Who keeps you company, and how: pure rules, no device reads (Tests.mc covers them).
-//   Awake: Charmander 06-11, Charmeleon 12-17, Charizard 18-21. Asleep 22-05: Charizard.
-//   Earned (a run today, or steps >= goal): the day's Mega, awake or asleep, rolled once a day.
+// Who keeps you company: pure rules, no device reads (Tests.mc covers them).
+//   Each weekday has a pair: its day Pokémon from sunrise to sunset, its night Pokémon after.
+//   Earned (a run finished today, or steps >= goal): the weekday's reward legendary until midnight.
+// Species indices follow tools/gen_pokeface.py's SPECIES (resources Mon0..Mon20).
 module Partner {
-    enum { CHARMANDER, CHARMELEON, CHARIZARD, MEGA_X, MEGA_Y }
+    // Monday to Sunday: day, night, reward
+    const NAMES = ["BLAZIKEN", "SCEPTILE", "LATIAS", "HO-OH", "LUGIA", "SUICUNE",
+                   "RAYQUAZA", "DEOXYS", "LATIOS", "CRESSELIA", "DARKRAI", "JIRACHI",
+                   "ARCEUS", "GIRATINA", "DIALGA", "SOLGALEO", "LUNALA", "NECROZMA",
+                   "XERNEAS", "YVELTAL", "ZYGARDE"];
 
-    function asleep(hour as Number) as Boolean {
-        return hour >= 22 || hour < 6;
+    enum { HP_NONE, HP_GREEN, HP_YELLOW, HP_RED }
+
+    // CIQ's day_of_week (1 = Sunday ... 7 = Saturday) -> 0 = Monday ... 6 = Sunday.
+    function row(dayOfWeek as Number) as Number {
+        return (dayOfWeek + 5) % 7;
     }
 
-    // mega is the day's roll (MEGA_X or MEGA_Y), used only when earned.
-    function pick(hour as Number, earned as Boolean, mega as Number) as Number {
-        if (earned) {
-            return mega;
+    // Day is sunrise to sunset; without sun times (no weather position yet), 06:00 to 18:00.
+    function isDay(now as Number, hour as Number, rise as Number or Null, set as Number or Null) as Boolean {
+        if (rise == null || set == null) {
+            return hour >= 6 && hour < 18;
         }
-        if (asleep(hour) || hour >= 18) {
-            return CHARIZARD;
-        }
-        return hour >= 12 ? CHARMELEON : CHARMANDER;
+        return now >= rise && now < set;
     }
 
-    // A goal of 0 or none never counts: no Mega for free.
+    function who(dayOfWeek as Number, day as Boolean, earned as Boolean) as Number {
+        return row(dayOfWeek) * 3 + (earned ? 2 : (day ? 0 : 1));
+    }
+
+    // Body Battery as Emerald's HP bar colour.
+    function hpColour(bb as Number or Null) as Number {
+        if (bb == null) {
+            return HP_NONE;
+        }
+        return bb > 50 ? HP_GREEN : (bb > 20 ? HP_YELLOW : HP_RED);
+    }
+
+    // A goal of 0 or none never counts: no reward for free.
     function earned(steps as Number or Null, goal as Number or Null, ranToday as Boolean) as Boolean {
         if (ranToday) {
             return true;
@@ -48,26 +65,6 @@ module Partner {
 
     function dayKey(y as Number, m as Number, d as Number) as Number {
         return y * 10000 + m * 100 + d;
-    }
-
-    // stored is yesterday's or today's [dayKey, mega] (or null); a new day takes the new roll (0 = X).
-    function megaFor(today as Number, stored as Array or Null, roll as Number) as Array {
-        if (stored != null && stored.size() == 2 && stored[0] == today) {
-            return stored;
-        }
-        return [today, roll == 0 ? MEGA_X : MEGA_Y];
-    }
-
-    // The tail flame follows Body Battery: 2 px drained, 8 px full; unknown sits in the middle.
-    function flameRadius(bb as Number or Null, asleep as Boolean) as Number {
-        if (asleep) {
-            return 2;
-        }
-        if (bb == null) {
-            return 5;
-        }
-        var v = bb < 0 ? 0 : (bb > 100 ? 100 : bb);
-        return 2 + v * 6 / 100;
     }
 
     function barFraction(steps as Number or Null, goal as Number or Null) as Float {

@@ -1,9 +1,7 @@
 import Toybox.Activity;
 import Toybox.ActivityMonitor;
-import Toybox.Application;
 import Toybox.Graphics;
 import Toybox.Lang;
-import Toybox.Math;
 import Toybox.System;
 import Toybox.Time;
 import Toybox.Time.Gregorian;
@@ -11,15 +9,15 @@ import Toybox.Timer;
 import Toybox.UserProfile;
 import Toybox.WatchUi;
 
-// true: the simulator steps through every stage, one per minute (06, 12, 18, Mega X, Mega Y,
-// asleep at 23 with Mega X, asleep at 03). Never ship it on.
+// true: the simulator steps through all 21 Pokémon, one per minute (Monday day, night, reward,
+// then Tuesday ...). Never ship it on.
 const DEMO = false;
 
 // Layout "A, all at once", top to bottom: weather + next sunrise/sunset; weekday, date, phone,
 // notifications, battery; the time; the partner with heart rate + temperature on its left and
 // Body Battery + calories on its right; the step bar; steps and distance.
-// Asleep (low power) the partner holds one pose a minute; a wrist raise animates it for the few
-// seconds the watch stays awake, except at night. The watch's numbers are read once a minute and
+// In low power the Pokémon holds one frame; a wrist raise plays its 2-frame idle for the few
+// seconds the watch stays awake. The watch's numbers are read once a minute and
 // on waking (refresh); animation frames only redraw them, to spare the battery.
 class PokefaceView extends WatchUi.WatchFace {
     const CX = 130;
@@ -31,8 +29,9 @@ class PokefaceView extends WatchUi.WatchFace {
     private var _frame as Number = 0;
     private var _frames as Number = 0;    // frames played since this wake
     private var _minute as Number = -1;   // -1: read everything on the next update
-    private var _species as Number = Partner.CHARMANDER;
-    private var _asleep as Boolean = false;
+    private var _species as Number = 0;
+    private var _rise as Number or Null;   // today's sunrise / sunset, epoch seconds
+    private var _set as Number or Null;
 
     // What refresh() read, ready to draw
     private var _sunMark as String = "";
@@ -46,14 +45,12 @@ class PokefaceView extends WatchUi.WatchFace {
     private var _phone as Boolean = false;
     private var _hr as String = "--";
     private var _bb as String = "--";
-    private var _flame as Number = 5;
     private var _kcal as String = "--";
     private var _stepsLine as String = "--";
     private var _bar as Float = 0.0;
 
     function initialize() {
         WatchFace.initialize();
-        Math.srand(Time.now().value());
     }
 
     // The face just appeared (back from a menu or an activity): someone is looking.
@@ -78,7 +75,7 @@ class PokefaceView extends WatchUi.WatchFace {
     }
 
     private function animate() as Void {
-        if (_asleep || _timer != null) {
+        if (_timer != null) {
             return;
         }
         _frames = 0;
@@ -176,6 +173,8 @@ class PokefaceView extends WatchUi.WatchFace {
         var cond = Stats.weather();
 
         var sun = Stats.sun(cond);
+        _rise = sun[0];
+        _set = sun[1];
         var next = Fmt.nextSun(Time.now().value(), sun[0], sun[1], sun[2], is24);
         var mark = next.substring(0, 1);
         _sunMark = mark.equals("↑") || mark.equals("↓") ? mark : "";
@@ -199,45 +198,24 @@ class PokefaceView extends WatchUi.WatchFace {
         _bar = Partner.barFraction(act.steps, act.stepGoal);
 
         decide(clock, act);
-        _flame = Partner.flameRadius(bb, _asleep);
     }
 
     function drawPartnerAt(dc as Dc, cx as Number, cy as Number) as Void {
-        _sprite.show(_species, _asleep);
-        _sprite.draw(dc, cx, cy, _frame, _flame);
-        if (_asleep) {
-            var c = _sprite.corner();
-            text(dc, cx + c[0] + 2, cy + c[1] + 4, "z", Graphics.COLOR_LT_GRAY, Graphics.TEXT_JUSTIFY_LEFT);
-            text(dc, cx + c[0] + 10, cy + c[1] - 6, "Z", Graphics.COLOR_LT_GRAY, Graphics.TEXT_JUSTIFY_LEFT);
-        }
+        _sprite.show(_species);
+        _sprite.draw(dc, 14, 86, _timer != null ? _frame : 0);
     }
 
-    // Who is out this minute: by the hour, or the day's Mega once a run or the step goal is done.
+    // Who is out: the weekday's day or night Pokémon, or its reward once a run or the step goal is done.
     private function decide(clock as System.ClockTime, act as ActivityMonitor.Info) as Void {
-        var hour = clock.hour;
-        var earned = Partner.earned(act.steps, act.stepGoal, false) || ranToday();
-        var mega = Partner.MEGA_X;
+        var dow = Gregorian.info(Time.now(), Time.FORMAT_SHORT).day_of_week as Number;
         if (DEMO) {
-            var stage = [[6, false, 0], [12, false, 0], [18, false, 0], [12, true, 0], [12, true, 1],
-                         [23, true, 0], [3, false, 0]][clock.min % 7] as Array;
-            hour = stage[0] as Number;
-            earned = stage[1] as Boolean;
-            mega = stage[2] == 0 ? Partner.MEGA_X : Partner.MEGA_Y;
-        } else if (earned) {
-            var now = Gregorian.info(Time.now(), Time.FORMAT_SHORT);
-            var today = Partner.dayKey(now.year, now.month as Number, now.day);
-            var stored = Application.Storage.getValue("mega") as Array or Null;
-            var day = Partner.megaFor(today, stored, Math.rand() % 2);
-            if (day != stored) {   // megaFor hands back the stored array when it is still today's
-                Application.Storage.setValue("mega", day as Application.PropertyValueType);
-            }
-            mega = day[1] as Number;
+            var i = clock.min % 21;
+            _species = i;
+            return;
         }
-        _asleep = Partner.asleep(hour);
-        _species = Partner.pick(hour, earned, mega);
-        if (_asleep) {
-            stopAnimating();
-        }
+        var earned = Partner.earned(act.steps, act.stepGoal, false) || ranToday();
+        var day = Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
+        _species = Partner.who(dow, day, earned);
     }
 
     // A run finished today, from the watch's activity history.

@@ -7,35 +7,6 @@ import Toybox.Time.Gregorian;
 import Toybox.Weather;
 
 (:test)
-function testStages(logger as Test.Logger) as Boolean {
-    Test.assertEqual(Partner.pick(6, false, Partner.MEGA_X), Partner.CHARMANDER);
-    Test.assertEqual(Partner.pick(11, false, Partner.MEGA_X), Partner.CHARMANDER);
-    Test.assertEqual(Partner.pick(12, false, Partner.MEGA_X), Partner.CHARMELEON);
-    Test.assertEqual(Partner.pick(17, false, Partner.MEGA_X), Partner.CHARMELEON);
-    Test.assertEqual(Partner.pick(18, false, Partner.MEGA_X), Partner.CHARIZARD);
-    Test.assertEqual(Partner.pick(21, false, Partner.MEGA_X), Partner.CHARIZARD);
-    return true;
-}
-
-(:test)
-function testAsleep(logger as Test.Logger) as Boolean {
-    Test.assert(Partner.asleep(22));
-    Test.assert(Partner.asleep(5));
-    Test.assert(!Partner.asleep(6));
-    Test.assert(!Partner.asleep(21));
-    Test.assertEqual(Partner.pick(23, false, Partner.MEGA_Y), Partner.CHARIZARD);
-    Test.assertEqual(Partner.pick(23, true, Partner.MEGA_Y), Partner.MEGA_Y);
-    Test.assertEqual(Partner.pick(3, false, Partner.MEGA_X), Partner.CHARIZARD);
-    return true;
-}
-
-(:test)
-function testEarnedOverridesDay(logger as Test.Logger) as Boolean {
-    Test.assertEqual(Partner.pick(9, true, Partner.MEGA_X), Partner.MEGA_X);
-    return true;
-}
-
-(:test)
 function testEarned(logger as Test.Logger) as Boolean {
     Test.assert(Partner.earned(10000, 10000, false));
     Test.assert(!Partner.earned(9999, 10000, false));
@@ -51,32 +22,8 @@ function testZeroGoalNotEarned(logger as Test.Logger) as Boolean {
 }
 
 (:test)
-function testMegaResetsOnNewDay(logger as Test.Logger) as Boolean {
-    var m = Partner.megaFor(20261024, [20261023, Partner.MEGA_X], 1);
-    Test.assertEqual(m[0], 20261024);
-    Test.assertEqual(m[1], Partner.MEGA_Y);
-    m = Partner.megaFor(20261023, [20261023, Partner.MEGA_X], 1);
-    Test.assertEqual(m[0], 20261023);
-    Test.assertEqual(m[1], Partner.MEGA_X);
-    m = Partner.megaFor(20261023, null, 0);
-    Test.assertEqual(m[0], 20261023);
-    Test.assertEqual(m[1], Partner.MEGA_X);
-    return true;
-}
-
-(:test)
 function testDayKey(logger as Test.Logger) as Boolean {
     Test.assertEqual(Partner.dayKey(2026, 10, 23), 20261023);
-    return true;
-}
-
-(:test)
-function testFlame(logger as Test.Logger) as Boolean {
-    Test.assertEqual(Partner.flameRadius(100, false), 8);
-    Test.assertEqual(Partner.flameRadius(0, false), 2);
-    Test.assertEqual(Partner.flameRadius(150, false), 8);
-    Test.assertEqual(Partner.flameRadius(null, false), 5);
-    Test.assertEqual(Partner.flameRadius(100, true), 2);
     return true;
 }
 
@@ -166,5 +113,62 @@ function testAnimationCap(logger as Test.Logger) as Boolean {
     Test.assert(Partner.keepAnimating(1));
     Test.assert(Partner.keepAnimating(Partner.MAX_FRAMES - 1));
     Test.assert(!Partner.keepAnimating(Partner.MAX_FRAMES));
+    return true;
+}
+
+// Each weekday's pair, Monday to Sunday: day, night, reward (CIQ day_of_week: 1 = Sunday).
+(:test)
+function testWho(logger as Test.Logger) as Boolean {
+    Test.assertEqual(Partner.who(2, true, false), 0);    // Monday day: Blaziken
+    Test.assertEqual(Partner.who(2, false, false), 1);   // Monday night: Sceptile
+    Test.assertEqual(Partner.who(2, true, true), 2);     // Monday reward: Latias
+    Test.assertEqual(Partner.who(1, true, false), 18);   // Sunday day: Xerneas
+    Test.assertEqual(Partner.who(7, false, false), 16);  // Saturday night: Lunala
+    return true;
+}
+
+// After midnight it's already the new weekday: its night Pokémon until sunrise.
+(:test)
+function testWhoAfterMidnight(logger as Test.Logger) as Boolean {
+    var now = 7200;   // 02:00
+    var day = Partner.isDay(now, 2, 21600, 64800);
+    Test.assertEqual(Partner.who(3, day, false), 4);     // Tuesday night: Lugia
+    return true;
+}
+
+(:test)
+function testIsDayFallback(logger as Test.Logger) as Boolean {
+    Test.assert(Partner.isDay(0, 12, null, null));
+    Test.assert(Partner.isDay(0, 6, null, null));
+    Test.assert(!Partner.isDay(0, 19, null, null));
+    Test.assert(!Partner.isDay(0, 5, null, null));
+    return true;
+}
+
+(:test)
+function testIsDaySun(logger as Test.Logger) as Boolean {
+    Test.assert(Partner.isDay(3000, 12, 1000, 5000));
+    Test.assert(!Partner.isDay(500, 12, 1000, 5000));
+    Test.assert(!Partner.isDay(5000, 12, 1000, 5000));
+    return true;
+}
+
+(:test)
+function testHpColour(logger as Test.Logger) as Boolean {
+    Test.assertEqual(Partner.hpColour(51), Partner.HP_GREEN);
+    Test.assertEqual(Partner.hpColour(50), Partner.HP_YELLOW);
+    Test.assertEqual(Partner.hpColour(21), Partner.HP_YELLOW);
+    Test.assertEqual(Partner.hpColour(20), Partner.HP_RED);
+    Test.assertEqual(Partner.hpColour(0), Partner.HP_RED);
+    Test.assertEqual(Partner.hpColour(null), Partner.HP_NONE);
+    return true;
+}
+
+(:test)
+function testNames(logger as Test.Logger) as Boolean {
+    Test.assertEqual(Partner.NAMES.size(), 21);
+    Test.assert((Partner.NAMES[0] as String).equals("BLAZIKEN"));
+    Test.assert((Partner.NAMES[3] as String).equals("HO-OH"));
+    Test.assert((Partner.NAMES[20] as String).equals("ZYGARDE"));
     return true;
 }
