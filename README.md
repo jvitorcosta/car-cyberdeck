@@ -97,8 +97,8 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
    **Updates over WiFi (S3):** with `REMOTE_TOKEN` set and the PC on the deck's network (home
    WiFi on its 2.4 GHz band, see [Two decks](#two-decks); or the PC joined to the iPhone
    hotspot with `--upload-port 172.20.10.10`), run
-   `pio run -e s3_ota -t upload`. The deck shows the upload's progress (on the Star Light Zone
-   night with `data/slzbg.bin`, see Media) and restarts into the new firmware; an interrupted upload never boots. If the new firmware crashes 3 boots in a
+   `pio run -e s3_ota -t upload`. The deck shows the upload's progress (on Green Hill Zone
+   with `data/backdrop.bin`, see Media) and restarts into the new firmware; an interrupted upload never boots. If the new firmware crashes 3 boots in a
    row before it has run a minute with a good poll, the deck goes back to the previous one
    (`[ota] rolled back`). Windows may ask to let Python through the firewall the first time:
    espota needs the deck to connect back to the PC. Media changes still go over USB
@@ -151,7 +151,7 @@ Without it the deck uses built-in defaults.
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
 | Intro video (S3) | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; default: the kiss wallpaper's walk-in and kiss, ~13 s; needs ffmpeg). One of the random boot openings | none: the night drive openings only |
 | Second intro video (S3) | `python tools/gen_intro.py max-clip/max.mp4 --seg 0-99 --out max --letterbox --q 8 --fps 16` → `data/max.bin` + `.pcm` (the whole 16:9 frame under the boot log; smaller frames at 16 fps, so the deck draws every one). Max Verstappen's F1 intro, another random opening | one video opening fewer |
-| Update screen night (S3) | `python tools/gen_slz_backdrop.py` → `data/slzbg.bin` (Star Light Zone, rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/slz/`) | the battle box on firmware updates |
+| Update screen backdrop (S3) | `python tools/gen_backdrop.py` → `data/backdrop.bin` (Green Hill Zone, rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/ghz/`) | the battle box on firmware updates |
 | Shadow on the update rail (S3) | `python tools/gen_shadow_rider.py` → `data/shadow.bin` (his Sonic Battle running loop, cut from the sprite sheet it fetches into `sonic-sprites/shadow/`) | two jet glows ride the rail |
 | Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Waiting for a song..." |
 | Music-box tunes (S3) | `python tools/gen_tune.py song.mid --name "National Park"` → `data/tunes/national_park.txt`, one per song (the melody line; `--track N` if it picks the accompaniment); all of `data/tunes/` loop in random order | two public-domain tunes (`data/tunes_default.txt`) |

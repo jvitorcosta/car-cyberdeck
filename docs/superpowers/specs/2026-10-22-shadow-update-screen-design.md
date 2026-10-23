@@ -2,6 +2,11 @@
 
 Date: 2026-10-22. Owner: João. Replaces the S3's firmware-update screen (`src/ui/otascreen.*`).
 
+> **Revision 2026-10-23 (owner, after seeing it on the deck): Green Hill Zone, not Star Light Zone**,
+> which was too dark on the screen. `tools/gen_backdrop.py` renders the GHZ background (window
+> x 1100..1419, y 16..255: clouds, hills, the waterfall, the lake) into `data/backdrop.bin`; the rest
+> of this design stands. Star Light Zone below is the original choice.
+
 ## Why
 
 The deck updates over WiFi (`net/ota`, PR #9). Today the screen is a battle box with an EXP bar:

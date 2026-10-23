@@ -1,10 +1,10 @@
-"""Host tests for tools/gen_slz_backdrop.py (no network). Run: python tools/test_gen_slz_backdrop.py"""
+"""Host tests for tools/gen_backdrop.py (no network). Run: python tools/test_gen_backdrop.py"""
 import os
 import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gen_slz_backdrop as g  # noqa: E402
+import gen_backdrop as g  # noqa: E402
 
 
 class Kosinski(unittest.TestCase):

@@ -4,9 +4,9 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
-- **Star Light Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
-  USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/slzbg.bin` and
-  `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): the night fills
+- **Green Hill Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
+  USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/backdrop.bin` and
+  `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): Green Hill fills
   the screen, the rail fills red with Shadow skating its tip, a red flash at 100%, the reboot. Cut the PC's upload
   mid-way: grey rail and "Update failed" for ~3 s, then the deck, polling again.
 

@@ -10,7 +10,7 @@ howl.pcm 624000
 avatar.bin 67736
 idle.bin 2536
 mcqueen.bin 33020
-slzbg.bin 153608
+backdrop.bin 153608
 max.bin 1102328
 max.pcm 780000
 shadow.bin 7168
