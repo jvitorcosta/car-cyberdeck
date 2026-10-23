@@ -848,9 +848,10 @@ static void load() {
 static tripclock::Clock tripClock;
 static uint32_t tripStartMs = 0;  // millis() of the first tick, 0: not started
 static volatile uint16_t tripKmh = 0;       // the latest reading, written by tripSpeed()
-static volatile bool tripHasSpeed = false;  // a reading arrived (single-word writes are atomic on the ESP32)
+static volatile uint32_t tripSpeedAt = 0;   // millis() of that reading, never 0; 0: none yet
 static uint32_t tripIntegratedAt = 0;       // millis() tripTick() last integrated the speed
-static constexpr uint32_t TRIP_MAX_STEP_MS = 3000;  // a gap (link dropped) counts at most this much
+static constexpr uint32_t TRIP_MAX_STEP_MS = 3000;  // one integration step counts at most this (a stalled loop)
+static constexpr uint32_t TRIP_FRESH_MS = 3000;     // a reading older than this is stale (the link dropped): no distance
 static uint8_t tripSaved[tripmeter::RECORD_BYTES];
 static bool tripSavedValid = false;
 
@@ -859,8 +860,12 @@ static bool tripSavedValid = false;
 // Meter isn't thread-safe). Nothing calls it yet and no speed is faked, so the strip shows "--" km.
 static void tripSpeed(uint16_t kmh) __attribute__((unused));
 static void tripSpeed(uint16_t kmh) {
+    // The speed first, then the time that makes it count: 32-bit and 16-bit writes are atomic on the
+    // ESP32, so loop() sees the old pair or the new speed with either time. A new speed with the old
+    // time is merely a fraction of a second early.
     tripKmh = kmh;
-    tripHasSpeed = true;
+    const uint32_t now = millis();
+    tripSpeedAt = now ? now : 1;
 }
 
 // The previous trip from NVS, as a message when it lasted a minute or more (shorter ones are a
@@ -887,7 +892,8 @@ static void tripTick() {
     static uint32_t checkedAt = 0;
     if (checkedAt && now - checkedAt < 1000) return;
     checkedAt = now ? now : 1;  // not now|1: that can be 1 ms ahead of now, and now - it wraps
-    if (tripHasSpeed) {
+    const uint32_t seenAt = tripSpeedAt;
+    if (seenAt && static_cast<int32_t>(now - seenAt) <= static_cast<int32_t>(TRIP_FRESH_MS)) {  // signed: core 0 may stamp it after our now; a silent link stops the distance
         const uint32_t dt = tripIntegratedAt ? now - tripIntegratedAt : 0;
         tripMeter.addSpeed(tripKmh, dt < TRIP_MAX_STEP_MS ? dt : TRIP_MAX_STEP_MS);
     }
