@@ -26,6 +26,23 @@ void test_tiny_steps_do_not_drift() {
     TEST_ASSERT_EQUAL_UINT32(1000, m.trip().meters);
 }
 
+void test_large_step_does_not_overflow() {
+    tripmeter::Meter m;
+    m.addSpeed(65535, 200000000u);  // 65535 * 2e8 overflows 32 bits; = 3,640,833,333 m
+    TEST_ASSERT_EQUAL_UINT32(3640833333u, m.trip().meters);
+}
+
+void test_remainder_carries_across_calls() {
+    tripmeter::Meter m;
+    m.addSpeed(7, 1000);  // 1.944 m
+    TEST_ASSERT_EQUAL_UINT32(1, m.trip().meters);
+    m.addSpeed(7, 1000);  // 3.888 m
+    TEST_ASSERT_EQUAL_UINT32(3, m.trip().meters);
+    m.addSpeed(7, 1000);  // 5.833 m
+    m.addSpeed(7, 1000);  // 7.777 m
+    TEST_ASSERT_EQUAL_UINT32(7, m.trip().meters);
+}
+
 void test_has_distance_only_after_a_speed() {
     tripmeter::Meter m;
     TEST_ASSERT_FALSE(m.trip().hasDistance);
@@ -113,6 +130,8 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_sixty_kmh_for_a_minute_is_a_kilometre);
     RUN_TEST(test_tiny_steps_do_not_drift);
+    RUN_TEST(test_large_step_does_not_overflow);
+    RUN_TEST(test_remainder_carries_across_calls);
     RUN_TEST(test_has_distance_only_after_a_speed);
     RUN_TEST(test_seconds_are_kept);
     RUN_TEST(test_line_times);

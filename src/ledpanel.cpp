@@ -847,20 +847,20 @@ static void load() {
 // ---- Trip meter: the clock, the OBD hook and the NVS record ("trip", 9 bytes) ----
 static tripclock::Clock tripClock;
 static uint32_t tripStartMs = 0;  // millis() of the first tick, 0: not started
-static uint32_t tripSpeedAt = 0;  // millis() of the last tripSpeed() call, 0: none yet
+static volatile uint16_t tripKmh = 0;       // the latest reading, written by tripSpeed()
+static volatile bool tripHasSpeed = false;  // a reading arrived (single-word writes are atomic on the ESP32)
+static uint32_t tripIntegratedAt = 0;       // millis() tripTick() last integrated the speed
+static constexpr uint32_t TRIP_MAX_STEP_MS = 3000;  // a gap (link dropped) counts at most this much
 static uint8_t tripSaved[tripmeter::RECORD_BYTES];
 static bool tripSavedValid = false;
 
-// The OBD link will call this with each speed reading (km/h); it integrates the speed over the time
-// since the previous call (the first one counts from the trip start). Nothing calls it yet and no
-// speed is faked, so the strip shows "--" km. A long gap (the link dropped) holds the last speed
-// across it; the link should report staleness before that matters.
+// The OBD link will call this with each speed reading (km/h). It may run on another core, so it
+// only stores the latest reading; tripTick() on the loop task integrates it once a second (the
+// Meter isn't thread-safe). Nothing calls it yet and no speed is faked, so the strip shows "--" km.
 static void tripSpeed(uint16_t kmh) __attribute__((unused));
 static void tripSpeed(uint16_t kmh) {
-    const uint32_t now = millis();
-    const uint32_t from = tripSpeedAt ? tripSpeedAt : tripStartMs ? tripStartMs : now;
-    tripMeter.addSpeed(kmh, now - from);
-    tripSpeedAt = now ? now : 1;
+    tripKmh = kmh;
+    tripHasSpeed = true;
 }
 
 // The previous trip from NVS, as a message when it lasted a minute or more (shorter ones are a
@@ -886,7 +886,12 @@ static void tripTick() {
     }
     static uint32_t checkedAt = 0;
     if (checkedAt && now - checkedAt < 1000) return;
-    checkedAt = now | 1;
+    checkedAt = now ? now : 1;  // not now|1: that can be 1 ms ahead of now, and now - it wraps
+    if (tripHasSpeed) {
+        const uint32_t dt = tripIntegratedAt ? now - tripIntegratedAt : 0;
+        tripMeter.addSpeed(tripKmh, dt < TRIP_MAX_STEP_MS ? dt : TRIP_MAX_STEP_MS);
+    }
+    tripIntegratedAt = checkedAt;
     tripMeter.setSeconds(tripClock.seconds(now));
     const tripmeter::Trip t = tripMeter.trip();
     // the line shows minutes and tenths of a km: redraw only when one of them moved
@@ -898,9 +903,9 @@ static void tripTick() {
         if (screen == Screen::Menu) drawTrip();
     }
     static uint32_t savedAt = 0;
-    if (!savedAt) savedAt = now | 1;
+    if (!savedAt) savedAt = now ? now : 1;
     if (now - savedAt >= 60000) {
-        savedAt = now | 1;
+        savedAt = now ? now : 1;
         uint8_t buf[tripmeter::RECORD_BYTES];
         tripmeter::encode(t, buf);
         if (!tripSavedValid || memcmp(buf, tripSaved, sizeof(buf)) != 0) {
@@ -1492,7 +1497,8 @@ void loop() {
             edgeUp[i] = up;
             if (edgeAt[o] && millis() - edgeAt[o] < 150 && edgeUp[o] == up) lightstatus::linkChangeBoth(up, m, sizeof(m));
             else lightstatus::linkChange(i == 0, up, m, sizeof(m));
-            setMessage(m);
+            // the boot's ">LAST TRIP" has its 6 s: a link change doesn't cut it short (the strip still redraws)
+            if (!(message[0] && messageMs > MESSAGE_MS && millis() - messageAt < messageMs)) setMessage(m);
             drawLightState();  // the message now, then STATUS on Lights / the strip on the Menu: "--" while it's gone
         }
     }
