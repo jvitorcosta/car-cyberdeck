@@ -63,6 +63,8 @@ void linkChange(bool inside, bool up, char* buf, size_t n) {
     snprintf(buf, n, ">%s: %s", inside ? "INSIDE" : "OUTSIDE", up ? "LINKED" : "NO LINK");
 }
 
+void linkChangeBoth(bool up, char* buf, size_t n) { snprintf(buf, n, ">LIGHTS: %s", up ? "LINKED" : "NO LINK"); }
+
 void reply(State in, State out, char* buf, size_t n) {
     snprintf(buf, n, "inside=%s outside=%s", word(in), word(out));
 }

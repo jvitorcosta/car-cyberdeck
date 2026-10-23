@@ -77,6 +77,10 @@ void test_messages() {
     TEST_ASSERT_EQUAL_STRING(">INSIDE: NO LINK", buf);
     lightstatus::linkChange(false, true, buf, sizeof buf);
     TEST_ASSERT_EQUAL_STRING(">OUTSIDE: LINKED", buf);
+    lightstatus::linkChangeBoth(false, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING(">LIGHTS: NO LINK", buf);
+    lightstatus::linkChangeBoth(true, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING(">LIGHTS: LINKED", buf);
 }
 
 int main(int, char**) {

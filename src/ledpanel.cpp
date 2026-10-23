@@ -464,7 +464,7 @@ static void drawStatus() {
 }
 
 // The Menu strip's block cursor: one GLCD cell at the end of the text line, blinking at ~1 Hz.
-// Only its cell is redrawn. -1: no room left of the strip's edge (the longest line), so none.
+// Only its cell is redrawn. -1 when it would pass the strip's edge (x 316); the longest line still fits.
 static constexpr uint32_t BLINK_MS = 500;
 static int cursorX = -1;
 static bool cursorOn = false;
@@ -640,11 +640,17 @@ static void drawFocus(int id, bool on) {
     clearBg(r.x + r.w, r.y, 2, r.h);
 }
 
-// Redraws the current screen in the current palette.
-static void drawAll() {
-    clearBg(0, 0, tft.width(), tft.height());
-    if (screen == Screen::Menu) drawHeader();
-    else drawTabRule(0, tft.width());
+// Redraws the current screen in the current palette. keepHeader (boot, right after typeHeader):
+// the Menu's header rect is left as typed, so it doesn't blink off for the redraw.
+static void drawAll(bool keepHeader = false) {
+    if (keepHeader && screen == Screen::Menu) {
+        const int top = deckmenu::HEADER.y + deckmenu::HEADER.h;
+        clearBg(0, top, tft.width(), tft.height() - top);
+    } else {
+        clearBg(0, 0, tft.width(), tft.height());
+        if (screen == Screen::Menu) drawHeader();
+    }
+    if (screen != Screen::Menu) drawTabRule(0, tft.width());
     for (int id = 0; id < deckmenu::count(screen); id++) {
         if (built(id)) drawButton(id);
     }
@@ -1297,7 +1303,7 @@ void setup() {
     pinMode(PIN_BOOT, INPUT_PULLUP);
     if (!loadCalibration() || digitalRead(PIN_BOOT) == LOW) calibrate();
     typeHeader();  // before the tasks start: nothing else draws while it types
-    drawAll();
+    drawAll(true);  // the typed header stays on screen
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
     xbox.begin();
@@ -1310,8 +1316,11 @@ void setup() {
 
 void loop() {
     int x, y;
-    // The panel reports a phantom press at power-up (raw x=0): ignore the first second.
-    const bool down = touch::read(&x, &y) && millis() > 1000;
+    // The panel reports a phantom press at power-up (raw x=0): ignore the first second of the loop
+    // (not of the boot: typeHeader() eats ~0.6 s of that before loop() ever runs).
+    static uint32_t loopStart = 0;
+    if (loopStart == 0) loopStart = millis() | 1;
+    const bool down = touch::read(&x, &y) && millis() - loopStart > 1000;
     if (down) {
         if (!tap.down) tap = {true, false, millis(), 0, 0, 0, -1};
         if (!tap.acted) {
@@ -1367,6 +1376,8 @@ void loop() {
 
     // A controller that just came up gets its zone's look, so it matches what the deck remembers.
     static bool shown[N_CTRL] = {};
+    static uint32_t edgeAt[N_CTRL] = {};  // when each light last changed link state, and which way
+    static bool edgeUp[N_CTRL] = {};
     for (int i = 0; i < N_CTRL; i++) {
         Controller& c = controllers[i];
         const bool up = linkUp(c);
@@ -1377,7 +1388,13 @@ void loop() {
         if (up != shown[i]) {
             shown[i] = up;
             char m[sizeof(message)];
-            lightstatus::linkChange(i == 0, up, m, sizeof(m));
+            // both lights going the same way together (the phone hotspot, the car's power): one
+            // message, or the second would replace the first
+            const int o = 1 - i;
+            edgeAt[i] = millis() | 1;
+            edgeUp[i] = up;
+            if (edgeAt[o] && millis() - edgeAt[o] < 150 && edgeUp[o] == up) lightstatus::linkChangeBoth(up, m, sizeof(m));
+            else lightstatus::linkChange(i == 0, up, m, sizeof(m));
             setMessage(m);
             drawLightState();  // the message now, then STATUS on Lights / the strip on the Menu: "--" while it's gone
         }
