@@ -74,6 +74,30 @@ The parked SD cache for walk sheets and sprites was removed; it is in git histor
 `0ba409b`. If repeat songs ever need it, the S3's SDMMC slot (pins in `include/pins.h`) is
 the place to add it.
 
+## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
+
+The companion with an OBD gauge cluster, kept for later. **The branch exists only in the owner's
+local checkout, not on GitHub**: 41 commits on an older main, 55 behind main as of 2026-10-23.
+
+- **What it has:** the gauge cluster (RPM arc, speed, coolant, km/l, battery and the crank dip)
+  read from an ELM327 over Bluetooth Classic, **seen working in the Honda City on 2026-10-19**;
+  the drive screens built 2026-10-21 and only compiled: a lyric strip under the cluster while
+  moving, her lyrics with a gauge strip when stopped, her coolant and battery warnings, the phone
+  page's status box and a pinned view (specs `2026-10-15-obd-gauges`, `2026-10-19-gauge-cluster`,
+  `2026-10-21-companion-drive`, on the branch). Read-only toward the car by construction: one
+  gate, `obd::allowed()`, mode 01 and adapter setup only.
+- **Why parked:** the yellow deck (the CYD) now runs `ledpanel`, the car LEDs over BLE (#13), and
+  the companion with OBD needs that same board. Bluetooth Classic for OBD leaves ~29 KB of heap,
+  so the LEDs' BLE on the same ESP32 is unlikely to fit. Decide the yellow deck's role (or add a
+  third board) before returning.
+- **To return:** rebase onto main. Expect conflicts in `CHANGELOG.md`, `docs/ARCHITECTURE.md`,
+  `docs/BACKLOG.md`, `src/core/nettask.cpp`, `src/ui/carlook.cpp`, `src/spotify/client.cpp`.
+  Drop `d079b62` (the 204 fix and `util/nowplaying.h`: main's own Spotify client made it
+  obsolete), and the copies of fixes main already has (`6af77a8` boot-terminal dots, `d34c366`
+  remote key); `1d44c44` (self-heal) isn't needed on the S3 (see Investigate). The car checks
+  still to do are in the branch's own BACKLOG ("Gauge cluster in the car", "Companion drive
+  screens").
+
 ## Accepted as is
 
 - Backlight stays at full brightness (decided 2026-10-07): no auto-dim from the CYD light
@@ -108,7 +132,6 @@ the place to add it.
   has its own screen. Plan: `docs/superpowers/plans/2026-10-13-companion-screen.md`.
 - **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
   extra: retro map"): gets its own plan.
-- **OBD2 car info** over a Bluetooth ELM327 dongle, after the companion.
 
 - **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
   skip/pause through the deck, a screen flash. After the hotspot check above.
