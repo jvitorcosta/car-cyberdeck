@@ -75,14 +75,18 @@ void test_purple_is_still_the_colour() {
     const ledvoice::Command c = parsed("purple");
     TEST_ASSERT_EQUAL_INT(3, c.color);
     TEST_ASSERT_EQUAL_INT(-1, c.preset);
+    const ledvoice::Command r = parsed("rosa");  // Portuguese pink stays a colour
+    TEST_ASSERT_EQUAL_INT(2, r.color);
+    TEST_ASSERT_EQUAL_INT(-1, r.preset);
 }
 void test_preset_number_words() {
     TEST_ASSERT_EQUAL_INT(2, parsed("preset two").preset);
     TEST_ASSERT_EQUAL_INT(2, parsed("favourite number 2").preset);
 }
 void test_name_disarms_a_favourite_word() {
-    const ledvoice::Command c = parsed("favourite fire two");  // "two" is no longer a slot
-    TEST_ASSERT_EQUAL_INT(2, c.preset);
+    // "two" would be slot 2 if the name had not disarmed; the name's own number must win
+    TEST_ASSERT_EQUAL_INT(1, parsed("favourite rose two").preset);
+    TEST_ASSERT_EQUAL_INT(3, parsed("favourite calm four").preset);
 }
 
 void test_favourite_digit() {

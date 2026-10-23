@@ -41,11 +41,20 @@ void test_wire_line() {
     TEST_ASSERT_EQUAL_STRING("1 ROSE pink 40 pink 100", buf);
 }
 
+void test_wire_line_clamps_slot() {
+    char buf[64];
+    ledpresets::wireLine(9, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("4 PURPURA purple 40 purple 100", buf);
+    ledpresets::wireLine(0, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("1 ROSE pink 40 pink 100", buf);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_table);
     RUN_TEST(test_describe);
     RUN_TEST(test_describe_fits);
     RUN_TEST(test_wire_line);
+    RUN_TEST(test_wire_line_clamps_slot);
     return UNITY_END();
 }

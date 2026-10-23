@@ -11,7 +11,10 @@ const Preset PRESETS[N] = {
 };
 
 namespace {
-const Preset& at(int slot) { return PRESETS[slot < 1 ? 0 : slot > N ? N - 1 : slot - 1]; }
+// An out-of-range slot clamps to 1..4, and callers print the clamped number so a line never pairs one
+// slot's number with another's data.
+int clampSlot(int slot) { return slot < 1 ? 1 : slot > N ? N : slot; }
+const Preset& at(int slot) { return PRESETS[clampSlot(slot) - 1]; }
 }  // namespace
 
 void describe(int slot, char* out, size_t n) {
@@ -30,7 +33,7 @@ void describe(int slot, char* out, size_t n) {
 
 void wireLine(int slot, char* out, size_t n) {
     const Preset& p = at(slot);
-    snprintf(out, n, "%d %s %s %u %s %u", slot, p.name, ledlook::SWATCHES[p.in.swatch].word, static_cast<unsigned>(p.in.pct),
+    snprintf(out, n, "%d %s %s %u %s %u", clampSlot(slot), p.name, ledlook::SWATCHES[p.in.swatch].word, static_cast<unsigned>(p.in.pct),
              ledlook::SWATCHES[p.out.swatch].word, static_cast<unsigned>(p.out.pct));
 }
 }  // namespace ledpresets
