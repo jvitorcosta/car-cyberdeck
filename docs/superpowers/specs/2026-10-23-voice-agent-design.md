@@ -109,10 +109,17 @@ Xbox (RT/LT) ──BLE──▶ yellow deck ──HTTP over hotspot──▶ bla
   drives (Brazil). The host is the builder's choice.
 - **Pipeline per command:** streaming speech-to-text while RT is held → model with tools → actions
   → reply text → stock phrase id or live TTS audio, all streamed back on the same connection.
-- **Fast first:** simple commands (lights, play/pause/skip/volume, "toca X") go to **Haiku**
-  (`claude-haiku-5-5`). A request that needs more steps or reasoning may go to Sonnet
-  (`claude-sonnet-5-5`). If the Agent SDK's own overhead breaks the 1.5 s target, the builder may run
-  the fast path as a plain Messages API tool loop with the same tools; the speed rule wins.
+- **Fast path = the router (owner, 2026-10-23).** No separate classify step. One model call gets
+  the transcript, the short context and the tools, and either acts (`lights`, `spotify_*`, `ask`,
+  `undo`) or calls `hand_off_to_agent(task)`. One call per simple command (~1 s total instead of
+  ~1.5 s with a router in front). The fast path is our own plain tool loop on the model's API, not
+  the Agent SDK. Risk: it tries a job it should hand off (e.g. "a que tocou antes do Djavan"); the
+  evals carry such cases, and the prompt says that anything needing history or several steps is
+  handed off. A separate router only comes back if the evals show the need.
+- **Slow path = the Claude Agent SDK** for real jobs (several steps, later calendar, WhatsApp,
+  reminders): the same tools as an in-process MCP server, hooks for "confirm before sending",
+  Sonnet (`claude-sonnet-5-5`) by default. Zero Two says "deixa comigo~" while it works; its
+  target is ~5 s, and after ~8 s she says it'll take a while and finishes in the background.
 - **Model-agnostic fast path (owner, 2026-10-23):** the fast path calls its model through a small
   interface, so development can start on a free model (e.g. a Groq-hosted open model) and switch by
   config. The production model is picked by the evals (wrong-action rate first, then p95 latency,
@@ -120,8 +127,8 @@ Xbox (RT/LT) ──BLE──▶ yellow deck ──HTTP over hotspot──▶ bla
   re-checked on the chosen model. The Agent SDK slow path only runs Claude, so it is developed on
   Claude from the start (a small prepaid API credit).
 - **Speech-to-text:** Brazilian Portuguese (v1), including English artist and song names inside a
-  Portuguese sentence ("toca Tyler, the Creator"), biased with a word list; streaming. The builder picks the provider by measuring accuracy and latency on **recordings made in
-  the car** (see the first step).
+  Portuguese sentence ("toca Tyler, the Creator"), biased with a word list; streaming.
+  The builder picks the provider by measuring accuracy and latency on **recordings made in the car** (see the first step).
 - **Voice (TTS):** ElevenLabs, a voice made with **Voice Design**: young, bright, expressive,
   anime-style girl, speaks pt-BR. Not cloned from any real voice actress. Its fast
   model, PCM output at 16 kHz.
