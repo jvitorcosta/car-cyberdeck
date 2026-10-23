@@ -20,6 +20,8 @@ void applied(const char* presetName, char* buf, size_t n);
 void linkChange(bool inside, bool up, char* buf, size_t n);
 // Both lights changed together: ">LIGHTS: NO LINK" / ">LIGHTS: LINKED".
 void linkChangeBoth(bool up, char* buf, size_t n);
+// A message that reports a problem (drawn in the ALERT colour): ">INSIDE: NO LINK" and its kin.
+bool isAlert(const char* msg);
 // The GET /status reply: "inside=on outside=nolink". Cut to n bytes.
 void reply(State in, State out, char* buf, size_t n);
 }  // namespace lightstatus

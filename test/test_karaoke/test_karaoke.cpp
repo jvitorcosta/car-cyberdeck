@@ -233,6 +233,15 @@ void test_wrap_text_longer_than_a_line_buffer() {
     TEST_ASSERT_EQUAL_UINT(sizeof(two[0].s) - 1, strlen(two[0].s));
 }
 
+void test_is_alert() {
+    TEST_ASSERT_TRUE(karaoke::isAlert(">WRONG KEY"));
+    TEST_ASSERT_FALSE(karaoke::isAlert(">NO SIGNAL"));
+    TEST_ASSERT_FALSE(karaoke::isAlert(">STANDBY"));
+    TEST_ASSERT_FALSE(karaoke::isAlert(">NO SYNCED LYRICS"));
+    TEST_ASSERT_FALSE(karaoke::isAlert(""));
+    TEST_ASSERT_FALSE(karaoke::isAlert(nullptr));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_progress_interpolates_while_playing);
@@ -243,6 +252,7 @@ int main(int, char**) {
     RUN_TEST(test_available);
     RUN_TEST(test_state_words);
     RUN_TEST(test_why_not);
+    RUN_TEST(test_is_alert);
     RUN_TEST(test_lyric_synced);
     RUN_TEST(test_lyric_next_unknown);
     RUN_TEST(test_lyric_not_synced);

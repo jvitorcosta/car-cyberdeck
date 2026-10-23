@@ -378,6 +378,10 @@ static int text(const char* s, int x, int y, Face f, uint8_t datum) {
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
 static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night)); }
 // A real colour (a chip, the pressed yellow), dimmed with the palette at night.
+// A terminal message's colour: ALERT for a problem (a lost link, the wrong key), else TEXT.
+static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
+static uint16_t msgInk(const char* m) { return pal(isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
+
 static uint16_t tint(uint32_t rgb) { return c565(termpal::tile(rgb, night)); }
 static constexpr uint32_t PRESSED = 0xFFFF00;  // under the finger, until release
 
@@ -584,7 +588,7 @@ static void drawStatus() {
     char line[48];
     lightstatus::line(looks[INSIDE], linkUp(controllers[0]), looks[OUTSIDE], linkUp(controllers[1]), line, sizeof(line));
     clearBg(r);
-    tft.setTextColor(pal(termpal::TEXT));
+    tft.setTextColor(message[0] ? msgInk(message) : pal(termpal::TEXT));
     text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
 }
 
@@ -639,6 +643,8 @@ static void drawClock() {
 static constexpr int N_WX_TEXT = 3;
 static char wxShown[N_WX_TEXT][48];
 
+static bool isOffline(const char* t) { return strcmp(t, ">OFFLINE") == 0; }  // the weather band's one problem
+
 static void weatherTexts(char (&t)[N_WX_TEXT][48]) {
     dashtext::temp(wx.ok, wx.tempC, t[0], sizeof(t[0]));
     snprintf(t[1], sizeof(t[1]), "%s", wx.ok ? weather::words(wx.code) : "");
@@ -658,7 +664,7 @@ static void drawWeather() {
     text(wxShown[0], DASH_RIGHT, CLOCK_Y, Face::BIG, TR_DATUM);
     tft.setTextColor(pal(termpal::MID));
     text(wxShown[1], DASH_RIGHT, WORDS_Y, Face::SMALL, TR_DATUM);
-    tft.setTextColor(pal(termpal::DIM));
+    tft.setTextColor(pal(isOffline(wxShown[2]) ? termpal::ALERT : termpal::DIM));
     text(wxShown[2], DASH_RIGHT, HILO_Y, Face::SMALL, TR_DATUM);
 }
 
@@ -678,7 +684,7 @@ static void drawLightsBand() {
         text(controllers[i].label, DASH_X, base, Face::BODY, BL_DATUM);  // INSIDE, OUTSIDE
         const lightstatus::State st = lightstatus::of(linkUp(controllers[i]), l.lit);
         if (st == lightstatus::State::NoLink) {
-            tft.setTextColor(pal(termpal::DIM));
+            tft.setTextColor(pal(termpal::ALERT));
             text("-- NO LINK", LIGHT_NAME_X, base, Face::TITLE, BL_DATUM);
             continue;
         }
@@ -754,7 +760,7 @@ static void songText(bool live, char* out, size_t n) { dashtext::song(live ? son
 static void drawSongLine() {
     clearBg(RULE_X0, songTop(), RULE_X1 - RULE_X0, tft.height() - songTop());
     if (message[0]) {
-        tft.setTextColor(pal(termpal::TEXT));
+        tft.setTextColor(msgInk(message));
         placeCursor(DASH_X + text(message, DASH_X, SONG_BASE, Face::SMALL, BL_DATUM));
         return;
     }
@@ -948,7 +954,7 @@ static void drawKaraokeBody(bool all) {
         snprintf(karaokeShownBig, sizeof(karaokeShownBig), "%s", big);
         karaokeShownWord = isWord;
         clearBg(KARAOKE_X, KARAOKE_BIG_Y, KARAOKE_W, KARAOKE_BIG_H);
-        drawBig(big, pal(isWord ? termpal::DIM : termpal::TEXT));
+        drawBig(big, pal(karaoke::isAlert(big) ? termpal::ALERT : isWord ? termpal::DIM : termpal::TEXT));
     }
     const char* next = isWord ? "" : karaoke::nextLine(d, pos);
     if (all || strcmp(next, karaokeShownNext) != 0) {

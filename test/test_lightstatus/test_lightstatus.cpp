@@ -73,6 +73,17 @@ void test_messages() {
     TEST_ASSERT_EQUAL_STRING(">LIGHTS: LINKED", buf);
 }
 
+void test_is_alert() {
+    TEST_ASSERT_TRUE(lightstatus::isAlert(">INSIDE: NO LINK"));
+    TEST_ASSERT_TRUE(lightstatus::isAlert(">OUTSIDE: NO LINK"));
+    TEST_ASSERT_TRUE(lightstatus::isAlert(">LIGHTS: NO LINK"));
+    TEST_ASSERT_FALSE(lightstatus::isAlert(">INSIDE: LINKED"));
+    TEST_ASSERT_FALSE(lightstatus::isAlert(">LIGHTS: LINKED"));
+    TEST_ASSERT_FALSE(lightstatus::isAlert(">ROSE APPLIED"));
+    TEST_ASSERT_FALSE(lightstatus::isAlert(""));
+    TEST_ASSERT_FALSE(lightstatus::isAlert(nullptr));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_link_never_on);
@@ -81,5 +92,6 @@ int main(int, char**) {
     RUN_TEST(test_line_cut_to_buffer);
     RUN_TEST(test_reply);
     RUN_TEST(test_messages);
+    RUN_TEST(test_is_alert);
     return UNITY_END();
 }

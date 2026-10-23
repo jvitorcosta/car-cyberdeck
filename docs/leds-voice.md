@@ -22,8 +22,8 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 
 ## On the deck
 
-The deck boots by typing the green-on-black welcome (`WELCOME TO CYBERDECK`, character by character in about half a second), then shows the **main screen**, whatever
-page it last showed. Every screen has faint scanlines and ALL CAPS bracket labels.
+The deck boots by typing the welcome (`WELCOME TO CYBERDECK`, character by character in about half a second), then shows the **main screen**, whatever
+page it last showed. The look is "Seegson" (Alien: Isolation): pale green on black, one hue at three brightnesses, and red kept for problems only (`-- NO LINK`, `>OFFLINE`, the `NO LINK` messages, `>WRONG KEY`; a deeper red at night). Every screen has faint scanlines and ALL CAPS bracket labels.
 
 - **Main screen** (a dashboard, top to bottom):
   - the header `CYBERDECK // HONDA CITY`;

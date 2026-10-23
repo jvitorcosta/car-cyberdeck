@@ -1,7 +1,15 @@
 #include "lightstatus.h"
 #include <cstdio>
+#include <cstring>
 
 namespace lightstatus {
+
+bool isAlert(const char* msg) {
+    static const char SUFFIX[] = ": NO LINK";
+    if (!msg || msg[0] != '>') return false;
+    const size_t n = strlen(msg), s = sizeof(SUFFIX) - 1;
+    return n > s && strcmp(msg + n - s, SUFFIX) == 0;
+}
 
 State of(bool linked, bool lit) {
     if (!linked) return State::NoLink;

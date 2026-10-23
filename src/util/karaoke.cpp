@@ -36,6 +36,8 @@ const char* whyNot(bool answered, bool wrongKey, bool playing, const stateparse:
     return ">NO SYNCED LYRICS";
 }
 
+bool isAlert(const char* msg) { return msg && strcmp(msg, ">WRONG KEY") == 0; }
+
 const char* lyric(const stateparse::Deck& d, uint32_t posMs) {
     if (strcmp(d.lyricKind, "synced") != 0) return "";
     if (d.nextStartMs > 0 && posMs >= d.nextStartMs) return d.next;
