@@ -1,15 +1,17 @@
-// The yellow deck (CYD) as the car's control screen: a RobCo-style terminal (green on black) that
-// drives the car's two ELK-family LED controllers. Two screens, laid out by util/deckmenu:
-//   Menu (boot): the header, the menu items as [ BRACKETED ] buttons (part 1 builds one, LIGHTS),
-//           the four presets ROSE / FIRE / CALM / PURPURA (tap one to apply it), and a strip at the
-//           bottom with the clock and each light's state ("IN PINK 40%  OUT --": its colour, a chip
-//           of it and its %, OFF, or -- when the deck has no link to it)
-//   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE (BOTH sets both lights together; INSIDE and
-//           OUTSIDE each keep their own look), the status line ("IN ON 50%  OUT --  LINK 1/2"),
-//           2x4 colour tiles (tap one to set it and turn on, double-tap the lit one to turn the
-//           lights off), the four presets (tap: apply),
-//           and  -  [level: the colour at its intensity and the %, OFF, or MIX on BOTH while the
-//           two lights differ]  +
+// The yellow deck (CYD) as the car's control screen: a RobCo-style terminal (green on black, amber
+// at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Two
+// screens, laid out by util/deckmenu:
+//   Menu (boot, after the header types out): the header, the menu items as list rows ("> [LIGHTS]";
+//           part 1 builds one), the four presets ROSE / FIRE / CALM / PURPURA (tap one to apply
+//           it), and a strip at the bottom with the clock and each light's state ("IN PINK 40%
+//           OUT --": its colour, a chip of it and its %, OFF, or -- when the deck has no link to
+//           it) ending in a blinking block cursor
+//   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
+//           together; INSIDE and OUTSIDE each keep their own look), the status line ("IN ON 50%
+//           OUT --  LINK 1/2"), 2x4 colour buttons (tap one to set it and turn on, double-tap the
+//           lit one to turn the lights off), the four presets (tap: apply),
+//           and  [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two
+//           lights differ]  [+]
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
 // The STATUS line on Lights and the strip's text on the Menu show a terminal message for 2.5 s
@@ -18,11 +20,11 @@
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
 // /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
-// drives it too: the D-pad moves the focus (an inverted bar on the Menu, a green ring on Lights),
+// drives it too: the D-pad moves the focus (an inverted bar on the Menu, a TEXT ring on Lights),
 // A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
 // "Xbox controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
-// palette goes to termpal's dim variant and the backlight to its night level. Without REMOTE_TOKEN
+// palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
 // there is no WiFi, no clock, and the deck stays in day mode.
 // Test hook: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
 // mode whatever the time, to check the dimming without waiting for 18:00. Not set in platformio.ini.
@@ -231,7 +233,7 @@ static_assert(N_SWATCH == 8 && L_PRE0 - L_TILE0 == N_SWATCH, "the grid is 2x4 co
 static bool built(int id) { return deckmenu::rect(screen, id).w > 0; }
 
 // The button the Xbox controller points at; -1 while none is connected. On the Menu it is drawn as
-// an inverted bar, on Lights as a green ring around the button.
+// an inverted bar, on Lights as a TEXT ring around the button (the lit colour is the bar there).
 static int focus = -1;
 static bool padUp = false;  // an Xbox controller is connected and reporting
 static void drawFocus(int id, bool on);
@@ -240,27 +242,26 @@ static void drawFocus(int id, bool on);
 static int homeFocus() { return screen == Screen::Menu ? static_cast<int>(M_ITEM0) : L_TILE0 + cur().swatch; }
 
 // ---- Drawing ----
-// GLCD (font 1) is the terminal's monospace font, scaled up where it fits; button labels use font
-// 2 (and 4 for - / + and the level), as GLCD at x2 is wider than deckmenu's buttons.
+// GLCD (font 1) is the terminal's monospace font, for small text; button labels use font 2 (and 4
+// for [-] / [+]), as GLCD at x2 is wider than deckmenu's buttons. Every label is upper case.
+// The background is black with a faint scanline on every 3rd screen row: every clear goes through
+// clearBg(), which repaints a rect's lines on absolute rows, so a partial redraw stays aligned.
+// Text over it is drawn transparent (no black box punching through the lines); the solid fills
+// (the inverted selection bar, the pressed yellow, the chips) are the design.
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
 static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night)); }
-// A real colour (a tile, a light preview, the pressed yellow), dimmed with the palette at night.
+// A real colour (a chip, the pressed yellow), dimmed with the palette at night.
 static uint16_t tint(uint32_t rgb) { return c565(termpal::tile(rgb, night)); }
 static constexpr uint32_t PRESSED = 0xFFFF00;  // under the finger, until release
-// The screen colour at a share of its brightness (for the level box).
-static uint16_t tintAt(uint32_t rgb, int pct) {
-    const uint32_t c = termpal::tile(rgb, night);
-    return tft.color565(((c >> 16) & 0xFF) * pct / 100, ((c >> 8) & 0xFF) * pct / 100, (c & 0xFF) * pct / 100);
+
+static void clearBg(int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0) return;
+    tft.fillRect(x, y, w, h, pal(termpal::BG));
+    const uint16_t line = c565(termpal::scan(night));
+    for (int row = y + (3 - y % 3) % 3; row < y + h; row += 3) tft.drawFastHLine(x, row, w, line);
 }
-static bool bright(uint32_t rgb, int pct = 100) {
-    return (((rgb >> 16) & 0xFF) * 3 + ((rgb >> 8) & 0xFF) * 6 + (rgb & 0xFF)) / 10 * pct / 100 > 140;
-}
-// Text on a real colour: black on a bright one, white on a dark one. Judged on the colour actually
-// drawn (dimmed at night), not the day one, or a tile that dimmed below the threshold keeps black ink.
-static uint16_t inkOn(uint32_t rgb, int pct = 100) {
-    return tint(bright(termpal::tile(rgb, night), pct) ? 0x000000 : 0xFFFFFF);
-}
+static void clearBg(const Rect& r) { clearBg(r.x, r.y, r.w, r.h); }
 
 // drawString at a text size, back to size 1 after (fonts 2 and 4 scale with it too).
 static void label(const char* s, int x, int y, uint8_t fontNo, uint8_t size = 1) {
@@ -269,91 +270,142 @@ static void label(const char* s, int x, int y, uint8_t fontNo, uint8_t size = 1)
     tft.setTextSize(1);
 }
 
-// A terminal button: a MID border with TEXT inside; inverted (TEXT fill, BG text) when selected,
-// yellow when pressed. The fill leaves a 1 px BG edge so a focus ring around it stays apart.
-static void drawChrome(const Rect& r, const char* s, uint8_t fontNo, bool pressed, bool inverted) {
-    const uint16_t bg = pal(termpal::BG);
-    tft.fillRect(r.x, r.y, r.w, r.h, bg);
-    uint16_t ink = pal(termpal::TEXT), fill = bg;
-    if (pressed || inverted) {
-        fill = pressed ? tint(PRESSED) : pal(termpal::TEXT);
-        ink = bg;
-        tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, fill);
-    } else {
-        tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
-        tft.drawRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pal(termpal::MID));
+// A swatch name ("Orange") as the screen shows it ("ORANGE").
+static void upper(const char* s, char* out, size_t n) {
+    size_t i = 0;
+    for (; s[i] && i + 1 < n; i++) out[i] = static_cast<char>(toupper(static_cast<unsigned char>(s[i])));
+    out[i] = 0;
+}
+
+// The box of a terminal button: the scanlined bg inside a MID border (`border` px), or the solid
+// bar when selected (TEXT) or pressed (yellow), 1 px in from the edge so a Lights focus ring around
+// it stays apart. Returns the ink for what goes on it (BG on a bar, else `ink`).
+static uint16_t drawBox(const Rect& r, bool pressed, bool selected, int border, uint16_t ink) {
+    clearBg(r);
+    if (pressed || selected) {
+        tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pressed ? tint(PRESSED) : pal(termpal::TEXT));
+        return pal(termpal::BG);
     }
+    for (int k = 0; k < border; k++) tft.drawRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, pal(termpal::MID));
+    return ink;
+}
+
+// A bordered button (< BACK, [-], [+]): the label centred.
+static void drawChrome(const Rect& r, const char* s, uint8_t fontNo, bool pressed, bool inverted) {
+    const uint16_t ink = drawBox(r, pressed, inverted, 2, pal(termpal::TEXT));
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(ink, fill);
+    tft.setTextColor(ink);
     label(s, r.x + r.w / 2, r.y + r.h / 2, fontNo);
 }
 
-// A preset block: its name over two chips, the inside and the outside light's colour (dimmed at
-// night like any tile). Inverted under the Menu's focus bar, yellow when pressed. Task 4 restyles it.
-static void drawPresetSlot(const Rect& r, int slot, bool pressed, bool inverted) {
-    const ledpresets::Preset& p = ledpresets::PRESETS[slot];
-    const uint16_t bg = pal(termpal::BG);
-    tft.fillRect(r.x, r.y, r.w, r.h, bg);
-    uint16_t fill = bg, ink = pal(termpal::TEXT);
-    const bool filled = pressed || inverted;
-    if (filled) {
-        fill = pressed ? tint(PRESSED) : pal(termpal::TEXT);
-        ink = bg;
-        tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, fill);
-    } else {
-        tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
-    }
-    // GLCD x2 on the Menu's wide blocks ("PURPURA" is 84 px), x1 on Lights' 75 px ones
-    const uint8_t size = r.w >= 120 ? 2 : 1;
-    const int cx = r.x + r.w / 2, chipY = r.y + r.h - 15;
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(ink, fill);
-    label(p.name, cx, r.y + 4 + 4 * size, 1, size);
-    const Look* sides[] = {&p.in, &p.out};
-    for (int k = 0; k < 2; k++) {
-        const int x = cx - 13 + k * 16;
-        tft.fillRect(x, chipY, 10, 10, tint(SWATCHES[sides[k]->swatch].screen));
-        if (filled) tft.drawRect(x - 1, chipY - 1, 12, 12, bg);  // apart from the fill (green on green)
-    }
+// A Menu list row ("> [LIGHTS]"): no border, the text left; the inverted bar when focused.
+static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted) {
+    const uint16_t ink = drawBox(r, pressed, inverted, 0, pal(termpal::TEXT));
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(ink);
+    label(s, r.x + 8, r.y + r.h / 2, 2);
 }
 
+// A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
+// off. On a bar, a 1 px BG edge keeps it apart from the fill (pink on yellow, white on green).
+static void drawChip(int x, int y, int size, const Look& l, bool onBar) {
+    if (l.lit) tft.fillRect(x, y, size, size, tint(SWATCHES[l.swatch].screen));
+    else tft.drawRect(x, y, size, size, pal(termpal::DIM));
+    if (onBar) tft.drawRect(x - 1, y - 1, size + 2, size + 2, pal(termpal::BG));
+}
+
+// A preset block. Menu (154x42): the name left, and right of it two big chips (inside, outside)
+// with each light's level under it. Lights (75x36): the name over two small chips. Inverted under
+// the Menu's focus bar, yellow when pressed.
+static void drawPresetSlot(const Rect& r, int slot, bool pressed, bool inverted) {
+    const ledpresets::Preset& p = ledpresets::PRESETS[slot];
+    const bool bar = pressed || inverted;
+    const uint16_t ink = drawBox(r, pressed, inverted, 1, pal(termpal::TEXT));
+    const Look* sides[] = {&p.in, &p.out};
+    tft.setTextColor(ink);
+    if (r.w >= 120) {
+        tft.setTextDatum(ML_DATUM);
+        label(p.name, r.x + 8, r.y + r.h / 2, 2);  // font 2: "PURPURA" is 56 px
+        tft.setTextDatum(MC_DATUM);
+        for (int k = 0; k < 2; k++) {
+            const int x = r.x + r.w - 50 + k * 24;
+            drawChip(x, r.y + 5, 18, *sides[k], bar);
+            char lv[8];
+            snprintf(lv, sizeof(lv), "%u", static_cast<unsigned>(sides[k]->pct));
+            label(sides[k]->lit ? lv : "OFF", x + 9, r.y + 32, 1);
+        }
+        return;
+    }
+    const int cx = r.x + r.w / 2;
+    tft.setTextDatum(TC_DATUM);
+    label(p.name, cx, r.y + 4, 2);  // fits the 75 px slot
+    for (int k = 0; k < 2; k++) drawChip(cx - 11 + k * 14, r.y + r.h - 12, 8, *sides[k], bar);
+}
+
+// A colour button: a box with a MID border, a big chip of the colour (left, centred) and its name.
+// The lit colour is the inverted bar, chip kept; the Xbox focus is a separate ring around it.
 static void drawTile(const Rect& r, int swatch, bool pressed) {
     const Swatch& s = SWATCHES[swatch];
     const bool sel = !bothMixed() && cur().lit && swatch == cur().swatch;
-    const int in = pressed ? 5 : 1;  // pressed: the colour shrinks inside a yellow ring
-    const uint16_t fill = tint(s.screen);
-    tft.fillRect(r.x, r.y, r.w, r.h, pal(termpal::BG));
-    tft.fillRoundRect(r.x + in, r.y + in, r.w - 2 * in, r.h - 2 * in, 8, fill);
-    if (pressed || sel) {  // a green ring: what the lights show
-        const uint16_t ring = pressed ? tint(PRESSED) : pal(termpal::TEXT);
-        for (int k = 0; k < 3; k++) tft.drawRoundRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, 8, ring);
-        if (!pressed) tft.drawRoundRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6, 6, pal(termpal::BG));
+    const uint16_t ink = drawBox(r, pressed, sel, 1, pal(termpal::TEXT));
+    constexpr int CHIP = 28;
+    Look l;
+    l.swatch = swatch;
+    drawChip(r.x + 5, r.y + (r.h - CHIP) / 2, CHIP, l, pressed || sel);
+    char name[12];
+    upper(s.name, name, sizeof(name));
+    tft.setTextDatum(ML_DATUM);
+    tft.setTextColor(ink);
+    label(name, r.x + 37, r.y + r.h / 2, 1);  // GLCD: "ORANGE" is 36 px, the room left of the border
+}
+
+// Lights' zone tabs are Pip-Boy tabs: a TEXT rule under the tab row, the current tab a TEXT bar
+// that runs down into the rule, the others MID text. TAB_RULE_Y is just under the tab row (rects
+// end at y 37) and over STATUS (y 40).
+static constexpr int TAB_RULE_Y = 39;
+static constexpr int RULE_X0 = 4, RULE_X1 = 316;
+
+// The rule's rows (and the gap row above it) over [x0, x1).
+static void drawTabRule(int x0, int x1) {
+    clearBg(x0, TAB_RULE_Y - 1, x1 - x0, 2);
+    const int a = x0 < RULE_X0 ? RULE_X0 : x0, b = x1 > RULE_X1 ? RULE_X1 : x1;
+    if (b > a) tft.drawFastHLine(a, TAB_RULE_Y, b - a, pal(termpal::TEXT));
+}
+
+static void drawTab(const Rect& r, const char* s, bool pressed, bool current) {
+    clearBg(r);
+    drawTabRule(r.x - 2, r.x + r.w + 2);  // under it and its focus ring
+    uint16_t ink = pal(termpal::MID);
+    if (pressed || current) {
+        tft.fillRect(r.x + 1, r.y + 1, r.w - 2, TAB_RULE_Y - r.y, pressed ? tint(PRESSED) : pal(termpal::TEXT));
+        ink = pal(termpal::BG);
     }
     tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(inkOn(s.screen), fill);
-    label(s.name, r.x + r.w / 2, r.y + r.h / 2, 2);
+    tft.setTextColor(ink);
+    label(s, r.x + r.w / 2, r.y + r.h / 2, 2);
 }
 
 static void drawButtonBody(int id, bool pressed) {
     const Rect r = deckmenu::rect(screen, id);
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
-        static const char* const ITEM[deckmenu::N_ITEMS] = {"[ LIGHTS ]"};  // in deckmenu::Item order
-        if (id < M_PRE0) drawChrome(r, ITEM[id - M_ITEM0], 2, pressed, id == focus);
+        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]"};  // in deckmenu::Item order
+        if (id < M_PRE0) drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus);
         else drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed, id == focus);
         return;
     }
     if (id == L_BACK) {
         drawChrome(r, "< BACK", 2, pressed, false);
+        drawTabRule(r.x - 2, r.x + r.w + 2);  // its focus ring crosses the rule too
     } else if (id < L_TILE0) {
         static const char* const ZONE[] = {"BOTH", "INSIDE", "OUTSIDE"};
-        drawChrome(r, ZONE[id - L_ZONE0], 2, pressed, target == static_cast<Target>(id - L_ZONE0));
+        drawTab(r, ZONE[id - L_ZONE0], pressed, target == static_cast<Target>(id - L_ZONE0));
     } else if (id < L_PRE0) {
         drawTile(r, id - L_TILE0, pressed);
     } else if (id < L_MINUS) {
         drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed, false);  // focus: the ring
     } else {
-        drawChrome(r, id == L_MINUS ? "-" : "+", 4, pressed, false);
+        drawChrome(r, id == L_MINUS ? "[-]" : "[+]", 4, pressed, false);
     }
 }
 
@@ -362,34 +414,28 @@ static void drawButton(int id, bool pressed = false) {
     if (id == focus) drawFocus(id, true);  // on Lights its ring hugs the rect just drawn over
 }
 
-// The colour at its intensity (shown no darker than 25 % so it stays readable) and the %; "MIX"
-// on BOTH while the lights differ (the STATUS line above has each light's %).
+// The block bar: 10 cells, one filled per 10 % (the terminal's full block), the rest outlined (its
+// shade block; TFT_eSPI's fonts have neither glyph), and the % under it. "MIX" on BOTH while the
+// lights differ (the STATUS line above has each light's %), "OFF" in DIM when off.
 static void drawLevel() {
     const Rect& r = deckmenu::LEVEL;
     const Look& l = cur();
-    const Swatch& s = SWATCHES[l.swatch];
-    const int shade = l.pct < 25 ? 25 : l.pct;
-    const uint16_t bg = pal(termpal::BG);
-    tft.fillRect(r.x, r.y, r.w, r.h, bg);
-    tft.setTextDatum(MC_DATUM);
-    if (bothMixed()) {
-        tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
-        tft.setTextColor(pal(termpal::TEXT), bg);
-        label("MIX", r.x + r.w / 2, r.y + r.h / 2, 4);
-        return;
-    }
-    uint16_t fill = bg, ink = pal(termpal::DIM);
-    if (l.lit) {
-        fill = tintAt(s.screen, shade);
-        ink = inkOn(s.screen, shade);
-        tft.fillRoundRect(r.x, r.y, r.w, r.h, 8, fill);
-    } else {
-        tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::DIM));
+    const bool mixed = bothMixed(), live = mixed || l.lit;
+    clearBg(r);
+    tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
+    constexpr int N_CELL = 10, CELL = 8, GAP = 2;
+    const int full = live && !mixed ? l.pct / 10 : 0;
+    const int x0 = r.x + (r.w - (N_CELL * (CELL + GAP) - GAP)) / 2;
+    for (int k = 0; k < N_CELL; k++) {
+        const int x = x0 + k * (CELL + GAP);
+        if (k < full) tft.fillRect(x, r.y + 7, CELL, 14, pal(termpal::TEXT));
+        else tft.drawRect(x, r.y + 7, CELL, 14, pal(live ? termpal::MID : termpal::DIM));
     }
     char pct[8];
-    snprintf(pct, sizeof(pct), "%u%%", l.pct);
-    tft.setTextColor(ink, fill);
-    label(l.lit ? pct : "OFF", r.x + r.w / 2, r.y + r.h / 2, 4);
+    snprintf(pct, sizeof(pct), "%u%%", static_cast<unsigned>(l.pct));
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(pal(live ? termpal::TEXT : termpal::DIM));
+    label(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, 2);
 }
 
 // A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS line
@@ -411,25 +457,47 @@ static void drawStatus() {
     const Rect& r = deckmenu::STATUS;
     char line[48];
     lightstatus::line(looks[INSIDE], linkUp(controllers[0]), looks[OUTSIDE], linkUp(controllers[1]), line, sizeof(line));
-    tft.fillRect(r.x, r.y, r.w, r.h, pal(termpal::BG));
+    clearBg(r);
     tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(pal(termpal::TEXT), pal(termpal::BG));
+    tft.setTextColor(pal(termpal::TEXT));
     label(message[0] ? message : line, r.x + 2, r.y + r.h / 2, 1);
 }
 
+// The Menu strip's block cursor: one GLCD cell at the end of the text line, blinking at ~1 Hz.
+// Only its cell is redrawn. -1: no room left of the strip's edge (the longest line), so none.
+static constexpr uint32_t BLINK_MS = 500;
+static int cursorX = -1;
+static bool cursorOn = false;
+
+static void drawCursor(bool on) {
+    cursorOn = on;
+    if (cursorX < 0) return;
+    const int y = deckmenu::MENU_STRIP.y + deckmenu::MENU_STRIP.h / 2 - 4;
+    if (on) tft.fillRect(cursorX, y, 6, 8, pal(termpal::TEXT));
+    else clearBg(cursorX, y, 6, 8);
+}
+
+static bool blinkPhase() { return (millis() / BLINK_MS) % 2 == 0; }
+
+// The cursor follows the text's end: a message's, or the strip line's.
+static void placeCursor(int x) {
+    const Rect& r = deckmenu::MENU_STRIP;
+    cursorX = x + 6 <= r.x + r.w - 4 ? x : -1;
+    drawCursor(blinkPhase());
+}
+
 // The Menu strip's text right of the clock: lightstatus::strip ("IN PINK 40%  OUT --"), with a chip
-// of the light's colour before each colour name, or the message. GLCD x1: the longest line
-// ("IN ORANGE 100%  OUT ORANGE 100%" plus two chips) is 202 px.
+// of the light's colour before each colour name, or the message, then the cursor. GLCD x1: the
+// longest line ("IN ORANGE 100%  OUT ORANGE 100%" plus two chips) is 202 px.
 static constexpr int STRIP_TEXT_X = 108;
 static void drawStripText() {
     const Rect& r = deckmenu::MENU_STRIP;
     const int cy = r.y + r.h / 2;
-    const uint16_t bg = pal(termpal::BG);
-    tft.fillRect(STRIP_TEXT_X, r.y + 2, r.x + r.w - STRIP_TEXT_X, r.h - 2, bg);  // under the rule
+    clearBg(STRIP_TEXT_X, r.y + 2, r.x + r.w - STRIP_TEXT_X, r.h - 2);  // under the rule
     tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(pal(termpal::TEXT), bg);
+    tft.setTextColor(pal(termpal::TEXT));
     if (message[0]) {
-        label(message, STRIP_TEXT_X, cy, 1);
+        placeCursor(STRIP_TEXT_X + tft.drawString(message, STRIP_TEXT_X, cy, 1));
         return;
     }
     char line[48];
@@ -439,13 +507,14 @@ static void drawStripText() {
     // that space when the light is on (the state then starts with its colour name).
     char* halves[2] = {line, strstr(line, "  ")};
     if (!halves[1]) {  // not the expected shape: plain text
-        label(line, STRIP_TEXT_X, cy, 1);
+        placeCursor(STRIP_TEXT_X + tft.drawString(line, STRIP_TEXT_X, cy, 1));
         return;
     }
     *halves[1] = 0;
     halves[1] += 2;
     int x = STRIP_TEXT_X;
     for (int i = 0; i < 2; i++) {
+        if (i) x += 12;  // the two spaces between the lights
         char* state = strchr(halves[i], ' ');
         if (state) *state++ = 0;
         x += tft.drawString(halves[i], x, cy, 1);
@@ -457,8 +526,13 @@ static void drawStripText() {
             x += 6;  // a space
         }
         if (state) x += tft.drawString(state, x, cy, 1);
-        x += 12;  // the two spaces between the lights
     }
+    placeCursor(x);
+}
+
+// Each loop pass on the Menu: the cursor's cell when its phase turned.
+static void blinkCursor() {
+    if (screen == Screen::Menu && blinkPhase() != cursorOn) drawCursor(!cursorOn);
 }
 
 // The clock's minute of the day on screen (-1: not synced, "--:--"); updateDayNight keeps it.
@@ -469,29 +543,60 @@ static void drawClock() {
     char s[16];  // room for any int, so -Wformat-truncation stays quiet
     if (clockMin < 0) snprintf(s, sizeof(s), "--:--");
     else snprintf(s, sizeof(s), "%02d:%02d", clockMin / 60, clockMin % 60);
-    tft.fillRect(r.x + 4, r.y + 2, STRIP_TEXT_X - r.x - 4, r.h - 2, pal(termpal::BG));  // left of the text, under the rule
+    clearBg(r.x + 4, r.y + 2, STRIP_TEXT_X - r.x - 4, r.h - 2);  // left of the text, under the rule
     tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(pal(termpal::TEXT), pal(termpal::BG));
+    tft.setTextColor(pal(termpal::TEXT));
     label(s, r.x + 8, r.y + r.h / 2, 1, 3);
 }
 
 static void drawStrip() {
     const Rect& r = deckmenu::MENU_STRIP;
-    tft.fillRect(r.x, r.y, r.w, r.h, pal(termpal::BG));
+    clearBg(r);
     tft.drawFastHLine(r.x + 4, r.y + 1, r.w - 8, pal(termpal::MID));
     drawClock();
     drawStripText();
 }
 
+// The Menu header: three terminal lines, the last in MID, and a rule. The boot types them out.
+static const char* const HEADER_LINES[] = {"WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK", ">SET TERMINAL/INQUIRE",
+                                           "HONDA CITY // CARDECK OS"};
+static constexpr int N_HEADER = sizeof(HEADER_LINES) / sizeof(HEADER_LINES[0]);
+static constexpr int HEADER_X = 8, HEADER_Y0 = 4, HEADER_DY = 12;
+static uint16_t headerInk(int i) { return pal(i == N_HEADER - 1 ? termpal::MID : termpal::TEXT); }
+
 static void drawHeader() {
     const Rect& r = deckmenu::HEADER;
-    tft.fillRect(r.x, r.y, r.w, r.h, pal(termpal::BG));
-    tft.setTextDatum(TC_DATUM);
-    tft.setTextColor(pal(termpal::TEXT), pal(termpal::BG));
-    label("ROBCO INDUSTRIES (TM) TERMLINK", r.x + r.w / 2, r.y + 6, 1);
-    tft.setTextColor(pal(termpal::MID), pal(termpal::BG));
-    label("HONDA CITY // CARDECK OS", r.x + r.w / 2, r.y + 18, 1);
+    clearBg(r);
+    tft.setTextDatum(TL_DATUM);
+    for (int i = 0; i < N_HEADER; i++) {
+        tft.setTextColor(headerInk(i));
+        tft.drawString(HEADER_LINES[i], HEADER_X, HEADER_Y0 + i * HEADER_DY, 1);
+    }
     tft.drawFastHLine(r.x + 4, r.y + r.h - 3, r.w - 8, pal(termpal::MID));
+}
+
+// The RobCo boot: on a blank screen the header's lines type out one character every TYPE_MS behind
+// a block cursor (85 characters, ~0.5 s), then drawAll() shows the Menu. It runs in setup(), so
+// nothing else draws meanwhile: every other drawing path runs from loop(), and the link and voice
+// tasks start after it (a voice job or a link change that comes later waits in the queue / the
+// link flags for loop() as always).
+static constexpr uint32_t TYPE_MS = 6;
+static void typeHeader() {
+    clearBg(0, 0, tft.width(), tft.height());
+    tft.setTextDatum(TL_DATUM);
+    for (int i = 0; i < N_HEADER; i++) {
+        tft.setTextColor(headerInk(i));
+        const int y = HEADER_Y0 + i * HEADER_DY;
+        int x = HEADER_X;
+        for (const char* p = HEADER_LINES[i]; *p; p++) {
+            const char ch[2] = {*p, 0};
+            clearBg(x, y, 6, 8);  // the cursor
+            x += tft.drawString(ch, x, y, 1);
+            tft.fillRect(x, y, 6, 8, pal(termpal::TEXT));
+            delay(TYPE_MS);
+        }
+        clearBg(x, y, 6, 8);
+    }
 }
 
 static void drawGrid() {
@@ -518,20 +623,28 @@ static void drawLooks() {
     drawLightState();
 }
 
-// Lights only (the Menu's focus is the inverted bar, drawn by the button itself). The ring sits in
-// the gap around the button (green inside it marks what the lights show, yellow "pressed").
+// Lights only (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
+// the 2 px gap around the button, apart from the lit colour's bar inside it. Off: the gap's
+// scanlined bg again (the caller redraws the button, and with it any rule the ring crossed).
 static void drawFocus(int id, bool on) {
     if (id < 0 || screen != Screen::Lights) return;
     const Rect r = deckmenu::rect(screen, id);
-    const uint16_t c = on ? pal(termpal::TEXT) : pal(termpal::BG);
-    tft.drawRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, c);
-    tft.drawRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2, c);
+    if (on) {
+        tft.drawRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, pal(termpal::TEXT));
+        tft.drawRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2, pal(termpal::TEXT));
+        return;
+    }
+    clearBg(r.x - 2, r.y - 2, r.w + 4, 2);
+    clearBg(r.x - 2, r.y + r.h, r.w + 4, 2);
+    clearBg(r.x - 2, r.y, 2, r.h);
+    clearBg(r.x + r.w, r.y, 2, r.h);
 }
 
 // Redraws the current screen in the current palette.
 static void drawAll() {
-    tft.fillScreen(pal(termpal::BG));
+    clearBg(0, 0, tft.width(), tft.height());
     if (screen == Screen::Menu) drawHeader();
+    else drawTabRule(0, tft.width());
     for (int id = 0; id < deckmenu::count(screen); id++) {
         if (built(id)) drawButton(id);
     }
@@ -995,7 +1108,8 @@ static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
 // In loop(): applies one voice command to its zone's page, like a tap there: BOTH (no zone given)
 // goes to both lights (bothlook: while they differ each keeps its own look unless a colour is
 // given); INSIDE or OUTSIDE changes only that light; a preset sets both lights whatever the
-// zone, and the phrase's colour, level and power go with it unheard ("rose 50" is ROSE as it is). The page on screen stays. Then answers the waiting handler.
+// zone, and a preset ignores the rest of the phrase ("rose 50" is ROSE as it is). The page on
+// screen stays. Then answers the waiting handler.
 static void applyVoice(const VoiceJob& job) {
     const ledvoice::Command& c = job.c;
     char line[sizeof(voiceReply)];
@@ -1182,6 +1296,7 @@ void setup() {
 
     pinMode(PIN_BOOT, INPUT_PULLUP);
     if (!loadCalibration() || digitalRead(PIN_BOOT) == LOW) calibrate();
+    typeHeader();  // before the tasks start: nothing else draws while it types
     drawAll();
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
@@ -1235,6 +1350,7 @@ void loop() {
 
     handlePad();
     updateDayNight();
+    blinkCursor();
 
     // BOOT held for 2 s: calibrate the touch again.
     static uint32_t bootSince = 0;

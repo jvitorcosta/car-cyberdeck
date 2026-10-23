@@ -49,6 +49,13 @@ void test_wire_line_clamps_slot() {
     TEST_ASSERT_EQUAL_STRING("1 ROSE pink 40 pink 100", buf);
 }
 
+// The swatch words in this order are the /presets wire contract (the watch maps them back).
+void test_swatch_words() {
+    const char* order[] = {"red", "orange", "pink", "purple", "blue", "green", "white", "yellow"};
+    TEST_ASSERT_EQUAL_INT(8, ledlook::N_SWATCH);
+    for (int i = 0; i < ledlook::N_SWATCH; i++) TEST_ASSERT_EQUAL_STRING(order[i], ledlook::SWATCHES[i].word);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_table);
@@ -56,5 +63,6 @@ int main(int, char**) {
     RUN_TEST(test_describe_fits);
     RUN_TEST(test_wire_line);
     RUN_TEST(test_wire_line_clamps_slot);
+    RUN_TEST(test_swatch_words);
     return UNITY_END();
 }
