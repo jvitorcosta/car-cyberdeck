@@ -29,21 +29,30 @@ void test_rects_inside_screen_and_apart() {
     const Rect menu[] = {HEADER, MENU_STRIP};
     const Rect lights[] = {STATUS, LEVEL};
     const Rect weather[] = {WEATHER_BODY};
+    const Rect radio[] = {RADIO_BODY};
     check_screen(Screen::Menu, menu, 2);
     check_screen(Screen::Lights, lights, 2);
     check_screen(Screen::Weather, weather, 1);
+    check_screen(Screen::Radio, radio, 1);
 }
 
 void test_menu_ids_and_hits() {
     TEST_ASSERT_EQUAL_INT(M_N, count(Screen::Menu));
-    TEST_ASSERT_EQUAL_INT(2, N_ITEMS);
+    TEST_ASSERT_EQUAL_INT(3, N_ITEMS);
     TEST_ASSERT_EQUAL_INT(M_PRE0, M_ITEM0 + N_ITEMS);
-    TEST_ASSERT_EQUAL_INT(6, M_N);
-    // LIGHTS and WEATHER side by side on the row, over the preset columns.
+    TEST_ASSERT_EQUAL_INT(3, M_PRE0);
+    TEST_ASSERT_EQUAL_INT(7, M_N);
+    // LIGHTS, WEATHER and RADIO side by side on the row, over the preset columns.
     const Rect lights = rect(Screen::Menu, M_ITEM0 + LIGHTS), weather = rect(Screen::Menu, M_ITEM0 + WEATHER);
-    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 48 && lights.w == 154 && lights.h == 36);
-    TEST_ASSERT_TRUE(weather.x == 162 && weather.y == 48 && weather.w == 154 && weather.h == 36);
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + WEATHER, hit(Screen::Menu, 240, 60));
+    const Rect radio = rect(Screen::Menu, M_ITEM0 + RADIO);
+    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 48 && lights.w == 100 && lights.h == 36);
+    TEST_ASSERT_TRUE(weather.x == 110 && weather.y == 48 && weather.w == 100 && weather.h == 36);
+    TEST_ASSERT_TRUE(radio.x == 216 && radio.y == 48 && radio.w == 100 && radio.h == 36);
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + WEATHER, hit(Screen::Menu, 160, 60));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + RADIO, hit(Screen::Menu, 240, 60));
+    // The presets did not move.
+    const Rect last = rect(Screen::Menu, M_PRE0 + 3);
+    TEST_ASSERT_TRUE(last.x == 162 && last.y == 138 && last.w == 154 && last.h == 42);
     const Rect first = rect(Screen::Menu, M_PRE0);
     TEST_ASSERT_EQUAL_INT(4, first.x);
     TEST_ASSERT_EQUAL_INT(92, first.y);
@@ -87,18 +96,22 @@ void test_neighbour() {
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, neighbour(Screen::Menu, M_PRE0, 1, 0));
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 2, neighbour(Screen::Menu, M_PRE0, 0, 1));
     TEST_ASSERT_EQUAL_INT(M_ITEM0, neighbour(Screen::Menu, M_PRE0, 0, -1));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + WEATHER, neighbour(Screen::Menu, M_PRE0 + 1, 0, -1));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + RADIO, neighbour(Screen::Menu, M_PRE0 + 1, 0, -1));
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 3, neighbour(Screen::Menu, M_PRE0 + 1, 0, 1));
     TEST_ASSERT_EQUAL_INT(M_PRE0, neighbour(Screen::Menu, M_PRE0 + 1, -1, 0));
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 2, neighbour(Screen::Menu, M_PRE0 + 2, 0, 1));
     TEST_ASSERT_EQUAL_INT(M_PRE0 + 3, neighbour(Screen::Menu, M_PRE0 + 3, 0, 1));
-    // Down from either item: the preset under it. Left / right: between the two items; past the
-    // row's ends nothing lies that way.
-    TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, neighbour(Screen::Menu, M_ITEM0 + WEATHER, 0, 1));
+    // Down from each item: a preset. Left / right: along the row of three; past the row's ends
+    // nothing lies that way.
+    for (int i = 0; i < N_ITEMS; i++) TEST_ASSERT_TRUE(isPreset(Screen::Menu, neighbour(Screen::Menu, M_ITEM0 + i, 0, 1)));
+    TEST_ASSERT_EQUAL_INT(M_PRE0, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, 0, 1));
+    TEST_ASSERT_EQUAL_INT(M_PRE0 + 1, neighbour(Screen::Menu, M_ITEM0 + RADIO, 0, 1));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + WEATHER, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + RADIO, neighbour(Screen::Menu, M_ITEM0 + WEATHER, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + WEATHER, neighbour(Screen::Menu, M_ITEM0 + RADIO, -1, 0));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + WEATHER, -1, 0));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, -1, 0));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + WEATHER, neighbour(Screen::Menu, M_ITEM0 + WEATHER, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + RADIO, neighbour(Screen::Menu, M_ITEM0 + RADIO, 1, 0));
 }
 
 void test_weather_screen() {
@@ -121,6 +134,27 @@ void test_weather_screen() {
     TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Weather, 0));
 }
 
+void test_radio_screen() {
+    TEST_ASSERT_EQUAL_INT(R_N, count(Screen::Radio));
+    TEST_ASSERT_EQUAL_INT(1, R_N);
+    const Rect back = rect(Screen::Radio, R_BACK), weatherBack = rect(Screen::Weather, W_BACK);
+    TEST_ASSERT_TRUE(back.x == weatherBack.x && back.y == weatherBack.y && back.w == weatherBack.w && back.h == weatherBack.h);
+    TEST_ASSERT_EQUAL_INT(0, rect(Screen::Radio, 1).w);
+    for (int y = 0; y < 240; y += 3)
+        for (int x = 0; x < 320; x += 3) {
+            const int h = hit(Screen::Radio, x, y);
+            TEST_ASSERT_TRUE(h == -1 || h == R_BACK);
+        }
+    TEST_ASSERT_EQUAL_INT(R_BACK, hit(Screen::Radio, 20, 20));
+    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Radio, 160, 120));
+    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Radio, 200, 20));
+    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Radio, 20, 50));  // the body, just under Back
+    TEST_ASSERT_EQUAL_INT(R_BACK, neighbour(Screen::Radio, R_BACK, 1, 0));
+    TEST_ASSERT_EQUAL_INT(R_BACK, neighbour(Screen::Radio, R_BACK, 0, 1));
+    TEST_ASSERT_FALSE(isPreset(Screen::Radio, R_BACK));
+    TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Radio, 0));
+}
+
 void test_preset_slots() {
     TEST_ASSERT_EQUAL_INT(3, presetSlot(Screen::Lights, L_PRE0 + 3));
     TEST_ASSERT_EQUAL_INT(0, presetSlot(Screen::Menu, M_PRE0));
@@ -129,6 +163,7 @@ void test_preset_slots() {
     TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Lights, L_MINUS));
     TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Menu, M_ITEM0));
     TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Menu, M_ITEM0 + WEATHER));
+    TEST_ASSERT_EQUAL_INT(-1, presetSlot(Screen::Menu, M_ITEM0 + RADIO));
     TEST_ASSERT_TRUE(isPreset(Screen::Menu, M_PRE0 + 3));
     TEST_ASSERT_FALSE(isPreset(Screen::Lights, L_PLUS));
 }
@@ -140,6 +175,7 @@ int main(int, char**) {
     RUN_TEST(test_hit_snaps_and_ignores_display_rects);
     RUN_TEST(test_neighbour);
     RUN_TEST(test_weather_screen);
+    RUN_TEST(test_radio_screen);
     RUN_TEST(test_preset_slots);
     return UNITY_END();
 }

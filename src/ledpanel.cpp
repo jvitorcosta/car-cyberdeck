@@ -1,8 +1,8 @@
 // The yellow deck (CYD) as the car's control screen: a RobCo-style terminal (green on black, amber
-// at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Three
+// at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Four
 // screens, laid out by util/deckmenu:
 //   Menu (boot, after the header types out): the header, the menu items side by side on one row
-//           ("> [LIGHTS]", "> [WEATHER]"), the four presets ROSE / FIRE / CALM / PURPURA (tap one
+//           ("> [LIGHTS]", "> [WEATHER]", "> [RADIO]"), the four presets ROSE / FIRE / CALM / PURPURA (tap one
 //           to apply it), and a strip at the bottom with the clock (the outside temperature under
 //           it, "24C" or "--C") and each light's state ("IN PINK 40% OUT --": its colour, a chip of
 //           it and its %, OFF, or -- when the deck has no link to it) ending in a blinking block
@@ -17,6 +17,10 @@
 //           today's HI / LO, the city, and "UPDATED 12:30" (or NO DATA YET / >OFFLINE). Where the
 //           car is comes from the hotspot's public IP (ip-api.com, approximate), the weather from
 //           Open-Meteo, both over plain http every 15 min (see "Weather" below)
+//   Radio:  < BACK, the title tab RADIO, "GALAXY NEWS RADIO" and ON AIR (or >STANDBY / >NO SIGNAL /
+//           >WRONG KEY), the song and artist the black deck (the S3) is playing, a 20-cell bar with
+//           "1:23 / 3:45", and the synced lyric line. Read from the black deck's GET /state every
+//           second while this screen shows (see "Radio" below)
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
 // The STATUS line on Lights and the strip's text on the Menu show a terminal message for 2.5 s
@@ -25,8 +29,8 @@
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
 // /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
-// drives it too: the D-pad moves the focus (an inverted bar on the Menu, a TEXT ring on Lights and
-// Weather), A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
+// drives it too: the D-pad moves the focus (an inverted bar on the Menu, a TEXT ring on Lights,
+// Weather and Radio), A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
 // "Xbox controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
 // palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
@@ -35,7 +39,9 @@
 // mode whatever the time, to check the dimming without waiting for 18:00. Not set in platformio.ini.
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
+#include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include <WiFi.h>
 #include <cmath>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
@@ -50,19 +56,26 @@
 #include "ui/backlight.h"
 #include "companion/touch.h"
 #include "net/clock.h"
+#include "net/ipaddr.h"
 #include "net/remote_config.h"
 #include "net/wifi.h"
 #include "util/bothlook.h"
 #include "util/daynight.h"
+#include "util/deckaddr.h"
 #include "util/deckmenu.h"
 #include "util/elkcmd.h"
 #include "util/geoip.h"
+#include "util/hotspotip.h"
 #include "util/ledlook.h"
 #include "util/ledpresets.h"
 #include "util/ledvoice.h"
 #include "util/lightstatus.h"
+#include "util/pollpace.h"
+#include "util/radioview.h"
 #include "util/readguard.h"
 #include "util/remotegate.h"
+#include "util/statejson.h"
+#include "util/stateparse.h"
 #include "util/termpal.h"
 #include "util/text.h"
 #include "util/touchcal.h"
@@ -104,6 +117,7 @@ using deckmenu::L_PRE0;
 using deckmenu::L_MINUS;
 using deckmenu::L_PLUS;
 using deckmenu::W_BACK;
+using deckmenu::R_BACK;
 
 static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Menu
 // The palette: every colour goes through termpal with this flag, so night mode only flips it and
@@ -125,6 +139,15 @@ struct WeatherReading {
 };
 static WeatherReading wx;
 static bool weatherOff = false;  // no REMOTE_TOKEN: no WiFi, so no weather (">OFFLINE")
+
+// What the black deck (the S3) is playing (see "Radio" below): the radio task publishes each poll
+// under radioMux and raises radioFresh; loop() copies it into `song`, which is all the drawing reads.
+struct RadioReading {
+    bool wrongKey = false;    // the last poll was turned down (403: the decks' REMOTE_TOKEN differ)
+    stateparse::Deck deck{};  // the last state that came (a miss keeps it)
+    uint32_t at = 0;          // millis() it came; 0: none yet
+};
+static RadioReading song;
 
 // ---- BLE ----
 
@@ -272,6 +295,7 @@ static void drawFocus(int id, bool on);
 static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Weather) return W_BACK;
+    if (screen == Screen::Radio) return R_BACK;
     return L_TILE0 + cur().swatch;
 }
 
@@ -423,12 +447,12 @@ static void drawButtonBody(int id, bool pressed) {
     const Rect r = deckmenu::rect(screen, id);
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
-        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [WEATHER]"};  // in deckmenu::Item order
+        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [WEATHER]", "> [RADIO]"};  // in deckmenu::Item order
         if (id < M_PRE0) drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus);
         else drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed, id == focus);
         return;
     }
-    if (screen == Screen::Weather || id == L_BACK) {  // W_BACK: the Weather screen's only button
+    if (screen == Screen::Weather || screen == Screen::Radio || id == L_BACK) {  // W_BACK / R_BACK: their only button
         drawChrome(r, "< BACK", 2, pressed, false);
         drawTabRule(r.x - 2, r.x + r.w + 2);  // its focus ring crosses the rule too
     } else if (id < L_TILE0) {
@@ -702,7 +726,7 @@ static void drawLooks() {
     drawLightState();
 }
 
-// Lights and Weather (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
+// Lights, Weather and Radio (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
 // the 2 px gap around the button, apart from the lit colour's bar inside it. Off: the gap's
 // scanlined bg again (the caller redraws the button, and with it any rule the ring crossed).
 static void drawFocus(int id, bool on) {
@@ -757,6 +781,178 @@ static void drawWeather() {
     drawWeatherBody();
 }
 
+// ---- Radio screen: the black deck's song, Galaxy News Radio style ----
+// The body (deckmenu::RADIO_BODY): "GALAXY NEWS RADIO" in MID with the state word right of it (ON AIR
+// in TEXT, the ">..." states in DIM) over a rule; the title (font 4, case kept: titles read better
+// than caps) and the artist (font 2, MID), both accent-folded (the fonts are ASCII only) and cut
+// with ".." to fit; a 20-cell block bar like the level bar with "1:23 / 3:45"; the synced lyric
+// line, wrapped to two lines. Each part is redrawn only when what it shows changed: the bar and the
+// time once a song second (radioview interpolates between polls), the title and artist on a new
+// song, the lyric on a new line. A state is believed for RADIO_HOLD_MS after it came, so the black
+// deck's odd dropped poll doesn't blank the screen.
+static constexpr Rect RADIO_TAB{80, 2, 100, 36};
+static constexpr uint32_t RADIO_HOLD_MS = 5000;
+static constexpr int RADIO_X = 4, RADIO_W = 312;
+static constexpr int RADIO_HEAD_Y = 50, RADIO_RULE_Y = 70, RADIO_TITLE_Y = 78, RADIO_ARTIST_Y = 108;
+static constexpr int RADIO_BAR_Y = 138, RADIO_LYRIC_Y = 168, RADIO_LYRIC_DY = 20;
+static constexpr int RADIO_CELLS = 20, RADIO_CELL = 7, RADIO_GAP = 2;
+static constexpr int RADIO_STATE_X = 196;  // the state word's area: right of "GALAXY NEWS RADIO"
+
+// `s` cut to fit maxW px in font fontNo, ending in ".." when cut (the fonts have no ellipsis).
+static void fitText(const char* s, char* out, size_t n, uint8_t fontNo, int maxW) {
+    snprintf(out, n, "%s", s);
+    if (tft.textWidth(out, fontNo) <= maxW) return;
+    size_t len = strlen(out);
+    while (len > 0) {
+        --len;  // out[0..len) is still the original text
+        while (len > 0 && out[len - 1] == ' ') --len;
+        if (len + 3 > n) continue;
+        out[len] = '.';
+        out[len + 1] = '.';
+        out[len + 2] = 0;
+        if (tft.textWidth(out, fontNo) <= maxW) return;
+    }
+    snprintf(out, n, "..");
+}
+
+// `s` over two lines of maxW px: the first as much as fits, broken at a space when there is one; the
+// rest cut with "..". b is "" when one line holds it all.
+static void wrapTwo(const char* s, char* a, char* b, size_t n, uint8_t fontNo, int maxW) {
+    char buf[sizeof(stateparse::Deck::line)];
+    snprintf(buf, sizeof(buf), "%s", s);
+    b[0] = 0;
+    if (tft.textWidth(buf, fontNo) <= maxW) {
+        snprintf(a, n, "%s", buf);
+        return;
+    }
+    const size_t len = strlen(buf);
+    size_t cut = 0, space = 0;
+    for (size_t k = 1; k <= len; k++) {
+        const char c = buf[k];
+        buf[k] = 0;
+        const bool fits = tft.textWidth(buf, fontNo) <= maxW;
+        buf[k] = c;
+        if (!fits) break;
+        cut = k;
+        if (c == ' ') space = k;  // buf[0..k) fits and a word ends there
+    }
+    if (space > 0) cut = space;
+    if (cut == 0) cut = 1;
+    size_t end = cut;
+    while (end > 0 && buf[end - 1] == ' ') --end;
+    snprintf(a, n, "%.*s", static_cast<int>(end), buf);
+    const char* rest = buf + cut;
+    while (*rest == ' ') ++rest;
+    fitText(rest, b, n, fontNo, maxW);
+}
+
+// What is on screen now (the texts as the deck sent them), so a redraw paints only the part that
+// changed. drawRadioBody(true) forgets it.
+static const char* radioShownState = nullptr;
+static char radioShownTitle[sizeof(stateparse::Deck::track)], radioShownArtist[sizeof(stateparse::Deck::artist)];
+static char radioShownLyric[sizeof(stateparse::Deck::line)], radioShownTime[32];
+static int radioShownCells = -1;
+static bool radioShownLive = false;
+
+static void drawRadioBody(bool all) {
+    const Rect& r = deckmenu::RADIO_BODY;
+    const uint32_t now = millis();
+    const bool heard = song.at != 0 && now - song.at < RADIO_HOLD_MS;
+    const stateparse::Deck& d = song.deck;
+    const bool hasTrack = heard && d.track[0];
+    if (all) {
+        clearBg(r);
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(pal(termpal::MID));
+        label("GALAXY NEWS RADIO", RADIO_X + 4, RADIO_HEAD_Y, 2);
+        tft.drawFastHLine(RADIO_X, RADIO_RULE_Y, RADIO_W, pal(termpal::MID));
+        radioShownState = nullptr;
+        radioShownTitle[0] = radioShownArtist[0] = radioShownLyric[0] = radioShownTime[0] = 0;
+        radioShownCells = -1;
+    }
+
+    const char* stateWord = radioview::state(heard, song.wrongKey, d.playing, d.track[0] != 0);
+    if (all || stateWord != radioShownState) {
+        radioShownState = stateWord;
+        clearBg(RADIO_STATE_X, RADIO_HEAD_Y, RADIO_X + RADIO_W - RADIO_STATE_X, 16);
+        tft.setTextDatum(TR_DATUM);
+        tft.setTextColor(pal(stateWord[0] == '>' ? termpal::DIM : termpal::TEXT));
+        label(stateWord, RADIO_X + RADIO_W, RADIO_HEAD_Y, 2);
+    }
+
+    // the title and artist as the deck sent them ("" without a song): folded and fitted only when new
+    char folded[sizeof(stateparse::Deck::line)], fit[sizeof(stateparse::Deck::line)];
+    const char* title = hasTrack ? d.track : "";
+    if (all || strcmp(title, radioShownTitle) != 0) {
+        snprintf(radioShownTitle, sizeof(radioShownTitle), "%s", title);
+        txt::asciiFold(title, folded, sizeof(folded));
+        fitText(folded, fit, sizeof(fit), 4, RADIO_W);
+        clearBg(RADIO_X, RADIO_TITLE_Y, RADIO_W, 26);
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(pal(termpal::TEXT));
+        label(fit, RADIO_X, RADIO_TITLE_Y, 4);
+    }
+    const char* artist = hasTrack ? d.artist : "";
+    if (all || strcmp(artist, radioShownArtist) != 0) {
+        snprintf(radioShownArtist, sizeof(radioShownArtist), "%s", artist);
+        txt::asciiFold(artist, folded, sizeof(folded));
+        fitText(folded, fit, sizeof(fit), 2, RADIO_W);
+        clearBg(RADIO_X, RADIO_ARTIST_Y, RADIO_W, 16);
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(pal(termpal::MID));
+        label(fit, RADIO_X, RADIO_ARTIST_Y, 2);
+    }
+
+    const uint32_t pos = hasTrack ? static_cast<uint32_t>(radioview::progressMs(d, now - song.at)) : 0;
+    const uint32_t dur = hasTrack ? d.durationMs : 0;
+    const int full = radioview::cells(pos, dur, RADIO_CELLS);
+    const bool live = hasTrack && d.playing;
+    if (all || full != radioShownCells || live != radioShownLive) {
+        radioShownCells = full;
+        radioShownLive = live;
+        clearBg(RADIO_X, RADIO_BAR_Y, RADIO_CELLS * (RADIO_CELL + RADIO_GAP) + 4, 14);
+        for (int k = 0; k < RADIO_CELLS; k++) {
+            const int x = RADIO_X + 4 + k * (RADIO_CELL + RADIO_GAP);
+            if (k < full) tft.fillRect(x, RADIO_BAR_Y, RADIO_CELL, 14, pal(termpal::TEXT));
+            else tft.drawRect(x, RADIO_BAR_Y, RADIO_CELL, 14, pal(live ? termpal::MID : termpal::DIM));
+        }
+    }
+    char t[32] = "-:-- / -:--";
+    if (hasTrack) {
+        char a[12], b[12];
+        radioview::clock(pos, a, sizeof(a));
+        if (dur > 0) radioview::clock(dur, b, sizeof(b));
+        else snprintf(b, sizeof(b), "-:--");
+        snprintf(t, sizeof(t), "%s / %s", a, b);
+    }
+    if (all || strcmp(t, radioShownTime) != 0) {
+        snprintf(radioShownTime, sizeof(radioShownTime), "%s", t);
+        const int x0 = RADIO_X + 4 + RADIO_CELLS * (RADIO_CELL + RADIO_GAP);
+        clearBg(x0, RADIO_BAR_Y - 1, RADIO_X + RADIO_W - x0, 16);
+        tft.setTextDatum(MR_DATUM);
+        tft.setTextColor(pal(hasTrack ? termpal::TEXT : termpal::DIM));
+        label(t, RADIO_X + RADIO_W, RADIO_BAR_Y + 7, 2);
+    }
+
+    const char* line = hasTrack ? radioview::lyric(d, pos) : "";
+    if (all || strcmp(line, radioShownLyric) != 0) {
+        snprintf(radioShownLyric, sizeof(radioShownLyric), "%s", line);
+        clearBg(RADIO_X, RADIO_LYRIC_Y, RADIO_W, RADIO_LYRIC_DY + 16);
+        txt::asciiFold(line, folded, sizeof(folded));
+        char a[sizeof(fit)], b[sizeof(fit)];
+        wrapTwo(folded, a, b, sizeof(a), 2, RADIO_W);
+        tft.setTextDatum(TL_DATUM);
+        tft.setTextColor(pal(termpal::TEXT));
+        label(a, RADIO_X, RADIO_LYRIC_Y, 2);
+        if (b[0]) label(b, RADIO_X, RADIO_LYRIC_Y + RADIO_LYRIC_DY, 2);
+    }
+}
+
+static void drawRadio() {
+    drawTab(RADIO_TAB, "RADIO", false, true);
+    drawRadioBody(true);
+}
+
 // Redraws the current screen in the current palette. keepHeader (boot, right after typeHeader):
 // the Menu's header rect is left as typed, so it doesn't blink off for the redraw.
 static void drawAll(bool keepHeader = false) {
@@ -775,6 +971,8 @@ static void drawAll(bool keepHeader = false) {
         drawStrip();
     } else if (screen == Screen::Weather) {
         drawWeather();
+    } else if (screen == Screen::Radio) {
+        drawRadio();
     } else {
         drawLevel();
         drawStatus();
@@ -1050,12 +1248,15 @@ static bool pressedNow(int id) { return (tap.down && tap.id == id) || padFlash =
 // Switches to screen `s`: the focus goes to its first button (none without a controller), a press
 // still drawn yellow is forgotten (its id means another button there), and so is a message (it was
 // about the screen left; the new screen shows its usual line).
+// Back from Radio, the focus lands on the RADIO item it came from.
 static void show(Screen s) {
+    const Screen from = screen;
     screen = s;
     tap.id = -1;
     padFlash = -1;
     message[0] = 0;
     focus = padUp ? homeFocus() : -1;
+    if (focus >= 0 && s == Screen::Menu && from == Screen::Radio) focus = M_ITEM0 + deckmenu::RADIO;
     drawAll();
 }
 
@@ -1112,6 +1313,10 @@ static void press(int id) {
         if (id == W_BACK) show(Screen::Menu);
         return;
     }
+    if (screen == Screen::Radio) {
+        if (id == R_BACK) show(Screen::Menu);
+        return;
+    }
     if (deckmenu::isPreset(screen, id)) {
         applyPreset(deckmenu::presetSlot(screen, id));
         return;
@@ -1120,6 +1325,7 @@ static void press(int id) {
     switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
     case deckmenu::LIGHTS: show(Screen::Lights); break;
     case deckmenu::WEATHER: show(Screen::Weather); break;
+    case deckmenu::RADIO: show(Screen::Radio); break;
     }
 }
 
@@ -1136,7 +1342,7 @@ static void act() {
 
 // ---- Xbox controller input ----
 //   D-pad: move the focus (held: repeats; the sticks are ignored)    A: press the focused button
-//   B: back to the Menu (from Lights or Weather; on the Menu: nothing)
+//   B: back to the Menu (from Lights, Weather or Radio; on the Menu: nothing)
 //   Lights only: X next page    Y this page's lights on/off    LB / RB: - / +
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
@@ -1361,6 +1567,141 @@ static void takeWeather() {
     }
 }
 
+// ---- Radio: what the black deck (the S3) is playing, from its GET /state ----
+// Its own task (core 1, idle priority like the weather; core 0 is the lights' and the controller's
+// link), started with the weather once WiFi is up. It polls only while the RADIO screen shows
+// (loop() keeps radioWanted): at once when the screen opens, then every second, every 5 s after ten
+// misses in a row (util/pollpace); otherwise it sleeps. The black deck is at its fixed hotspot
+// address (COMPANION_DECK) on the iPhone hotspot, else looked up by its mDNS name (DECK_MDNS_NAME)
+// and kept through blips (util/deckaddr). HTTP/1.0, 1.5 s timeouts, the body into a fixed
+// statejson::MAX_JSON buffer, util/stateparse. Each poll is published under radioMux; loop() polls
+// radioFresh to redraw. The log tells when the deck is found, lost and back, not every poll.
+static TaskHandle_t radioHandle = nullptr;
+static portMUX_TYPE radioMux = portMUX_INITIALIZER_UNLOCKED;
+static RadioReading radioPub;             // guarded by radioMux
+static volatile bool radioFresh = false;  // a poll was published; loop() clears it
+static volatile bool radioWanted = false; // the RADIO screen shows; loop() keeps it
+static char radioBody[statejson::MAX_JSON];  // only the radio task touches these three
+static deckaddr::Keep radioAddr;
+static bool radioMdns = false;
+
+// Where the black deck is: its fixed address on the hotspot, else its mDNS name on whatever network
+// both are on. False when it can't be found.
+static bool radioHost(char* out, size_t n) {
+    if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()))) {
+        snprintf(out, n, "%s", COMPANION_DECK);
+        return true;
+    }
+    if (!radioMdns) radioMdns = MDNS.begin("cardeck-leds");
+    if (radioAddr.addr() == 0) {
+        const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
+        if (static_cast<uint32_t>(a) == 0) return false;
+        radioAddr.found(static_cast<uint32_t>(a));
+        Serial.printf("[radio] deck found at %s (mDNS)\n", a.toString().c_str());
+    }
+    snprintf(out, n, "%s", IPAddress(radioAddr.addr()).toString().c_str());
+    return true;
+}
+
+// GET /state into radioBody (cut at MAX_JSON, always terminated); the HTTP status, negative without
+// an answer. Short timeouts: the deck is one hop away, and a missing deck must not hold the polls up.
+static int radioGet() {
+    radioBody[0] = 0;
+    if (!net::isOnline()) return -1;
+    char host[40], url[128];
+    if (!radioHost(host, sizeof(host))) return -1;
+    snprintf(url, sizeof(url), "http://%s/state?k=%s", host, REMOTE_TOKEN);
+    WiFiClient c;
+    HTTPClient h;
+    h.setTimeout(1500);
+    h.setConnectTimeout(1500);
+    h.useHTTP10(true);
+    if (!h.begin(c, url)) return -1;
+    const int rc = h.GET();
+    size_t len = 0;
+    if (rc == 200) {
+        WiFiClient* s = h.getStreamPtr();
+        readguard::Guard g(millis(), 1500, 3000);
+        while (len < sizeof(radioBody) - 1 && (h.connected() || s->available())) {
+            const int a = s->available();
+            if (a <= 0) {
+                if (g.check(millis()) != readguard::State::Ok) break;
+                vTaskDelay(pdMS_TO_TICKS(2));
+                continue;
+            }
+            size_t want = sizeof(radioBody) - 1 - len;
+            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
+            len += s->readBytes(radioBody + len, want);
+            g.onData(millis());
+        }
+    }
+    radioBody[len] = 0;
+    h.end();
+    return rc;
+}
+
+static void radioTask(void*) {
+    static stateparse::Deck deck;  // static: ~650 B, off the task stack
+    pollpace::Pace pace;
+    uint32_t lastPoll = 0;
+    bool polling = false;  // the screen was showing last pass
+    for (;;) {
+        if (!radioWanted) {
+            polling = false;
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        if (!polling) pace = pollpace::Pace();  // just opened: poll at once, at the fast pace
+        const uint32_t now = millis();
+        if (!polling || now - lastPoll >= pace.intervalMs()) {
+            polling = true;
+            lastPoll = now;
+            const int rc = radioGet();
+            const bool ok = rc == 200 && stateparse::parse(radioBody, deck);
+            if (pace.misses() == 0 && !ok) Serial.printf("[radio] deck lost (rc=%d)\n", rc);
+            if (pace.misses() > 0 && ok) Serial.println("[radio] deck back");
+            pace.onResult(ok);
+            radioAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
+            const uint32_t at = millis();
+            portENTER_CRITICAL(&radioMux);
+            radioPub.wrongKey = rc == 403;
+            if (ok) {
+                radioPub.deck = deck;
+                radioPub.at = at ? at : 1;
+            }
+            portEXIT_CRITICAL(&radioMux);
+            radioFresh = true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+// From the voice task, once WiFi is up. 6 KB: HTTPClient, its Strings and the mDNS query; the [mem]
+// line shows what's left.
+static void beginRadio() {
+    if (radioHandle) return;
+    xTaskCreatePinnedToCore(radioTask, "radio", 6144, nullptr, 0, &radioHandle, 1);
+}
+
+// In loop(): tells the task whether to poll, takes a published poll, and redraws the parts of the
+// RADIO screen that changed (the bar and the time move between polls, so this runs every 200 ms).
+static void radioTick() {
+    radioWanted = screen == Screen::Radio;
+    bool fresh = false;
+    if (radioFresh) {
+        radioFresh = false;  // before the copy: a poll published meanwhile raises it again
+        portENTER_CRITICAL(&radioMux);
+        song = radioPub;
+        portEXIT_CRITICAL(&radioMux);
+        fresh = true;
+    }
+    if (screen != Screen::Radio) return;
+    static uint32_t drawnAt = 0;
+    if (!fresh && millis() - drawnAt < 200) return;
+    drawnAt = millis();
+    drawRadioBody(false);
+}
+
 // ---- Voice: Siri Shortcuts over WiFi ----
 // On the iPhone hotspot the deck sits at 172.20.10.11 (net/wifi pins it). A Shortcut dictates a
 // phrase and calls  GET /say?text=<phrase>&k=<REMOTE_TOKEN>; the reply is one line to speak back
@@ -1544,6 +1885,7 @@ static void voiceTask(void*) {
     server->begin();
     netclock::begin();  // SNTP, for night mode and the Menu's clock
     beginWeather();
+    beginRadio();
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
@@ -1680,16 +2022,18 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, radio %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
+                      radioHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(radioHandle)) : 0u,
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 
     handlePad();
     takeWeather();
+    radioTick();
     updateDayNight();
     tripTick();
     blinkCursor();
