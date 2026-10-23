@@ -4,6 +4,7 @@ import Toybox.WatchUi;
 
 // The zone pages, all in the "filled" look (see Fill): BOTH shows inside (left) and outside
 // (right) as two columns filled up to their brightness; INSIDE and OUTSIDE fill the whole face.
+// A fourth page lists the deck's 4 favourites. A controller that isn't linked says "Not connected".
 // Page dots on the right; the status shows while something is being sent or failed.
 class ZonesView extends WatchUi.View {
     var page as Number = BOTH;  // opens on BOTH: every zone is one press away from it
@@ -31,27 +32,53 @@ class ZonesView extends WatchUi.View {
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
             dc.fillRectangle(cx - 2, 0, 4, h);
             var busy = _deck.status.length() > 0;
+            var gone = _deck.links[0].equals("nolink");
+            var gone2 = _deck.links[1].equals("nolink");
+            var note = gone && gone2 ? "Not connected" : gone ? "Inside not connected"
+                     : gone2 ? "Outside not connected" : "";
             pill(dc, cx, 40, "BOTH", Graphics.COLOR_WHITE);
-            pill(dc, cx, h - 32, busy ? _deck.status : "START: change",
-                 busy ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
+            pill(dc, cx, h - 32, busy ? _deck.status : note.length() > 0 ? note : "START: change",
+                 busy || note.length() > 0 ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
+        } else if (page == FAVS) {
+            favourites(dc, cx, h);
         } else {
             // one zone: its colour filled up from the bottom to its brightness
             var l = _deck.look(page);
             var c = COLORS[l.color] as Array;
             var busy = _deck.status.length() > 0;
+            var gone = _deck.links[page - 1].equals("nolink");
             Fill.page(dc, c[2] as Number, l.lit, l.pct, page == INSIDE ? "INSIDE" : "OUTSIDE",
                       l.lit ? c[0] as String : "Off", l.lit ? l.pct + "%" : "",
-                      busy ? _deck.status : "START: change", busy);
+                      busy ? _deck.status : gone ? "Not connected" : "START: change", busy || gone);
         }
 
-        // page dots on the right: BOTH, INSIDE, OUTSIDE from top to bottom (black-rimmed, so
-        // they read on a coloured half too)
-        for (var i = 0; i < 3; i++) {
+        // page dots on the right: BOTH, INSIDE, OUTSIDE, FAVOURITES from top to bottom
+        // (black-rimmed, so they read on a coloured half too)
+        for (var i = 0; i < 4; i++) {
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-            dc.fillCircle(w - 14, cy - 14 + i * 14, 6);
+            dc.fillCircle(w - 14, cy - 21 + i * 14, 6);
             dc.setColor(i == page ? Graphics.COLOR_WHITE : Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.fillCircle(w - 14, cy - 14 + i * 14, 4);
+            dc.fillCircle(w - 14, cy - 21 + i * 14, 4);
         }
+    }
+
+    // The Favourites page: FAVOURITES on top, a row per slot (F1 and its two dots, or "F3 --"
+    // when empty), and the hint or status at the bottom.
+    private function favourites(dc as Dc, cx as Number, h as Number) as Void {
+        pill(dc, cx, 40, "FAVOURITES", Graphics.COLOR_WHITE);
+        for (var i = 0; i < 4; i++) {
+            var y = 82 + i * 32;
+            var fav = _deck.favs[i];
+            dc.setColor(fav != null ? Graphics.COLOR_WHITE : Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx - 62, y, Graphics.FONT_SMALL, "F" + (i + 1) + (fav != null ? "" : " --"),
+                        Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+            if (fav != null) {
+                new FavDots(fav as Array).paint(dc, cx + 18, cx + 54, y, 11);
+            }
+        }
+        var busy = _deck.status.length() > 0;
+        pill(dc, cx, h - 32, busy ? _deck.status : "START: apply",
+             busy ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
     }
 
     // Text on a black rounded pill centred on (x, y).

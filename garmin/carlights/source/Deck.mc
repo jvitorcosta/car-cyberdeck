@@ -16,6 +16,10 @@ const COLORS = [
 // Zones, as the deck names them. BOTH changes both lights; its reply describes both.
 enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
 
+// The Favourites page, and the marker on a job that isn't about one zone (/favs, /status, and the
+// /say that applies a favourite: no zone param, and its reply must not be read as a look).
+const FAVS = 3;
+
 // One light's look as the watch knows it.
 class Look {
     var color as Number = 0;
@@ -30,20 +34,33 @@ class Deck {
     var inside as Look = new Look();
     var outside as Look = new Look();
     var status as String = "";  // "Sending...", "No answer", ...; "" when all is well
+    // The deck's 4 favourites: null (empty slot) or [inColor, inPct, inLit, outColor, outPct, outLit],
+    // the colours as indices into COLORS (found by word: the deck's order differs).
+    var favs as Array = [null, null, null, null];
+    // Each controller's link, [inside, outside]: "on" | "off" | "nolink", "" until the deck answers.
+    var links as Array<String> = ["", ""];
 
     private var _queue as Array<Array> = [];  // [path, text or null, zone]
     private var _busy as Boolean = false;
     private var _zone as Number = BOTH;       // the zone of the request that is out
+    private var _path as String = "";         // and its path
 
     // A command for a zone: a colour word, "off", "brighter", "50%"...
     function send(text as String, zone as Number) as Void {
         push(["/say", text, zone]);
     }
 
-    // Reads both lights (when the app opens).
+    // Reads both lights, the favourites and the links (when the app opens).
     function sync() as Void {
         push(["/state", null, INSIDE]);
         push(["/state", null, OUTSIDE]);
+        push(["/favs", null, FAVS]);
+        push(["/status", null, FAVS]);
+    }
+
+    // Applies favourite n (1..4) on the deck. The reply isn't a look; onReply re-syncs instead.
+    function applyFav(n as Number) as Void {
+        push(["/say", "favourite " + n, FAVS]);
     }
 
     function look(zone as Number) as Look {
@@ -68,6 +85,7 @@ class Deck {
         _queue = _queue.slice(1, null);
         _busy = true;
         _zone = job[2] as Number;
+        _path = job[0] as String;
         status = "Sending...";
         WatchUi.requestUpdate();
         var params = {"k" => DECK_KEY} as Dictionary<Object, Object>;
@@ -91,15 +109,23 @@ class Deck {
         if (code == 200 && data != null) {
             status = "";
             var text = data.toString();
-            if (_zone == BOTH) {
+            if (_path.equals("/favs")) {
+                readFavs(text);
+            } else if (_path.equals("/status")) {
+                links = [linkOf(text, "inside="), linkOf(text, "outside=")];
+            } else if (_zone == FAVS) {
+                sync();  // a favourite was applied: read the lights it set
+            } else if (_zone == BOTH) {
                 absorb(text, inside);
                 absorb(text, outside);
             } else {
                 absorb(text, look(_zone));
             }
             // for the glance: the last state the deck reported, [colour, pct, lit] per light
-            Application.Storage.setValue("in", [inside.color, inside.pct, inside.lit]);
-            Application.Storage.setValue("out", [outside.color, outside.pct, outside.lit]);
+            if (!_path.equals("/favs") && !_path.equals("/status")) {
+                Application.Storage.setValue("in", [inside.color, inside.pct, inside.lit]);
+                Application.Storage.setValue("out", [outside.color, outside.pct, outside.lit]);
+            }
         } else {
             _queue = [];  // the deck isn't answering: drop the rest rather than wait on each
             if (code == -300) {
@@ -116,6 +142,56 @@ class Deck {
         }
         WatchUi.requestUpdate();
         next();
+    }
+
+    // "1 pink 50 pink 100" / "2 off 0 blue 80" / "3 -" per line, to favs (slot n at index n - 1).
+    private function readFavs(text as String) as Void {
+        var out = [null, null, null, null] as Array;
+        var lines = split(text, "\n");
+        for (var i = 0; i < lines.size(); i++) {
+            var t = split(lines[i], " ");
+            var n = t.size() > 0 ? t[0].toNumber() : null;
+            if (n == null || n < 1 || n > 4 || t.size() < 5) {
+                continue;  // "3 -" (empty) or noise
+            }
+            out[n - 1] = [colorOf(t[1]), t[2].toNumber(), !t[1].equals("off"),
+                          colorOf(t[3]), t[4].toNumber(), !t[3].equals("off")];
+        }
+        favs = out;
+    }
+
+    // The COLORS index for a colour word (0 for "off" or anything unknown: the light isn't lit then).
+    private function colorOf(word as String) as Number {
+        for (var i = 0; i < COLORS.size(); i++) {
+            if (word.equals((COLORS[i] as Array)[1] as String)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    // The word after `key` in "inside=on outside=nolink" ("" if absent).
+    private function linkOf(text as String, key as String) as String {
+        var at = text.find(key);
+        if (at == null) {
+            return "";
+        }
+        var rest = text.substring(at + key.length(), text.length()) as String;
+        var sp = rest.find(" ");
+        return sp != null ? rest.substring(0, sp) as String : rest;
+    }
+
+    private function split(text as String, sep as String) as Array<String> {
+        var parts = [] as Array<String>;
+        var rest = text;
+        var at = rest.find(sep);
+        while (at != null) {
+            parts.add(rest.substring(0, at) as String);
+            rest = rest.substring(at + sep.length(), rest.length()) as String;
+            at = rest.find(sep);
+        }
+        parts.add(rest);
+        return parts;
     }
 
     // Reads a deck line into a look: "[Inside: |Outside: ]<Colour>[, <n> percent]" or "... Lights off".
