@@ -17,11 +17,10 @@ static const char* const PHRASE[PHRASES] = {
     "aumenta o volume",
 };
 
+// The one condition recorded (owner, 2026-10-23): how the agent will usually hear him, with the
+// music turned down while he talks. The full test was A-D: paused/20% x windows closed/open.
 static const char* const CONDITION[SLOTS / PHRASES] = {
-    "Spotify pausado, vidros fechados",
     "Spotify a 20%, vidros fechados",
-    "Spotify pausado, vidros abertos",
-    "Spotify a 20%, vidros abertos",
 };
 
 static bool inRange(int slot) { return slot >= 0 && slot < SLOTS; }
@@ -94,6 +93,10 @@ Tap tapAt(int x) {
 int runEnd(int slot) {
     if (slot >= SLOTS) return SLOTS;
     return (slot / PHRASES + 1) * PHRASES;
+}
+
+bool moveToHotspot(const char* current, const char* hotspot, bool seen) {
+    return seen && strcmp(current, hotspot) != 0;
 }
 
 }  // namespace micrec

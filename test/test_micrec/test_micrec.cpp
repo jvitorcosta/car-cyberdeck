@@ -12,12 +12,12 @@ static uint16_t le16(const uint8_t* p) { return (uint16_t)(p[0] | p[1] << 8); }
 
 void test_slots_map_to_condition_and_phrase() {
     TEST_ASSERT_EQUAL_CHAR('A', micrec::condition(0));
-    TEST_ASSERT_EQUAL_CHAR('B', micrec::condition(10));
-    TEST_ASSERT_EQUAL_CHAR('D', micrec::condition(39));
-    TEST_ASSERT_EQUAL_CHAR('?', micrec::condition(40));
+    TEST_ASSERT_EQUAL_CHAR('A', micrec::condition(9));
+    TEST_ASSERT_EQUAL_CHAR('?', micrec::condition(10));
+    TEST_ASSERT_EQUAL_STRING("Spotify a 20%, vidros fechados", micrec::conditionText(0));
     TEST_ASSERT_EQUAL_CHAR('?', micrec::condition(-1));
-    TEST_ASSERT_EQUAL_INT(9, micrec::phraseOf(19));
-    TEST_ASSERT_EQUAL_INT(-1, micrec::phraseOf(40));
+    TEST_ASSERT_EQUAL_INT(9, micrec::phraseOf(9));
+    TEST_ASSERT_EQUAL_INT(-1, micrec::phraseOf(10));
     TEST_ASSERT_EQUAL_STRING("toca Djavan", micrec::phrase(4));
     TEST_ASSERT_EQUAL_STRING("liga as luzes", micrec::phrase(0));
     TEST_ASSERT_EQUAL_STRING("aumenta o volume", micrec::phrase(9));
@@ -56,8 +56,8 @@ void test_clip_names() {
     TEST_ASSERT_EQUAL_STRING("A01", s);
     micrec::clipName(9, s, sizeof s);
     TEST_ASSERT_EQUAL_STRING("A10", s);
-    micrec::clipName(39, s, sizeof s);
-    TEST_ASSERT_EQUAL_STRING("D10", s);
+    micrec::clipName(10, s, sizeof s);
+    TEST_ASSERT_EQUAL_STRING("?", s);
 }
 
 void test_a_phrase_counts_down_then_records_then_rests() {
@@ -75,10 +75,8 @@ void test_a_phrase_counts_down_then_records_then_rests() {
 
 void test_a_run_stops_at_the_end_of_its_condition() {
     TEST_ASSERT_EQUAL_INT(10, micrec::runEnd(0));
-    TEST_ASSERT_EQUAL_INT(10, micrec::runEnd(7));    // started mid-condition: finish A only
-    TEST_ASSERT_EQUAL_INT(20, micrec::runEnd(10));
-    TEST_ASSERT_EQUAL_INT(40, micrec::runEnd(39));
-    TEST_ASSERT_EQUAL_INT(40, micrec::runEnd(40));   // full: nothing to run
+    TEST_ASSERT_EQUAL_INT(10, micrec::runEnd(7));    // started mid-condition: finish it
+    TEST_ASSERT_EQUAL_INT(10, micrec::runEnd(10));   // full: nothing to run
 }
 
 void test_screen_thirds_are_back_resume_skip() {
@@ -93,9 +91,15 @@ void test_screen_thirds_are_back_resume_skip() {
 void test_a_break_comes_before_every_condition_but_the_first() {
     TEST_ASSERT_FALSE(micrec::breakBefore(0));
     TEST_ASSERT_FALSE(micrec::breakBefore(5));
-    TEST_ASSERT_TRUE(micrec::breakBefore(10));
-    TEST_ASSERT_TRUE(micrec::breakBefore(30));
-    TEST_ASSERT_FALSE(micrec::breakBefore(40));
+    TEST_ASSERT_FALSE(micrec::breakBefore(9));
+    TEST_ASSERT_FALSE(micrec::breakBefore(10));   // one condition: never a break
+}
+
+void test_it_moves_to_the_hotspot_only_when_seen_and_not_already_there() {
+    TEST_ASSERT_TRUE(micrec::moveToHotspot("Cecilia", "iPhone", true));
+    TEST_ASSERT_FALSE(micrec::moveToHotspot("Cecilia", "iPhone", false));   // not around
+    TEST_ASSERT_FALSE(micrec::moveToHotspot("iPhone", "iPhone", true));     // already there
+    TEST_ASSERT_TRUE(micrec::moveToHotspot("", "iPhone", true));            // offline
 }
 
 int main() {
@@ -108,5 +112,6 @@ int main() {
     RUN_TEST(test_a_run_stops_at_the_end_of_its_condition);
     RUN_TEST(test_screen_thirds_are_back_resume_skip);
     RUN_TEST(test_a_break_comes_before_every_condition_but_the_first);
+    RUN_TEST(test_it_moves_to_the_hotspot_only_when_seen_and_not_already_there);
     return UNITY_END();
 }

@@ -1,7 +1,8 @@
 // Car mic recorder for the voice agent test (NOT the firmware): docs/superpowers/plans/
-// 2026-10-23-voice-agent-1-mic-test.md. Hands-free from boot: after 5 s it records all 40 phrases
-// in order, per phrase a 3-2-1 countdown, a beep, 4 s of recording (into PSRAM), the next phrase,
-// with a 20 s break before conditions B, C and D to change the music and windows. A screen tap
+// 2026-10-23-voice-agent-1-mic-test.md. Hands-free from boot: after 5 s it records the phrases
+// (micrec::SLOTS, one condition) in order, per phrase a 3-2-1 countdown, a beep, 4 s of recording (into PSRAM), the next phrase,
+// with a 20 s break before any next condition to change the music and windows. On home WiFi it
+// moves to the hotspot as soon as it sees it. A screen tap
 // pauses; while paused, tap the left third to go back a phrase (to redo it), the middle to
 // resume, the right to skip. The clips are served over WiFi as WAV for tools/micrec_pull.py or
 // the phone:
@@ -201,7 +202,7 @@ static void runStep() {
         return;
     }
     if (s_slot >= micrec::SLOTS) {
-        Serial.println("[micrec] all 40 clips recorded");
+        Serial.println("[micrec] all clips recorded");
         s_paused = true;   // a redo then waits for "continuar" instead of starting by itself
         drawScreen();
     }
@@ -284,26 +285,60 @@ static void handleGain() {
     s_server.send(204);
 }
 
-// Starts serving once WiFi is up. The deck may boot before the hotspot does, and a reboot would
+// Serving starts once WiFi is up. The deck may boot before the hotspot does, and a reboot would
 // wipe the clips, so loop() keeps retrying in the background (WiFi.begin doesn't block).
 static void startServing() {
+    static bool routes = false;
     s_online = true;
+    MDNS.end();
     MDNS.begin("cardeck");
-    s_server.on("/", HTTP_GET, handleRoot);
-    s_server.on("/clip", HTTP_GET, handleClip);
-    s_server.on("/manifest.json", HTTP_GET, handleManifest);
-    s_server.on("/gain", HTTP_POST, handleGain);
-    s_server.begin();
-    Serial.printf("[micrec] serving at http://%s/?k=...\n", WiFi.localIP().toString().c_str());
+    if (!routes) {
+        routes = true;
+        s_server.on("/", HTTP_GET, handleRoot);
+        s_server.on("/clip", HTTP_GET, handleClip);
+        s_server.on("/manifest.json", HTTP_GET, handleManifest);
+        s_server.on("/gain", HTTP_POST, handleGain);
+        s_server.begin();
+    }
+    Serial.printf("[micrec] serving on %s at http://%s/?k=...\n", WiFi.SSID().c_str(),
+                  WiFi.localIP().toString().c_str());
     drawScreen();
+}
+
+// On another network (home WiFi), looks for the hotspot every 20 s and moves to it when it's
+// there: home WiFi hides the deck from the PC, the hotspot doesn't (2026-10-23).
+static void followHotspot() {
+    static uint32_t lastScan = 0;
+    const int found = WiFi.scanComplete();
+    if (found >= 0) {
+        bool seen = false;
+        for (int i = 0; i < found; i++) seen |= WiFi.SSID(i) == WIFI_NETWORKS[0].ssid;
+        WiFi.scanDelete();
+        if (micrec::moveToHotspot(WiFi.SSID().c_str(), WIFI_NETWORKS[0].ssid, seen)) {
+            Serial.println("[micrec] hotspot seen: moving to it");
+            s_online = false;
+            WiFi.disconnect();
+            WiFi.begin(WIFI_NETWORKS[0].ssid, WIFI_NETWORKS[0].pass);
+        }
+        return;
+    }
+    if (found == WIFI_SCAN_RUNNING || millis() - lastScan < 20000) return;
+    lastScan = millis();
+    WiFi.scanNetworks(true);   // async
 }
 
 static void wifiLoop() {
     static uint32_t lastTry = 0;
     static int net = -1;
-    if (s_online || WiFi.status() == WL_CONNECTED) {
+    if (WiFi.status() == WL_CONNECTED) {
         if (!s_online) startServing();
+        if (WiFi.SSID() != WIFI_NETWORKS[0].ssid) followHotspot();
         return;
+    }
+    if (s_online) {   // dropped: show it and start over from the hotspot
+        s_online = false;
+        net = -1;
+        drawScreen();
     }
     if (net >= 0 && millis() - lastTry < 8000) return;   // give each network 8 s
     net = (net + 1) % WIFI_NETWORK_COUNT;
