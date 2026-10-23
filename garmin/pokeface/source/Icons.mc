@@ -82,13 +82,13 @@ module Icons {
             return;
         }
         if (kind == FOG) {
-            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);   // white reads on the blue sky
             for (var i = -4; i <= 4; i += 4) {
                 dc.drawLine(x - 7, y + i, x + 7, y + i);
             }
             return;
         }
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);   // the cloud
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);   // the cloud
         dc.fillCircle(x - 4, y - 1, 4);
         dc.fillCircle(x + 2, y - 3, 5);
         dc.fillRectangle(x - 8, y - 1, 15, 4);

@@ -100,3 +100,22 @@ The data is the same as v1, from `Stats` and `Fmt`, and is still read once a min
 - Pixel positions, box shapes and colours within the mockup's arrangement.
 - How to restructure `Partner` (the weekday table, day/night by sun, reward rule) while keeping it pure and unit-tested. v1's Mega/stage functions go.
 - The simulator demo: step through the weekdays, day/night and the reward.
+
+## As built (2026-10-23, after wearing it)
+
+João tried each build on the watch and asked for changes. What ships differs from the design above as follows:
+
+- **Font:** the game's own font sheet (pokeemerald-expansion `graphics/fonts/latin_normal.png`), not a fan TTF. FontStruct's "Pokémon Emerald Pro" needs an account to download. Like the sprites, the sheet is git-ignored.
+- **Time and small lines:** the time is 3× (not 4×), and the small info runs on two 1× lines.
+  - Line 1: phone dot · weekday + date · envelope + notifications · battery icon + %.
+  - Line 2: weather · high/low · sunrise/sunset arrow + time.
+  - The weekday comes from a fixed English table, because the Emerald font has no accented letters.
+- **No calories.** The dialogue box shows heart rate + temperature, then distance, at 2×. A row too wide for the round edge drops to 1× (`Fit`). The info box shows "N steps" under the EXP bar.
+- **Colours:** solid and vivid, with no dithering:
+  - day: sky 55AAFF, horizon 005500, grass 00AA00;
+  - night: 000055 / 005555 / 005500.
+  - Text on the sky is black. The info box is cream with black text, the dialogue box is navy with white text, HP is 00FF00 / FFAA00 / FF0000, and EXP is 00AAFF.
+  - The deck's pale battle colours, even dithered, washed out on the 255's reflective screen.
+- **Boxes:** shaped like the deck's (`src/ui/battle.cpp`): a battle box with a 3 px shadow and a slanted side, and a framed dialogue box.
+- **Animation:** the 2-frame idle runs at 2 Hz, 40 frames (about 10 s) at most. Frame 1 is clipped from the whole 2×-drawn sheet, rather than using `drawBitmap2`'s source rectangle, whose offset handling differs between devices.
+- **Memory:** about 20 KB of 124 KB in the simulator (one sheet, one 2 bpp field, three fonts).

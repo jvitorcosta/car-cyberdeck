@@ -1,5 +1,5 @@
-// Pokéface: a Forerunner 255 watch face. The Charmander line keeps you company through the day
-// (Partner picks who), among the weather, health and phone data (Stats reads it, Fmt writes it).
+// Pokéface: a Forerunner 255 watch face drawn as Emerald's battle screen. Partner picks today's
+// Pokémon, Stats reads the watch's numbers, Fmt writes them, Battle and Icons draw the scene.
 import Toybox.Application;
 import Toybox.Lang;
 import Toybox.WatchUi;

@@ -63,10 +63,6 @@ module Partner {
         return frames < MAX_FRAMES;
     }
 
-    function dayKey(y as Number, m as Number, d as Number) as Number {
-        return y * 10000 + m * 100 + d;
-    }
-
     function barFraction(steps as Number or Null, goal as Number or Null) as Float {
         if (steps == null || goal == null || goal <= 0) {
             return 0.0;

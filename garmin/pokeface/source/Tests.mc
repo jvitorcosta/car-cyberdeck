@@ -1,5 +1,5 @@
 // Unit tests for Partner and Fmt (no device data). Build with --unit-test and run with
-// monkeydo <prg> fr255 -t while the simulator is open.
+// monkeydo <prg> fr255 /t (Windows; -t elsewhere) while the simulator is open.
 import Toybox.Lang;
 import Toybox.Test;
 import Toybox.Time;
@@ -18,12 +18,6 @@ function testEarned(logger as Test.Logger) as Boolean {
 (:test)
 function testZeroGoalNotEarned(logger as Test.Logger) as Boolean {
     Test.assert(!Partner.earned(500, 0, false));
-    return true;
-}
-
-(:test)
-function testDayKey(logger as Test.Logger) as Boolean {
-    Test.assertEqual(Partner.dayKey(2026, 10, 23), 20261023);
     return true;
 }
 
@@ -189,7 +183,7 @@ function testFit(logger as Test.Logger) as Boolean {
     Test.assertEqual(Fit.halfChord(130), 130);
     Test.assertEqual(Fit.halfChord(10), 50);       // sqrt(130^2 - 120^2)
     Test.assertEqual(Fit.halfChord(-5), 0);
-    Test.assert(Fit.fits(178, 223, 242, 4) == false);   // the review's "2345 kcal 12.3 mi" row
+    Test.assert(Fit.fits(178, 223, 242, 4) == false);   // a 178 px row near the bottom edge
     Test.assert(Fit.fits(122, 223, 242, 4));
     Test.assert(Fit.fits(150, 196, 214, 4));
     return true;

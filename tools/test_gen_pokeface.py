@@ -1,9 +1,15 @@
-"""Host tests for tools/gen_pokeface.py (no network). Run: python tools/test_gen_pokeface.py"""
+"""Host tests for tools/gen_pokeface.py (no network; needs Pillow 12.1+, skipped without it, as on
+CI). Run: python tools/test_gen_pokeface.py"""
 import os
 import sys
 import unittest
 
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
+if Image is None or not hasattr(Image.Image, "get_flattened_data"):
+    raise unittest.SkipTest("gen_pokeface needs Pillow 12.1+ (pip install -r tools/requirements.txt)")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen_pokeface as g  # noqa: E402

@@ -22,7 +22,6 @@ const DEMO = false;
 // on waking (refresh); animation frames only redraw them, to spare the battery.
 class PokefaceView extends WatchUi.WatchFace {
     const CX = 130;
-    const SPRITE_Y = 150;
     const FRAME_MS = 250;   // 2 frames: a 2 Hz idle, like the game's
 
     private var _sprite as Sprite = new Sprite();
@@ -117,9 +116,6 @@ class PokefaceView extends WatchUi.WatchFace {
         if (clock.min != _minute) {
             _minute = clock.min;
             refresh(clock, is24);
-            if (_timer == null) {
-                _frame = clock.min;
-            }
         }
         var night = DEMO ? (clock.min % 21) % 3 == 1 : !Partner.isDay(Time.now().value(), clock.hour, _rise, _set);
         var ink = Battle.ink(night);
@@ -138,7 +134,7 @@ class PokefaceView extends WatchUi.WatchFace {
 
         // The Pokémon on its platform
         Battle.platform(dc, 62, 182, night);
-        drawPartnerAt(dc, CX, SPRITE_Y);
+        drawPartner(dc);
 
         // Two small lines, over the Pokémon so it never hides them, each centred:
         //   phone dot, weekday + date | envelope, notifications | battery
@@ -272,7 +268,8 @@ class PokefaceView extends WatchUi.WatchFace {
         decide(clock, act);
     }
 
-    function drawPartnerAt(dc as Dc, cx as Number, cy as Number) as Void {
+    // Today's Pokémon, its 128 px square's top-left at (-2, 64); frame 0 unless it's animating.
+    private function drawPartner(dc as Dc) as Void {
         _sprite.show(_species);
         _sprite.draw(dc, -2, 64, _timer != null ? _frame : 0);
     }

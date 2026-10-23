@@ -1,9 +1,10 @@
 <?xml version="1.0"?>
-<!-- Pokéface: a watch face with a Charmander-line partner that changes over the day and goes
-     Mega when a run or the step goal is done. Spec: docs/superpowers/specs/2026-10-23-pokeface-watch-face-design.md -->
+<!-- Pokéface: Emerald's battle screen as a watch face. A Gen 3-style Pokémon for each weekday, day
+     and night, and a reward legendary after a run or the step goal.
+     Spec: docs/superpowers/specs/2026-10-23-pokeface-emerald-design.md -->
 <iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
     <iq:application id="f74f9786dfa8488d85883e4c563291ab" type="watchface" name="@Strings.AppName"
-                    entry="PokefaceApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="3.2.0">
+                    entry="PokefaceApp" launcherIcon="@Drawables.LauncherIcon" minApiLevel="4.2.0">
         <iq:products>
             <iq:product id="fr255"/>
             <iq:product id="fr255m"/>
