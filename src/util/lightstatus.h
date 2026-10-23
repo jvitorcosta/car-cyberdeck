@@ -15,6 +15,12 @@ const char* word(State s);            // "nolink", "off", "on"
 // The Lights page line: "IN ON 50%  OUT --  LINK 1/2". A linked light shows OFF when off and its
 // pct when on; an unlinked one shows "--". LINK counts the linked lights out of 2. Cut to n bytes.
 void line(const ledlook::Look& in, bool inUp, const ledlook::Look& out, bool outUp, char* buf, size_t n);
+// The menu strip: "IN PINK 40%  OUT PINK 100%". A linked light shows its colour name and pct when on,
+// OFF when off; an unlinked one "--". Upper case, cut to n bytes.
+void strip(const ledlook::Look& in, bool inUp, const ledlook::Look& out, bool outUp, char* buf, size_t n);
+// Terminal status messages: ">ROSE APPLIED", ">INSIDE: NO LINK", ">OUTSIDE: LINKED".
+void applied(const char* presetName, char* buf, size_t n);
+void linkChange(bool inside, bool up, char* buf, size_t n);
 // The GET /status reply: "inside=on outside=nolink". Cut to n bytes.
 void reply(State in, State out, char* buf, size_t n);
 }  // namespace lightstatus

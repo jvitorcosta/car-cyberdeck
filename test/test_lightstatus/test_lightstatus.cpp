@@ -59,6 +59,26 @@ void test_reply() {
     TEST_ASSERT_EQUAL_STRING("inside=on outside=nolink", buf);
 }
 
+void test_strip() {
+    char buf[64];
+    const ledlook::Look pink40{2, 40, true}, pink100{2, 100, true}, off{2, 40, false};
+    lightstatus::strip(pink40, true, pink100, true, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("IN PINK 40%  OUT PINK 100%", buf);
+    lightstatus::strip(off, true, pink100, true, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("IN OFF  OUT PINK 100%", buf);
+    lightstatus::strip(pink40, false, pink100, true, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("IN --  OUT PINK 100%", buf);
+}
+void test_messages() {
+    char buf[32];
+    lightstatus::applied("ROSE", buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING(">ROSE APPLIED", buf);
+    lightstatus::linkChange(true, false, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING(">INSIDE: NO LINK", buf);
+    lightstatus::linkChange(false, true, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING(">OUTSIDE: LINKED", buf);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_link_never_on);
@@ -66,5 +86,7 @@ int main(int, char**) {
     RUN_TEST(test_line);
     RUN_TEST(test_line_cut_to_buffer);
     RUN_TEST(test_reply);
+    RUN_TEST(test_strip);
+    RUN_TEST(test_messages);
     return UNITY_END();
 }

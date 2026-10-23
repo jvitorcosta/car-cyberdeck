@@ -1056,9 +1056,9 @@ static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
 static void applyVoice(const VoiceJob& job) {
     const ledvoice::Command& c = job.c;
     char line[sizeof(voiceReply)];
-    if (c.fav >= 1 && c.fav <= ledfavs::N_FAV) {  // "favourite 2": both lights, whatever zone was asked
-        applyFav(c.fav - 1);
-        ledfavs::describe(favs[c.fav - 1], c.fav, line, sizeof(line));
+    if (c.preset >= 1 && c.preset <= ledfavs::N_FAV) {  // "favourite 2": both lights, whatever zone was asked
+        applyFav(c.preset - 1);
+        ledfavs::describe(favs[c.preset - 1], c.preset, line, sizeof(line));
         answerVoice(line, job.seq);
         return;
     }

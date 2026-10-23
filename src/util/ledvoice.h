@@ -15,7 +15,7 @@ struct Command {
     int level = -1;      // absolute 10..100 %, or -1
     int levelStep = 0;   // +1 brighter, -1 dimmer (one 10 % step each)
     int zone = ZONE_NONE;
-    int fav = -1;        // saved favourite 1..4 ("favourite two"), or -1
+    int preset = -1;     // preset 1..4 ("rose", "favourite two"), or -1
 };
 
 namespace detail {
@@ -71,6 +71,11 @@ static const Word SLOTS[] = {
     {"three", 3}, {"tree", 3}, {"3", 3},
     {"four", 4},  {"for", 4}, {"fore", 4}, {"4", 4},
 };
+// The four presets by name: ROSE, FIRE, CALM, PURPURA ("purpura" is the owner's spelling). They set the
+// preset directly, no arming. "rose" is not a colour word here (pink is "rosa"), so there is no clash.
+static const Word PRESET_NAMES[] = {
+    {"rose", 1}, {"fire", 2}, {"calm", 3}, {"purpura", 4},
+};
 #define LEDVOICE_N(t) static_cast<int>(sizeof(t) / sizeof(t[0]))
 }  // namespace detail
 
@@ -96,10 +101,10 @@ inline bool parse(const char* text, Command* out) {
         if (std::isdigit(static_cast<unsigned char>(w[0]))) {  // "50", "50%": a level, or a slot right after "favourite"
             int v = 0;
             for (int i = 0; i < n && std::isdigit(static_cast<unsigned char>(w[i])); i++) v = v * 10 + (w[i] - '0');
-            if (armed) {  // outside 1..4 there is no such favourite: fav stays -1 and nothing is parsed
+            if (armed) {  // outside 1..4 there is no such favourite: preset stays -1 and nothing is parsed
                 armed = false;
                 if (v >= 1 && v <= 4) {
-                    out->fav = v;
+                    out->preset = v;
                     any = true;
                 }
                 continue;
@@ -111,7 +116,13 @@ inline bool parse(const char* text, Command* out) {
         }
         int v;
         if (armed && (v = lookup(w, SLOTS, LEDVOICE_N(SLOTS))) >= 0) {
-            out->fav = v;
+            out->preset = v;
+            armed = false;
+            any = true;
+            continue;
+        }
+        if ((v = lookup(w, PRESET_NAMES, LEDVOICE_N(PRESET_NAMES))) >= 0) {
+            out->preset = v;  // a command word: it also drops a pending "favourite" arm
             armed = false;
             any = true;
             continue;
