@@ -282,6 +282,18 @@ static const qrcard::Qr* phoneQr(bool recheck) {
     return s_qr.size ? &s_qr : nullptr;
 }
 
+#ifdef OTA_DEMO
+// -D OTA_DEMO: the update screen on a loop with no upload, to see it on the desk (the home WiFi
+// won't let the PC reach the deck): 0..99 % over 15 s, the Done flash for 1 s (no reboot), then
+// "Update failed" at 40 % for 3 s. Spotify keeps polling underneath.
+static ota::View otaDemo(uint32_t ms) {
+    const uint32_t t = ms % 19000;
+    if (t < 15000) return {otaview::Phase::Receiving, (int)(t / 150)};
+    if (t < 16000) return {otaview::Phase::Done, 100};
+    return {otaview::Phase::Failed, 40};
+}
+#endif
+
 // The music box loops while "Waiting for a song..." is up, and stops (a short fade) as it
 // goes.
 // It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
@@ -380,14 +392,21 @@ void loop() {
     static int lastMode = -1;
     // An update over WiFi (net/ota): its screen, nothing else. With the Star Light Zone file also
     // its flash and "Update failed"; the battle box only while it receives, as before.
+#ifdef OTA_DEMO
+    const ota::View ov = otaDemo(millis());
+#else
     const ota::View ov = ota::view();
+#endif
     const bool slzScreen = backdrop::width() > 0;
     if (ov.phase != otaview::Phase::Idle && (slzScreen || ov.phase != otaview::Phase::Failed)) {
         static int shownPct = -1;
-        if (!ui::drawShadowUpdate(s_tft, ov, millis(), lastMode != -2) &&
-            (lastMode != -2 || ov.pct != shownPct))
-            ui::drawUpdate(s_tft, ov.pct, lastMode != -2);
+        static otaview::Phase shownPhase = otaview::Phase::Idle;
+        // Whole screen when it appears, and after the Done flash (only the demo gets past it).
+        const bool full = lastMode != -2 || (shownPhase == otaview::Phase::Done && ov.phase != shownPhase);
+        if (!ui::drawShadowUpdate(s_tft, ov, millis(), full) && (full || ov.pct != shownPct))
+            ui::drawUpdate(s_tft, ov.pct, full);
         shownPct = ov.pct;
+        shownPhase = ov.phase;
         lastMode = -2;     // no screen's mode: the one it covered comes back in full
         delay(20);
         return;
