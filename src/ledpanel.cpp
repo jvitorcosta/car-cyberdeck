@@ -45,6 +45,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <cmath>
+#include <cstddef>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
 #pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
@@ -56,6 +57,8 @@
 #include <WebServer.h>
 #include "pins.h"
 #include "ui/backlight.h"
+#include "ui/termfont.h"
+#include "ui/termlayout.h"
 #include "companion/touch.h"
 #include "net/clock.h"
 #include "net/ipaddr.h"
@@ -324,12 +327,45 @@ static int homeFocus() {
 }
 
 // ---- Drawing ----
-// GLCD (font 1) is the terminal's monospace font, for small text; button labels use font 2 (and 4
-// for [-] / [+]), as GLCD at x2 is wider than deckmenu's buttons. Every label is upper case.
+// The lettering is VT323, a CRT terminal font, 1-bit at four sizes named by role (ui/termfont:
+// SMALL, BODY, TITLE, BIG); where each label goes so it fits is ui/termlayout's, which
+// test_termfont checks. Every label is upper case (the lyrics keep theirs). The touch calibration
+// screens keep TFT_eSPI's built-in fonts.
 // The background is black with a faint scanline on every 3rd screen row: every clear goes through
 // clearBg(), which repaints a rect's lines on absolute rows, so a partial redraw stays aligned.
-// Text over it is drawn transparent (no black box punching through the lines); the solid fills
-// (the inverted selection bar, the pressed yellow, the chips) are the design.
+// Text over it is drawn transparent (free fonts always are: no black box punching through the
+// lines); the solid fills (the inverted selection bar, the pressed yellow, the chips) are the design.
+using termfont::Face;
+using namespace termlayout;
+
+// termfont's tables are GFXfont's, so TFT_eSPI draws them as they are.
+static_assert(sizeof(termfont::Glyph) == sizeof(GFXglyph) && offsetof(termfont::Glyph, bitmapOffset) == offsetof(GFXglyph, bitmapOffset) &&
+                  offsetof(termfont::Glyph, width) == offsetof(GFXglyph, width) && offsetof(termfont::Glyph, height) == offsetof(GFXglyph, height) &&
+                  offsetof(termfont::Glyph, xAdvance) == offsetof(GFXglyph, xAdvance) &&
+                  offsetof(termfont::Glyph, xOffset) == offsetof(GFXglyph, xOffset) && offsetof(termfont::Glyph, yOffset) == offsetof(GFXglyph, yOffset),
+              "termfont::Glyph is GFXglyph");
+static_assert(sizeof(termfont::Font) == sizeof(GFXfont) && offsetof(termfont::Font, bitmap) == offsetof(GFXfont, bitmap) &&
+                  offsetof(termfont::Font, glyph) == offsetof(GFXfont, glyph) && offsetof(termfont::Font, first) == offsetof(GFXfont, first) &&
+                  offsetof(termfont::Font, last) == offsetof(GFXfont, last) && offsetof(termfont::Font, yAdvance) == offsetof(GFXfont, yAdvance),
+              "termfont::Font is GFXfont");
+
+// Draws s in face f at (x, y), in the text colour set, and returns the pen's travel (where text drawn
+// after it starts). `datum` is one of TFT_eSPI's nine (TL_DATUM .. BR_DATUM): its left / centre /
+// right part places x as usual, but its top / middle / bottom part goes by the capitals, not by the
+// font's tallest glyph as TFT_eSPI's free-font datums do (that set '(' and '[' high and every label
+// low): T puts the caps' top row at y, M centres the caps on y, B puts the baseline (the row under
+// the caps) at y. setFreeFont scans the font, so it runs only when the face changes.
+static int text(const char* s, int x, int y, Face f, uint8_t datum) {
+    static int shown = -1;
+    if (static_cast<int>(f) != shown) {
+        shown = static_cast<int>(f);
+        tft.setFreeFont(reinterpret_cast<const GFXfont*>(&termfont::font(f)));
+    }
+    const int cap = termfont::capHeight(f), v = datum / 3;
+    const int base = v == 0 ? y + cap : v == 1 ? y + cap / 2 : y;
+    tft.setTextDatum(L_BASELINE + datum % 3);
+    return tft.drawString(s, x, base);
+}
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
 static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night)); }
@@ -344,13 +380,6 @@ static void clearBg(int x, int y, int w, int h) {
     for (int row = y + (3 - y % 3) % 3; row < y + h; row += 3) tft.drawFastHLine(x, row, w, line);
 }
 static void clearBg(const Rect& r) { clearBg(r.x, r.y, r.w, r.h); }
-
-// drawString at a text size, back to size 1 after (fonts 2 and 4 scale with it too).
-static void label(const char* s, int x, int y, uint8_t fontNo, uint8_t size = 1) {
-    tft.setTextSize(size);
-    tft.drawString(s, x, y, fontNo);
-    tft.setTextSize(1);
-}
 
 // A swatch name ("Orange") as the screen shows it ("ORANGE").
 static void upper(const char* s, char* out, size_t n) {
@@ -373,11 +402,10 @@ static uint16_t drawBox(const Rect& r, bool pressed, bool selected, int border, 
 }
 
 // A bordered button (< BACK, [-], [+]): the label centred.
-static void drawChrome(const Rect& r, const char* s, uint8_t fontNo, bool pressed, bool inverted) {
+static void drawChrome(const Rect& r, const char* s, Face f, bool pressed, bool inverted) {
     const uint16_t ink = drawBox(r, pressed, inverted, 2, pal(termpal::TEXT));
-    tft.setTextDatum(MC_DATUM);
     tft.setTextColor(ink);
-    label(s, r.x + r.w / 2, r.y + r.h / 2, fontNo);
+    text(s, r.x + r.w / 2, r.y + r.h / 2, f, MC_DATUM);
 }
 
 // A Menu list row ("> [LIGHTS]"): no border, the text left; the inverted bar when focused. Dimmed
@@ -398,22 +426,22 @@ static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, b
     } else {
         ink = drawBox(r, pressed, inverted, 0, pal(termpal::TEXT));
     }
-    tft.setTextDatum(ML_DATUM);
     tft.setTextColor(ink);
-    label(s, r.x + 8, r.y + r.h / 2, 2);
+    text(s, r.x + ROW_TEXT_X, r.y + r.h / 2, Face::BODY, ML_DATUM);
 }
 
 // A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
 // off. On a bar, a 1 px BG edge keeps it apart from the fill (pink on yellow, white on green).
-static void drawChip(int x, int y, int size, const Look& l, bool onBar) {
-    if (l.lit) tft.fillRect(x, y, size, size, tint(SWATCHES[l.swatch].screen));
-    else tft.drawRect(x, y, size, size, pal(termpal::DIM));
-    if (onBar) tft.drawRect(x - 1, y - 1, size + 2, size + 2, pal(termpal::BG));
+static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
+    if (l.lit) tft.fillRect(x, y, w, h, tint(SWATCHES[l.swatch].screen));
+    else tft.drawRect(x, y, w, h, pal(termpal::DIM));
+    if (onBar) tft.drawRect(x - 1, y - 1, w + 2, h + 2, pal(termpal::BG));
 }
 
-// A preset block. Menu (154x42): the name left, and right of it two big chips (inside, outside)
-// with each light's level under it. Lights (75x36): the name over two small chips. Inverted under
-// the Menu's focus bar, yellow when pressed.
+// A preset block. Menu (154x42): the name left (TITLE), and right of it two big chips (inside,
+// outside) with each light's level under it (SMALL). Lights (75x36): the name (BODY: TITLE's
+// "PURPURA" is too wide for the slot) over two small chips. Inverted under the Menu's focus bar,
+// yellow when pressed.
 static void drawPresetSlot(const Rect& r, int slot, bool pressed, bool inverted) {
     const ledpresets::Preset& p = ledpresets::PRESETS[slot];
     const bool bar = pressed || inverted;
@@ -421,39 +449,35 @@ static void drawPresetSlot(const Rect& r, int slot, bool pressed, bool inverted)
     const Look* sides[] = {&p.in, &p.out};
     tft.setTextColor(ink);
     if (r.w >= 120) {
-        tft.setTextDatum(ML_DATUM);
-        label(p.name, r.x + 8, r.y + r.h / 2, 2);  // font 2: "PURPURA" is 56 px
-        tft.setTextDatum(MC_DATUM);
+        text(p.name, r.x + PRESET_TEXT_X, r.y + r.h / 2, Face::TITLE, ML_DATUM);
         for (int k = 0; k < 2; k++) {
-            const int x = r.x + r.w - 50 + k * 24;
-            drawChip(x, r.y + 5, 18, *sides[k], bar);
+            const int x = r.x + r.w - PRESET_CHIPS_FROM_RIGHT + k * 24;
+            drawChip(x, r.y + 5, 18, 18, *sides[k], bar);
             char lv[8];
             snprintf(lv, sizeof(lv), "%u", static_cast<unsigned>(sides[k]->pct));
-            label(sides[k]->lit ? lv : "OFF", x + 9, r.y + 32, 1);
+            text(sides[k]->lit ? lv : "OFF", x + 9, r.y + 32, Face::SMALL, MC_DATUM);
         }
         return;
     }
     const int cx = r.x + r.w / 2;
-    tft.setTextDatum(TC_DATUM);
-    label(p.name, cx, r.y + 4, 2);  // fits the 75 px slot
-    for (int k = 0; k < 2; k++) drawChip(cx - 11 + k * 14, r.y + r.h - 12, 8, *sides[k], bar);
+    text(p.name, cx, r.y + 4, Face::BODY, TC_DATUM);
+    for (int k = 0; k < 2; k++) drawChip(cx - 11 + k * 14, r.y + r.h - 12, 8, 8, *sides[k], bar);
 }
 
-// A colour button: a box with a MID border, a big chip of the colour (left, centred) and its name.
+// A colour button: a box with a MID border, a tall chip of the colour (left, centred) and its name
+// (SMALL: "ORANGE" is 41 px, what the 75 px button has right of the chip).
 // The lit colour is the inverted bar, chip kept; the Xbox focus is a separate ring around it.
 static void drawTile(const Rect& r, int swatch, bool pressed) {
     const Swatch& s = SWATCHES[swatch];
     const bool sel = !bothMixed() && cur().lit && swatch == cur().swatch;
     const uint16_t ink = drawBox(r, pressed, sel, 1, pal(termpal::TEXT));
-    constexpr int CHIP = 28;
     Look l;
     l.swatch = swatch;
-    drawChip(r.x + 5, r.y + (r.h - CHIP) / 2, CHIP, l, pressed || sel);
+    drawChip(r.x + TILE_CHIP_X, r.y + (r.h - TILE_CHIP_H) / 2, TILE_CHIP_W, TILE_CHIP_H, l, pressed || sel);
     char name[12];
     upper(s.name, name, sizeof(name));
-    tft.setTextDatum(ML_DATUM);
     tft.setTextColor(ink);
-    label(name, r.x + 37, r.y + r.h / 2, 1);  // GLCD: "ORANGE" is 36 px, the room left of the border
+    text(name, r.x + TILE_TEXT_X, r.y + r.h / 2, Face::SMALL, ML_DATUM);
 }
 
 // Lights' zone tabs are Pip-Boy tabs: a TEXT rule under the tab row, the current tab a TEXT bar
@@ -477,9 +501,8 @@ static void drawTab(const Rect& r, const char* s, bool pressed, bool current) {
         tft.fillRect(r.x + 1, r.y + 1, r.w - 2, TAB_RULE_Y - r.y, pressed ? tint(PRESSED) : pal(termpal::TEXT));
         ink = pal(termpal::BG);
     }
-    tft.setTextDatum(MC_DATUM);
     tft.setTextColor(ink);
-    label(s, r.x + r.w / 2, r.y + r.h / 2, 2);
+    text(s, r.x + r.w / 2, r.y + r.h / 2, Face::BODY, MC_DATUM);
 }
 
 static void drawButtonBody(int id, bool pressed) {
@@ -497,7 +520,7 @@ static void drawButtonBody(int id, bool pressed) {
         return;
     }
     if (screen == Screen::Weather || screen == Screen::Karaoke || id == L_BACK) {  // W_BACK / K_BACK: their only button
-        drawChrome(r, "< BACK", 2, pressed, false);
+        drawChrome(r, "< BACK", Face::BODY, pressed, false);
         drawTabRule(r.x - 2, r.x + r.w + 2);  // its focus ring crosses the rule too
     } else if (id < L_TILE0) {
         static const char* const ZONE[] = {"BOTH", "INSIDE", "OUTSIDE"};
@@ -507,7 +530,7 @@ static void drawButtonBody(int id, bool pressed) {
     } else if (id < L_MINUS) {
         drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed, false);  // focus: the ring
     } else {
-        drawChrome(r, id == L_MINUS ? "[-]" : "[+]", 4, pressed, false);
+        drawChrome(r, id == L_MINUS ? "[-]" : "[+]", Face::TITLE, pressed, false);
     }
 }
 
@@ -517,8 +540,8 @@ static void drawButton(int id, bool pressed = false) {
 }
 
 // The block bar: 10 cells, one filled per 10 % (the terminal's full block), the rest outlined (its
-// shade block; TFT_eSPI's fonts have neither glyph), and the % under it. "MIX" on BOTH while the
-// lights differ (the STATUS line above has each light's %), "OFF" in DIM when off.
+// shade block; the font's ASCII table has neither glyph), and the % under it (TITLE). "MIX" on BOTH
+// while the lights differ (the STATUS line above has each light's %), "OFF" in DIM when off.
 static void drawLevel() {
     const Rect& r = deckmenu::LEVEL;
     const Look& l = cur();
@@ -535,9 +558,8 @@ static void drawLevel() {
     }
     char pct[8];
     snprintf(pct, sizeof(pct), "%u%%", static_cast<unsigned>(l.pct));
-    tft.setTextDatum(MC_DATUM);
     tft.setTextColor(pal(live ? termpal::TEXT : termpal::DIM));
-    label(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, 2);
+    text(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, Face::TITLE, MC_DATUM);
 }
 
 // A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS line
@@ -557,19 +579,27 @@ static void setMessage(const char* m, uint32_t ms = MESSAGE_MS) {
     messageMs = ms;
 }
 
-// Lights: the line under the tabs, "IN ON 50%  OUT --  LINK 1/2", or the message.
+// Lights: the line under the tabs, "IN ON 50%  OUT --  LINK 1/2", or the message. SMALL, sat on the
+// rect's bottom: STATUS has 12 rows between the tab rule and the colours, and "/" stands 2 rows
+// above the caps (BODY's would need 15).
 static void drawStatus() {
     const Rect& r = deckmenu::STATUS;
     char line[48];
     lightstatus::line(looks[INSIDE], linkUp(controllers[0]), looks[OUTSIDE], linkUp(controllers[1]), line, sizeof(line));
     clearBg(r);
-    tft.setTextDatum(ML_DATUM);
     tft.setTextColor(pal(termpal::TEXT));
-    label(message[0] ? message : line, r.x + 2, r.y + r.h / 2, 1);
+    text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
 }
 
-// The Menu strip's block cursor: one GLCD cell at the end of the text line, blinking at ~1 Hz.
-// Only its cell is redrawn. -1 when it would pass the strip's edge (x 316); the longest line still fits.
+// The Menu strip (y 184..239, its rule on row 185): left, the clock (BIG) with the temperature
+// (SMALL) under its right end; right (termlayout::STRIP_TEXT_X on, SMALL), the lights' line and under
+// it the trip line. The clock and the lights' line share a baseline, and so do the temperature and
+// the trip line; rows from STRIP_SPLIT down are the second line's (a redraw of one leaves the other).
+static constexpr int STRIP_BASE = 212, TRIP_BASE = 230, STRIP_SPLIT = 216;
+
+// The Menu strip's block cursor: one SMALL cell (as wide as a character, as tall as the caps) at the
+// end of the lights' line, blinking at ~1 Hz. Only its cell is redrawn. -1 when it would pass the
+// strip's edge (x 316); the longest line still fits (test_termfont).
 static constexpr uint32_t BLINK_MS = 500;
 static int cursorX = -1;
 static bool cursorOn = false;
@@ -577,63 +607,52 @@ static bool cursorOn = false;
 static void drawCursor(bool on) {
     cursorOn = on;
     if (cursorX < 0) return;
-    const int y = deckmenu::MENU_STRIP.y + deckmenu::MENU_STRIP.h / 2 - 4;
-    if (on) tft.fillRect(cursorX, y, 6, 8, pal(termpal::TEXT));
-    else clearBg(cursorX, y, 6, 8);
+    const int cap = termfont::capHeight(Face::SMALL), w = termfont::cell(Face::SMALL);
+    if (on) tft.fillRect(cursorX, STRIP_BASE - cap, w, cap, pal(termpal::TEXT));
+    else clearBg(cursorX, STRIP_BASE - cap, w, cap);
 }
 
 static bool blinkPhase() { return (millis() / BLINK_MS) % 2 == 0; }
 
 // The cursor follows the text's end: a message's, or the strip line's.
 static void placeCursor(int x) {
-    const Rect& r = deckmenu::MENU_STRIP;
-    cursorX = x + 6 <= r.x + r.w - 4 ? x : -1;
+    cursorX = x + termfont::cell(Face::SMALL) <= STRIP_RIGHT ? x : -1;
     drawCursor(blinkPhase());
 }
 
-// The Menu strip's text right of the clock: lightstatus::strip ("IN PINK 40%  OUT --"), with a chip
-// of the light's colour before each colour name, or the message, then the cursor. GLCD x1: the
-// longest line ("IN ORANGE 100%  OUT ORANGE 100%" plus two chips) is 202 px.
-static constexpr int STRIP_TEXT_X = 108;
-static constexpr int TRIP_Y = 226;  // the trip line's middle: under the colours line (y 212), above the strip's foot (240)
+// The Menu strip's lights' line: lightstatus::strip ("IN PINK 40%  OUT --"), with a chip of the
+// light's colour before each colour name (termlayout::stripLayout places them), or the message,
+// then the cursor.
 static void drawStripText() {
     const Rect& r = deckmenu::MENU_STRIP;
-    const int cy = r.y + r.h / 2;
-    clearBg(STRIP_TEXT_X, r.y + 2, r.x + r.w - STRIP_TEXT_X, TRIP_Y - 5 - (r.y + 2));  // under the rule, above the trip line
-    tft.setTextDatum(ML_DATUM);
+    clearBg(STRIP_TEXT_X, r.y + 2, r.x + r.w - STRIP_TEXT_X, STRIP_SPLIT - (r.y + 2));  // under the rule, above the trip line
     tft.setTextColor(pal(termpal::TEXT));
     if (message[0]) {
-        placeCursor(STRIP_TEXT_X + tft.drawString(message, STRIP_TEXT_X, cy, 1));
+        placeCursor(STRIP_TEXT_X + text(message, STRIP_TEXT_X, STRIP_BASE, Face::SMALL, BL_DATUM));
         return;
     }
     char line[48];
     const bool up[N_CTRL] = {linkUp(controllers[0]), linkUp(controllers[1])};
     lightstatus::strip(looks[INSIDE], up[0], looks[OUTSIDE], up[1], line, sizeof(line));
-    // "IN <state>  OUT <state>": each half is its name, a space, then the state; the chip goes in
-    // that space when the light is on (the state then starts with its colour name).
-    char* halves[2] = {line, strstr(line, "  ")};
-    if (!halves[1]) {  // not the expected shape: plain text
-        placeCursor(STRIP_TEXT_X + tft.drawString(line, STRIP_TEXT_X, cy, 1));
+    // a chip for a light that is on (its state then starts with its colour name)
+    const bool chip[N_CTRL] = {lightstatus::of(up[0], looks[INSIDE].lit) == lightstatus::State::On,
+                               lightstatus::of(up[1], looks[OUTSIDE].lit) == lightstatus::State::On};
+    StripPart parts[N_CTRL];
+    const int end = stripLayout(line, STRIP_TEXT_X, chip, parts);
+    if (end < 0) {  // not the expected shape: plain text
+        placeCursor(STRIP_TEXT_X + text(line, STRIP_TEXT_X, STRIP_BASE, Face::SMALL, BL_DATUM));
         return;
     }
-    *halves[1] = 0;
-    halves[1] += 2;
-    int x = STRIP_TEXT_X;
-    for (int i = 0; i < 2; i++) {
-        if (i) x += 12;  // the two spaces between the lights
-        char* state = strchr(halves[i], ' ');
-        if (state) *state++ = 0;
-        x += tft.drawString(halves[i], x, cy, 1);
-        const Look& l = looks[i + 1];
-        if (state && lightstatus::of(up[i], l.lit) == lightstatus::State::On) {
-            tft.fillRect(x + 4, cy - 4, 7, 7, tint(SWATCHES[l.swatch].screen));
-            x += 14;
-        } else {
-            x += 6;  // a space
+    const int cap = termfont::capHeight(Face::SMALL);
+    for (int i = 0; i < N_CTRL; i++) {
+        const StripPart& p = parts[i];
+        text(p.name, p.nameX, STRIP_BASE, Face::SMALL, BL_DATUM);
+        if (p.chipX >= 0) {  // centred on the caps
+            tft.fillRect(p.chipX, STRIP_BASE - (cap + STRIP_CHIP) / 2, STRIP_CHIP, STRIP_CHIP, tint(SWATCHES[looks[i + 1].swatch].screen));
         }
-        if (state) x += tft.drawString(state, x, cy, 1);
+        if (p.state) text(p.state, p.stateX, STRIP_BASE, Face::SMALL, BL_DATUM);
     }
-    placeCursor(x);
+    placeCursor(end);
 }
 
 // Each loop pass on the Menu: the cursor's cell when its phase turned.
@@ -644,22 +663,22 @@ static void blinkCursor() {
 // The clock's minute of the day on screen (-1: not synced, "--:--"); updateDayNight keeps it.
 static int clockMin = -1;
 
-// The temperature as shown: "24C", "--C" before the first reading (GLCD has no degree sign).
+// The temperature as shown: "24C", "--C" before the first reading (the font is ASCII: no degree sign).
 static void tempText(char* out, size_t n) {
     if (wx.ok) snprintf(out, n, "%dC", static_cast<int>(lround(wx.tempC)));
     else snprintf(out, n, "--C");
 }
 
-// The Menu strip's temperature: GLCD under the clock (its digits end at y 224), right edge under the
-// clock's (x 98). stripTemp is the text on screen: a new reading redraws it only when it differs.
+// The Menu strip's temperature: SMALL under the clock, its right edge under the clock's ink (clockRight).
+// stripTemp is the text on screen: a new reading redraws it only when it differs.
 static char stripTemp[16] = "";
+static int clockRight = STRIP_CLOCK_X;
 static void drawStripTemp() {
     const Rect& r = deckmenu::MENU_STRIP;
     tempText(stripTemp, sizeof(stripTemp));
-    clearBg(r.x + 40, 227, 66, 11);
-    tft.setTextDatum(MR_DATUM);
+    clearBg(r.x + 4, STRIP_SPLIT, STRIP_TEXT_X - 4 - (r.x + 4), r.y + r.h - STRIP_SPLIT);
     tft.setTextColor(pal(termpal::TEXT));
-    tft.drawString(stripTemp, r.x + 98, 232, 1);
+    text(stripTemp, clockRight, TRIP_BASE, Face::SMALL, BR_DATUM);
 }
 
 static void drawClock() {
@@ -668,9 +687,9 @@ static void drawClock() {
     if (clockMin < 0) snprintf(s, sizeof(s), "--:--");
     else snprintf(s, sizeof(s), "%02d:%02d", clockMin / 60, clockMin % 60);
     clearBg(r.x + 4, r.y + 2, STRIP_TEXT_X - r.x - 4, r.h - 2);  // left of the text, under the rule
-    tft.setTextDatum(ML_DATUM);
     tft.setTextColor(pal(termpal::TEXT));
-    label(s, r.x + 8, r.y + r.h / 2, 1, 3);
+    text(s, STRIP_CLOCK_X, STRIP_BASE, Face::BIG, BL_DATUM);
+    clockRight = STRIP_CLOCK_X + termfont::width(Face::BIG, s);
     drawStripTemp();  // the clear above took it
 }
 
@@ -683,10 +702,9 @@ static void drawTrip() {
     const Rect& r = deckmenu::MENU_STRIP;
     char s[40];
     tripmeter::line(tripMeter.trip(), s, sizeof(s));
-    clearBg(STRIP_TEXT_X, TRIP_Y - 5, r.x + r.w - STRIP_TEXT_X, 10);
-    tft.setTextDatum(ML_DATUM);
+    clearBg(STRIP_TEXT_X, STRIP_SPLIT, r.x + r.w - STRIP_TEXT_X, r.y + r.h - STRIP_SPLIT);
     tft.setTextColor(pal(termpal::TEXT));
-    tft.drawString(s, STRIP_TEXT_X, TRIP_Y, 1);
+    text(s, STRIP_TEXT_X, TRIP_BASE, Face::SMALL, BL_DATUM);
 }
 
 static void drawStrip() {
@@ -698,11 +716,8 @@ static void drawStrip() {
     drawTrip();
 }
 
-// The Menu header: three terminal lines, the last in MID, and a rule. The boot types them out.
-static const char* const HEADER_LINES[] = {"WELCOME TO ROBCO INDUSTRIES (TM) TERMLINK", ">SET TERMINAL/INQUIRE",
-                                           "HONDA CITY // CARDECK OS"};
-static constexpr int N_HEADER = sizeof(HEADER_LINES) / sizeof(HEADER_LINES[0]);
-static constexpr int HEADER_X = 8, HEADER_Y0 = 4, HEADER_DY = 12;
+// The Menu header: three terminal lines (termlayout::HEADER_LINES, SMALL), the last in MID, and a
+// rule. The boot types them out.
 static uint16_t headerInk(int i) { return pal(i == N_HEADER - 1 ? termpal::MID : termpal::TEXT); }
 
 static void drawHeaderRule() {
@@ -713,35 +728,34 @@ static void drawHeaderRule() {
 static void drawHeader() {
     const Rect& r = deckmenu::HEADER;
     clearBg(r);
-    tft.setTextDatum(TL_DATUM);
     for (int i = 0; i < N_HEADER; i++) {
         tft.setTextColor(headerInk(i));
-        tft.drawString(HEADER_LINES[i], HEADER_X, HEADER_Y0 + i * HEADER_DY, 1);
+        text(HEADER_LINES[i], HEADER_X, HEADER_Y0 + i * HEADER_DY, Face::SMALL, TL_DATUM);
     }
     drawHeaderRule();
 }
 
 // The RobCo boot: on a blank screen the header's lines type out one character every TYPE_MS behind
-// a block cursor (85 characters, ~0.5 s), then drawAll() shows the Menu. It runs in setup(), so
+// a block cursor (a SMALL cell; 85 characters, ~0.5 s), then drawAll() shows the Menu. It runs in setup(), so
 // nothing else draws meanwhile: every other drawing path runs from loop(), and the link and voice
 // tasks start after it (a voice job or a link change that comes later waits in the queue / the
 // link flags for loop() as always).
 static constexpr uint32_t TYPE_MS = 6;
 static void typeHeader() {
     clearBg(0, 0, tft.width(), tft.height());
-    tft.setTextDatum(TL_DATUM);
+    const int w = termfont::cell(Face::SMALL), h = termfont::capHeight(Face::SMALL);
     for (int i = 0; i < N_HEADER; i++) {
         tft.setTextColor(headerInk(i));
-        const int y = HEADER_Y0 + i * HEADER_DY;
+        const int y = HEADER_Y0 + i * HEADER_DY;  // the caps' top row
         int x = HEADER_X;
         for (const char* p = HEADER_LINES[i]; *p; p++) {
             const char ch[2] = {*p, 0};
-            clearBg(x, y, 6, 8);  // the cursor
-            x += tft.drawString(ch, x, y, 1);
-            tft.fillRect(x, y, 6, 8, pal(termpal::TEXT));
+            clearBg(x, y, w, h);  // the cursor
+            x += text(ch, x, y, Face::SMALL, TL_DATUM);
+            tft.fillRect(x, y, w, h, pal(termpal::TEXT));
             delay(TYPE_MS);
         }
-        clearBg(x, y, 6, 8);
+        clearBg(x, y, w, h);
     }
     drawHeaderRule();  // drawAll(true) keeps the typed header, so the rule is part of it
 }
@@ -788,36 +802,35 @@ static void drawFocus(int id, bool on) {
 }
 
 // The Weather screen's title: the current Pip-Boy tab right of < BACK (display only, no button).
-static constexpr Rect WEATHER_TAB{80, 2, 100, 36};
+static constexpr Rect WEATHER_TAB{80, 2, WEATHER_TAB_W, 36};
 
-// The Weather screen's body (deckmenu::WEATHER_BODY), from `wx`: the temperature big (font 4 at x2,
-// 52 px), the sky in words, today's HI / LO, the city in MID, and when it came (or why nothing did).
+// The Weather screen's body (deckmenu::WEATHER_BODY), from `wx`: the temperature (BIG), the sky in
+// words (TITLE), today's HI / LO, the city in MID (BODY), and when it came, or why nothing did
+// (SMALL). The y are the caps' top rows.
 static void drawWeatherBody() {
     const Rect& r = deckmenu::WEATHER_BODY;
     clearBg(r);
-    constexpr int X = 16;
-    tft.setTextDatum(TL_DATUM);
     tft.setTextColor(pal(termpal::TEXT));
     char s[40];
     tempText(s, sizeof(s));
-    label(s, X, r.y + 10, 4, 2);
-    if (wx.ok) label(weather::words(wx.code), X, r.y + 70, 4);
+    text(s, WEATHER_X, r.y + 16, Face::BIG, TL_DATUM);
+    if (wx.ok) text(weather::words(wx.code), WEATHER_X, r.y + 54, Face::TITLE, TL_DATUM);
     if (wx.ok && wx.daily)
         snprintf(s, sizeof(s), "HI %dC  LO %dC", static_cast<int>(lround(wx.maxC)), static_cast<int>(lround(wx.minC)));
     else snprintf(s, sizeof(s), "HI --C  LO --C");
-    label(s, X, r.y + 104, 2);
+    text(s, WEATHER_X, r.y + 86, Face::BODY, TL_DATUM);
     if (wx.city[0]) {
         char folded[sizeof(wx.city)], city[sizeof(wx.city)];
-        txt::asciiFold(wx.city, folded, sizeof(folded));  // "Sao Paulo": the fonts are ASCII only
+        txt::asciiFold(wx.city, folded, sizeof(folded));  // "Sao Paulo": the font is ASCII only
         upper(folded, city, sizeof(city));
         tft.setTextColor(pal(termpal::MID));
-        label(city, X, r.y + 126, 2);
+        text(city, WEATHER_X, r.y + 108, Face::BODY, TL_DATUM);
     }
     if (wx.ok && wx.at >= 0) snprintf(s, sizeof(s), "UPDATED %02d:%02d", wx.at / 60, wx.at % 60);
     else if (wx.ok) snprintf(s, sizeof(s), "UPDATED --:--");
     else snprintf(s, sizeof(s), "%s", wx.failed || weatherOff ? ">OFFLINE" : "NO DATA YET");
     tft.setTextColor(pal(wx.ok ? termpal::DIM : termpal::TEXT));
-    label(s, X, r.y + 168, 1);
+    text(s, WEATHER_X, r.y + 168, Face::SMALL, TL_DATUM);
 }
 
 static void drawWeather() {
@@ -826,57 +839,55 @@ static void drawWeather() {
 }
 
 // ---- Karaoke screen: the black deck's song, its synced lyrics big ----
-// The top row: < BACK and right of it the song as "TITLE - ARTIST" (font 2, MID). The body
-// (deckmenu::KARAOKE_BODY): the lyric line due now big (font 4, TEXT, centred, word-wrapped over up
-// to 3 lines, ".." on the 3rd; a line too long for that in font 2 over up to 4), the next line under
-// it (font 2, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). Texts
-// keep their case (lyrics read better than caps) and are accent-folded (the fonts are ASCII only).
+// The top row: < BACK and right of it the song as "TITLE - ARTIST" (BODY, MID). The body
+// (deckmenu::KARAOKE_BODY): the lyric line due now big (BIG, TEXT, centred, word-wrapped over up
+// to 3 lines, ".." on the 3rd; a line too long for that in TITLE over up to 4), the next line under
+// it (BODY, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). Texts
+// keep their case (lyrics read better than caps) and are accent-folded (the font is ASCII only).
 // Without a song to sing along the big text is the state word in DIM (>NO SYNCED LYRICS, >STANDBY,
 // >NO SIGNAL, >WRONG KEY) and the screen stays. The line switches at its start time: karaoke
 // interpolates the position between polls and lyricsTick looks every KARAOKE_TICK_MS. Each part is
 // redrawn only when what it shows changed.
 static constexpr uint32_t KARAOKE_TICK_MS = 50;
-static constexpr int KARAOKE_X = 4, KARAOKE_W = 312, KARAOKE_CX = 160;
+// The areas' sizes and pitches are termlayout's (test_termfont checks each face's lines fit them).
+static constexpr int KARAOKE_X = 4, KARAOKE_CX = 160;
 static constexpr int KARAOKE_SONG_X = 80, KARAOKE_SONG_W = 236;  // right of < BACK (x 4..74), on the top row
-static constexpr int KARAOKE_BIG_Y = 56, KARAOKE_BIG_H = 90;     // the line due now: 3 lines of font 4
-static constexpr int KARAOKE_BIG_DY = 30, KARAOKE_SMALL_DY = 20; // font 4 / font 2 line pitches
-static constexpr int KARAOKE_NEXT_Y = 156, KARAOKE_NEXT_H = 40;  // the next line: 2 lines of font 2
+static constexpr int KARAOKE_BIG_Y = 56;                         // the line due now
+static constexpr int KARAOKE_NEXT_Y = 156;                       // the next line
 static constexpr int KARAOKE_BAR_Y = 224, KARAOKE_BAR_H = 3;
-
-// A text's width in px in a TFT_eSPI font, for karaoke::wrap.
-static int textPx(const char* s, int fontNo) { return tft.textWidth(s, static_cast<uint8_t>(fontNo)); }
 
 // The texts are accent-folded into karaokeFolded and wrapped into karaokeLines (only loop draws).
 static char karaokeFolded[sizeof(stateparse::Deck::line)];
 static karaoke::Line karaokeLines[4];
 
-// karaokeLines[0..n) centred, from y every dy px.
-static void drawLines(int n, int fontNo, int y, int dy, uint16_t ink) {
-    tft.setTextDatum(TC_DATUM);
+// karaokeLines[0..n) centred, the first line's tallest glyph at row y, a line every dy px (each
+// face's lines fit their pitch whole: no line's descender reaches the next's capitals).
+static void drawLines(int n, Face f, int y, int dy, uint16_t ink) {
     tft.setTextColor(ink);
-    for (int i = 0; i < n; i++) label(karaokeLines[i].s, KARAOKE_CX, y + i * dy, static_cast<uint8_t>(fontNo));
+    for (int i = 0; i < n; i++) text(karaokeLines[i].s, KARAOKE_CX, y + i * dy + termfont::ascent(f), f, BC_DATUM);
 }
 
-// The big text: font 4 over up to 3 lines, or font 2 over up to 4 when font 4 would cut it; the
-// block centred in its area.
+// The big text: BIG over up to 3 lines, or TITLE over up to 4 when BIG would cut it; the block
+// centred in its area. Each is measured in the face it is drawn in.
 static void drawBig(const char* s, uint16_t ink) {
     txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
     bool cut = false;
-    int n = karaoke::wrap(karaokeFolded, 4, textPx, KARAOKE_W, 3, karaokeLines, &cut);
-    int fontNo = 4, dy = KARAOKE_BIG_DY;
+    Face f = Face::BIG;
+    int n = karaoke::wrap(karaokeFolded, static_cast<int>(f), termfont::widthOf, KARAOKE_W, 3, karaokeLines, &cut);
+    int dy = KARAOKE_BIG_DY;
     if (cut) {
-        n = karaoke::wrap(karaokeFolded, 2, textPx, KARAOKE_W, 4, karaokeLines);
-        fontNo = 2;
-        dy = KARAOKE_SMALL_DY;
+        f = Face::TITLE;
+        n = karaoke::wrap(karaokeFolded, static_cast<int>(f), termfont::widthOf, KARAOKE_W, 4, karaokeLines);
+        dy = KARAOKE_FIT_DY;
     }
-    drawLines(n, fontNo, KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2, dy, ink);
+    drawLines(n, f, KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2, dy, ink);
 }
 
-// The next line: font 2 over up to 2 lines, DIM.
+// The next line: BODY over up to 2 lines, DIM.
 static void drawNext(const char* s) {
     txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
-    const int n = karaoke::wrap(karaokeFolded, 2, textPx, KARAOKE_W, 2, karaokeLines);
-    drawLines(n, 2, KARAOKE_NEXT_Y, KARAOKE_SMALL_DY, pal(termpal::DIM));
+    const int n = karaoke::wrap(karaokeFolded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_W, 2, karaokeLines);
+    drawLines(n, Face::BODY, KARAOKE_NEXT_Y, KARAOKE_NEXT_DY, pal(termpal::DIM));
 }
 
 // What is on screen now (the texts as the deck sent them), so a redraw paints only the part that
@@ -908,11 +919,10 @@ static void drawKaraokeBody(bool all) {
         static char folded[sizeof(songText)];
         static karaoke::Line fit[1];
         txt::asciiFold(songText, folded, sizeof(folded));
-        const int n = karaoke::wrap(folded, 2, textPx, KARAOKE_SONG_W, 1, fit);
+        const int n = karaoke::wrap(folded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_SONG_W, 1, fit);
         clearBg(KARAOKE_SONG_X, 2, KARAOKE_SONG_W, 36);
-        tft.setTextDatum(ML_DATUM);
         tft.setTextColor(pal(termpal::MID));
-        if (n > 0) label(fit[0].s, KARAOKE_SONG_X, 20, 2);
+        if (n > 0) text(fit[0].s, KARAOKE_SONG_X, 20, Face::BODY, ML_DATUM);
     }
 
     const uint32_t pos = hasTrack ? static_cast<uint32_t>(karaoke::progressMs(d, now - song.at)) : 0;
