@@ -37,12 +37,12 @@ class Sprite {
         if (_sheet == null) {
             return;
         }
-        // The transform scales the source offset too, so frame 1 (64 px into the sheet) would land
-        // 128 px to the right: start it that much further left.
-        var sx = (frame % 2) * SIZE;
-        dc.drawBitmap2(x - sx * 2, y, _sheet, {
-            :bitmapX => sx, :bitmapY => 0, :bitmapWidth => SIZE, :bitmapHeight => SIZE,
+        // The whole sheet is drawn at 2x, shifted so frame `frame` sits at (x, y), and clipped to that
+        // 128x128 square: no source-rectangle options, whose offset handling differs between devices.
+        dc.setClip(x, y, SIZE * 2, SIZE * 2);
+        dc.drawBitmap2(x - (frame % 2) * SIZE * 2, y, _sheet, {
             :transform => _scale, :filterMode => Graphics.FILTER_MODE_POINT
         });
+        dc.clearClip();
     }
 }

@@ -55,9 +55,9 @@ module Partner {
         return start + duration >= todayStart;
     }
 
-    // The wrist-raise animation's frames, at most: about 10 s at 125 ms, the time the watch stays
+    // The wrist-raise animation's frames, at most: about 10 s at 250 ms, the time the watch stays
     // awake. It stops here even if the watch never says it went back to sleep.
-    const MAX_FRAMES = 80;
+    const MAX_FRAMES = 40;
 
     function keepAnimating(frames as Number) as Boolean {
         return frames < MAX_FRAMES;

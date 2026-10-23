@@ -9,6 +9,12 @@ module Fmt {
         return v == null ? "--" : v.toString();
     }
 
+    // CIQ's day_of_week (1 = Sunday) in English capitals, whatever the watch's language: the
+    // Emerald font has no accented letters.
+    function weekday(dow as Number) as String {
+        return ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"][(dow - 1) % 7] as String;
+    }
+
     function clock(hour as Number, min as Number, is24 as Boolean) as String {
         if (is24) {
             return hour.format("%02d") + ":" + min.format("%02d");

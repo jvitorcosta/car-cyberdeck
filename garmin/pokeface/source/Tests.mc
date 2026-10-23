@@ -172,3 +172,25 @@ function testNames(logger as Test.Logger) as Boolean {
     Test.assert((Partner.NAMES[20] as String).equals("ZYGARDE"));
     return true;
 }
+
+// The weekday is spelled from a fixed English table: the watch's language may need letters the
+// Emerald font lacks (Portuguese "SÁB").
+(:test)
+function testWeekday(logger as Test.Logger) as Boolean {
+    Test.assertEqual(Fmt.weekday(1), "SUN");
+    Test.assertEqual(Fmt.weekday(2), "MON");
+    Test.assertEqual(Fmt.weekday(7), "SAT");
+    return true;
+}
+
+// Half the round screen's width at a height, and whether a centred line fits between two heights.
+(:test)
+function testFit(logger as Test.Logger) as Boolean {
+    Test.assertEqual(Fit.halfChord(130), 130);
+    Test.assertEqual(Fit.halfChord(10), 50);       // sqrt(130^2 - 120^2)
+    Test.assertEqual(Fit.halfChord(-5), 0);
+    Test.assert(Fit.fits(178, 223, 242, 4) == false);   // the review's "2345 kcal 12.3 mi" row
+    Test.assert(Fit.fits(122, 223, 242, 4));
+    Test.assert(Fit.fits(150, 196, 214, 4));
+    return true;
+}
