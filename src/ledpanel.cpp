@@ -2,7 +2,8 @@
 // at night, faint scanlines, all caps) that drives the car's two ELK-family LED controllers. Four
 // screens, laid out by util/deckmenu:
 //   Menu (boot, after the header types out): the header, the menu items side by side on one row
-//           ("> [LIGHTS]", "> [WEATHER]", "> [RADIO]"), the four presets ROSE / FIRE / CALM / PURPURA (tap one
+//           ("> [LIGHTS]", "> [WEATHER]", "> [KARAOKE]", the last dimmed while the black deck plays nothing
+//           with synced lyrics: a tap then only says why), the four presets ROSE / FIRE / CALM / PURPURA (tap one
 //           to apply it), and a strip at the bottom with the clock (the outside temperature under
 //           it, "24C" or "--C") and each light's state ("IN PINK 40% OUT --": its colour, a chip of
 //           it and its %, OFF, or -- when the deck has no link to it) ending in a blinking block
@@ -17,10 +18,11 @@
 //           today's HI / LO, the city, and "UPDATED 12:30" (or NO DATA YET / >OFFLINE). Where the
 //           car is comes from the hotspot's public IP (ip-api.com, approximate), the weather from
 //           Open-Meteo, both over plain http every 15 min (see "Weather" below)
-//   Radio:  < BACK, the title tab RADIO, "GALAXY NEWS RADIO" and ON AIR (or >STANDBY / >NO SIGNAL /
-//           >WRONG KEY), the song and artist the black deck (the S3) is playing, a 20-cell bar with
-//           "1:23 / 3:45", and the synced lyric line. Read from the black deck's GET /state every
-//           second while this screen shows (see "Radio" below)
+//   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
+//           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
+//           >STANDBY / >NO SIGNAL / >WRONG KEY big in place of the lyrics). Read from the black
+//           deck's GET /state every second while this screen shows, every 5 s while the Menu shows
+//           (see "Lyrics" below)
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
 // The STATUS line on Lights and the strip's text on the Menu show a terminal message for 2.5 s
@@ -30,7 +32,7 @@
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
 // /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
 // drives it too: the D-pad moves the focus (an inverted bar on the Menu, a TEXT ring on Lights,
-// Weather and Radio), A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
+// Weather and Karaoke), A presses, B goes back to the Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see
 // "Xbox controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
 // palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
@@ -71,7 +73,7 @@
 #include "util/ledvoice.h"
 #include "util/lightstatus.h"
 #include "util/pollpace.h"
-#include "util/radioview.h"
+#include "util/karaoke.h"
 #include "util/readguard.h"
 #include "util/remotegate.h"
 #include "util/statejson.h"
@@ -117,7 +119,7 @@ using deckmenu::L_PRE0;
 using deckmenu::L_MINUS;
 using deckmenu::L_PLUS;
 using deckmenu::W_BACK;
-using deckmenu::R_BACK;
+using deckmenu::K_BACK;
 
 static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Menu
 // The palette: every colour goes through termpal with this flag, so night mode only flips it and
@@ -140,14 +142,34 @@ struct WeatherReading {
 static WeatherReading wx;
 static bool weatherOff = false;  // no REMOTE_TOKEN: no WiFi, so no weather (">OFFLINE")
 
-// What the black deck (the S3) is playing (see "Radio" below): the radio task publishes each poll
-// under radioMux and raises radioFresh; loop() copies it into `song`, which is all the drawing reads.
-struct RadioReading {
+// What the black deck (the S3) is playing (see "Lyrics" below): the lyrics task publishes each poll
+// under lyricsMux and raises lyricsFresh; loop() copies it into `song`, which is all the drawing reads.
+struct LyricsReading {
     bool wrongKey = false;    // the last poll was turned down (403: the decks' REMOTE_TOKEN differ)
     stateparse::Deck deck{};  // the last state that came (a miss keeps it)
     uint32_t at = 0;          // millis() it came; 0: none yet
 };
-static RadioReading song;
+static LyricsReading song;
+
+// A state is believed for a while after it came, so the black deck's odd dropped poll doesn't blank
+// the KARAOKE screen or dim its Menu item: on KARAOKE (a poll a second) for LYRICS_HOLD_MS after it
+// came or after the screen opened (the Menu's last poll carries it until the screen's own first
+// one), on the Menu (a poll every MENU_POLL_MS) for MENU_HOLD_MS, a dropped poll and some.
+static constexpr uint32_t MENU_POLL_MS = 5000;
+static constexpr uint32_t LYRICS_HOLD_MS = 5000, MENU_HOLD_MS = 3 * MENU_POLL_MS;
+static uint32_t karaokeAt = 0;  // millis() the KARAOKE screen was shown
+
+static bool lyricsHeard() {
+    if (song.at == 0) return false;
+    const uint32_t now = millis(), age = now - song.at;
+    if (age >= MENU_HOLD_MS) return false;
+    if (screen == Screen::Menu) return true;
+    return age < LYRICS_HOLD_MS || now - karaokeAt < LYRICS_HOLD_MS;
+}
+
+// The black deck plays a song with synced lyrics: the Menu's KARAOKE item is lit and opens.
+static bool karaokeReady() { return karaoke::available(lyricsHeard(), song.deck.playing, song.deck); }
+static bool karaokeShownReady = false;  // as the Menu item was last drawn (lit or dimmed)
 
 // ---- BLE ----
 
@@ -295,7 +317,7 @@ static void drawFocus(int id, bool on);
 static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Weather) return W_BACK;
-    if (screen == Screen::Radio) return R_BACK;
+    if (screen == Screen::Karaoke) return K_BACK;
     return L_TILE0 + cur().swatch;
 }
 
@@ -356,9 +378,22 @@ static void drawChrome(const Rect& r, const char* s, uint8_t fontNo, bool presse
     label(s, r.x + r.w / 2, r.y + r.h / 2, fontNo);
 }
 
-// A Menu list row ("> [LIGHTS]"): no border, the text left; the inverted bar when focused.
-static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted) {
-    const uint16_t ink = drawBox(r, pressed, inverted, 0, pal(termpal::TEXT));
+// A Menu list row ("> [LIGHTS]"): no border, the text left; the inverted bar when focused. Dimmed
+// (an item that won't open now): DIM text in a DIM border, the bar in DIM.
+static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim = false) {
+    uint16_t ink;
+    if (dim && !pressed) {
+        clearBg(r);
+        if (inverted) {
+            tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pal(termpal::DIM));
+            ink = pal(termpal::BG);
+        } else {
+            tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::DIM));
+            ink = pal(termpal::DIM);
+        }
+    } else {
+        ink = drawBox(r, pressed, inverted, 0, pal(termpal::TEXT));
+    }
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(ink);
     label(s, r.x + 8, r.y + r.h / 2, 2);
@@ -447,12 +482,17 @@ static void drawButtonBody(int id, bool pressed) {
     const Rect r = deckmenu::rect(screen, id);
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
-        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [WEATHER]", "> [RADIO]"};  // in deckmenu::Item order
-        if (id < M_PRE0) drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus);
+        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [WEATHER]", "> [KARAOKE]"};  // in deckmenu::Item order
+        bool dim = false;
+        if (id == M_ITEM0 + deckmenu::KARAOKE) {
+            karaokeShownReady = karaokeReady();
+            dim = !karaokeShownReady;
+        }
+        if (id < M_PRE0) drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus, dim);
         else drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed, id == focus);
         return;
     }
-    if (screen == Screen::Weather || screen == Screen::Radio || id == L_BACK) {  // W_BACK / R_BACK: their only button
+    if (screen == Screen::Weather || screen == Screen::Karaoke || id == L_BACK) {  // W_BACK / K_BACK: their only button
         drawChrome(r, "< BACK", 2, pressed, false);
         drawTabRule(r.x - 2, r.x + r.w + 2);  // its focus ring crosses the rule too
     } else if (id < L_TILE0) {
@@ -726,7 +766,7 @@ static void drawLooks() {
     drawLightState();
 }
 
-// Lights, Weather and Radio (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
+// Lights, Weather and Karaoke (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
 // the 2 px gap around the button, apart from the lit colour's bar inside it. Off: the gap's
 // scanlined bg again (the caller redraws the button, and with it any rule the ring crossed).
 static void drawFocus(int id, bool on) {
@@ -781,176 +821,125 @@ static void drawWeather() {
     drawWeatherBody();
 }
 
-// ---- Radio screen: the black deck's song, Galaxy News Radio style ----
-// The body (deckmenu::RADIO_BODY): "GALAXY NEWS RADIO" in MID with the state word right of it (ON AIR
-// in TEXT, the ">..." states in DIM) over a rule; the title (font 4, case kept: titles read better
-// than caps) and the artist (font 2, MID), both accent-folded (the fonts are ASCII only) and cut
-// with ".." to fit; a 20-cell block bar like the level bar with "1:23 / 3:45"; the synced lyric
-// line, wrapped to two lines. Each part is redrawn only when what it shows changed: the bar and the
-// time once a song second (radioview interpolates between polls), the title and artist on a new
-// song, the lyric on a new line. A state is believed for RADIO_HOLD_MS after it came, so the black
-// deck's odd dropped poll doesn't blank the screen.
-static constexpr Rect RADIO_TAB{80, 2, 100, 36};
-static constexpr uint32_t RADIO_HOLD_MS = 5000;
-static constexpr int RADIO_X = 4, RADIO_W = 312;
-static constexpr int RADIO_HEAD_Y = 50, RADIO_RULE_Y = 70, RADIO_TITLE_Y = 78, RADIO_ARTIST_Y = 108;
-static constexpr int RADIO_BAR_Y = 138, RADIO_LYRIC_Y = 168, RADIO_LYRIC_DY = 20;
-static constexpr int RADIO_CELLS = 20, RADIO_CELL = 7, RADIO_GAP = 2;
-static constexpr int RADIO_STATE_X = 196;  // the state word's area: right of "GALAXY NEWS RADIO"
+// ---- Karaoke screen: the black deck's song, its synced lyrics big ----
+// The top row: < BACK and right of it the song as "TITLE - ARTIST" (font 2, MID). The body
+// (deckmenu::KARAOKE_BODY): the lyric line due now big (font 4, TEXT, centred, word-wrapped over up
+// to 3 lines, ".." on the 3rd; a line too long for that in font 2 over up to 4), the next line under
+// it (font 2, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). Texts
+// keep their case (lyrics read better than caps) and are accent-folded (the fonts are ASCII only).
+// Without a song to sing along the big text is the state word in DIM (>NO SYNCED LYRICS, >STANDBY,
+// >NO SIGNAL, >WRONG KEY) and the screen stays. The line switches at its start time: karaoke
+// interpolates the position between polls and lyricsTick looks every KARAOKE_TICK_MS. Each part is
+// redrawn only when what it shows changed.
+static constexpr uint32_t KARAOKE_TICK_MS = 50;
+static constexpr int KARAOKE_X = 4, KARAOKE_W = 312, KARAOKE_CX = 160;
+static constexpr int KARAOKE_SONG_X = 80, KARAOKE_SONG_W = 236;  // right of < BACK (x 4..74), on the top row
+static constexpr int KARAOKE_BIG_Y = 56, KARAOKE_BIG_H = 90;     // the line due now: 3 lines of font 4
+static constexpr int KARAOKE_BIG_DY = 30, KARAOKE_SMALL_DY = 20; // font 4 / font 2 line pitches
+static constexpr int KARAOKE_NEXT_Y = 156, KARAOKE_NEXT_H = 40;  // the next line: 2 lines of font 2
+static constexpr int KARAOKE_BAR_Y = 224, KARAOKE_BAR_H = 3;
 
-// `s` cut to fit maxW px in font fontNo, ending in ".." when cut (the fonts have no ellipsis).
-static void fitText(const char* s, char* out, size_t n, uint8_t fontNo, int maxW) {
-    snprintf(out, n, "%s", s);
-    if (tft.textWidth(out, fontNo) <= maxW) return;
-    size_t len = strlen(out);
-    while (len > 0) {
-        --len;  // out[0..len) is still the original text
-        while (len > 0 && out[len - 1] == ' ') --len;
-        if (len + 3 > n) continue;
-        out[len] = '.';
-        out[len + 1] = '.';
-        out[len + 2] = 0;
-        if (tft.textWidth(out, fontNo) <= maxW) return;
-    }
-    snprintf(out, n, "..");
+// A text's width in px in a TFT_eSPI font, for karaoke::wrap.
+static int textPx(const char* s, int fontNo) { return tft.textWidth(s, static_cast<uint8_t>(fontNo)); }
+
+// The texts are accent-folded into karaokeFolded and wrapped into karaokeLines (only loop draws).
+static char karaokeFolded[sizeof(stateparse::Deck::line)];
+static karaoke::Line karaokeLines[4];
+
+// karaokeLines[0..n) centred, from y every dy px.
+static void drawLines(int n, int fontNo, int y, int dy, uint16_t ink) {
+    tft.setTextDatum(TC_DATUM);
+    tft.setTextColor(ink);
+    for (int i = 0; i < n; i++) label(karaokeLines[i].s, KARAOKE_CX, y + i * dy, static_cast<uint8_t>(fontNo));
 }
 
-// `s` over two lines of maxW px: the first as much as fits, broken at a space when there is one; the
-// rest cut with "..". b is "" when one line holds it all.
-static void wrapTwo(const char* s, char* a, char* b, size_t n, uint8_t fontNo, int maxW) {
-    char buf[sizeof(stateparse::Deck::line)];
-    snprintf(buf, sizeof(buf), "%s", s);
-    b[0] = 0;
-    if (tft.textWidth(buf, fontNo) <= maxW) {
-        snprintf(a, n, "%s", buf);
-        return;
+// The big text: font 4 over up to 3 lines, or font 2 over up to 4 when font 4 would cut it; the
+// block centred in its area.
+static void drawBig(const char* s, uint16_t ink) {
+    txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
+    bool cut = false;
+    int n = karaoke::wrap(karaokeFolded, 4, textPx, KARAOKE_W, 3, karaokeLines, &cut);
+    int fontNo = 4, dy = KARAOKE_BIG_DY;
+    if (cut) {
+        n = karaoke::wrap(karaokeFolded, 2, textPx, KARAOKE_W, 4, karaokeLines);
+        fontNo = 2;
+        dy = KARAOKE_SMALL_DY;
     }
-    const size_t len = strlen(buf);
-    size_t cut = 0, space = 0;
-    for (size_t k = 1; k <= len; k++) {
-        const char c = buf[k];
-        buf[k] = 0;
-        const bool fits = tft.textWidth(buf, fontNo) <= maxW;
-        buf[k] = c;
-        if (!fits) break;
-        cut = k;
-        if (c == ' ') space = k;  // buf[0..k) fits and a word ends there
-    }
-    if (space > 0) cut = space;
-    if (cut == 0) cut = 1;
-    size_t end = cut;
-    while (end > 0 && buf[end - 1] == ' ') --end;
-    snprintf(a, n, "%.*s", static_cast<int>(end), buf);
-    const char* rest = buf + cut;
-    while (*rest == ' ') ++rest;
-    fitText(rest, b, n, fontNo, maxW);
+    drawLines(n, fontNo, KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2, dy, ink);
+}
+
+// The next line: font 2 over up to 2 lines, DIM.
+static void drawNext(const char* s) {
+    txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
+    const int n = karaoke::wrap(karaokeFolded, 2, textPx, KARAOKE_W, 2, karaokeLines);
+    drawLines(n, 2, KARAOKE_NEXT_Y, KARAOKE_SMALL_DY, pal(termpal::DIM));
 }
 
 // What is on screen now (the texts as the deck sent them), so a redraw paints only the part that
-// changed. drawRadioBody(true) forgets it.
-static const char* radioShownState = nullptr;
-static char radioShownTitle[sizeof(stateparse::Deck::track)], radioShownArtist[sizeof(stateparse::Deck::artist)];
-static char radioShownLyric[sizeof(stateparse::Deck::line)], radioShownTime[32];
-static int radioShownCells = -1;
-static bool radioShownLive = false;
+// changed. drawKaraokeBody(true) forgets it.
+static char karaokeShownSong[sizeof(stateparse::Deck::track) + sizeof(stateparse::Deck::artist) + 4];
+static char karaokeShownBig[sizeof(stateparse::Deck::line)], karaokeShownNext[sizeof(stateparse::Deck::line)];
+static bool karaokeShownWord = false;  // the big text is a state word
+static int karaokeShownBar = -1;
+static bool karaokeShownLive = false;
 
-static void drawRadioBody(bool all) {
-    const Rect& r = deckmenu::RADIO_BODY;
+static void drawKaraokeBody(bool all) {
     const uint32_t now = millis();
-    const bool heard = song.at != 0 && now - song.at < RADIO_HOLD_MS;
+    const bool heard = lyricsHeard();
     const stateparse::Deck& d = song.deck;
     const bool hasTrack = heard && d.track[0];
     if (all) {
-        clearBg(r);
-        tft.setTextDatum(TL_DATUM);
+        clearBg(deckmenu::KARAOKE_BODY);
+        karaokeShownSong[0] = karaokeShownBig[0] = karaokeShownNext[0] = 0;
+        karaokeShownWord = false;
+        karaokeShownBar = -1;
+    }
+
+    static char songText[sizeof(karaokeShownSong)];
+    if (!hasTrack) songText[0] = 0;
+    else if (d.artist[0]) snprintf(songText, sizeof(songText), "%s - %s", d.track, d.artist);
+    else snprintf(songText, sizeof(songText), "%s", d.track);
+    if (all || strcmp(songText, karaokeShownSong) != 0) {
+        snprintf(karaokeShownSong, sizeof(karaokeShownSong), "%s", songText);
+        static char folded[sizeof(songText)];
+        static karaoke::Line fit[1];
+        txt::asciiFold(songText, folded, sizeof(folded));
+        const int n = karaoke::wrap(folded, 2, textPx, KARAOKE_SONG_W, 1, fit);
+        clearBg(KARAOKE_SONG_X, 2, KARAOKE_SONG_W, 36);
+        tft.setTextDatum(ML_DATUM);
         tft.setTextColor(pal(termpal::MID));
-        label("GALAXY NEWS RADIO", RADIO_X + 4, RADIO_HEAD_Y, 2);
-        tft.drawFastHLine(RADIO_X, RADIO_RULE_Y, RADIO_W, pal(termpal::MID));
-        radioShownState = nullptr;
-        radioShownTitle[0] = radioShownArtist[0] = radioShownLyric[0] = radioShownTime[0] = 0;
-        radioShownCells = -1;
+        if (n > 0) label(fit[0].s, KARAOKE_SONG_X, 20, 2);
     }
 
-    const char* stateWord = radioview::state(heard, song.wrongKey, d.playing, d.track[0] != 0);
-    if (all || stateWord != radioShownState) {
-        radioShownState = stateWord;
-        clearBg(RADIO_STATE_X, RADIO_HEAD_Y, RADIO_X + RADIO_W - RADIO_STATE_X, 16);
-        tft.setTextDatum(TR_DATUM);
-        tft.setTextColor(pal(stateWord[0] == '>' ? termpal::DIM : termpal::TEXT));
-        label(stateWord, RADIO_X + RADIO_W, RADIO_HEAD_Y, 2);
+    const uint32_t pos = hasTrack ? static_cast<uint32_t>(karaoke::progressMs(d, now - song.at)) : 0;
+    const char* stateWord = karaoke::state(heard, song.wrongKey, d.playing, d);
+    const bool isWord = stateWord[0] != 0;
+    const char* big = isWord ? stateWord : karaoke::lyric(d, pos);
+    if (all || isWord != karaokeShownWord || strcmp(big, karaokeShownBig) != 0) {
+        snprintf(karaokeShownBig, sizeof(karaokeShownBig), "%s", big);
+        karaokeShownWord = isWord;
+        clearBg(KARAOKE_X, KARAOKE_BIG_Y, KARAOKE_W, KARAOKE_BIG_H);
+        drawBig(big, pal(isWord ? termpal::DIM : termpal::TEXT));
+    }
+    const char* next = isWord ? "" : karaoke::nextLine(d, pos);
+    if (all || strcmp(next, karaokeShownNext) != 0) {
+        snprintf(karaokeShownNext, sizeof(karaokeShownNext), "%s", next);
+        clearBg(KARAOKE_X, KARAOKE_NEXT_Y, KARAOKE_W, KARAOKE_NEXT_H);
+        drawNext(next);
     }
 
-    // the title and artist as the deck sent them ("" without a song): folded and fitted only when new
-    char folded[sizeof(stateparse::Deck::line)], fit[sizeof(stateparse::Deck::line)];
-    const char* title = hasTrack ? d.track : "";
-    if (all || strcmp(title, radioShownTitle) != 0) {
-        snprintf(radioShownTitle, sizeof(radioShownTitle), "%s", title);
-        txt::asciiFold(title, folded, sizeof(folded));
-        fitText(folded, fit, sizeof(fit), 4, RADIO_W);
-        clearBg(RADIO_X, RADIO_TITLE_Y, RADIO_W, 26);
-        tft.setTextDatum(TL_DATUM);
-        tft.setTextColor(pal(termpal::TEXT));
-        label(fit, RADIO_X, RADIO_TITLE_Y, 4);
-    }
-    const char* artist = hasTrack ? d.artist : "";
-    if (all || strcmp(artist, radioShownArtist) != 0) {
-        snprintf(radioShownArtist, sizeof(radioShownArtist), "%s", artist);
-        txt::asciiFold(artist, folded, sizeof(folded));
-        fitText(folded, fit, sizeof(fit), 2, RADIO_W);
-        clearBg(RADIO_X, RADIO_ARTIST_Y, RADIO_W, 16);
-        tft.setTextDatum(TL_DATUM);
-        tft.setTextColor(pal(termpal::MID));
-        label(fit, RADIO_X, RADIO_ARTIST_Y, 2);
-    }
-
-    const uint32_t pos = hasTrack ? static_cast<uint32_t>(radioview::progressMs(d, now - song.at)) : 0;
-    const uint32_t dur = hasTrack ? d.durationMs : 0;
-    const int full = radioview::cells(pos, dur, RADIO_CELLS);
+    // the progress line: the played part a solid bar, the rest a DIM hairline through its middle
+    const int px = karaoke::cells(pos, hasTrack ? d.durationMs : 0, KARAOKE_W);
     const bool live = hasTrack && d.playing;
-    if (all || full != radioShownCells || live != radioShownLive) {
-        radioShownCells = full;
-        radioShownLive = live;
-        clearBg(RADIO_X, RADIO_BAR_Y, RADIO_CELLS * (RADIO_CELL + RADIO_GAP) + 4, 14);
-        for (int k = 0; k < RADIO_CELLS; k++) {
-            const int x = RADIO_X + 4 + k * (RADIO_CELL + RADIO_GAP);
-            if (k < full) tft.fillRect(x, RADIO_BAR_Y, RADIO_CELL, 14, pal(termpal::TEXT));
-            else tft.drawRect(x, RADIO_BAR_Y, RADIO_CELL, 14, pal(live ? termpal::MID : termpal::DIM));
+    if (all || px != karaokeShownBar || live != karaokeShownLive) {
+        karaokeShownBar = px;
+        karaokeShownLive = live;
+        if (px > 0) tft.fillRect(KARAOKE_X, KARAOKE_BAR_Y, px, KARAOKE_BAR_H, pal(live ? termpal::TEXT : termpal::MID));
+        if (px < KARAOKE_W) {
+            clearBg(KARAOKE_X + px, KARAOKE_BAR_Y, KARAOKE_W - px, KARAOKE_BAR_H);
+            tft.drawFastHLine(KARAOKE_X + px, KARAOKE_BAR_Y + KARAOKE_BAR_H / 2, KARAOKE_W - px, pal(termpal::DIM));
         }
     }
-    char t[32] = "-:-- / -:--";
-    if (hasTrack) {
-        char a[12], b[12];
-        radioview::clock(pos, a, sizeof(a));
-        if (dur > 0) radioview::clock(dur, b, sizeof(b));
-        else snprintf(b, sizeof(b), "-:--");
-        snprintf(t, sizeof(t), "%s / %s", a, b);
-    }
-    if (all || strcmp(t, radioShownTime) != 0) {
-        snprintf(radioShownTime, sizeof(radioShownTime), "%s", t);
-        const int x0 = RADIO_X + 4 + RADIO_CELLS * (RADIO_CELL + RADIO_GAP);
-        clearBg(x0, RADIO_BAR_Y - 1, RADIO_X + RADIO_W - x0, 16);
-        tft.setTextDatum(MR_DATUM);
-        tft.setTextColor(pal(hasTrack ? termpal::TEXT : termpal::DIM));
-        label(t, RADIO_X + RADIO_W, RADIO_BAR_Y + 7, 2);
-    }
-
-    const char* line = hasTrack ? radioview::lyric(d, pos) : "";
-    if (all || strcmp(line, radioShownLyric) != 0) {
-        snprintf(radioShownLyric, sizeof(radioShownLyric), "%s", line);
-        clearBg(RADIO_X, RADIO_LYRIC_Y, RADIO_W, RADIO_LYRIC_DY + 16);
-        txt::asciiFold(line, folded, sizeof(folded));
-        char a[sizeof(fit)], b[sizeof(fit)];
-        wrapTwo(folded, a, b, sizeof(a), 2, RADIO_W);
-        tft.setTextDatum(TL_DATUM);
-        tft.setTextColor(pal(termpal::TEXT));
-        label(a, RADIO_X, RADIO_LYRIC_Y, 2);
-        if (b[0]) label(b, RADIO_X, RADIO_LYRIC_Y + RADIO_LYRIC_DY, 2);
-    }
-}
-
-static void drawRadio() {
-    drawTab(RADIO_TAB, "RADIO", false, true);
-    drawRadioBody(true);
 }
 
 // Redraws the current screen in the current palette. keepHeader (boot, right after typeHeader):
@@ -971,8 +960,8 @@ static void drawAll(bool keepHeader = false) {
         drawStrip();
     } else if (screen == Screen::Weather) {
         drawWeather();
-    } else if (screen == Screen::Radio) {
-        drawRadio();
+    } else if (screen == Screen::Karaoke) {
+        drawKaraokeBody(true);
     } else {
         drawLevel();
         drawStatus();
@@ -1248,15 +1237,16 @@ static bool pressedNow(int id) { return (tap.down && tap.id == id) || padFlash =
 // Switches to screen `s`: the focus goes to its first button (none without a controller), a press
 // still drawn yellow is forgotten (its id means another button there), and so is a message (it was
 // about the screen left; the new screen shows its usual line).
-// Back from Radio, the focus lands on the RADIO item it came from.
+// Back from Karaoke, the focus lands on the KARAOKE item it came from.
 static void show(Screen s) {
     const Screen from = screen;
     screen = s;
     tap.id = -1;
     padFlash = -1;
     message[0] = 0;
+    if (s == Screen::Karaoke) karaokeAt = millis();
     focus = padUp ? homeFocus() : -1;
-    if (focus >= 0 && s == Screen::Menu && from == Screen::Radio) focus = M_ITEM0 + deckmenu::RADIO;
+    if (focus >= 0 && s == Screen::Menu && from == Screen::Karaoke) focus = M_ITEM0 + deckmenu::KARAOKE;
     drawAll();
 }
 
@@ -1313,8 +1303,8 @@ static void press(int id) {
         if (id == W_BACK) show(Screen::Menu);
         return;
     }
-    if (screen == Screen::Radio) {
-        if (id == R_BACK) show(Screen::Menu);
+    if (screen == Screen::Karaoke) {
+        if (id == K_BACK) show(Screen::Menu);
         return;
     }
     if (deckmenu::isPreset(screen, id)) {
@@ -1325,7 +1315,15 @@ static void press(int id) {
     switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
     case deckmenu::LIGHTS: show(Screen::Lights); break;
     case deckmenu::WEATHER: show(Screen::Weather); break;
-    case deckmenu::RADIO: show(Screen::Radio); break;
+    case deckmenu::KARAOKE:
+        // dimmed: no song to sing along, so only the strip says why
+        if (karaokeReady()) {
+            show(Screen::Karaoke);
+        } else {
+            setMessage(karaoke::whyNot(lyricsHeard(), song.wrongKey));
+            drawStripText();
+        }
+        break;
     }
 }
 
@@ -1342,7 +1340,7 @@ static void act() {
 
 // ---- Xbox controller input ----
 //   D-pad: move the focus (held: repeats; the sticks are ignored)    A: press the focused button
-//   B: back to the Menu (from Lights, Weather or Radio; on the Menu: nothing)
+//   B: back to the Menu (from Lights, Weather or Karaoke; on the Menu: nothing)
 //   Lights only: X next page    Y this page's lights on/off    LB / RB: - / +
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
@@ -1567,49 +1565,51 @@ static void takeWeather() {
     }
 }
 
-// ---- Radio: what the black deck (the S3) is playing, from its GET /state ----
+// ---- Lyrics: what the black deck (the S3) is playing, from its GET /state ----
 // Its own task (core 1, idle priority like the weather; core 0 is the lights' and the controller's
-// link), started with the weather once WiFi is up. It polls only while the RADIO screen shows
-// (loop() keeps radioWanted): at once when the screen opens, then every second, every 5 s after ten
-// misses in a row (util/pollpace); otherwise it sleeps. The black deck is at its fixed hotspot
+// link), started with the weather once WiFi is up. It polls only while a screen that shows it is up
+// (loop() keeps lyricsWant): the KARAOKE screen every second, every 5 s after ten misses in a row
+// (util/pollpace); the Menu every MENU_POLL_MS (enough to light or dim its KARAOKE item); at once
+// when either opens. Otherwise it sleeps. The black deck is at its fixed hotspot
 // address (COMPANION_DECK) on the iPhone hotspot, else looked up by its mDNS name (DECK_MDNS_NAME)
 // and kept through blips (util/deckaddr). HTTP/1.0, 1.5 s timeouts, the body into a fixed
-// statejson::MAX_JSON buffer, util/stateparse. Each poll is published under radioMux; loop() polls
-// radioFresh to redraw. The log tells when the deck is found, lost and back, not every poll.
-static TaskHandle_t radioHandle = nullptr;
-static portMUX_TYPE radioMux = portMUX_INITIALIZER_UNLOCKED;
-static RadioReading radioPub;             // guarded by radioMux
-static volatile bool radioFresh = false;  // a poll was published; loop() clears it
-static volatile bool radioWanted = false; // the RADIO screen shows; loop() keeps it
-static char radioBody[statejson::MAX_JSON];  // only the radio task touches these three
-static deckaddr::Keep radioAddr;
-static bool radioMdns = false;
+// statejson::MAX_JSON buffer, util/stateparse. Each poll is published under lyricsMux; loop() polls
+// lyricsFresh to redraw. The log tells when the deck is found, lost and back, not every poll.
+static TaskHandle_t lyricsHandle = nullptr;
+static portMUX_TYPE lyricsMux = portMUX_INITIALIZER_UNLOCKED;
+static LyricsReading lyricsPub;             // guarded by lyricsMux
+static volatile bool lyricsFresh = false;  // a poll was published; loop() clears it
+enum LyricsWant : uint8_t { WANT_NONE, WANT_MENU, WANT_KARAOKE };
+static volatile uint8_t lyricsWant = WANT_NONE;  // what the screen shown needs; loop() keeps it
+static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches these three
+static deckaddr::Keep lyricsAddr;
+static bool lyricsMdns = false;
 
 // Where the black deck is: its fixed address on the hotspot, else its mDNS name on whatever network
 // both are on. False when it can't be found.
-static bool radioHost(char* out, size_t n) {
+static bool lyricsHost(char* out, size_t n) {
     if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()))) {
         snprintf(out, n, "%s", COMPANION_DECK);
         return true;
     }
-    if (!radioMdns) radioMdns = MDNS.begin("cardeck-leds");
-    if (radioAddr.addr() == 0) {
+    if (!lyricsMdns) lyricsMdns = MDNS.begin("cardeck-leds");
+    if (lyricsAddr.addr() == 0) {
         const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
         if (static_cast<uint32_t>(a) == 0) return false;
-        radioAddr.found(static_cast<uint32_t>(a));
-        Serial.printf("[radio] deck found at %s (mDNS)\n", a.toString().c_str());
+        lyricsAddr.found(static_cast<uint32_t>(a));
+        Serial.printf("[lyrics] deck found at %s (mDNS)\n", a.toString().c_str());
     }
-    snprintf(out, n, "%s", IPAddress(radioAddr.addr()).toString().c_str());
+    snprintf(out, n, "%s", IPAddress(lyricsAddr.addr()).toString().c_str());
     return true;
 }
 
-// GET /state into radioBody (cut at MAX_JSON, always terminated); the HTTP status, negative without
+// GET /state into lyricsBody (cut at MAX_JSON, always terminated); the HTTP status, negative without
 // an answer. Short timeouts: the deck is one hop away, and a missing deck must not hold the polls up.
-static int radioGet() {
-    radioBody[0] = 0;
+static int lyricsGet() {
+    lyricsBody[0] = 0;
     if (!net::isOnline()) return -1;
     char host[40], url[128];
-    if (!radioHost(host, sizeof(host))) return -1;
+    if (!lyricsHost(host, sizeof(host))) return -1;
     snprintf(url, sizeof(url), "http://%s/state?k=%s", host, REMOTE_TOKEN);
     WiFiClient c;
     HTTPClient h;
@@ -1622,55 +1622,57 @@ static int radioGet() {
     if (rc == 200) {
         WiFiClient* s = h.getStreamPtr();
         readguard::Guard g(millis(), 1500, 3000);
-        while (len < sizeof(radioBody) - 1 && (h.connected() || s->available())) {
+        while (len < sizeof(lyricsBody) - 1 && (h.connected() || s->available())) {
             const int a = s->available();
             if (a <= 0) {
                 if (g.check(millis()) != readguard::State::Ok) break;
                 vTaskDelay(pdMS_TO_TICKS(2));
                 continue;
             }
-            size_t want = sizeof(radioBody) - 1 - len;
+            size_t want = sizeof(lyricsBody) - 1 - len;
             if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
-            len += s->readBytes(radioBody + len, want);
+            len += s->readBytes(lyricsBody + len, want);
             g.onData(millis());
         }
     }
-    radioBody[len] = 0;
+    lyricsBody[len] = 0;
     h.end();
     return rc;
 }
 
-static void radioTask(void*) {
+static void lyricsTask(void*) {
     static stateparse::Deck deck;  // static: ~650 B, off the task stack
     pollpace::Pace pace;
     uint32_t lastPoll = 0;
-    bool polling = false;  // the screen was showing last pass
+    uint8_t was = WANT_NONE;  // what was wanted at the last poll
     for (;;) {
-        if (!radioWanted) {
-            polling = false;
+        const uint8_t want = lyricsWant;
+        if (want == WANT_NONE) {
+            was = WANT_NONE;
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
-        if (!polling) pace = pollpace::Pace();  // just opened: poll at once, at the fast pace
         const uint32_t now = millis();
-        if (!polling || now - lastPoll >= pace.intervalMs()) {
-            polling = true;
+        const uint32_t every = want == WANT_MENU ? MENU_POLL_MS : pace.intervalMs();
+        if (want != was || now - lastPoll >= every) {
+            if (want != was) pace = pollpace::Pace();  // just opened: poll at once, at the fast pace
+            was = want;
             lastPoll = now;
-            const int rc = radioGet();
-            const bool ok = rc == 200 && stateparse::parse(radioBody, deck);
-            if (pace.misses() == 0 && !ok) Serial.printf("[radio] deck lost (rc=%d)\n", rc);
-            if (pace.misses() > 0 && ok) Serial.println("[radio] deck back");
+            const int rc = lyricsGet();
+            const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
+            if (pace.misses() == 0 && !ok) Serial.printf("[lyrics] deck lost (rc=%d)\n", rc);
+            if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
             pace.onResult(ok);
-            radioAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
+            lyricsAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
             const uint32_t at = millis();
-            portENTER_CRITICAL(&radioMux);
-            radioPub.wrongKey = rc == 403;
+            portENTER_CRITICAL(&lyricsMux);
+            lyricsPub.wrongKey = rc == 403;
             if (ok) {
-                radioPub.deck = deck;
-                radioPub.at = at ? at : 1;
+                lyricsPub.deck = deck;
+                lyricsPub.at = at ? at : 1;
             }
-            portEXIT_CRITICAL(&radioMux);
-            radioFresh = true;
+            portEXIT_CRITICAL(&lyricsMux);
+            lyricsFresh = true;
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
@@ -1678,28 +1680,35 @@ static void radioTask(void*) {
 
 // From the voice task, once WiFi is up. 6 KB: HTTPClient, its Strings and the mDNS query; the [mem]
 // line shows what's left.
-static void beginRadio() {
-    if (radioHandle) return;
-    xTaskCreatePinnedToCore(radioTask, "radio", 6144, nullptr, 0, &radioHandle, 1);
+static void beginLyrics() {
+    if (lyricsHandle) return;
+    xTaskCreatePinnedToCore(lyricsTask, "lyrics", 6144, nullptr, 0, &lyricsHandle, 1);
 }
 
-// In loop(): tells the task whether to poll, takes a published poll, and redraws the parts of the
-// RADIO screen that changed (the bar and the time move between polls, so this runs every 200 ms).
-static void radioTick() {
-    radioWanted = screen == Screen::Radio;
+// In loop(): tells the task how to poll, takes a published poll, and redraws what changed: on the
+// Menu the KARAOKE item when it turns lit or dimmed (a state also goes stale with time), on KARAOKE
+// the parts of the screen that changed (the line and the bar move between polls, so this looks
+// every KARAOKE_TICK_MS).
+static void lyricsTick() {
+    lyricsWant = screen == Screen::Karaoke ? WANT_KARAOKE : screen == Screen::Menu ? WANT_MENU : WANT_NONE;
     bool fresh = false;
-    if (radioFresh) {
-        radioFresh = false;  // before the copy: a poll published meanwhile raises it again
-        portENTER_CRITICAL(&radioMux);
-        song = radioPub;
-        portEXIT_CRITICAL(&radioMux);
+    if (lyricsFresh) {
+        lyricsFresh = false;  // before the copy: a poll published meanwhile raises it again
+        portENTER_CRITICAL(&lyricsMux);
+        song = lyricsPub;
+        portEXIT_CRITICAL(&lyricsMux);
         fresh = true;
     }
-    if (screen != Screen::Radio) return;
+    if (screen == Screen::Menu) {
+        const int item = M_ITEM0 + deckmenu::KARAOKE;
+        if (karaokeReady() != karaokeShownReady) drawButton(item, pressedNow(item));
+        return;
+    }
+    if (screen != Screen::Karaoke) return;
     static uint32_t drawnAt = 0;
-    if (!fresh && millis() - drawnAt < 200) return;
+    if (!fresh && millis() - drawnAt < KARAOKE_TICK_MS) return;
     drawnAt = millis();
-    drawRadioBody(false);
+    drawKaraokeBody(false);
 }
 
 // ---- Voice: Siri Shortcuts over WiFi ----
@@ -1885,7 +1894,7 @@ static void voiceTask(void*) {
     server->begin();
     netclock::begin();  // SNTP, for night mode and the Menu's clock
     beginWeather();
-    beginRadio();
+    beginLyrics();
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
@@ -2022,18 +2031,18 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, radio %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
-                      radioHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(radioHandle)) : 0u,
+                      lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 
     handlePad();
     takeWeather();
-    radioTick();
+    lyricsTick();
     updateDayNight();
     tripTick();
     blinkCursor();
