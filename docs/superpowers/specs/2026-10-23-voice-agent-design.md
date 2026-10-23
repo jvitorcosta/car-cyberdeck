@@ -113,6 +113,12 @@ Xbox (RT/LT) ──BLE──▶ yellow deck ──HTTP over hotspot──▶ bla
   (`claude-haiku-5-5`). A request that needs more steps or reasoning may go to Sonnet
   (`claude-sonnet-5-5`). If the Agent SDK's own overhead breaks the 1.5 s target, the builder may run
   the fast path as a plain Messages API tool loop with the same tools; the speed rule wins.
+- **Model-agnostic fast path (owner, 2026-10-23):** the fast path calls its model through a small
+  interface, so development can start on a free model (e.g. a Groq-hosted open model) and switch by
+  config. The production model is picked by the evals (wrong-action rate first, then p95 latency,
+  then cost), with Haiku, Sonnet and the free model as contenders; prompts and tool descriptions are
+  re-checked on the chosen model. The Agent SDK slow path only runs Claude, so it is developed on
+  Claude from the start (a small prepaid API credit).
 - **Speech-to-text:** Brazilian Portuguese (v1), including English artist and song names inside a
   Portuguese sentence ("toca Tyler, the Creator"), biased with a word list; streaming. The builder picks the provider by measuring accuracy and latency on **recordings made in
   the car** (see the first step).
