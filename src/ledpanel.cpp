@@ -27,6 +27,7 @@
 #include "net/remote_config.h"
 #include "net/wifi.h"
 #include "util/elkcmd.h"
+#include "util/ledlook.h"
 #include "util/ledvoice.h"
 #include "util/remotegate.h"
 #include "util/touchcal.h"
@@ -36,23 +37,10 @@ static Preferences prefs;
 
 // ---- State ----
 
-// Each colour has two values. `led` is what the strip gets: RGB LEDs don't mix like a screen (green
-// and blue emitters look far brighter than red), so orange, pink and purple need much less green or
-// blue than their screen colours, and white is warmed to offset the strips' blue cast. `screen` is
-// what the tile shows: fully saturated, because this panel washes colours out (soft "LED-like"
-// tints looked dead on it).
-struct Swatch {
-    const char* name;
-    uint8_t r, g, b;   // led
-    uint32_t screen;   // 0xRRGGBB
-};
-static const Swatch SWATCHES[] = {
-    {"Red", 255, 0, 0, 0xFF0000},       {"Orange", 255, 40, 0, 0xFF6A00},
-    {"Pink", 255, 0, 70, 0xFF0090},     {"Purple", 120, 0, 255, 0x9000FF},
-    {"Blue", 0, 0, 255, 0x0040FF},      {"Green", 0, 255, 0, 0x00FF30},
-    {"White", 255, 215, 170, 0xFFFFFF}, {"Yellow", 255, 110, 0, 0xFFD400},  // LED yellow: full green goes lime
-};
-static constexpr int N_SWATCH = sizeof(SWATCHES) / sizeof(SWATCHES[0]);
+using ledlook::Swatch;
+using ledlook::SWATCHES;
+using ledlook::N_SWATCH;
+using ledlook::Look;
 
 // The zone tabs are pages. BOTH is the general page: a change there goes to both lights (the
 // inside and outside looks become a copy of it). INSIDE and OUTSIDE each keep their own look and
@@ -60,15 +48,8 @@ static constexpr int N_SWATCH = sizeof(SWATCHES) / sizeof(SWATCHES[0]);
 enum Target { BOTH, INSIDE, OUTSIDE };
 static Target target = BOTH;  // the page on screen
 
-struct Look {
-    int swatch = N_SWATCH - 1;  // white
-    uint8_t pct = 100;          // 10..100 %, in steps of 10
-    bool lit = true;
-};
 static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
 static Look& cur() { return looks[target]; }
-
-static constexpr uint8_t MIN_INTENSITY = 10;
 
 // ---- BLE ----
 
@@ -482,7 +463,7 @@ static void load() {
         l.swatch = prefs.getUChar(key, static_cast<uint8_t>(old.swatch)) % N_SWATCH;
         snprintf(key, sizeof(key), "pct%d", i);
         l.pct = prefs.getUChar(key, old.pct);
-        if (l.pct < MIN_INTENSITY || l.pct > 100) l.pct = 100;
+        if (l.pct < ledlook::MIN_PCT || l.pct > 100) l.pct = 100;
         snprintf(key, sizeof(key), "lit%d", i);
         l.lit = prefs.getBool(key, old.lit);
         savedLooks[i] = l;
@@ -520,7 +501,7 @@ static void press(int id) {
         drawZones();  // the tab chips follow
     } else {
         const int pct = l.pct + (id == PLUS ? 10 : -10);
-        l.pct = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
+        l.pct = static_cast<uint8_t>(pct < ledlook::MIN_PCT ? ledlook::MIN_PCT : pct > 100 ? 100 : pct);
         pushTargets();
         drawLevel();
     }
@@ -705,7 +686,7 @@ static void applyVoice(const VoiceJob& job) {
     }
     if (c.power >= 0) l.lit = c.power == 1;
     int pct = c.level >= 0 ? c.level : l.pct + 10 * c.levelStep;
-    l.pct = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
+    l.pct = static_cast<uint8_t>(pct < ledlook::MIN_PCT ? ledlook::MIN_PCT : pct > 100 ? 100 : pct);
     if (job.zone == BOTH) {
         looks[INSIDE] = looks[OUTSIDE] = l;
         for (int i = 0; i < N_CTRL; i++) push(i);
