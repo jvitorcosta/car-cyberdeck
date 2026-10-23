@@ -78,7 +78,7 @@ class ZonesView extends WatchUi.View {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx - 62, y, Graphics.FONT_SMALL, p[0] as String,
                         Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
-            new FavDots(p.slice(1, null)).paint(dc, cx + 36, cx + 66, y, 11);
+            new FavDots(p.slice(1, 7)).paint(dc, cx + 36, cx + 66, y, 11);
         }
         var busy = _deck.status.length() > 0;
         if (busy || list.size() > 0) {

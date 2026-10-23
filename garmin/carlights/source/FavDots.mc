@@ -6,7 +6,7 @@ import Toybox.WatchUi;
 // grey when that light is off). The icon of a Presets list item; the page draws the same dots
 // per row through paint().
 class FavDots extends WatchUi.Drawable {
-    private var _fav as Array;  // [inColor, inPct, inLit, outColor, outPct, outLit], a Deck.presets entry without its name
+    private var _fav as Array;  // [inColor, inPct, inLit, outColor, outPct, outLit]
 
     function initialize(fav as Array) {
         Drawable.initialize({});

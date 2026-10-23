@@ -34,7 +34,7 @@ class Deck {
     var inside as Look = new Look();
     var outside as Look = new Look();
     var status as String = "";  // "Sending...", "No answer", ...; "" when all is well
-    // The deck's fixed presets, in its order: [name, inColor, inPct, inLit, outColor, outPct, outLit],
+    // The deck's fixed presets, in its order: [name, inColor, inPct, inLit, outColor, outPct, outLit, number],
     // the colours as indices into COLORS (found by word: the deck's order differs). Empty until
     // /presets answers (and if it never does).
     var presets as Array = [];
@@ -151,11 +151,10 @@ class Deck {
     }
 
     // "1 ROSE pink 40 pink 100" / "4 PURPURA off 0 purple 100" per line, to presets in the deck's
-    // order. The number isn't kept: the menu sends the preset's position, which is the same.
+    // order, with the deck's number last (what /say needs). An answer with no valid line keeps the old list.
     private function readPresets(text as String) as Void {
         var out = [] as Array;
-        var lines = split(text, "
-");
+        var lines = split(text, "\n");
         for (var i = 0; i < lines.size(); i++) {
             var t = split(lines[i], " ");
             var n = t.size() > 0 ? t[0].toNumber() : null;
@@ -165,9 +164,11 @@ class Deck {
                 continue;  // noise or a trailing blank line
             }
             out.add([t[1], colorOf(t[2]), inPct, !t[2].equals("off"),
-                     colorOf(t[4]), outPct, !t[4].equals("off")]);
+                     colorOf(t[4]), outPct, !t[4].equals("off"), n]);
         }
-        presets = out;
+        if (out.size() > 0) {
+            presets = out;
+        }
     }
 
     // The COLORS index for a colour word (0 for "off" or anything unknown: the light isn't lit then).

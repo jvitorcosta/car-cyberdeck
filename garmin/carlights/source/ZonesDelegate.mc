@@ -57,7 +57,7 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
             menu.addItem(new WatchUi.IconMenuItem(p[0] as String,
                 say(p[1] as Number, p[2] as Number, p[3] as Boolean) + " / "
                 + say(p[4] as Number, p[5] as Number, p[6] as Boolean),
-                i + 1, new FavDots(p.slice(1, null)), {}));
+                p[7] as Number, new FavDots(p.slice(1, 7)), {}));
         }
         WatchUi.pushView(menu, new PresetMenuDelegate(_deck), WatchUi.SLIDE_LEFT);
         return true;
