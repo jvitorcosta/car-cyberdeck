@@ -22,9 +22,14 @@ void begin(const char* name, bool (*hold)() = nullptr, void (*onStart)() = nullp
 struct View { otaview::Phase phase; int pct; };   // pct -1 when Idle
 View view();
 bool active();     // Receiving or Done: network work pauses (Failed resumes it at once)
+// The listener is up (ArduinoOTA.begin() has run): the deck can take the next update. The LED
+// panel counts its firmware as proven only then, so a good firmware is always one that listens.
+bool listening();
+// The listener task's least stack to spare so far (bytes), for a [mem] line; 0 before begin().
+unsigned stackLeft();
 int progress();    // 0-100 while active, else -1
-// After each sign the app works (the S3: a good Spotify poll; the LED panel: a loop pass while
-// online): once the deck has run bootguard::HEALTHY_MS the running firmware counts as good and the
-// crash count clears.
+// After each sign the app works (the S3: a good Spotify poll; the LED panel: a check while online
+// and listening()): once the deck has run bootguard::HEALTHY_MS the running firmware counts as
+// good and the crash count clears.
 void onGoodPoll();
 }

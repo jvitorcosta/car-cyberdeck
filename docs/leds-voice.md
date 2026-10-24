@@ -222,11 +222,12 @@ is `REMOTE_TOKEN`; off without one).
 - **On the screen**, in the current theme: `>UPDATING` with a 10-cell block bar and the %, then
   `>REBOOTING` and the restart into the new firmware. Meanwhile the lights stay as they are (no
   reconnects, no controller scan), the lyrics and weather polls stop, and the touch, the controller
-  and voice wait (`/say` answers busy). A failed or cut upload shows `>UPDATE FAILED` in red for
-  about 3 s, then the screen that was showing; the running firmware stays.
-- **Rollback**: new firmware proves itself once it has run a minute and is online. If it crashes three
-  times in a row before that, the panel boots the previous firmware (`[ota] rolled back` in the
-  serial log). A power cut doesn't count as a crash.
+  and voice wait (`/say` answers busy). A failed or cut upload shows `>UPDATE FAILED` in the alert
+  colour (red; white on the red, orange and pink themes) for about 3 s, then the screen that was
+  showing; the running firmware stays.
+- **Rollback**: new firmware proves itself once it has run a minute, is online and listens for
+  updates. If it crashes three times in a row before that, the panel boots the previous firmware
+  (`[ota] rolled back` in the serial log). A power cut doesn't count as a crash.
 
 ## Notes
 

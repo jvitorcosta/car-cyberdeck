@@ -1835,6 +1835,9 @@ static bool updateTick() {
         case otapage::Draw::Bar: drawUpdateBar(v.pct); break;
         case otapage::Draw::Back:  // the screen it covered, in full, in the palette of the moment
             Serial.println("[ota] back to the deck");
+            // A press from before (or during) the page is forgotten, so it can't act on this screen.
+            tap.down = false;
+            tap.id = -1;
             drawAll();
             break;
         case otapage::Draw::None: break;
@@ -2158,14 +2161,16 @@ void setup() {
 }
 
 void loop() {
-    // Online for bootguard::HEALTHY_MS: this firmware has proven itself (net/ota). Once a second.
+    // Up bootguard::HEALTHY_MS, online at that moment and the update listener started: this
+    // firmware has proven itself (net/ota), and can take the next update. Checked once a second.
     static uint32_t provenAt = 0;
     if (millis() - provenAt >= 1000) {
         provenAt = millis();
-        if (net::isOnline()) ota::onGoodPoll();
+        if (net::isOnline() && ota::listening()) ota::onGoodPoll();
     }
     // An update over WiFi: its page holds the screen, and nothing below draws or acts meanwhile.
     if (updateTick()) {
+        flushSave();  // a change made just before the upload is kept through its reboot
         delay(10);
         return;
     }
@@ -2205,12 +2210,13 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, ota %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
+                      ota::stackLeft(),
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 

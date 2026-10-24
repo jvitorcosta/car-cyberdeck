@@ -27,6 +27,8 @@ template <typename F> void locked(F f) {
     portEXIT_CRITICAL(&s_mux);
 }
 std::atomic<bool> s_good{false};   // the running firmware has proven itself (nvs "ota"/"good")
+std::atomic<bool> s_listening{false};   // ArduinoOTA.begin() has run
+TaskHandle_t s_task = nullptr;
 bool (*s_hold)() = nullptr;
 void (*s_onStart)() = nullptr;
 const char* s_name = "";
@@ -75,6 +77,7 @@ void task(void*) {
         Serial.printf("[ota] failed (error %d): the running firmware stays\n", (int)e);
     });
     ArduinoOTA.begin();
+    s_listening.store(true);
     Serial.printf("[ota] listening on %s:3232\n", net::deviceIp().c_str());
     for (;;) {
         // An update runs to the end inside handle(). Not once Done: a second upload in the reboot
@@ -136,7 +139,7 @@ void begin(const char* name, bool (*hold)(), void (*onStart)()) {
     s_onStart = onStart;
     // Core 0 with the S3's network task and the panel's BLE link task, which idle during an update.
     // 4 KB: ArduinoOTA's 1460-byte buffer is static, not on the stack.
-    xTaskCreatePinnedToCore(task, "ota", 4096, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(task, "ota", 4096, nullptr, 1, &s_task, 0);
 }
 
 View view() {
@@ -151,6 +154,9 @@ bool active() {
     return p == otaview::Phase::Receiving || p == otaview::Phase::Done;
 }
 int progress() { return active() ? view().pct : -1; }
+
+bool listening() { return s_listening.load(); }
+unsigned stackLeft() { return s_task ? (unsigned)uxTaskGetStackHighWaterMark(s_task) : 0u; }
 
 void onGoodPoll() {
     if (s_good.load() || !bootguard::healthy(millis(), true)) return;
