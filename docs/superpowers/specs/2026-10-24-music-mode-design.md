@@ -124,6 +124,24 @@ adjusted by the **time of day**.
 - Inside light dances; **outside stays steady** in the song's main colour.
 - Normal listening volume: car stereo ~18 (mid).
 
+## Settled after the builder check (2026-10-24)
+- **INSIDE / OUTSIDE mapping is confirmed** by the owner ("correct all this time"): the controller at `be:16:b6:00:9b:ff` is INSIDE,
+  `be:68:93:1d:22:00` OUTSIDE. Update the "guess from signal strength" comment in `src/ledpanel.cpp` and close the BACKLOG item. Music mode
+  pulses only the INSIDE controller.
+- *Controller's call:* **one mode for both lights.** Turning MUSIC on never switches on a light the owner left off (an off outside light
+  stays off; an off inside light is switched on, since that's the point of the mode). Any change from any page (BOTH, INSIDE or OUTSIDE),
+  preset, voice or watch ends music mode and applies that change. "Honda, music" and the watch item mean this global mode; `/status`
+  carries one `music=on|off`.
+- *Controller's call:* **build order behind a gate.** Milestone 1 is the black deck's capture + features with a readout (serial log and a
+  small `GET /music/debug` or the yellow deck's dashboard showing energy/beat) used during a normal drive — passive, not a new mic test
+  session. Build the yellow deck's light logic after features are seen rising above the floor with the car's music. If they never do, the
+  accepted end state is: palette colours steady (outside and inside) with `>NO SIGNAL`, i.e. a "song-colour mode" that still follows the
+  album/genre/time-of-day palette.
+- *Controller's call:* **mic capture lives on main as one shared module** (`board/s3/mic_es8311.*` or similar) built from the full-duplex
+  setup and register values proven in `spike/mictest-s3` / `feat/voice-agent` (+42 dB gain, +24 dB ADC volume, I2S 16 kHz, MCLK ×384),
+  owning I2S for both directions so the greeting, the music box and the phone remote's `/play` sounds play through it. The voice agent
+  branch later rebases onto this module. The other session (voice agent) is told.
+
 ## Left to the builder
 The exact band edges, thresholds and time constants (start from the values above, make them constants, tune later); FFT vs filters;
 the UDP format; the MUSIC control's place on the Lights page; how the header-variant traffic is halved; the genre→family table details.
