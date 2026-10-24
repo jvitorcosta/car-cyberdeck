@@ -69,9 +69,9 @@ cut locally by `tools/gen_intro.py` from a copy you download yourself. It lives 
 Sonic waiting on the S3's "Nothing playing" screen is rebuilt locally by `tools/gen_idle_sprite.py`
 from Sonic the Hedgehog (Mega Drive, 1991) art in the
 [s1disasm](https://github.com/sonicretro/s1disasm) disassembly. The art is © SEGA; it is fetched
-into the git-ignored `sonic-sprites/` and `data/idle.bin`, never distributed here. The Star Light
-Zone night behind the firmware-update screen is rebuilt the same way by `tools/gen_slz_backdrop.py`
-(into `sonic-sprites/slz/` and `data/slzbg.bin`). Shadow skating on its rail is cut by
+into the git-ignored `sonic-sprites/` and `data/idle.bin`, never distributed here. The Green Hill
+Zone behind the firmware-update screen is rebuilt the same way by `tools/gen_backdrop.py`
+(into `sonic-sprites/ghz/` and `data/backdrop.bin`). Shadow skating on its rail is cut by
 `tools/gen_shadow_rider.py` from his Sonic Battle (GBA, 2003) sprite sheet: original sprites by
 SEGA and Sonic Team, ripped by QuadFactor, fetched from
 [Sonic Battle Unlimited Edition](https://github.com/SingularMJ/Sonic-Battle-Unlimited-Edition)

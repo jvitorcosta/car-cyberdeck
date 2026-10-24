@@ -1,11 +1,11 @@
-"""Build data/slzbg.bin: the Star Light Zone night behind the S3's firmware-update screen.
-Run: python tools/gen_slz_backdrop.py [--png preview.png]
+"""Build data/backdrop.bin: Green Hill Zone behind the S3's firmware-update screen.
+Run: python tools/gen_backdrop.py [--png preview.png]
 
-Rebuilds the background of Star Light Zone from Sonic the Hedgehog (Mega Drive, 1991) out of the
+Rebuilds the background of Green Hill Zone from Sonic the Hedgehog (Mega Drive, 1991) out of the
 s1disasm disassembly (github.com/sonicretro/s1disasm, pinned below, as tools/gen_idle_sprite.py):
 the zone's 8x8 art (Nemesis), its 16x16 blocks (Enigma), its 256x256 chunks (Kosinski), the
-background layout and the palette. The files are fetched once into sonic-sprites/slz/
-(git-ignored); the art is SEGA's, used locally, never committed. Without data/slzbg.bin the
+background layout and the palette. The files are fetched once into sonic-sprites/ghz/
+(git-ignored); the art is SEGA's, used locally, never committed. Without data/backdrop.bin the
 update screen keeps its battle box. --png also writes a preview (needs Pillow).
 
 Format "BKD1": u16 width, u16 height (LE), then width x height RGB565 pixels row by row, each as
@@ -20,17 +20,17 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from gen_idle_sprite import REV, md_to_rgb565  # noqa: E402  (same pinned disassembly)
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
-SRC = os.path.join(ROOT, "sonic-sprites", "slz")
-OUT = os.path.join(ROOT, "data", "slzbg.bin")
+SRC = os.path.join(ROOT, "sonic-sprites", "ghz")
+OUT = os.path.join(ROOT, "data", "backdrop.bin")
 FILES = {   # local name: path in the disassembly
-    "art.nem": "artnem/8x8 - SLZ.nem",
-    "blocks.eni": "map16/SLZ.eni",
-    "chunks.kos": "map256/SLZ.kos",
-    "layout.bin": "levels/slzbg.bin",
-    "zone.pal": "palette/Star Light Zone.bin",
+    "art.nem": "artnem/8x8 - GHZ (Combined).nem",
+    "blocks.eni": "map16/GHZ.eni",
+    "chunks.kos": "map256/GHZ.kos",
+    "layout.bin": "levels/ghzbg.bin",
+    "zone.pal": "palette/Green Hill Zone.bin",
     "sonic.pal": "palette/Sonic.bin",
 }
-WINDOW = (256, 660, 576, 900)   # x0, y0, x1, y1 of the rendered layout: sky, city lights, roofs
+WINDOW = (1100, 16, 1420, 256)  # x0, y0, x1, y1 of the rendered layout: clouds, hills, the waterfall, the lake
 
 
 def nemesis(d):
@@ -211,8 +211,9 @@ def fetch():
         dest = os.path.join(SRC, name)
         if os.path.isfile(dest):
             continue
-        url = "https://raw.githubusercontent.com/sonicretro/s1disasm/%s/%s" % (REV, path.replace(" ", "%20"))
-        print("gen_slz_backdrop: fetching", path)
+        url = "https://raw.githubusercontent.com/sonicretro/s1disasm/%s/%s" % (
+            REV, path.replace(" ", "%20").replace("(", "%28").replace(")", "%29"))
+        print("gen_backdrop: fetching", path)
         with urllib.request.urlopen(url, timeout=30) as r, open(dest, "wb") as f:
             f.write(r.read())
 
@@ -221,12 +222,12 @@ def main():
     try:
         fetch()
     except OSError as e:
-        sys.exit("gen_slz_backdrop: couldn't fetch the disassembly (%s)" % e)
+        sys.exit("gen_backdrop: couldn't fetch the disassembly (%s)" % e)
     w, h, px = render(SRC)
     data = pack(w, h, px)
     with open(OUT, "wb") as f:
         f.write(data)
-    print("gen_slz_backdrop: wrote %s (%dx%d, %d B)" % (OUT, w, h, len(data)))
+    print("gen_backdrop: wrote %s (%dx%d, %d B)" % (OUT, w, h, len(data)))
     if "--png" in sys.argv:
         from PIL import Image
         img = Image.new("RGB", (w, h))

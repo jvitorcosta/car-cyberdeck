@@ -4,60 +4,14 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
-- **Yellow deck menu** (built 2026-10-23, `feat/yellow-menu`, only compiled; the deck and watch
-  weren't connected). Flash with `pio run -e ledpanel -t upload`, sideload the watch app, then:
-  - it boots to the main screen (dashboard); LIGHTS opens, BACK returns; every tile, zone, `-` and
-    `+` hits where tapped; a controller switched off turns the Lights status line from `LINK 2/2`
-    (green) into `OUTSIDE: NO LINK` / `INSIDE: NO LINK` (both off: `NO LINK`) in red, and its
-    dashboard row into `-- NO LINK` (red) within ~10 s;
-  - `/say` changes the lights while the main screen shows, and its two light rows follow;
-  - presets: tapping ROSE / FIRE / CALM / PURPURA on Lights applies both lights
-    (no hold, nothing saved); Xbox A on one applies it; `/presets` returns 4 lines
-    (`1 ROSE pink 40 pink 100` ...) and `/status` returns `inside=… outside=…`; the blocks fit;
-  - voice: "rose", "fire", "calm", "purpura" and "preset one".."four" apply and answer
-    (`Rose: inside Pink 40 percent, outside Pink 100 percent`); "rose 50" is only ROSE. Siri may hear
-    "purpura" as "purple": say "preset four" for that one;
-  - Xbox: A applies a preset; **B is now Back** (was: BOTH page);
-  - restyle: scanlines, the `> [LIGHTS]` row, the Pip-Boy tabs, the colour boxes, the 10-cell
-    level bar (%, MIX, OFF) read well; the typed boot takes ~0.5 s (then ~0.4 s to read it) and a
-    `/say` during it isn't lost; the block cursor blinks after the trip line;
-  - Lights page: the colour names are the presets' size and `YELLOW` / `ORANGE` / `PURPLE` fit their
-    boxes clear of the border; the preset chips (12 px, two per preset) tell the looks apart;
-    `< BACK` is the same box on Lights and Karaoke; Karaoke's song row is in capitals;
-  - main screen (dashboard, layout B 2026-10-23): header line; clock + date (`FRI 23 OCT`) left,
-    temperature and sky right (`--C` without a reading); under them one row, the trip line + cursor
-    left and `HI 32 LO 26  MANAUS` (dim) right (`>OFFLINE` without a reading), neither touching the
-    other; no strip under the buttons any more; two evenly spaced light rows (no LIGHTS label), with
-    more air than before, real colours, chip and level (`OFF` dim, `-- NO LINK`); the two 44 px
-    buttons at the bottom are easy to hit and D-pad left / right moves between them; without the
-    Xbox controller neither button is inverted (no focus bar), with it the bar shows; no song
-    anywhere on the main screen; no Weather page left;
-  - KARAOKE: while the black deck plays a song with synced lyrics it turns bright with a small
-    inverted `LIVE` tag at its right edge within ~5 s, and dims (no tag) within ~20 s of the song
-    stopping; the tag reads on the focus bar, while pressed (yellow) and at night; dimmed, a tap
-    shows why on the trip row;
-  - messages: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (and `>LAST TRIP ...` at boot)
-    take the whole trip / HI-LO row ~2.5 s with the cursor at their end, then the trip and HI / LO
-    come back with the cursor after the trip line, nothing left over from the message;
-  - colours: by day MID and DIM read green, not teal, and the dim texts (date, HI / LO, `OFF`, a
-    dimmed KARAOKE) read from the driver's seat;
-  - night mode: a `-D NIGHT_TEST` build drops the backlight (~90/255) and the screen is **amber**
-    (no green left, no bright frame: night TEXT is brighter than before, so watch the switch), the
-    8 tiles stay distinguishable and the ink readable, the dimmest (night DIM) included; the
-    clock shows `--:--` then `HH:MM` (and the date) and refreshes each minute without flicker; a normal build
-    switches by itself around 18:00 and stays bright green by day;
-  - fonts and layout (VT323, the dashboard's bands) read well on the panel;
-  - theme (2026-10-24): set the inside light to each of the 8 colours (or a `-D THEME_TEST=0`..`7`
-    build at home) and check by day and at night that the text reads, the darker levels stay their
-    hue (no teal greens, no olive ambers), blue and purple read, white turns amber at night, and a
-    problem (`-- NO LINK`) shows white on red / orange / pink and red on the rest; then turn the
-    inside light off, and drop its link, and see the screen go back to green (amber at night);
-  - watch: the PRESETS page lists the four names, START applies ROSE and BOTH shows the new
-    looks, and a controller switched off shows "Not connected" after reopening the app.
+- **Yellow deck menu** (`feat/yellow-menu`): **tested in the car 2026-10-24, owner: "works great
+  in the car"**: the dashboard (layout B), presets (touch, voice, Xbox, watch), KARAOKE, weather, trip,
+  VT323, the inside-colour theme and night mode. Shades were tuned on the panel (day contrast
+  picks, the owner's night ambers T3/M3/D3); the 8 themes were previewed with `-D THEME_TEST`.
 
-- **Star Light Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
-  USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/slzbg.bin` and
-  `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): the night fills
+- **Green Hill Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
+  USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/backdrop.bin` and
+  `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): Green Hill fills
   the screen, the rail fills red with Shadow skating its tip, a red flash at 100%, the reboot. Cut the PC's upload
   mid-way: grey rail and "Update failed" for ~3 s, then the deck, polling again.
 
@@ -88,16 +42,14 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Investigate
 
-- **Dropped WiFi receive buffers.** The WiFi driver can't get a ~1.5 KB buffer (caps 0x1800)
-  and drops the frame; TCP resends it and every request still succeeds, but each drop adds
-  latency. Rate varies a lot by network and song: 1 800-4 900 in 5 min on the iPhone hotspot
-  (2026-10-08). Findings: it happens during every TLS request, plain polls included, not only
-  around track changes; only one TLS session was open at a time then (the old Spotify library
-  closed its client after each call; since 2026-10-21 the Spotify connection stays open, so
-  re-measure on the S3); even 218 B allocations fail, so the heap is
-  momentarily empty while a TLS session (~40 KB) is open on ~65 KB free. The levers left are
-  build-time settings fixed in the precompiled Arduino core (mbedTLS 16 KB input buffer, lwIP
-  TCP window, WiFi RX buffer count): they need the arduino-as-ESP-IDF-component build.
+- **Dropped WiFi receive buffers: not on the S3** (re-measured 2026-10-23, closed). A 30-min
+  serial capture on the home WiFi while Spotify played (20 songs: 20 art downloads, 34 lyrics
+  fetches, 439 polls over the kept-open connection): 0 failed allocations in 74 `[mem]` reports,
+  lowest free 154 KB, largest block never under 102 KB (TLS needs 20 KB). The 1 800-4 900 drops
+  per 5 min (2026-10-08) were the CYD's (~65 KB free), whose deck build is retired. So the
+  self-heal's "any failed allocation since the last good poll = starved" check (`nettask.cpp`)
+  can't turn an outage into a reboot loop on the S3; it stays as is (fix on `feat/obd`,
+  `1d44c44`, if a low-memory board ever runs the deck again). Logs: `.superpowers/debug/selfheal-s3*.log`.
 
 - **DMA for the S3 intro** (blocked, 2026-10-15): pushing frames by DMA from two buffers ran
   at ~36 ms a frame, but TFT_eSPI's `initDMA()` on this board left every later draw black, with
@@ -126,6 +78,35 @@ Open items, not scheduled. Newest decisions first within each section.
 The parked SD cache for walk sheets and sprites was removed; it is in git history up to
 `0ba409b`. If repeat songs ever need it, the S3's SDMMC slot (pins in `include/pins.h`) is
 the place to add it.
+
+## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
+
+The companion with an OBD gauge cluster, kept for later, on the branch `feat/obd` (pushed to
+GitHub as a backup on 2026-10-23, no PR): 41 commits on an older main, 56 behind as of that day.
+
+- **What it has:** the gauge cluster (RPM arc, speed, coolant, km/l, battery and the crank dip)
+  read from an ELM327 over Bluetooth Classic, **seen working in the Honda City on 2026-10-19**;
+  the drive screens built 2026-10-21 and only compiled: a lyric strip under the cluster while
+  moving, her lyrics with a gauge strip when stopped, her coolant and battery warnings, the phone
+  page's status box and a pinned view (specs `2026-10-15-obd-gauges`, `2026-10-19-gauge-cluster`,
+  `2026-10-21-companion-drive`, on the branch). Read-only toward the car by construction: one
+  gate, `obd::allowed()`, mode 01 and adapter setup only.
+- **Why parked:** the yellow deck (the CYD) now runs `ledpanel`, the car LEDs over BLE (#13), and
+  the companion with OBD needs that same board. Bluetooth Classic for OBD leaves ~29 KB of heap,
+  so the LEDs' BLE on the same ESP32 is unlikely to fit. Decide the yellow deck's role (or add a
+  third board) before returning.
+- **To return:** rebase onto main. Expect conflicts in `CHANGELOG.md`, `docs/ARCHITECTURE.md`,
+  `docs/BACKLOG.md`, `src/core/nettask.cpp`, `src/ui/carlook.cpp`, `src/spotify/client.cpp`.
+  Drop `d079b62` (the 204 fix and `util/nowplaying.h`: main's own Spotify client made it
+  obsolete), and the copies of fixes main already has (`6af77a8` boot-terminal dots, `d34c366`
+  remote key); `1d44c44` (self-heal) isn't needed on the S3 (see Investigate). The car checks
+  still to do are in the branch's own BACKLOG ("Gauge cluster in the car", "Companion drive
+  screens").
+- **Trip reset: keep or remove, when the companion returns** (asked 2026-10-23, deferred). On main
+  the companion's TRIP screen and its phone page have a hold-to-reset button that zeroes the S3's
+  own trip clock (`POST /trip/reset`, `net/remote`, `util/tripclock`); it never touches the car.
+  Dormant while the yellow deck runs `ledpanel`. Removing it means the companion's TRIP button,
+  the phone page's hold button, the S3 endpoint and her TripReset line.
 
 ## Accepted as is
 
@@ -176,7 +157,6 @@ the place to add it.
   has its own screen. Plan: `docs/superpowers/plans/2026-10-13-companion-screen.md`.
 - **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
   extra: retro map"): gets its own plan.
-- **OBD2 car info** over a Bluetooth ELM327 dongle, after the companion.
 
 - **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
   skip/pause through the deck, a screen flash. After the hotspot check above.

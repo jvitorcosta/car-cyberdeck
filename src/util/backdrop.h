@@ -1,8 +1,8 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-// The Star Light Zone night behind the S3's firmware-update screen (data/slzbg.bin, from
-// tools/gen_slz_backdrop.py; git-ignored, in the media partition). PURE, host-tested. A missing,
+// Green Hill Zone behind the S3's firmware-update screen (data/backdrop.bin, from
+// tools/gen_backdrop.py; git-ignored, in the media partition). PURE, host-tested. A missing,
 // stand-in or bad file reads as none (width 0): the update screen keeps its battle box.
 // Format "BKD1": u16 width, u16 height (LE), then the pixels row by row, each RGB565 as 2 bytes
 // big-endian (pushImage's byte order).

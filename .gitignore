@@ -48,7 +48,7 @@ data/greeting_alt.pcm
 # Sonic waiting sprite: SEGA art fetched locally by tools/gen_idle_sprite.py, never committed
 sonic-sprites/
 data/idle.bin
-data/slzbg.bin
+data/backdrop.bin
 data/shadow.bin
 # Music-box tunes: your own (tools/gen_tune.py song.mid), never committed; the packed set is built
 data/tunes/
@@ -61,3 +61,7 @@ mcqueen*.png
 # Garmin watch app: the deck key, and build output
 garmin/carlights/source/Secrets.mc
 garmin/carlights/bin/
+garmin/pokeface/bin/
+# Pokéface sprites and font: Nintendo's / pokeemerald-expansion's art, fetched by tools/gen_pokeface.py, never committed
+pokefont-src/
+garmin/pokeface/resources/gen/

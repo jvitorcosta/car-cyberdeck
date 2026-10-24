@@ -19,7 +19,7 @@
 #include "util/idlesprite.h"
 #include "core/media.h"
 MEDIA_DECL(data_idle_bin);   // Sonic on "Waiting for a song..." (tools/gen_idle_sprite.py), else empty
-MEDIA_DECL(data_slzbg_bin);  // Star Light Zone behind the update screen (tools/gen_slz_backdrop.py)
+MEDIA_DECL(data_backdrop_bin); // Green Hill Zone behind the update screen (tools/gen_backdrop.py)
 MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rider.py)
 #include "util/backdrop.h"
 #include "util/ridersprite.h"
@@ -37,6 +37,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "util/interp.h"
 #include "util/netplan.h"
 #include "util/idlewait.h"
+#include "util/tunegate.h"
 #include "util/press.h"
 #include "board/s3/touch_ft6336.h"
 #include <Preferences.h>
@@ -174,8 +175,8 @@ void setup() {
     const media::Blob idle = MEDIA(data_idle_bin, "idle.bin");
     Serial.println(idlesprite::parse(idle.data, idle.size)
                        ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
-    const media::Blob slz = MEDIA(data_slzbg_bin, "slzbg.bin");
-    Serial.println(backdrop::parse(slz.data, slz.size) ? "[ota] update screen: Star Light Zone"
+    const media::Blob bkd = MEDIA(data_backdrop_bin, "backdrop.bin");
+    Serial.println(backdrop::parse(bkd.data, bkd.size) ? "[ota] update screen: Green Hill Zone"
                                                        : "[ota] update screen: battle box");
     const media::Blob rider = MEDIA(data_shadow_bin, "shadow.bin");
     if (ridersprite::parse(rider.data, rider.size)) Serial.println("[ota] Shadow skates the rail");
@@ -282,38 +283,36 @@ static const qrcard::Qr* phoneQr(bool recheck) {
     return s_qr.size ? &s_qr : nullptr;
 }
 
+#ifdef OTA_DEMO
+// -D OTA_DEMO: the update screen on a loop with no upload, to see it on the desk (the home WiFi
+// won't let the PC reach the deck): 0..99 % over 15 s, the Done flash for 1 s (no reboot), then
+// "Update failed" at 40 % for 3 s. Spotify keeps polling underneath.
+static ota::View otaDemo(uint32_t ms) {
+    const uint32_t t = ms % 19000;
+    if (t < 15000) return {otaview::Phase::Receiving, (int)(t / 150)};
+    if (t < 16000) return {otaview::Phase::Done, 100};
+    return {otaview::Phase::Failed, 40};
+}
+#endif
+
 // The music box loops while "Waiting for a song..." is up, and stops (a short fade) as it
-// goes.
-// It holds the audio driver and a 4 KB task, so only with Spotify's TLS memory to spare: it
-// starts with the same margin as a phone howl, stops when memory runs low, and then tries again
-// at most once a minute.
+// goes: util/tunegate decides (the same margin as a phone howl to start, stopping when memory
+// runs low, a minute's rest after that or after audio that didn't start).
 static void musicBox(bool want) {
-    constexpr uint32_t RETRY_MS = 60000;
-    static uint32_t gaveUpAt = 0;
-    static bool gaveUp = false;
-    if (!want) {
-        if (greeting::tunesPlaying()) greeting::stopTunes();
-        gaveUp = false;
-        return;
+    static tunegate::Gate gate;
+    const unsigned largest = (unsigned)mem::byteLargest();
+    const bool playing = greeting::tunesPlaying();
+    switch (gate.update({want, playing, !playing && greeting::playing(), greeting::tunesFailures(), largest,
+                         netplan::TLS_NEED + 12000, netplan::TLS_NEED + 4000},
+                        millis())) {
+    case tunegate::Act::Play: greeting::playTunes(); break;
+    case tunegate::Act::Stop:
+        if (want) Serial.printf("[tunes] low memory (largest %u): stopping\n", largest);
+        greeting::stopTunes();
+        break;
+    case tunegate::Act::AudioFailed: Serial.println("[tunes] audio didn't start: retry in 1 min"); break;
+    case tunegate::Act::None: break;
     }
-    if (greeting::tunesPlaying()) {
-        if (mem::byteLargest() < netplan::TLS_NEED + 4000) {
-            Serial.printf("[tunes] low memory (largest %u): stopping\n", (unsigned)mem::byteLargest());
-            greeting::stopTunes();
-            gaveUp = true;
-            gaveUpAt = millis();
-        }
-        return;
-    }
-    if (gaveUp && millis() - gaveUpAt < RETRY_MS) return;
-    if (greeting::playing()) return;   // a howl, or the last tune still fading: next pass
-    if (mem::byteLargest() < netplan::TLS_NEED + 12000) {
-        gaveUp = true;
-        gaveUpAt = millis();
-        return;
-    }
-    gaveUp = false;
-    greeting::playTunes();
 }
 
 // A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on
@@ -378,16 +377,23 @@ void loop() {
         netplan::stale(millis(), st.lastPollOkMs, STALE_MS)) mode = 1;
     else if (idleNow) mode = 2;
     static int lastMode = -1;
-    // An update over WiFi (net/ota): its screen, nothing else. With the Star Light Zone file also
+    // An update over WiFi (net/ota): its screen, nothing else. With the Green Hill Zone file also
     // its flash and "Update failed"; the battle box only while it receives, as before.
+#ifdef OTA_DEMO
+    const ota::View ov = otaDemo(millis());
+#else
     const ota::View ov = ota::view();
-    const bool slzScreen = backdrop::width() > 0;
-    if (ov.phase != otaview::Phase::Idle && (slzScreen || ov.phase != otaview::Phase::Failed)) {
+#endif
+    const bool artScreen = backdrop::width() > 0;
+    if (ov.phase != otaview::Phase::Idle && (artScreen || ov.phase != otaview::Phase::Failed)) {
         static int shownPct = -1;
-        if (!ui::drawShadowUpdate(s_tft, ov, millis(), lastMode != -2) &&
-            (lastMode != -2 || ov.pct != shownPct))
-            ui::drawUpdate(s_tft, ov.pct, lastMode != -2);
+        static otaview::Phase shownPhase = otaview::Phase::Idle;
+        // Whole screen when it appears, and after the Done flash (only the demo gets past it).
+        const bool full = lastMode != -2 || (shownPhase == otaview::Phase::Done && ov.phase != shownPhase);
+        if (!ui::drawShadowUpdate(s_tft, ov, millis(), full) && (full || ov.pct != shownPct))
+            ui::drawUpdate(s_tft, ov.pct, full);
         shownPct = ov.pct;
+        shownPhase = ov.phase;
         lastMode = -2;     // no screen's mode: the one it covered comes back in full
         delay(20);
         return;

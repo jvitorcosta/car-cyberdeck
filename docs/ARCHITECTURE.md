@@ -95,8 +95,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   — ArduinoOTA on port 3232 (password REMOTE_TOKEN), its own task. `otaview::Tracker` keeps the
   update's state (Receiving, Done, Failed held 3 s); ArduinoOTA's own reboot is off, so the deck
   restarts 600 ms after the end, once the screen has flashed red. While Receiving or Done the
-  network task pauses; a failure resumes it at once. With `data/slzbg.bin` (Star Light Zone, from
-  `tools/gen_slz_backdrop.py`, media partition) the screen is that night with the red rail
+  network task pauses; a failure resumes it at once. With `data/backdrop.bin` (Green Hill Zone, from
+  `tools/gen_backdrop.py`, media partition) the screen is that zone with the red rail
   filling and Shadow skating its tip (`util/ridersprite`, `data/shadow.bin` from
   `tools/gen_shadow_rider.py`: his Sonic Battle run; two jet glows without it),
   else the battle box with its EXP bar.

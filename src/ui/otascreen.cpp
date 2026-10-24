@@ -32,7 +32,7 @@ void drawUpdate(TFT_eSPI& t, int pct, bool full) {
     expBar(t, BAR_X, BAR_Y, BAR_W, pct / 100.0f);
 }
 
-// ---- The Star Light Zone screen (spec 2026-10-22-shadow-update-screen-design) ----
+// ---- The Green Hill Zone screen (spec 2026-10-22-shadow-update-screen-design) ----
 namespace {
 using namespace otaview;
 using rgb565::hex;
