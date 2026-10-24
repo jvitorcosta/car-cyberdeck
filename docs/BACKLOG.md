@@ -47,6 +47,11 @@ Open items, not scheduled. Newest decisions first within each section.
     clock shows `--:--` then `HH:MM` (and the date) and refreshes each minute without flicker; a normal build
     switches by itself around 18:00 and stays bright green by day;
   - fonts and layout (VT323, the dashboard's bands) read well on the panel;
+  - theme (2026-10-24): set the inside light to each of the 8 colours (or a `-D THEME_TEST=0`..`7`
+    build at home) and check by day and at night that the text reads, the darker levels stay their
+    hue (no teal greens, no olive ambers), blue and purple read, white turns amber at night, and a
+    problem (`-- NO LINK`) shows white on red / orange / pink and red on the rest; then turn the
+    inside light off, and drop its link, and see the screen go back to green (amber at night);
   - watch: the PRESETS page lists the four names, START applies ROSE and BOTH shows the new
     looks, and a controller switched off shows "Not connected" after reopening the app.
 

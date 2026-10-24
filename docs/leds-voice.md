@@ -116,6 +116,19 @@ $env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
 Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ```
 
+## Theme: the inside light's colour
+
+While the **INSIDE** light is on and linked, the whole terminal (main screen, Lights, Karaoke; not the
+boot typing or the touch calibration) takes that light's colour: the same three brightnesses in its
+hue, by day and darker at night (`termpal::rgb(role, night, theme)`, every colour's contrast in
+`src/util/termpal.h`). Blue and purple are lighter shades so the text reads; green by day is the usual
+green; white is a pale grey-white by day and the usual **amber at night** (no white glare). Problems
+stay red, except on the red, orange and pink themes, where they show in **white** (a dimmer white at
+night) so they stand apart from the text. The colour tiles, chips and preset chips keep their real
+colours. With the inside light off or out of reach the screen goes back to the green / amber. To
+see a theme without the car's lights, build with `-D THEME_TEST=<0..7>` (red, orange, pink, purple,
+blue, green, white, yellow) the same way as `NIGHT_TEST` above, then clear it.
+
 ## What it understands
 
 English or Portuguese, any order, other words ignored (`src/util/ledvoice.h`):

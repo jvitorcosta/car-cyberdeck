@@ -35,8 +35,14 @@
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
 // palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
 // there is no WiFi, no clock, and the deck stays in day mode.
-// Test hook: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
-// mode whatever the time, to check the dimming without waiting for 18:00. Not set in platformio.ini.
+// Theme: while the INSIDE light is on and linked, the terminal (Menu, Lights, Karaoke; not the boot
+// typing or the calibration) takes that light's colour, termpal's three levels of it, day and night
+// (white turns to the amber at night; problems show in white on the red, orange and pink themes).
+// The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
+// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
+// mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
+// (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
+// the inside light does, to see it without the car's lights. Neither is set in platformio.ini.
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #include <ESPmDNS.h>
@@ -125,6 +131,9 @@ static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Men
 // The palette: every colour goes through termpal with this flag, so night mode only flips it and
 // redraws.
 static bool night = false;
+// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green / amber. Loop-owned, as
+// `night`; updateTheme() keeps it.
+static int theme = -1;
 
 // The outside weather (see "Weather" below): the weather task publishes each try under weatherMux
 // and raises weatherFresh; loop() copies it into `wx`, which is all the drawing reads.
@@ -377,7 +386,7 @@ static int text(const char* s, int x, int y, Face f, uint8_t datum) {
 }
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
-static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night)); }
+static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night, theme)); }
 // A terminal message's colour: ALERT for a problem (a lost link, the wrong key), else TEXT.
 static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
 static uint16_t msgInk(const char* m) { return pal(isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
@@ -2017,6 +2026,31 @@ static void updateDayNight() {
     drawAll();
 }
 
+// The theme the INSIDE light asks for: its colour while it's on and linked (`insideUp`: the link
+// state loop() last took), else -1.
+static int wantTheme(bool insideUp) {
+#ifdef THEME_TEST
+    (void)insideUp;
+    return THEME_TEST;
+#else
+    const Look& l = looks[INSIDE];
+    return lightstatus::of(insideUp, l.lit) == lightstatus::State::On ? l.swatch : -1;
+#endif
+}
+
+// Polled every loop, after anything that changes a look (a tap, voice, the watch, the Xbox
+// controller, a preset) or the links: a new theme repaints the current screen (the backlight stays),
+// with a button still under a finger or a controller press drawn pressed again.
+static void updateTheme(bool insideUp) {
+    const int want = wantTheme(insideUp);
+    if (want == theme) return;
+    theme = want;
+    Serial.printf("[ui] theme %d\n", theme);
+    drawAll();
+    if (tap.down && tap.id >= 0) drawButton(tap.id, true);
+    if (padFlash >= 0) drawButton(padFlash, true);
+}
+
 void setup() {
     Serial.begin(115200);
     tft.init();
@@ -2034,6 +2068,7 @@ void setup() {
     typeBoot();  // before the tasks start: nothing else draws while it types
     showLastTrip();  // after the typing, so its few seconds start when the Menu shows
     weatherOff = !gate.enabled();  // no REMOTE_TOKEN, no WiFi: the first draw already says >OFFLINE
+    theme = wantTheme(false);  // after the typing (always green); no link yet, so -1 but for THEME_TEST
     drawAll();
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
@@ -2137,6 +2172,7 @@ void loop() {
             if (screen == Screen::Menu) drawMessage();
         }
     }
+    updateTheme(shown[0]);
     publish();  // for /state and /status
     delay(10);
 }
