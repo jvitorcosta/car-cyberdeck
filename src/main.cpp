@@ -28,6 +28,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "util/daynight.h"
 #include "util/linkstatus.h"
 #include "net/remote.h"
+#include "net/remote_config.h"
 #include "net/ota.h"
 #include "ui/otascreen.h"
 #include "util/qrfit.h"
@@ -214,7 +215,7 @@ void setup() {
     if (wifi) bootscene::setCaption("Connecting to Spotify...");
     bootscene::waitDone();                // the display is ours again
     remote::begin(bootscene::active);
-    ota::begin(bootscene::active);
+    ota::begin(REMOTE_NAME, bootscene::active, greeting::stopTunes);
 }
 
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).

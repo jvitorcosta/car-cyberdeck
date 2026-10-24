@@ -9,6 +9,17 @@ Open items, not scheduled. Newest decisions first within each section.
   VT323, the inside-colour theme and night mode. Shades were tuned on the panel (day contrast
   picks, the owner's night ambers T3/M3/D3); the 8 themes were previewed with `-D THEME_TEST`.
 
+- **Yellow deck updates over WiFi** (2026-10-24): **done on the deck**: the USB flash to the two-slot
+  layout kept the touch calibration (no calibration screen), and the first
+  `pio run -e ledpanel_ota -t upload` from the PC on the hotspot went through (`Result: OK`); the
+  new build booted and logged `[ota] this firmware is good`, heap ~93 KB (min ~86 KB). Note: Windows
+  moves the PC back to the home WiFi on its own, so check the PC is still on the hotspot before an
+  upload. Still to see: the `>UPDATING` page by eye on a later update, and a cut update
+  (stop the PC's upload mid-way): `>UPDATE FAILED` in ALERT
+  for ~3 s, then the screen that was showing, lights, lyrics and weather carrying on. The rollback:
+  upload a build that crashes early (e.g. an `abort()` in setup); after three crash resets the
+  serial log says `[ota] rolled back` and the previous firmware runs.
+
 - **Green Hill Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
   USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/backdrop.bin` and
   `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): Green Hill fills

@@ -1,10 +1,11 @@
 #pragma once
 #include <cstdint>
-// The S3's boot-loop guard for firmware that arrived over WiFi (net/ota). The Arduino core marks
+// Both decks' boot-loop guard for firmware that arrived over WiFi (net/ota). The Arduino core marks
 // each new image valid as it boots (initArduino), so IDF's rollback never fires; the deck counts
 // its own crashes instead: a counter in
 // RTC memory (it survives a crash reset, not a power-on) goes up after each panic or watchdog
-// reset. Once the deck has run HEALTHY_MS with a good Spotify poll the running firmware counts
+// reset. Once the deck has run HEALTHY_MS with its sign of working (the S3: a good Spotify poll;
+// the yellow deck's LED panel: online, its update listener up) the running firmware counts
 // as good (remembered in nvs) and the counter clears. LIMIT crashes in a row on firmware not yet
 // good: boot the other slot. A power-on, a self-heal restart or an update's restart clears the
 // count, so a deck with no signal for hours never rolls back. PURE, host-tested.

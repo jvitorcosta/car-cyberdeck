@@ -208,6 +208,27 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
   the file already there, keep the new one), then unplug. To have it in the glance loop, add
   Honda City in the watch's glance settings.
 
+## Updates over WiFi
+
+The panel takes new firmware over WiFi, like the black deck (ArduinoOTA on port 3232, the password
+is `REMOTE_TOKEN`; off without one).
+
+- **Once over USB**: `pio run -e ledpanel -t upload`. This build switches the panel to a flash
+  layout with two app slots; the settings (touch calibration, looks, trip, the controller's bond)
+  stay, as the layout keeps them where they were.
+- **Then from a PC on the iPhone hotspot**: `pio run -e ledpanel_ota -t upload`. It sends to the
+  panel's hotspot address, `172.20.10.11`; from the home 5 GHz network the panel can't be reached.
+  The panel listens once it is online.
+- **On the screen**, in the current theme: `>UPDATING` with a 10-cell block bar and the %, then
+  `>REBOOTING` and the restart into the new firmware. Meanwhile the lights stay as they are (no
+  reconnects, no controller scan), the lyrics and weather polls stop, and the touch, the controller
+  and voice wait (`/say` answers busy). A failed or cut upload shows `>UPDATE FAILED` in the alert
+  colour (red; white on the red, orange and pink themes) for about 3 s, then the screen that was
+  showing; the running firmware stays.
+- **Rollback**: new firmware proves itself once it has run a minute, is online and listens for
+  updates. If it crashes three times in a row before that, the panel boots the previous firmware
+  (`[ota] rolled back` in the serial log). A power cut doesn't count as a crash.
+
 ## Notes
 
 - At home the deck may join home WiFi instead (the iPhone only shows its hotspot while the

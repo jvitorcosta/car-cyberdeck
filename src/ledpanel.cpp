@@ -43,6 +43,11 @@
 // mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
 // (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
 // the inside light does, to see it without the car's lights. Neither is set in platformio.ini.
+// Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
+//   pio run -e ledpanel_ota -t upload
+// A page in the theme holds the screen meanwhile (see "Update over WiFi" below); three crash resets
+// in a row before new firmware has proven itself boot the previous one (util/bootguard).
+// Over USB (the first time, or to recover):
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #include <ESPmDNS.h>
@@ -66,6 +71,7 @@
 #include "companion/touch.h"
 #include "net/clock.h"
 #include "net/ipaddr.h"
+#include "net/ota.h"
 #include "net/remote_config.h"
 #include "net/wifi.h"
 #include "util/bothlook.h"
@@ -79,6 +85,7 @@
 #include "util/ledlook.h"
 #include "util/ledpresets.h"
 #include "util/ledvoice.h"
+#include "util/otapage.h"
 #include "util/lightstatus.h"
 #include "util/pollpace.h"
 #include "util/karaoke.h"
@@ -95,6 +102,10 @@
 
 static TFT_eSPI tft;
 static Preferences prefs;
+
+// The panel's name on a network other than the hotspot (http://cardeck-leds.local/): the lyrics
+// task's mDNS and the update listener's hostname.
+#define LEDS_MDNS_NAME "cardeck-leds"
 
 // ---- State ----
 
@@ -270,13 +281,22 @@ static XboxSeriesXControllerESP32_asukiaaa::Core xbox;
 //    round up to 60 s, back to 5 s (at once) when a connected light drops. A connect pauses a
 //    running controller scan by itself (NimBLE stops it on EBUSY);
 //  - controller: while connected (or mid-pairing) the library runs every tick; otherwise one of
-//    its 4 s scans every 15 s (it scans flat out).
+//    its 4 s scans every 15 s (it scans flat out);
+//  - an update over WiFi (net/ota) has the radio: no connects and no scan (a running one stops)
+//    until it ends. Connected lights and a connected controller stay as they are (the library
+//    needs no tick for that: its reports come in callbacks).
 static constexpr uint32_t PAD_SCAN_EVERY_MS = 15000;
 static TaskHandle_t linkHandle = nullptr;
 
 static void linkTask(void*) {
     uint32_t waitMs = 5000, nextLights = 0, lastPadScan = 0;
     for (;;) {
+        if (ota::active()) {
+            NimBLEScan* scan = NimBLEDevice::getScan();
+            if (scan->isScanning()) scan->stop();
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
         const uint32_t now = millis();
         const bool padBusy = xbox.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr ||
                              NimBLEDevice::getScan()->isScanning();
@@ -1550,6 +1570,7 @@ static void weatherTask(void*) {
     bool placed = false;
     WeatherReading r;  // the last good reading, with this try's outcome
     for (;;) {
+        while (ota::active()) vTaskDelay(pdMS_TO_TICKS(500));  // an update has the WiFi
         bool ok = false;
         if (!net::isOnline()) {
             Serial.println("[weather] offline");
@@ -1644,7 +1665,7 @@ static bool lyricsHost(char* out, size_t n) {
         snprintf(out, n, "%s", COMPANION_DECK);
         return true;
     }
-    if (!lyricsMdns) lyricsMdns = MDNS.begin("cardeck-leds");
+    if (!lyricsMdns) lyricsMdns = MDNS.begin(LEDS_MDNS_NAME);
     if (lyricsAddr.addr() == 0) {
         // each failed lookup holds the task for up to 1.5 s: while the deck stays away, not every poll
         const uint32_t now = millis();
@@ -1703,7 +1724,7 @@ static void lyricsTask(void*) {
     uint8_t was = WANT_NONE;  // what was wanted at the last poll
     for (;;) {
         const uint8_t want = lyricsWant;
-        if (want == WANT_NONE) {
+        if (want == WANT_NONE || ota::active()) {  // nothing shows it, or an update has the WiFi
             was = WANT_NONE;
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
@@ -1770,6 +1791,58 @@ static void lyricsTick() {
     if (!fresh && millis() - drawnAt < KARAOKE_TICK_MS) return;
     drawnAt = millis();
     drawKaraokeBody(false);
+}
+
+// ---- Update over WiFi (net/ota): its page holds the screen ----
+// While an update arrives (ArduinoOTA on its own task, core 0) a full-screen page in the current
+// theme (util/otapage, laid out by termlayout's UPDATE_*) covers whatever showed: the dashboard's
+// header, then ">UPDATING" over a 10-cell block bar (one cell per 10 %, as the Lights level) and
+// the %; ">REBOOTING" as it ends well (net/ota restarts the deck otaview::DONE_MS later); or
+// ">UPDATE FAILED" in ALERT for otaview::FAILED_HOLD_MS (the running firmware stays), then the
+// screen it covered comes back. Meanwhile loop() draws and acts on nothing else: touch and the
+// controller do nothing, a voice job waits (/say answers busy); the lights keep their looks, and
+// the link, lyrics and weather tasks pause themselves on ota::active().
+
+// The bar and the % under it (everything from the bar down to the screen's bottom).
+static void drawUpdateBar(int pct) {
+    clearBg(0, UPDATE_BAR_Y, tft.width(), tft.height() - UPDATE_BAR_Y);
+    const int x0 = (tft.width() - UPDATE_BAR_W) / 2, full = otapage::cells(pct);
+    for (int k = 0; k < otapage::CELLS; k++) {
+        const int x = x0 + k * (UPDATE_CELL + UPDATE_GAP);
+        if (k < full) tft.fillRect(x, UPDATE_BAR_Y, UPDATE_CELL, UPDATE_BAR_H, pal(termpal::TEXT));
+        else tft.drawRect(x, UPDATE_BAR_Y, UPDATE_CELL, UPDATE_BAR_H, pal(termpal::MID));
+    }
+    char line[8];
+    snprintf(line, sizeof(line), "%d%%", pct < 0 ? 0 : pct > 100 ? 100 : pct);
+    tft.setTextColor(pal(termpal::TEXT));
+    text(line, tft.width() / 2, UPDATE_PCT_Y, Face::TITLE, TC_DATUM);
+}
+
+static void drawUpdatePage(otaview::Phase p, int pct) {
+    clearBg(0, 0, tft.width(), tft.height());
+    drawHeader();
+    tft.setTextColor(pal(otapage::alert(p) ? termpal::ALERT : termpal::TEXT));
+    text(otapage::title(p), tft.width() / 2, UPDATE_TITLE_Y, Face::BIG, TC_DATUM);
+    drawUpdateBar(pct);
+}
+
+// Each loop pass: draws what the update's phase asks for; true while the page holds the screen.
+static bool updateTick() {
+    static otapage::Shown shown;
+    const ota::View v = ota::view();
+    switch (otapage::step(shown, v.phase, v.pct)) {
+        case otapage::Draw::Page: drawUpdatePage(v.phase, v.pct); break;
+        case otapage::Draw::Bar: drawUpdateBar(v.pct); break;
+        case otapage::Draw::Back:  // the screen it covered, in full, in the palette of the moment
+            Serial.println("[ota] back to the deck");
+            // A press from before (or during) the page is forgotten, so it can't act on this screen.
+            tap.down = false;
+            tap.id = -1;
+            drawAll();
+            break;
+        case otapage::Draw::None: break;
+    }
+    return otapage::holds(v.phase);
 }
 
 // ---- Voice: Siri Shortcuts over WiFi ----
@@ -1957,6 +2030,7 @@ static void voiceTask(void*) {
     netclock::begin();  // SNTP, for night mode and the Menu's clock
     beginWeather();
     beginLyrics();
+    ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (beginVoice's gate: REMOTE_TOKEN is set)
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
@@ -2058,6 +2132,7 @@ static void updateTheme() {
 
 void setup() {
     Serial.begin(115200);
+    ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
     tft.init();
     backlight::begin();  // PWM, at the day level
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
@@ -2086,6 +2161,20 @@ void setup() {
 }
 
 void loop() {
+    // Up bootguard::HEALTHY_MS, online at that moment and the update listener started: this
+    // firmware has proven itself (net/ota), and can take the next update. Checked once a second.
+    static uint32_t provenAt = 0;
+    if (millis() - provenAt >= 1000) {
+        provenAt = millis();
+        if (net::isOnline() && ota::listening()) ota::onGoodPoll();
+    }
+    // An update over WiFi: its page holds the screen, and nothing below draws or acts meanwhile.
+    if (updateTick()) {
+        flushSave();  // a change made just before the upload is kept through its reboot
+        delay(10);
+        return;
+    }
+
     int x, y;
     // The panel reports a phantom press at power-up (raw x=0): ignore the first second of the loop
     // (not of the boot: typeBoot() eats ~1 s of that before loop() ever runs).
@@ -2121,12 +2210,13 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, ota %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
+                      ota::stackLeft(),
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 
