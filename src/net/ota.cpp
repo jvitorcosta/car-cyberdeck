@@ -8,7 +8,6 @@
 #include <esp_system.h>
 #include "remote_config.h"
 #include "wifi.h"
-#include "../audio/greeting.h"
 #include "../util/bootguard.h"
 #include "../util/otaview.h"
 
@@ -29,6 +28,8 @@ template <typename F> void locked(F f) {
 }
 std::atomic<bool> s_good{false};   // the running firmware has proven itself (nvs "ota"/"good")
 bool (*s_hold)() = nullptr;
+void (*s_onStart)() = nullptr;
+const char* s_name = "";
 
 // The running firmware's ELF SHA-256 (hex, first 16 chars): what nvs remembers as good.
 void runningId(char* out, size_t n) {
@@ -50,14 +51,14 @@ bool isGood() {
 void task(void*) {
     while ((s_hold && s_hold()) || !net::isOnline()) vTaskDelay(pdMS_TO_TICKS(200));
     ArduinoOTA.setPort(3232);
-    ArduinoOTA.setHostname(REMOTE_NAME);
+    ArduinoOTA.setHostname(s_name);
     ArduinoOTA.setPassword(REMOTE_TOKEN);
-    ArduinoOTA.setMdnsEnabled(false);   // net/remote already answers to REMOTE_NAME.local
+    ArduinoOTA.setMdnsEnabled(false);   // the app already answers to its .local name (net/remote, the panel's lyrics)
     ArduinoOTA.setRebootOnSuccess(false);   // the deck reboots itself, after the screen's flash
     ArduinoOTA.onStart([] {
         locked([] { s_tracker.onStart(); });
-        greeting::stopTunes();
-        Serial.println("[ota] update started: Spotify polls paused");
+        if (s_onStart) s_onStart();
+        Serial.println("[ota] update started: network work paused");
     });
     ArduinoOTA.onProgress([](unsigned done, unsigned total) {
         const int pct = total ? (int)((uint64_t)done * 100 / total) : 0;
@@ -128,11 +129,13 @@ void checkBoot() {
     esp_restart();
 }
 
-void begin(bool (*hold)()) {
+void begin(const char* name, bool (*hold)(), void (*onStart)()) {
     if (!REMOTE_TOKEN[0]) { Serial.println("[ota] off (REMOTE_TOKEN empty)"); return; }
+    s_name = name;
     s_hold = hold;
-    // Core 0 with the network task, which idles during an update. 4 KB: ArduinoOTA's 1460-byte
-    // buffer is static, not on the stack.
+    s_onStart = onStart;
+    // Core 0 with the S3's network task and the panel's BLE link task, which idle during an update.
+    // 4 KB: ArduinoOTA's 1460-byte buffer is static, not on the stack.
     xTaskCreatePinnedToCore(task, "ota", 4096, nullptr, 1, nullptr, 0);
 }
 
