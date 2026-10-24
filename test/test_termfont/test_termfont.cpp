@@ -9,6 +9,7 @@
 #include "../../src/util/karaoke.h"
 #include "../../src/util/ledlook.h"
 #include "../../src/util/ledpresets.h"
+#include "../../src/util/otapage.h"
 #include "../../src/util/tripmeter.h"
 #include "../../src/util/weather.h"
 
@@ -306,6 +307,19 @@ void test_wrap_with_a_face() {
     for (int i = 0; i < n; i++) TEST_ASSERT_TRUE(termfont::width(Face::BIG, lines[i].s) <= KARAOKE_W);
 }
 
+// The update page (an update over WiFi): under the dashboard's header, the title (BIG, centred) over
+// the 10-cell bar over the % (TITLE, centred), all on the 320x240 screen.
+void test_update_page_fits() {
+    for (otaview::Phase p : {otaview::Phase::Receiving, otaview::Phase::Done, otaview::Phase::Failed}) {
+        fitsCentred(Face::BIG, otapage::title(p), 320);
+    }
+    for (const char* s : {"0%", "57%", "100%"}) fitsCentred(Face::TITLE, s, 320);
+    between(HEADER_RULE_Y, fromCapTop(Face::BIG, UPDATE_TITLE_Y), UPDATE_BAR_Y, "update title");
+    TEST_ASSERT_TRUE(UPDATE_BAR_W == otapage::CELLS * (UPDATE_CELL + UPDATE_GAP) - UPDATE_GAP);
+    TEST_ASSERT_TRUE(UPDATE_BAR_W <= 320 - 2 * DASH_X);
+    between(UPDATE_BAR_Y + UPDATE_BAR_H - 1, fromCapTop(Face::TITLE, UPDATE_PCT_Y), 240, "update %");
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_width_follows_tft_espi);
@@ -323,5 +337,6 @@ int main() {
     RUN_TEST(test_status_fits);
     RUN_TEST(test_karaoke_pitches);
     RUN_TEST(test_wrap_with_a_face);
+    RUN_TEST(test_update_page_fits);
     return UNITY_END();
 }

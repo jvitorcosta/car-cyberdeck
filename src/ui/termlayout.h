@@ -72,4 +72,13 @@ constexpr int KARAOKE_W = 312;
 constexpr int KARAOKE_BIG_H = 90, KARAOKE_BIG_DY = 30, KARAOKE_FIT_DY = 22;
 constexpr int KARAOKE_NEXT_H = 40, KARAOKE_NEXT_DY = 20;
 
+// The update page (an update over WiFi, util/otapage), the whole screen: the dashboard's header and
+// its rule, the title (BIG, centred, caps top UPDATE_TITLE_Y), the 10-cell block bar (UPDATE_CELL px
+// cells UPDATE_GAP apart, UPDATE_BAR_H tall, top UPDATE_BAR_Y, centred) and the % under it (TITLE,
+// centred, caps top UPDATE_PCT_Y).
+constexpr int UPDATE_TITLE_Y = 62;
+constexpr int UPDATE_CELL = 22, UPDATE_GAP = 6, UPDATE_BAR_W = 10 * (UPDATE_CELL + UPDATE_GAP) - UPDATE_GAP;
+constexpr int UPDATE_BAR_Y = 120, UPDATE_BAR_H = 28;
+constexpr int UPDATE_PCT_Y = 166;
+
 }  // namespace termlayout
