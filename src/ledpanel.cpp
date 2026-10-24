@@ -1,18 +1,55 @@
-// Standalone LED panel for the car's two ELK-family controllers on the yellow deck (CYD). Not the
-// firmware; a first step before LED control becomes a deck feature. Layout D, built for fingers:
-//   top:    pages BOTH / INSIDE / OUTSIDE. BOTH sets both lights together; INSIDE and OUTSIDE
-//           each keep their own look. Each zone tab shows its colour, ringed green when connected
-//   grid:   2x4 tiles of 75x66: red, orange, pink, purple, blue, green, white, yellow; tap one to
-//           set it (and turn on), double-tap the lit one to turn the lights off
-//   bottom: -  [level: the colour at its intensity and the %, or "Off"]  +
+// The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
+// red only for problems, amber at night, faint scanlines, all caps) that drives the car's two
+// ELK-family LED controllers. Three screens, laid out by util/deckmenu:
+//   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands. The header line
+//           (CYBERDECK // HONDA CITY); the clock big with the date under it ("FRI 23 OCT"), and
+//           right of it the outside temperature big and the sky in words (see "Weather" below);
+//           under them one row: the trip line ending in a blinking block cursor left and
+//           "HI 32 LO 26  MANAUS" right (a message takes the whole row while it shows); a row per
+//           light with its colour chip, colour name and level (OFF, or -- NO LINK when the deck has
+//           no link to it); and at the bottom the two items "> [LIGHTS]" and "> [KARAOKE]" (the
+//           second with a LIVE tag while the black deck plays a song with synced lyrics, dimmed
+//           otherwise: a tap then only says why). The song itself is on the Karaoke screen only
+//   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
+//           together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK 2/2",
+//           or "OUTSIDE: NO LINK" in ALERT), 2x4 colour buttons (tap one to set it and turn on,
+//           double-tap the lit one to turn the lights off), the four presets (tap: apply),
+//           and  [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two
+//           lights differ]  [+]
+//   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
+//           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
+//           >STANDBY / >NO SIGNAL / >WRONG KEY big in place of the lyrics). Read from the black
+//           deck's GET /state every second while this screen shows, every 5 s while the Menu shows
+//           (see "Lyrics" below)
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
-// Each page's colour, intensity and power, and the page shown, survive a reboot (NVS). Touch calibration (resistive panel)
-// runs on first boot, or with BOOT held (at power-up, or 2 s any time). Voice: Siri Shortcuts call
-// GET /say over WiFi (see "Voice" below). An Xbox controller (BLE) drives it too: a cyan ring
-// marks the focused button (see "Xbox controller input" below).
+// The STATUS line on Lights and the trip row on the Menu show a terminal message for 2.5 s
+// (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again (on the Menu: trip and HI / LO).
+// Each page's colour, intensity and power and the page last shown survive a reboot (NVS); the deck
+// still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
+// or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
+// /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
+// drives it too: the D-pad moves the focus (an inverted bar on the Menu's two items, a TEXT ring on
+// Lights and Karaoke; none is drawn while no controller is connected), A presses, B goes back to the
+// Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see "Xbox controller input" below).
+// Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
+// palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
+// there is no WiFi, no clock, and the deck stays in day mode.
+// Theme: while the INSIDE light is on and linked, the terminal (Menu, Lights, Karaoke; not the boot
+// typing or the calibration) takes that light's colour, termpal's three levels of it, day and night
+// (white turns to the amber at night; problems show in white on the red, orange and pink themes).
+// The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
+// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
+// mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
+// (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
+// the inside light does, to see it without the car's lights. Neither is set in platformio.ini.
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
+#include <ESPmDNS.h>
+#include <HTTPClient.h>
+#include <WiFi.h>
+#include <cstddef>
+#include <type_traits>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
 #pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
@@ -23,52 +60,129 @@
 #include <TFT_eSPI.h>
 #include <WebServer.h>
 #include "pins.h"
+#include "ui/backlight.h"
+#include "ui/termfont.h"
+#include "ui/termlayout.h"
 #include "companion/touch.h"
+#include "net/clock.h"
+#include "net/ipaddr.h"
 #include "net/remote_config.h"
 #include "net/wifi.h"
+#include "util/bothlook.h"
+#include "util/dashtext.h"
+#include "util/daynight.h"
+#include "util/deckaddr.h"
+#include "util/deckmenu.h"
 #include "util/elkcmd.h"
+#include "util/geoip.h"
+#include "util/hotspotip.h"
+#include "util/ledlook.h"
+#include "util/ledpresets.h"
 #include "util/ledvoice.h"
+#include "util/lightstatus.h"
+#include "util/pollpace.h"
+#include "util/karaoke.h"
+#include "util/readguard.h"
 #include "util/remotegate.h"
+#include "util/statejson.h"
+#include "util/stateparse.h"
+#include "util/termpal.h"
+#include "util/text.h"
 #include "util/touchcal.h"
+#include "util/tripclock.h"
+#include "util/tripmeter.h"
+#include "util/weather.h"
 
 static TFT_eSPI tft;
 static Preferences prefs;
 
 // ---- State ----
 
-// Each colour has two values. `led` is what the strip gets: RGB LEDs don't mix like a screen (green
-// and blue emitters look far brighter than red), so orange, pink and purple need much less green or
-// blue than their screen colours, and white is warmed to offset the strips' blue cast. `screen` is
-// what the tile shows: fully saturated, because this panel washes colours out (soft "LED-like"
-// tints looked dead on it).
-struct Swatch {
-    const char* name;
-    uint8_t r, g, b;   // led
-    uint32_t screen;   // 0xRRGGBB
-};
-static const Swatch SWATCHES[] = {
-    {"Red", 255, 0, 0, 0xFF0000},       {"Orange", 255, 40, 0, 0xFF6A00},
-    {"Pink", 255, 0, 70, 0xFF0090},     {"Purple", 120, 0, 255, 0x9000FF},
-    {"Blue", 0, 0, 255, 0x0040FF},      {"Green", 0, 255, 0, 0x00FF30},
-    {"White", 255, 215, 170, 0xFFFFFF}, {"Yellow", 255, 110, 0, 0xFFD400},  // LED yellow: full green goes lime
-};
-static constexpr int N_SWATCH = sizeof(SWATCHES) / sizeof(SWATCHES[0]);
+using ledlook::Swatch;
+using ledlook::SWATCHES;
+using ledlook::N_SWATCH;
+using ledlook::Look;
 
 // The zone tabs are pages. BOTH is the general page: a change there goes to both lights (the
-// inside and outside looks become a copy of it). INSIDE and OUTSIDE each keep their own look and
-// change only their light. Voice works like the BOTH page.
+// inside and outside looks become a copy of it; while the lights differ, util/bothlook keeps each
+// one's own colour and level unless the change sets a colour). INSIDE and OUTSIDE each keep their
+// own look and change only their light. Voice works like the BOTH page.
 enum Target { BOTH, INSIDE, OUTSIDE };
 static Target target = BOTH;  // the page on screen
 
-struct Look {
-    int swatch = N_SWATCH - 1;  // white
-    uint8_t pct = 100;          // 10..100 %, in steps of 10
-    bool lit = true;
-};
 static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
 static Look& cur() { return looks[target]; }
+// The BOTH page is on screen while the lights differ (after a preset or the INSIDE / OUTSIDE
+// pages): it shows no selected colour and "MIX" for the level.
+static bool bothMixed() { return target == BOTH && bothlook::mixed(looks[INSIDE], looks[OUTSIDE]); }
 
-static constexpr uint8_t MIN_INTENSITY = 10;
+using deckmenu::Rect;
+using deckmenu::Screen;
+using deckmenu::M_ITEM0;
+using deckmenu::L_BACK;
+using deckmenu::L_ZONE0;
+using deckmenu::L_TILE0;
+using deckmenu::L_PRE0;
+using deckmenu::L_MINUS;
+using deckmenu::L_PLUS;
+using deckmenu::K_BACK;
+
+static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Menu
+// The palette: every colour goes through termpal with this flag, so night mode only flips it and
+// redraws.
+static bool night = false;
+// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green / amber. Loop-owned, as
+// `night`; updateTheme() keeps it, from the looks and `insideSeen`: the INSIDE light's link as loop()
+// last took it (its edge loop sets it before anything draws the change).
+static int theme = -1;
+static bool insideSeen = false;
+static void updateTheme();
+
+// The outside weather (see "Weather" below): the weather task publishes each try under weatherMux
+// and raises weatherFresh; loop() copies it into `wx`, which is all the drawing reads.
+struct WeatherReading {
+    bool ok = false;      // a reading came (the fields below hold the last good one)
+    bool failed = false;  // the last try failed (no network, no answer)
+    double tempC = 0;
+    int code = 0;
+    bool day = true;
+    bool daily = false;   // maxC / minC came too
+    double maxC = 0, minC = 0;
+    char city[24] = "";
+};
+static WeatherReading wx;
+static bool weatherOff = false;  // no REMOTE_TOKEN: no WiFi, so no weather (">OFFLINE")
+
+// What the black deck (the S3) is playing (see "Lyrics" below): the lyrics task publishes each poll
+// under lyricsMux and raises lyricsFresh; loop() copies it into `song`, which is all the drawing reads.
+struct LyricsReading {
+    bool wrongKey = false;    // the last poll was turned down (403: the decks' REMOTE_TOKEN differ)
+    stateparse::Deck deck{};  // the last state that came (a miss keeps it)
+    uint32_t at = 0;          // millis() it came; 0: none yet
+};
+static LyricsReading song;
+static volatile bool lyricsNudge = false;         // loop(): poll now, the line shown changed; the task clears it
+static constexpr uint32_t LYRICS_NUDGE_MS = 300;  // least gap between a poll and a nudged one
+
+// A state is believed for a while after it came, so the black deck's odd dropped poll doesn't blank
+// the KARAOKE screen or dim its Menu item: on KARAOKE (a poll a second) for LYRICS_HOLD_MS after it
+// came or after the screen opened (the Menu's last poll carries it until the screen's own first
+// one), on the Menu (a poll every MENU_POLL_MS) for MENU_HOLD_MS, a dropped poll and some.
+static constexpr uint32_t MENU_POLL_MS = 5000;
+static constexpr uint32_t LYRICS_HOLD_MS = 5000, MENU_HOLD_MS = 3 * MENU_POLL_MS;
+static uint32_t karaokeAt = 0;  // millis() the KARAOKE screen was shown
+
+static bool lyricsHeard() {
+    if (song.at == 0) return false;
+    const uint32_t now = millis(), age = now - song.at;
+    if (age >= MENU_HOLD_MS) return false;
+    if (screen == Screen::Menu) return true;
+    return age < LYRICS_HOLD_MS || now - karaokeAt < LYRICS_HOLD_MS;
+}
+
+// The black deck plays a song with synced lyrics: the Menu's KARAOKE item is lit and opens.
+static bool karaokeReady() { return karaoke::available(lyricsHeard(), song.deck.playing, song.deck); }
+static bool karaokeShownReady = false;  // as the Menu item was last drawn (lit or dimmed)
 
 // ---- BLE ----
 
@@ -111,12 +225,13 @@ static void push(int i) {
     }
 }
 
-// After the page's look changed: on BOTH it becomes both zones' look; then the lights it covers
-// get it.
-static void pushTargets() {
-    if (target == BOTH) looks[INSIDE] = looks[OUTSIDE] = looks[BOTH];
+// One change on `page` (a tap, Y, voice): on BOTH it goes to both lights (bothlook), on INSIDE or
+// OUTSIDE to that light's look only; then the lights it covers get their looks.
+static void change(Target page, const bothlook::Change& c) {
+    if (page == BOTH) bothlook::apply(c, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+    else bothlook::edit(&looks[page], c);
     for (int i = 0; i < N_CTRL; i++) {
-        if (target == BOTH || target == static_cast<Target>(i + 1)) push(i);
+        if (page == BOTH || page == static_cast<Target>(i + 1)) push(i);
     }
 }
 
@@ -197,144 +312,715 @@ static void linkTask(void*) {
     }
 }
 
-// ---- Buttons (320x240 landscape) ----
+// ---- Buttons (320x240 landscape, laid out by util/deckmenu) ----
 
 // The grid is all colours; there is no power tile: double-tapping the lit colour turns the lights
 // off, and tapping any colour turns them back on.
-enum : int { ZONE0 = 0, TILE0 = 3, TILE_END = TILE0 + N_SWATCH, MINUS = TILE_END, PLUS, N_BTN };
-static_assert(N_SWATCH == 8, "the grid is 2x4");
-struct Rect { int x, y, w, h; };
+static_assert(N_SWATCH == 8 && L_PRE0 - L_TILE0 == N_SWATCH, "the grid is 2x4 colours");
 
-static Rect rectOf(int id) {
-    if (id < TILE0) return {4 + id * 106, 4, 100, 36};
-    if (id < TILE_END) {
-        const int i = id - TILE0;
-        return {4 + (i % 4) * 79, 46 + (i / 4) * 70, 75, 66};
-    }
-    if (id == MINUS) return {4, 188, 96, 48};
-    return {220, 188, 96, 48};  // PLUS
-}
-static constexpr Rect LEVEL{106, 188, 108, 48};  // display only
+static bool built(int id) { return deckmenu::rect(screen, id).w > 0; }
 
-// The button the Xbox controller points at (a cyan ring around it); -1 while none is connected.
+// The button the Xbox controller points at; -1 while none is connected. On the Menu it is drawn as
+// an inverted bar, on Lights as a TEXT ring around the button (the lit colour is the bar there).
 static int focus = -1;
+static bool padUp = false;  // an Xbox controller is connected and reporting
 static void drawFocus(int id, bool on);
 
-// The button under (x, y), or the nearest within SNAP px when the tap lands in a gap; -1 if none,
-// and for the level box (display only: snapping from it pressed Green, White or -).
-static constexpr int SNAP = 10;
-static int hit(int x, int y) {
-    if (x >= LEVEL.x && x < LEVEL.x + LEVEL.w && y >= LEVEL.y && y < LEVEL.y + LEVEL.h) return -1;
-    int best = -1, bestD = SNAP + 1;
-    for (int id = 0; id < N_BTN; id++) {
-        const Rect r = rectOf(id);
-        const int dx = x < r.x ? r.x - x : x >= r.x + r.w ? x - (r.x + r.w - 1) : 0;
-        const int dy = y < r.y ? r.y - y : y >= r.y + r.h ? y - (r.y + r.h - 1) : 0;
-        const int d = dx > dy ? dx : dy;
-        if (d < bestD) {
-            bestD = d;
-            best = id;
-        }
-    }
-    return best;
+// Where the focus starts on each screen: the first item, or the colour the page shows.
+static int homeFocus() {
+    if (screen == Screen::Menu) return M_ITEM0;
+    if (screen == Screen::Karaoke) return K_BACK;
+    return L_TILE0 + cur().swatch;
 }
 
 // ---- Drawing ----
+// The lettering is VT323, a CRT terminal font, 1-bit at four sizes named by role (ui/termfont:
+// SMALL, BODY, TITLE, BIG); where each label goes so it fits is ui/termlayout's, which
+// test_termfont checks. Every label is upper case (the lyrics keep theirs). The touch calibration
+// screens keep TFT_eSPI's built-in fonts.
+// The background is black with a faint scanline on every 3rd screen row: every clear goes through
+// clearBg(), which repaints a rect's lines on absolute rows, so a partial redraw stays aligned.
+// Text over it is drawn transparent (free fonts always are: no black box punching through the
+// lines); the solid fills (the inverted selection bar, the pressed yellow, the chips) are the design.
+using termfont::Face;
+using namespace termlayout;
 
-static constexpr uint16_t PRESSED = TFT_YELLOW;  // under the finger, until release
-static uint16_t grey(uint8_t v) { return tft.color565(v, v, v); }
+// termfont's tables are GFXfont's, so TFT_eSPI draws them as they are.
+static_assert(sizeof(termfont::Glyph) == sizeof(GFXglyph) && offsetof(termfont::Glyph, bitmapOffset) == offsetof(GFXglyph, bitmapOffset) &&
+                  offsetof(termfont::Glyph, width) == offsetof(GFXglyph, width) && offsetof(termfont::Glyph, height) == offsetof(GFXglyph, height) &&
+                  offsetof(termfont::Glyph, xAdvance) == offsetof(GFXglyph, xAdvance) &&
+                  offsetof(termfont::Glyph, xOffset) == offsetof(GFXglyph, xOffset) && offsetof(termfont::Glyph, yOffset) == offsetof(GFXglyph, yOffset),
+              "termfont::Glyph is GFXglyph");
+static_assert(sizeof(termfont::Font) == sizeof(GFXfont) && offsetof(termfont::Font, bitmap) == offsetof(GFXfont, bitmap) &&
+                  offsetof(termfont::Font, glyph) == offsetof(GFXfont, glyph) && offsetof(termfont::Font, first) == offsetof(GFXfont, first) &&
+                  offsetof(termfont::Font, last) == offsetof(GFXfont, last) && offsetof(termfont::Font, yAdvance) == offsetof(GFXfont, yAdvance),
+              "termfont::Font is GFXfont");
+// and field for field the same types (pointers aside: termfont's point to const)
+static_assert(std::is_same<decltype(termfont::Glyph::bitmapOffset), decltype(GFXglyph::bitmapOffset)>::value &&
+                  std::is_same<decltype(termfont::Glyph::width), decltype(GFXglyph::width)>::value &&
+                  std::is_same<decltype(termfont::Glyph::height), decltype(GFXglyph::height)>::value &&
+                  std::is_same<decltype(termfont::Glyph::xAdvance), decltype(GFXglyph::xAdvance)>::value &&
+                  std::is_same<decltype(termfont::Glyph::xOffset), decltype(GFXglyph::xOffset)>::value &&
+                  std::is_same<decltype(termfont::Glyph::yOffset), decltype(GFXglyph::yOffset)>::value,
+              "termfont::Glyph's fields are GFXglyph's");
+static_assert(std::is_same<std::remove_const<std::remove_pointer<decltype(termfont::Font::bitmap)>::type>::type,
+                           std::remove_pointer<decltype(GFXfont::bitmap)>::type>::value &&
+                  std::is_same<decltype(termfont::Font::first), decltype(GFXfont::first)>::value &&
+                  std::is_same<decltype(termfont::Font::last), decltype(GFXfont::last)>::value &&
+                  std::is_same<decltype(termfont::Font::yAdvance), decltype(GFXfont::yAdvance)>::value,
+              "termfont::Font's fields are GFXfont's");
+
+// Draws s in face f at (x, y), in the text colour set, and returns the pen's travel (where text drawn
+// after it starts). `datum` is one of TFT_eSPI's nine (TL_DATUM .. BR_DATUM): its left / centre /
+// right part places x as usual, but its top / middle / bottom part goes by the capitals, not by the
+// font's tallest glyph as TFT_eSPI's free-font datums do (that set '(' and '[' high and every label
+// low): T puts the caps' top row at y, M centres the caps on y, B puts the baseline (the row under
+// the caps) at y. setFreeFont scans the font, so it runs only when the face changes.
+static int text(const char* s, int x, int y, Face f, uint8_t datum) {
+    static int shown = -1;
+    if (static_cast<int>(f) != shown) {
+        shown = static_cast<int>(f);
+        tft.setFreeFont(reinterpret_cast<const GFXfont*>(&termfont::font(f)));
+    }
+    const int cap = termfont::capHeight(f), v = datum / 3;
+    const int base = v == 0 ? y + cap : v == 1 ? y + cap / 2 : y;
+    tft.setTextDatum(L_BASELINE + datum % 3);
+    return tft.drawString(s, x, base);
+}
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
-// The screen colour at a share of its brightness (for the level box).
-static uint16_t c565At(uint32_t rgb, int pct) {
-    return tft.color565(((rgb >> 16) & 0xFF) * pct / 100, ((rgb >> 8) & 0xFF) * pct / 100, (rgb & 0xFF) * pct / 100);
+static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night, theme)); }
+// A terminal message's colour: ALERT for a problem (a lost link, the wrong key), else TEXT.
+static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
+static uint16_t msgInk(const char* m) { return pal(isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
+
+// A real colour (a chip, the pressed yellow), dimmed with the palette at night.
+static uint16_t tint(uint32_t rgb) { return c565(termpal::tile(rgb, night)); }
+static constexpr uint32_t PRESSED = 0xFFFF00;  // under the finger, until release
+
+static void clearBg(int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0) return;
+    tft.fillRect(x, y, w, h, pal(termpal::BG));
+    const uint16_t line = c565(termpal::scan(night));
+    for (int row = y + (3 - y % 3) % 3; row < y + h; row += 3) tft.drawFastHLine(x, row, w, line);
 }
-static bool bright(uint32_t rgb, int pct = 100) {
-    return (((rgb >> 16) & 0xFF) * 3 + ((rgb >> 8) & 0xFF) * 6 + (rgb & 0xFF)) / 10 * pct / 100 > 140;
+static void clearBg(const Rect& r) { clearBg(r.x, r.y, r.w, r.h); }
+
+// A swatch name ("Orange") as the screen shows it ("ORANGE").
+static void upper(const char* s, char* out, size_t n) {
+    size_t i = 0;
+    for (; s[i] && i + 1 < n; i++) out[i] = static_cast<char>(toupper(static_cast<unsigned char>(s[i])));
+    out[i] = 0;
+}
+
+// The box of a terminal button: the scanlined bg inside a MID border (`border` px), or the solid
+// bar when selected (TEXT) or pressed (yellow), 1 px in from the edge so a Lights focus ring around
+// it stays apart. Returns the ink for what goes on it (BG on a bar, else `ink`).
+static uint16_t drawBox(const Rect& r, bool pressed, bool selected, int border, uint16_t ink) {
+    clearBg(r);
+    if (pressed || selected) {
+        tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pressed ? tint(PRESSED) : pal(termpal::TEXT));
+        return pal(termpal::BG);
+    }
+    for (int k = 0; k < border; k++) tft.drawRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, pal(termpal::MID));
+    return ink;
+}
+
+// A bordered button (< BACK, [-], [+]): the label centred.
+static void drawChrome(const Rect& r, const char* s, Face f, bool pressed, bool inverted) {
+    const uint16_t ink = drawBox(r, pressed, inverted, 2, pal(termpal::TEXT));
+    tft.setTextColor(ink);
+    text(s, r.x + r.w / 2, r.y + r.h / 2, f, MC_DATUM);
+}
+
+// A Menu item ("> [LIGHTS]"): a MID outline (it stands among the dashboard's text), the text left;
+// the inverted bar when focused. Only the Xbox controller focuses (focus is -1 without it), so
+// without one both items look alike and the clock and the lights band lead. Dimmed (an item that
+// won't open now): DIM text in a DIM border, the bar in DIM; a press keeps that look (only a second
+// DIM outline inside the border), since it won't open: the message is the feedback. `live`
+// (KARAOKE while it opens): a LIVE tag at the right edge, an inverted mini-label in the text's ink
+// with the ground's colour for letters (TEXT, not ALERT: red is for problems).
+static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim, bool live) {
+    uint16_t ink;
+    if (dim) {
+        clearBg(r);
+        if (inverted) {
+            tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pal(termpal::DIM));
+            ink = pal(termpal::BG);
+        } else {
+            tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::DIM));
+            if (pressed) tft.drawRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, pal(termpal::DIM));
+            ink = pal(termpal::DIM);
+        }
+    } else {
+        ink = drawBox(r, pressed, inverted, 1, pal(termpal::TEXT));
+    }
+    tft.setTextColor(ink);
+    text(s, r.x + ROW_TEXT_X, r.y + r.h / 2, Face::BODY, ML_DATUM);
+    if (!live) return;
+    const int w = termfont::width(Face::SMALL, LIVE_TAG) + 2 * LIVE_PAD, h = termfont::capHeight(Face::SMALL) + 2 * LIVE_PAD;
+    const int x = r.x + r.w - LIVE_RIGHT - w, y = r.y + (r.h - h) / 2;
+    tft.fillRect(x, y, w, h, ink);
+    tft.setTextColor(pressed ? tint(PRESSED) : inverted ? pal(termpal::TEXT) : pal(termpal::BG));  // the ground's
+    text(LIVE_TAG, x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
+}
+
+// A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
+// off. On a bar, a 1 px BG edge keeps it apart from the fill (pink on yellow, white on green).
+static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
+    if (l.lit) tft.fillRect(x, y, w, h, tint(SWATCHES[l.swatch].screen));
+    else tft.drawRect(x, y, w, h, pal(termpal::DIM));
+    if (onBar) tft.drawRect(x - 1, y - 1, w + 2, h + 2, pal(termpal::BG));
+}
+
+// A Lights preset block (75x36): the name (BODY, the colour names' face too: TITLE's "PURPURA" is too
+// wide for the slot) over two chips big enough to tell apart at a glance (inside, outside); yellow
+// when pressed. The Xbox focus is the ring around it.
+static void drawPresetSlot(const Rect& r, int slot, bool pressed) {
+    const ledpresets::Preset& p = ledpresets::PRESETS[slot];
+    const uint16_t ink = drawBox(r, pressed, false, 1, pal(termpal::TEXT));
+    const Look* sides[] = {&p.in, &p.out};
+    tft.setTextColor(ink);
+    const int cx = r.x + r.w / 2, x0 = cx - (2 * PRESET_CHIP + PRESET_CHIP_GAP) / 2;
+    text(p.name, cx, r.y + PRESET_NAME_Y, Face::BODY, TC_DATUM);
+    for (int k = 0; k < 2; k++) {
+        drawChip(x0 + k * (PRESET_CHIP + PRESET_CHIP_GAP), r.y + PRESET_CHIP_Y, PRESET_CHIP, PRESET_CHIP, *sides[k], pressed);
+    }
+}
+
+// A colour button: a box with a MID border, a tall chip of the colour (left, centred) and its name
+// (BODY, the preset names' face: "YELLOW" is 47 px, what the 75 px button has right of the chip).
+// The lit colour is the inverted bar, chip kept; the Xbox focus is a separate ring around it.
+static void drawTile(const Rect& r, int swatch, bool pressed) {
+    const Swatch& s = SWATCHES[swatch];
+    const bool sel = !bothMixed() && cur().lit && swatch == cur().swatch;
+    const uint16_t ink = drawBox(r, pressed, sel, 1, pal(termpal::TEXT));
+    Look l;
+    l.swatch = swatch;
+    drawChip(r.x + TILE_CHIP_X, r.y + (r.h - TILE_CHIP_H) / 2, TILE_CHIP_W, TILE_CHIP_H, l, pressed || sel);
+    char name[12];
+    upper(s.name, name, sizeof(name));
+    tft.setTextColor(ink);
+    text(name, r.x + TILE_TEXT_X, r.y + r.h / 2, Face::BODY, ML_DATUM);
+}
+
+// Lights' zone tabs are Pip-Boy tabs: a TEXT rule under the tab row, the current tab a TEXT bar
+// that runs down into the rule, the others MID text. TAB_RULE_Y is just under the tab row (rects
+// end at y 37) and over STATUS (y 40).
+static constexpr int TAB_RULE_Y = 39;
+static constexpr int RULE_X0 = 4, RULE_X1 = 316;
+
+// The rule's rows (and the gap row above it) over [x0, x1).
+static void drawTabRule(int x0, int x1) {
+    clearBg(x0, TAB_RULE_Y - 1, x1 - x0, 2);
+    const int a = x0 < RULE_X0 ? RULE_X0 : x0, b = x1 > RULE_X1 ? RULE_X1 : x1;
+    if (b > a) tft.drawFastHLine(a, TAB_RULE_Y, b - a, pal(termpal::TEXT));
+}
+
+static void drawTab(const Rect& r, const char* s, bool pressed, bool current) {
+    clearBg(r);
+    drawTabRule(r.x - 2, r.x + r.w + 2);  // under it and its focus ring
+    uint16_t ink = pal(termpal::MID);
+    if (pressed || current) {
+        tft.fillRect(r.x + 1, r.y + 1, r.w - 2, TAB_RULE_Y - r.y, pressed ? tint(PRESSED) : pal(termpal::TEXT));
+        ink = pal(termpal::BG);
+    }
+    tft.setTextColor(ink);
+    text(s, r.x + r.w / 2, r.y + r.h / 2, Face::BODY, MC_DATUM);
 }
 
 static void drawButtonBody(int id, bool pressed) {
-    const Rect r = rectOf(id);
-    tft.setTextDatum(MC_DATUM);
-    const int cx = r.x + r.w / 2, cy = r.y + r.h / 2;
-    if (id < TILE0) {
-        static const char* names[] = {"BOTH", "INSIDE", "OUTSIDE"};
-        const bool sel = target == static_cast<Target>(id);
-        const uint16_t bg = pressed ? PRESSED : sel ? TFT_WHITE : grey(51);
-        tft.fillRoundRect(r.x, r.y, r.w, r.h, 8, bg);
-        tft.setTextColor(sel || pressed ? TFT_BLACK : TFT_LIGHTGREY, bg);
-        tft.drawString(names[id], cx - (id > 0 ? 9 : 0), cy, 2);
-        if (id > 0) {  // that zone's colour (grey when off), ringed green when its light is connected
-            const Look& l = looks[id];
-            const int chipX = r.x + r.w - 24, chipY = cy - 9;
-            tft.fillRoundRect(chipX, chipY, 18, 18, 4, linkUp(controllers[id - 1]) ? TFT_GREEN : TFT_RED);
-            tft.fillRoundRect(chipX + 3, chipY + 3, 12, 12, 2, l.lit ? c565(SWATCHES[l.swatch].screen) : grey(70));
+    const Rect r = deckmenu::rect(screen, id);
+    if (r.w <= 0) return;
+    if (screen == Screen::Menu) {
+        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [KARAOKE]"};  // in deckmenu::Item order
+        bool dim = false, live = false;
+        if (id == M_ITEM0 + deckmenu::KARAOKE) {
+            karaokeShownReady = karaokeReady();
+            dim = !karaokeShownReady;
+            live = karaokeShownReady;
         }
+        drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus, dim, live);
         return;
     }
-    if (id < TILE_END) {
-        const Swatch& s = SWATCHES[id - TILE0];
-        const bool sel = cur().lit && id - TILE0 == cur().swatch;
-        const int in = pressed ? 5 : 0;  // pressed: the colour shrinks inside a yellow ring
-        tft.fillRect(r.x, r.y, r.w, r.h, TFT_BLACK);
-        tft.fillRoundRect(r.x + in, r.y + in, r.w - 2 * in, r.h - 2 * in, 10, c565(s.screen));
-        if (pressed || sel) {  // white ring: what the lights show
-            for (int k = 0; k < 3; k++) tft.drawRoundRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, 10, pressed ? PRESSED : TFT_WHITE);
-            if (!pressed) tft.drawRoundRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6, 8, TFT_BLACK);
-        }
-        const uint16_t fill = c565(s.screen);
-        tft.setTextColor(bright(s.screen) ? TFT_BLACK : TFT_WHITE, fill);
-        tft.drawString(s.name, cx, cy, 2);
-        return;
+    if (screen == Screen::Karaoke || id == L_BACK) {  // K_BACK: its only button
+        drawChrome(r, "< BACK", Face::BODY, pressed, false);
+        drawTabRule(r.x - 2, r.x + r.w + 2);  // its focus ring crosses the rule too
+    } else if (id < L_TILE0) {
+        static const char* const ZONE[] = {"BOTH", "INSIDE", "OUTSIDE"};
+        drawTab(r, ZONE[id - L_ZONE0], pressed, target == static_cast<Target>(id - L_ZONE0));
+    } else if (id < L_PRE0) {
+        drawTile(r, id - L_TILE0, pressed);
+    } else if (id < L_MINUS) {
+        drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed);
+    } else {
+        drawChrome(r, id == L_MINUS ? "[-]" : "[+]", Face::TITLE, pressed, false);
     }
-    const uint16_t bg = pressed ? PRESSED : grey(51);  // MINUS / PLUS
-    tft.fillRoundRect(r.x, r.y, r.w, r.h, 10, bg);
-    tft.setTextColor(pressed ? TFT_BLACK : TFT_WHITE, bg);
-    tft.drawString(id == MINUS ? "-" : "+", cx, cy, 4);
 }
 
 static void drawButton(int id, bool pressed = false) {
     drawButtonBody(id, pressed);
-    if (id == focus) drawFocus(id, true);  // its corners fall inside the rect just drawn over
+    if (id == focus) drawFocus(id, true);  // on Lights its ring hugs the rect just drawn over
 }
 
-// The colour at its intensity (shown no darker than 25 % so it stays readable) and the %.
+// The block bar: 10 cells, one filled per 10 % (the terminal's full block), the rest outlined (its
+// shade block; the font's ASCII table has neither glyph), and the % under it (TITLE). "MIX" on BOTH
+// while the lights differ (the main screen's lights band has each light's %), "OFF" in DIM when off.
 static void drawLevel() {
+    const Rect& r = deckmenu::LEVEL;
     const Look& l = cur();
-    const Swatch& s = SWATCHES[l.swatch];
-    const int shade = l.pct < 25 ? 25 : l.pct;
-    const uint16_t bg = l.lit ? c565At(s.screen, shade) : grey(26);
-    tft.fillRoundRect(LEVEL.x, LEVEL.y, LEVEL.w, LEVEL.h, 10, bg);
+    const bool mixed = bothMixed(), live = mixed || l.lit;
+    clearBg(r);
+    tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
+    constexpr int N_CELL = 10, CELL = 8, GAP = 2;
+    const int full = live && !mixed ? l.pct / 10 : 0;
+    const int x0 = r.x + (r.w - (N_CELL * (CELL + GAP) - GAP)) / 2;
+    for (int k = 0; k < N_CELL; k++) {
+        const int x = x0 + k * (CELL + GAP);
+        if (k < full) tft.fillRect(x, r.y + 7, CELL, 14, pal(termpal::TEXT));
+        else tft.drawRect(x, r.y + 7, CELL, 14, pal(live ? termpal::MID : termpal::DIM));
+    }
     char pct[8];
-    snprintf(pct, sizeof(pct), "%u%%", l.pct);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(l.lit ? (bright(s.screen, shade) ? TFT_BLACK : TFT_WHITE) : TFT_DARKGREY, bg);
-    tft.drawString(l.lit ? pct : "Off", LEVEL.x + LEVEL.w / 2, LEVEL.y + LEVEL.h / 2, 4);
+    snprintf(pct, sizeof(pct), "%u%%", static_cast<unsigned>(l.pct));
+    tft.setTextColor(pal(live ? termpal::TEXT : termpal::DIM));
+    text(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, Face::TITLE, MC_DATUM);
+}
+
+// A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS
+// line, or in place of the Menu's trip row (trip and HI / LO), for MESSAGE_MS since messageAt;
+// loop() then puts the usual line back. A newer message replaces it, and so does a screen change (show() drops it), so none
+// outlives its screen. Only loop() touches it (and setup(), before loop() starts).
+static constexpr uint32_t MESSAGE_MS = 2500;
+static constexpr uint32_t LAST_TRIP_MS = 6000;  // the boot's ">LAST TRIP ..." is worth longer to read
+static char message[32] = "";  // "" when none
+static uint32_t messageAt = 0;
+static uint32_t messageMs = MESSAGE_MS;
+
+// Sets the message; the caller redraws what shows it (drawMessage, or drawStatus on Lights).
+static void setMessage(const char* m, uint32_t ms = MESSAGE_MS) {
+    snprintf(message, sizeof(message), "%s", m);
+    messageAt = millis();
+    messageMs = ms;
+}
+
+// Lights: the line under the tabs, just the link state ("LINK 2/2" in TEXT; "OUTSIDE: NO LINK",
+// "INSIDE: NO LINK" or "NO LINK" in ALERT), or the message. SMALL, sat on the rect's bottom: STATUS
+// has 12 rows (40..51) between the tab rule (39) and the colours, and SMALL's "/" is 12 rows tall
+// (BODY's would need 15), so the line fills them with no margin: "/" starts the row under the rule.
+// Rows 52-53 can't give it room, as a top-row colour's focus ring is drawn there. The clear (the
+// rect) covers all its ink: the line and the messages are capitals, digits and "% / : - >", none
+// below the baseline (test_termfont checks).
+static void drawStatus() {
+    const Rect& r = deckmenu::STATUS;
+    char line[24];
+    const bool down = lightstatus::link(linkUp(controllers[0]), linkUp(controllers[1]), line, sizeof(line));
+    clearBg(r);
+    tft.setTextColor(message[0] ? msgInk(message) : pal(down ? termpal::ALERT : termpal::TEXT));
+    text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
+}
+
+// ---- The Menu: a dashboard of stacked bands ----
+// Top to bottom (termlayout's DASH_* place them, test_termfont checks they fit): the header line;
+// the clock and the date left, the weather right, then the band's last row: the trip line left
+// (the block cursor after it) and today's HI / LO right, or a message across both while one shows;
+// the lights; the two items at the bottom. A MID rule under each band. Each part clears and draws
+// its own rows, so it is redrawn alone when what it shows changes: the clock each minute, the
+// weather on a new reading, the lights on a look or link change, the trip row when the trip's text
+// moves, the HI / LO line changes or a message comes or goes, the cursor's cell on a blink.
+
+static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
+
+// The header: one MID line and its rule (the boot's welcome lines typed out before it).
+static void drawHeader() {
+    clearBg(deckmenu::HEADER);
+    tft.setTextColor(pal(termpal::MID));
+    text(DASH_TITLE, DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    drawRule(HEADER_RULE_Y);
+}
+
+// The clock band's last row (trip, HI / LO, messages): the first row its ink reaches, where its clear
+// starts and the parts above it stop theirs, so neither takes the other.
+static int tripRowTop() { return TRIP_ROW_BASE - termfont::ascent(Face::SMALL); }
+
+// The clock's minute of the day on screen (-1: not synced, "--:--") and its date, read together
+// (netclock::localNow) so they never straddle midnight; updateDayNight keeps them.
+static int clockMin = -1;
+static int clockY = 0, clockMonth = 0, clockDay = 0;
+
+// The clock band's left: the clock (BIG, TEXT) and under it the date (SMALL, MID: "FRI 23 OCT",
+// "--- -- ---" before the clock synced). The date only turns over with a minute, so both go together.
+static void drawClock() {
+    char s[16];  // room for any int, so -Wformat-truncation stays quiet
+    if (clockMin < 0) snprintf(s, sizeof(s), "--:--");
+    else snprintf(s, sizeof(s), "%02d:%02d", clockMin / 60, clockMin % 60);
+    char date[16];
+    dashtext::date(clockMin >= 0, clockY, clockMonth, clockDay, date, sizeof(date));
+    const int top = HEADER_RULE_Y + 1;
+    clearBg(RULE_X0, top, DASH_SPLIT - RULE_X0, tripRowTop() - top);  // down to the trip row
+    tft.setTextColor(pal(termpal::TEXT));
+    text(s, DASH_X, CLOCK_Y, Face::BIG, TL_DATUM);
+    tft.setTextColor(pal(termpal::MID));
+    text(date, DASH_X, DATE_Y, Face::SMALL, TL_DATUM);
+}
+
+// The weather's four texts as shown: the temperature ("32C", "--C" before the first reading), the sky
+// in words ("PARTLY CLOUDY"; nothing before a reading), "HI 32 LO 26  MANAUS" (">OFFLINE", in ALERT,
+// while no reading ever came and the last try failed, or there's no WiFi; "HI -- LO --" before the
+// first try), and the same without the city ("HI 32 LO 26"), for when the city wouldn't clear the
+// trip line. A failed try keeps the last good reading on screen. wxShown is what is on screen: a new
+// reading redraws the part only when one of them changed.
+static constexpr int N_WX_TEXT = 4;
+static char wxShown[N_WX_TEXT][48];
+
+static bool isOffline(const char* t) { return strcmp(t, ">OFFLINE") == 0; }  // the weather band's one problem
+
+static void weatherTexts(char (&t)[N_WX_TEXT][48]) {
+    dashtext::temp(wx.ok, wx.tempC, t[0], sizeof(t[0]));
+    snprintf(t[1], sizeof(t[1]), "%s", wx.ok ? weather::words(wx.code) : "");
+    if (wx.ok) dashtext::hiLo(wx.daily, wx.maxC, wx.minC, wx.city, t[2], sizeof(t[2]));
+    else if (wx.failed || weatherOff) snprintf(t[2], sizeof(t[2]), ">OFFLINE");
+    else dashtext::hiLo(false, 0, 0, nullptr, t[2], sizeof(t[2]));
+    if (wx.ok) dashtext::hiLo(wx.daily, wx.maxC, wx.minC, nullptr, t[3], sizeof(t[3]));
+    else snprintf(t[3], sizeof(t[3]), "%s", t[2]);  // already short
+}
+
+// The clock band's right above the trip row, right-aligned: the temperature (BIG, TEXT) and the sky
+// (SMALL, MID). Takes the weather's texts into wxShown; the HI / LO line is the trip row's.
+static void drawWeatherTop() {
+    weatherTexts(wxShown);
+    const int top = HEADER_RULE_Y + 1;
+    clearBg(DASH_SPLIT, top, RULE_X1 - DASH_SPLIT, tripRowTop() - top);
+    tft.setTextColor(pal(termpal::TEXT));
+    text(wxShown[0], DASH_RIGHT, CLOCK_Y, Face::BIG, TR_DATUM);
+    tft.setTextColor(pal(termpal::MID));
+    text(wxShown[1], DASH_RIGHT, WORDS_Y, Face::SMALL, TR_DATUM);
+}
+
+// The lights band: a row per light, no label (the rows name the lights, and the clock leads): its
+// name (BODY, MID) and what lightstatus::of says of it: on, a chip of its colour, the colour name
+// (TITLE, TEXT) and its level right-aligned; off, a DIM outlined chip and OFF in DIM; no link,
+// "-- NO LINK" in ALERT and no chip (never its last look: the deck can't tell what a light it has
+// lost shows).
+static void drawLightsBand() {
+    const int top = CLOCK_RULE_Y + 1;
+    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, LIGHTS_RULE_Y - top);
+    for (int i = 0; i < N_CTRL; i++) {
+        const int base = LIGHT_ROW_BASE + i * LIGHT_ROW_DY;
+        const Look& l = looks[i + 1];
+        tft.setTextColor(pal(termpal::MID));
+        text(controllers[i].label, DASH_X, base, Face::BODY, BL_DATUM);  // INSIDE, OUTSIDE
+        const lightstatus::State st = lightstatus::of(linkUp(controllers[i]), l.lit);
+        if (st == lightstatus::State::NoLink) {
+            tft.setTextColor(pal(termpal::ALERT));
+            text("-- NO LINK", LIGHT_NAME_X, base, Face::TITLE, BL_DATUM);
+            continue;
+        }
+        drawChip(LIGHT_CHIP_X, base - LIGHT_CHIP_H, LIGHT_CHIP_W, LIGHT_CHIP_H, l, false);  // on TITLE's caps
+        if (st == lightstatus::State::Off) {
+            tft.setTextColor(pal(termpal::DIM));
+            text("OFF", LIGHT_NAME_X, base, Face::TITLE, BL_DATUM);
+            continue;
+        }
+        char name[12], pct[8];
+        upper(SWATCHES[l.swatch].name, name, sizeof(name));
+        snprintf(pct, sizeof(pct), "%u%%", static_cast<unsigned>(l.pct));
+        tft.setTextColor(pal(termpal::TEXT));
+        text(name, LIGHT_NAME_X, base, Face::TITLE, BL_DATUM);
+        text(pct, DASH_RIGHT, base, Face::TITLE, BR_DATUM);
+    }
+}
+
+// The trip meter: time since the first loop() pass (the car started the deck), kilometres once a
+// speed feeds it. The trip row shows it; tripTick() redraws that row when its text would change
+// (every minute, or every 0.1 km).
+static tripmeter::Meter tripMeter;
+
+// The block cursor: one SMALL cell (as wide as a character, as tall as the caps) at the end of the
+// trip line, or of the message while one shows, blinking at ~1 Hz. Only its cell is redrawn. -1 when
+// it would pass DASH_RIGHT; the longest trip line and message still leave it room (test_termfont).
+static constexpr uint32_t BLINK_MS = 500;
+static int cursorX = -1;
+static bool cursorOn = false;
+
+static void drawCursor(bool on) {
+    cursorOn = on;
+    if (cursorX < 0) return;
+    const int cap = termfont::capHeight(Face::SMALL), w = termfont::cell(Face::SMALL);
+    if (on) tft.fillRect(cursorX, TRIP_ROW_BASE - cap, w, cap, pal(termpal::TEXT));
+    else clearBg(cursorX, TRIP_ROW_BASE - cap, w, cap);
+}
+
+static bool blinkPhase() { return (millis() / BLINK_MS) % 2 == 0; }
+
+// The cursor goes to x on the trip row (whose clear has taken its old cell).
+static void placeCursor(int x) {
+    cursorX = x + termfont::cell(Face::SMALL) <= DASH_RIGHT ? x : -1;
+    drawCursor(blinkPhase());
+}
+
+// Each loop pass on the Menu: the cursor's cell when its phase turned.
+static void blinkCursor() {
+    if (screen == Screen::Menu && blinkPhase() != cursorOn) drawCursor(!cursorOn);
+}
+
+// The clock band's last row, cleared whole (from its ink's top to the band's rule, rule to rule
+// across) and drawn again: while a message shows, just the message (TEXT, ALERT for a problem) with
+// the cursor after it; else the trip line (SMALL, TEXT) with the cursor after it, and right-aligned
+// the HI / LO line (SMALL, DIM; ">OFFLINE" in ALERT), without its city when that wouldn't clear the
+// cursor (termlayout::besideTrip; a 23-letter city beside the longest trip). Redrawn on a trip
+// change, a weather change, or a message coming or going.
+static void drawTripRow() {
+    const int top = tripRowTop();
+    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, CLOCK_RULE_Y - top);
+    if (message[0]) {
+        tft.setTextColor(msgInk(message));
+        placeCursor(DASH_X + text(message, DASH_X, TRIP_ROW_BASE, Face::SMALL, BL_DATUM));
+        return;
+    }
+    char s[40];
+    tripmeter::line(tripMeter.trip(), s, sizeof(s));
+    tft.setTextColor(pal(termpal::TEXT));
+    const int tripEndX = DASH_X + text(s, DASH_X, TRIP_ROW_BASE, Face::SMALL, BL_DATUM);
+    const char* hiLo = besideTrip(s, wxShown[2]) ? wxShown[2] : wxShown[3];
+    tft.setTextColor(pal(isOffline(hiLo) ? termpal::ALERT : termpal::DIM));
+    text(hiLo, DASH_RIGHT, TRIP_ROW_BASE, Face::SMALL, BR_DATUM);
+    placeCursor(tripEndX);
+}
+
+// The weather after a new reading: the temperature and the sky, then the trip row for the HI / LO
+// line (not while a message holds the row: it comes back with the weather's texts when that goes).
+static void drawWeather() {
+    drawWeatherTop();
+    if (!message[0]) drawTripRow();
+}
+
+// The whole dashboard but its two items (drawAll draws those as buttons).
+static void drawDash() {
+    drawHeader();
+    drawClock();
+    drawWeatherTop();
+    drawTripRow();
+    drawRule(CLOCK_RULE_Y);
+    drawLightsBand();
+    drawRule(LIGHTS_RULE_Y);
+}
+
+// The terminal's boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
+// type out one character every TYPE_MS behind a block cursor (a SMALL cell; 85 characters, ~0.5 s),
+// stay BOOT_HOLD_MS to be read, then drawAll() puts up the dashboard. It runs in setup(), so nothing
+// else draws meanwhile: every other drawing path runs from loop(), and the link and voice tasks start
+// after it (a voice job or a link change that comes later waits in the queue / the link flags for
+// loop() as always).
+static constexpr uint32_t TYPE_MS = 6, BOOT_HOLD_MS = 400;
+static void typeBoot() {
+    clearBg(0, 0, tft.width(), tft.height());
+    const int w = termfont::cell(Face::SMALL), h = termfont::capHeight(Face::SMALL);
+    for (int i = 0; i < N_BOOT; i++) {
+        tft.setTextColor(pal(i == N_BOOT - 1 ? termpal::MID : termpal::TEXT));
+        const int y = BOOT_Y0 + i * BOOT_DY;  // the caps' top row
+        int x = BOOT_X;
+        for (const char* p = BOOT_LINES[i]; *p; p++) {
+            const char ch[2] = {*p, 0};
+            clearBg(x, y, w, h);  // the cursor
+            x += text(ch, x, y, Face::SMALL, TL_DATUM);
+            tft.fillRect(x, y, w, h, pal(termpal::TEXT));
+            delay(TYPE_MS);
+        }
+        clearBg(x, y, w, h);
+    }
+    delay(BOOT_HOLD_MS);
 }
 
 static void drawGrid() {
-    for (int id = TILE0; id < TILE_END; id++) drawButton(id);
+    for (int id = L_TILE0; id < L_PRE0; id++) drawButton(id);
 }
 
 static void drawZones() {
-    for (int id = ZONE0; id < TILE0; id++) drawButton(id);
+    for (int id = L_ZONE0; id < L_TILE0; id++) drawButton(id);
 }
 
-// The focus ring sits in the gap around the button (white is "what the lights show", yellow
-// "pressed"); its corners dip into the button's rect, so drawButton() redraws it.
+// What shows the lights' links on the current screen: Lights' STATUS line (the message too), the
+// Menu's lights band.
+static void drawLightState() {
+    if (screen == Screen::Lights) drawStatus();
+    else if (screen == Screen::Menu) drawLightsBand();
+}
+
+// What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's trip row
+// (then the trip and HI / LO again).
+static void drawMessage() {
+    if (screen == Screen::Lights) drawStatus();
+    else if (screen == Screen::Menu) drawTripRow();
+}
+
+// After a look changed (a tap, voice, the watch, Y): everything that shows it (Lights' STATUS line
+// shows only the links).
+static void drawLooks() {
+    updateTheme();  // a look that changes the theme repaints all in the new one, never a part in the old
+    if (screen == Screen::Lights) {
+        drawGrid();
+        drawLevel();
+    } else if (screen == Screen::Menu) {
+        drawLightsBand();
+    }
+}
+
+// Lights and Karaoke (the Menu's focus is the inverted bar, drawn by the button itself): a TEXT ring in
+// the 2 px gap around the button, apart from the lit colour's bar inside it. Off: the gap's
+// scanlined bg again (the caller redraws the button, and with it any rule the ring crossed).
 static void drawFocus(int id, bool on) {
-    if (id < 0) return;
-    const Rect r = rectOf(id);
-    const uint16_t c = on ? TFT_CYAN : TFT_BLACK;
-    tft.drawRoundRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, 11, c);
-    tft.drawRoundRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2, 10, c);
+    if (id < 0 || screen == Screen::Menu) return;
+    const Rect r = deckmenu::rect(screen, id);
+    if (on) {
+        tft.drawRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, pal(termpal::TEXT));
+        tft.drawRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2, pal(termpal::TEXT));
+        return;
+    }
+    clearBg(r.x - 2, r.y - 2, r.w + 4, 2);
+    clearBg(r.x - 2, r.y + r.h, r.w + 4, 2);
+    clearBg(r.x - 2, r.y, 2, r.h);
+    clearBg(r.x + r.w, r.y, 2, r.h);
 }
 
+// ---- Karaoke screen: the black deck's song, its synced lyrics big ----
+// The top row: < BACK (the same boxed button as Lights') and right of it the song as
+// "TITLE - ARTIST" (BODY, MID, in capitals like the rest of the chrome). The body
+// (deckmenu::KARAOKE_BODY): the lyric line due now big (BIG, TEXT, centred, word-wrapped over up
+// to 3 lines, ".." on the 3rd; a line too long for that in TITLE over up to 4), the next line under
+// it (BODY, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). The
+// lyrics keep their case (they read better than caps); all texts are accent-folded (the font is
+// ASCII only). Without a song to sing along the big text is the state word in DIM (>NO SYNCED
+// LYRICS, >STANDBY, >NO SIGNAL; >WRONG KEY, a problem, in ALERT) and the screen stays. The line
+// switches at its start time: karaoke interpolates the position between polls and lyricsTick looks
+// every KARAOKE_TICK_MS. Each part is redrawn only when what it shows changed.
+static constexpr uint32_t KARAOKE_TICK_MS = 50;
+// The areas' sizes and pitches are termlayout's (test_termfont checks each face's lines fit them).
+static constexpr int KARAOKE_X = 4, KARAOKE_CX = 160;
+static constexpr int KARAOKE_SONG_X = 80, KARAOKE_SONG_W = 236;  // right of < BACK (x 4..74), on the top row
+static constexpr int KARAOKE_BIG_Y = 56;                         // the line due now
+static constexpr int KARAOKE_NEXT_Y = 156;                       // the next line
+static constexpr int KARAOKE_BAR_Y = 224, KARAOKE_BAR_H = 3;
+
+// The texts are accent-folded into karaokeFolded and wrapped into karaokeLines (only loop draws).
+static char karaokeFolded[sizeof(stateparse::Deck::line)];
+static karaoke::Line karaokeLines[4];
+
+// karaokeLines[0..n) centred, the first line's tallest glyph at row y, a line every dy px (each
+// face's lines fit their pitch whole: no line's descender reaches the next's capitals).
+static void drawLines(int n, Face f, int y, int dy, uint16_t ink) {
+    tft.setTextColor(ink);
+    for (int i = 0; i < n; i++) text(karaokeLines[i].s, KARAOKE_CX, y + i * dy + termfont::ascent(f), f, BC_DATUM);
+}
+
+// The big text: BIG over up to 3 lines, or TITLE over up to 4 when BIG would cut it; the block
+// centred in its area. Each is measured in the face it is drawn in.
+static void drawBig(const char* s, uint16_t ink) {
+    txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
+    bool cut = false;
+    Face f = Face::BIG;
+    int n = karaoke::wrap(karaokeFolded, static_cast<int>(f), termfont::widthOf, KARAOKE_W, 3, karaokeLines, &cut);
+    int dy = KARAOKE_BIG_DY;
+    if (cut) {
+        f = Face::TITLE;
+        n = karaoke::wrap(karaokeFolded, static_cast<int>(f), termfont::widthOf, KARAOKE_W, 4, karaokeLines);
+        dy = KARAOKE_FIT_DY;
+    }
+    drawLines(n, f, KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2, dy, ink);
+}
+
+// The next line: BODY over up to 2 lines, DIM.
+static void drawNext(const char* s) {
+    txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
+    const int n = karaoke::wrap(karaokeFolded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_W, 2, karaokeLines);
+    drawLines(n, Face::BODY, KARAOKE_NEXT_Y, KARAOKE_NEXT_DY, pal(termpal::DIM));
+}
+
+// What is on screen now (the texts as the deck sent them), so a redraw paints only the part that
+// changed. drawKaraokeBody(true) forgets it.
+static char karaokeShownSong[sizeof(stateparse::Deck::track) + sizeof(stateparse::Deck::artist) + 4];
+static char karaokeShownBig[sizeof(stateparse::Deck::line)], karaokeShownNext[sizeof(stateparse::Deck::line)];
+static bool karaokeShownWord = false;  // the big text is a state word
+static int karaokeShownBar = -1;
+static bool karaokeShownLive = false;
+
+static void drawKaraokeBody(bool all) {
+    const uint32_t now = millis();
+    const bool heard = lyricsHeard();
+    const stateparse::Deck& d = song.deck;
+    const bool hasTrack = heard && d.track[0];
+    if (all) {
+        clearBg(deckmenu::KARAOKE_BODY);
+        karaokeShownSong[0] = karaokeShownBig[0] = karaokeShownNext[0] = 0;
+        karaokeShownWord = false;
+        karaokeShownBar = -1;
+    }
+
+    static char songText[sizeof(karaokeShownSong)];
+    if (!hasTrack) songText[0] = 0;
+    else if (d.artist[0]) snprintf(songText, sizeof(songText), "%s - %s", d.track, d.artist);
+    else snprintf(songText, sizeof(songText), "%s", d.track);
+    if (all || strcmp(songText, karaokeShownSong) != 0) {
+        snprintf(karaokeShownSong, sizeof(karaokeShownSong), "%s", songText);
+        static char folded[sizeof(songText)];
+        static karaoke::Line fit[1];
+        txt::asciiFold(songText, folded, sizeof(folded));
+        upper(folded, folded, sizeof(folded));
+        const int n = karaoke::wrap(folded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_SONG_W, 1, fit);
+        clearBg(KARAOKE_SONG_X, 2, KARAOKE_SONG_W, 36);
+        tft.setTextColor(pal(termpal::MID));
+        if (n > 0) text(fit[0].s, KARAOKE_SONG_X, 20, Face::BODY, ML_DATUM);
+    }
+
+    const uint32_t pos = hasTrack ? static_cast<uint32_t>(karaoke::progressMs(d, now - song.at)) : 0;
+    const char* stateWord = karaoke::state(heard, song.wrongKey, d.playing, d);
+    const bool isWord = stateWord[0] != 0;
+    const char* big = isWord ? stateWord : karaoke::lyric(d, pos);
+    const bool bigChanged = all || isWord != karaokeShownWord || strcmp(big, karaokeShownBig) != 0;
+    if (bigChanged) {
+        snprintf(karaokeShownBig, sizeof(karaokeShownBig), "%s", big);
+        karaokeShownWord = isWord;
+        clearBg(KARAOKE_X, KARAOKE_BIG_Y, KARAOKE_W, KARAOKE_BIG_H);
+        drawBig(big, pal(karaoke::isAlert(big) ? termpal::ALERT : isWord ? termpal::DIM : termpal::TEXT));
+    }
+    const char* next = isWord ? "" : karaoke::nextLine(d, pos);
+    if (all || strcmp(next, karaokeShownNext) != 0) {
+        snprintf(karaokeShownNext, sizeof(karaokeShownNext), "%s", next);
+        clearBg(KARAOKE_X, KARAOKE_NEXT_Y, KARAOKE_W, KARAOKE_NEXT_H);
+        drawNext(next);
+    }
+    // The line switched between polls (the position is interpolated) and the one after it isn't known
+    // until the next poll: ask for that one now. The area stays blank meanwhile, not a stale line.
+    if (bigChanged && !all && !isWord && next[0] == 0) lyricsNudge = true;
+
+    // the progress line: the played part a solid bar, the rest a DIM hairline through its middle
+    const int px = karaoke::cells(pos, hasTrack ? d.durationMs : 0, KARAOKE_W);
+    const bool live = hasTrack && d.playing;
+    if (all || px != karaokeShownBar || live != karaokeShownLive) {
+        karaokeShownBar = px;
+        karaokeShownLive = live;
+        if (px > 0) tft.fillRect(KARAOKE_X, KARAOKE_BAR_Y, px, KARAOKE_BAR_H, pal(live ? termpal::TEXT : termpal::MID));
+        if (px < KARAOKE_W) {
+            clearBg(KARAOKE_X + px, KARAOKE_BAR_Y, KARAOKE_W - px, KARAOKE_BAR_H);
+            tft.drawFastHLine(KARAOKE_X + px, KARAOKE_BAR_Y + KARAOKE_BAR_H / 2, KARAOKE_W - px, pal(termpal::DIM));
+        }
+    }
+}
+
+// Redraws the current screen in the current palette.
 static void drawAll() {
-    tft.fillScreen(TFT_BLACK);
-    for (int id = 0; id < N_BTN; id++) drawButton(id);
-    drawLevel();
-    drawFocus(focus, true);
+    clearBg(0, 0, tft.width(), tft.height());
+    if (screen != Screen::Menu) drawTabRule(0, tft.width());
+    for (int id = 0; id < deckmenu::count(screen); id++) {
+        if (built(id)) drawButton(id);
+    }
+    if (screen == Screen::Menu) {
+        drawDash();
+    } else if (screen == Screen::Karaoke) {
+        drawKaraokeBody(true);
+    } else {
+        drawLevel();
+        drawStatus();
+    }
 }
 
 // ---- Touch calibration: tap five crosses with the pen, fit, keep it in NVS ("touch"/"hom") ----
@@ -482,49 +1168,110 @@ static void load() {
         l.swatch = prefs.getUChar(key, static_cast<uint8_t>(old.swatch)) % N_SWATCH;
         snprintf(key, sizeof(key), "pct%d", i);
         l.pct = prefs.getUChar(key, old.pct);
-        if (l.pct < MIN_INTENSITY || l.pct > 100) l.pct = 100;
+        if (l.pct < ledlook::MIN_PCT || l.pct > 100) l.pct = 100;
         snprintf(key, sizeof(key), "lit%d", i);
         l.lit = prefs.getBool(key, old.lit);
         savedLooks[i] = l;
     }
     target = savedTarget = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
+    // fav0..fav3 (the saved favourites of earlier builds) stay in NVS, unread.
 }
 
-// One settled tap on a button.
-static void press(int id) {
-    Look& l = cur();
-    if (id < TILE0) {  // another page: show its look
-        target = static_cast<Target>(id);
-        drawZones();
-        drawGrid();
-        drawLevel();
-    } else if (id < TILE_END) {
-        // A second tap on the lit colour within DOUBLE_MS turns the lights off; any other tap sets
-        // the colour and turns them on.
-        static constexpr uint32_t DOUBLE_MS = 450;
-        static int lastTile = -1;
-        static uint32_t lastTileMs = 0;
-        const int tile = id - TILE0;
-        const bool doubleTap = l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
-        lastTile = doubleTap ? -1 : tile;  // a third tap starts over
-        lastTileMs = millis();
-        if (doubleTap) {
-            l.lit = false;
-        } else {
-            l.swatch = tile;
-            l.lit = true;
-        }
-        pushTargets();
-        drawGrid();
-        drawLevel();
-        drawZones();  // the tab chips follow
-    } else {
-        const int pct = l.pct + (id == PLUS ? 10 : -10);
-        l.pct = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
-        pushTargets();
-        drawLevel();
+// ---- Trip meter: the clock, the OBD hook and the NVS record ("trip", 9 bytes) ----
+static tripclock::Clock tripClock;
+static uint32_t tripStartMs = 0;  // millis() of the first tick, 0: not started
+static volatile uint16_t tripKmh = 0;       // the latest reading, written by tripSpeed()
+static volatile uint32_t tripSpeedAt = 0;   // millis() of that reading, never 0; 0: none yet
+static uint32_t tripIntegratedAt = 0;       // millis() tripTick() last integrated the speed
+static constexpr uint32_t TRIP_MAX_STEP_MS = 3000;  // one integration step counts at most this (a stalled loop)
+static constexpr uint32_t TRIP_FRESH_MS = 3000;     // a reading older than this is stale (the link dropped): no distance
+static uint8_t tripSaved[tripmeter::RECORD_BYTES];
+static bool tripSavedValid = false;
+
+// The OBD link will call this with each speed reading (km/h). It may run on another core, so it
+// only stores the latest reading; tripTick() on the loop task integrates it once a second (the
+// Meter isn't thread-safe). Nothing calls it yet and no speed is faked, so the trip line shows "--" km.
+static void tripSpeed(uint16_t kmh) __attribute__((unused));
+static void tripSpeed(uint16_t kmh) {
+    // The speed first, then the time that makes it count: 32-bit and 16-bit writes are atomic on the
+    // ESP32, so loop() sees the old pair or the new speed with either time. A new speed with the old
+    // time is merely a fraction of a second early.
+    tripKmh = kmh;
+    const uint32_t now = millis();
+    tripSpeedAt = now ? now : 1;
+}
+
+// The previous trip from NVS, as a message when it lasted a minute or more (shorter ones are a
+// bench test or a failed start). Called once, before the first draw.
+static void showLastTrip() {
+    uint8_t buf[tripmeter::RECORD_BYTES + 1];
+    const size_t len = prefs.getBytesLength("trip");
+    if (len != tripmeter::RECORD_BYTES || prefs.getBytes("trip", buf, sizeof(buf)) != len) return;
+    tripmeter::Trip t;
+    if (!tripmeter::decode(buf, len, &t) || t.seconds < 60) return;
+    char m[sizeof(message)];
+    tripmeter::last(t, m, sizeof(m));
+    setMessage(m, LAST_TRIP_MS);
+}
+
+// Each loop pass: once a second the seconds, and the trip row if the trip's text changed; once a minute
+// the NVS record (when it differs from the last one written).
+static void tripTick() {
+    const uint32_t now = millis();
+    if (!tripStartMs) {
+        tripStartMs = now ? now : 1;  // not now|1: that can be 1 ms ahead of now
+        tripClock = tripclock::Clock(tripStartMs);
     }
+    static uint32_t checkedAt = 0;
+    if (checkedAt && now - checkedAt < 1000) return;
+    checkedAt = now ? now : 1;  // not now|1: that can be 1 ms ahead of now, and now - it wraps
+    const uint32_t seenAt = tripSpeedAt;
+    if (seenAt && static_cast<int32_t>(now - seenAt) <= static_cast<int32_t>(TRIP_FRESH_MS)) {  // signed: core 0 may stamp it after our now; a silent link stops the distance
+        const uint32_t dt = tripIntegratedAt ? now - tripIntegratedAt : 0;
+        tripMeter.addSpeed(tripKmh, dt < TRIP_MAX_STEP_MS ? dt : TRIP_MAX_STEP_MS);
+    }
+    tripIntegratedAt = checkedAt;
+    tripMeter.setSeconds(tripClock.seconds(now));
+    const tripmeter::Trip t = tripMeter.trip();
+    // the line shows minutes and tenths of a km: redraw only when one of them moved
+    static bool shown = false;
+    static tripmeter::Trip on;
+    if (!shown || t.seconds / 60 != on.seconds / 60 || t.meters / 100 != on.meters / 100 || t.hasDistance != on.hasDistance) {
+        shown = true;
+        on = t;
+        if (screen == Screen::Menu && !message[0]) drawTripRow();  // a message holds the row: it brings the trip back
+    }
+    static uint32_t savedAt = 0;
+    if (!savedAt) savedAt = now ? now : 1;
+    if (now - savedAt >= 60000) {
+        savedAt = now ? now : 1;
+        uint8_t buf[tripmeter::RECORD_BYTES];
+        tripmeter::encode(t, buf);
+        if (!tripSavedValid || memcmp(buf, tripSaved, sizeof(buf)) != 0) {
+            prefs.putBytes("trip", buf, sizeof(buf));
+            memcpy(tripSaved, buf, sizeof(buf));
+            tripSavedValid = true;
+        }
+    }
+}
+
+// Preset slot0 (0..3) onto the lights: each light gets the preset's look. The BOTH page copies them
+// when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
+// shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
+// the watch.
+static void applyPreset(int slot0) {
+    const ledpresets::Preset& p = ledpresets::PRESETS[slot0];
+    looks[INSIDE] = p.in;
+    looks[OUTSIDE] = p.out;
+    looks[BOTH] = bothlook::seed(p.in, p.out);
+    for (int i = 0; i < N_CTRL; i++) push(i);
     save();
+    char m[sizeof(message)];
+    lightstatus::applied(p.name, m, sizeof(m));
+    setMessage(m);
+    updateTheme();
+    drawLooks();
+    drawMessage();  // Lights' STATUS line, the Menu's trip row
 }
 
 // A press is averaged over its first SETTLE_MS (a fingertip's first readings jump around) and acts
@@ -537,77 +1284,156 @@ static struct {
     int n = 0, id = -1;  // id: the button drawn pressed
 } tap;
 
-static void act() {
-    tap.acted = true;
-    const int x = static_cast<int>(tap.sx / tap.n), y = static_cast<int>(tap.sy / tap.n);
-    tap.id = hit(x, y);
-    Serial.printf("[tap] %d,%d -> button %d\n", x, y, tap.id);
-    if (tap.id < 0) return;
-    press(tap.id);
-    drawButton(tap.id, true);
-}
-
-// ---- Xbox controller input ----
-//   D-pad: move the focus ring (held: repeats; the sticks are ignored)    A: press the focused button
-//   B: the BOTH page    X: next page    Y: this page's lights on/off    LB / RB: - / +
-
-// The nearest button from `from` in direction (dx, dy), by centres; straying sideways costs double.
-static int neighbour(int from, int dx, int dy) {
-    const Rect a = rectOf(from);
-    const int ax = a.x + a.w / 2, ay = a.y + a.h / 2;
-    int best = from, bestScore = 1 << 30;
-    for (int id = 0; id < N_BTN; id++) {
-        if (id == from) continue;
-        const Rect b = rectOf(id);
-        const int vx = b.x + b.w / 2 - ax, vy = b.y + b.h / 2 - ay;
-        const int along = dx ? vx * dx : vy * dy;
-        if (along <= 0) continue;
-        const int across = dx ? (vy < 0 ? -vy : vy) : (vx < 0 ? -vx : vx);
-        if (along + 2 * across < bestScore) {
-            bestScore = along + 2 * across;
-            best = id;
-        }
-    }
-    return best;
-}
-
 // The button a controller press is showing yellow, and since when (see padPress).
 static constexpr uint32_t PAD_FLASH_MS = 150;
 static int padFlash = -1;
 static uint32_t padFlashAt = 0;
 
-// Moves the ring to `to` (-1: hides it). Erasing the old ring also notches its button's corners,
-// so that button is redrawn.
+// Whether button `id` is under a finger or a controller press right now (drawn yellow).
+static bool pressedNow(int id) { return (tap.down && tap.id == id) || padFlash == id; }
+
+// Switches to screen `s`: the focus goes to its first button (none without a controller), a press
+// still drawn yellow is forgotten (its id means another button there), and so is a message (it was
+// about the screen left; the new screen shows its usual line).
+// Back from Karaoke, the focus lands on the KARAOKE item it came from.
+static void show(Screen s) {
+    const Screen from = screen;
+    screen = s;
+    tap.id = -1;
+    padFlash = -1;
+    message[0] = 0;
+    if (s == Screen::Karaoke) karaokeAt = millis();
+    focus = padUp ? homeFocus() : -1;
+    if (focus >= 0 && s == Screen::Menu && from == Screen::Karaoke) focus = M_ITEM0 + deckmenu::KARAOKE;
+    drawAll();
+}
+
+// One settled tap on a Lights button.
+static void pressLights(int id) {
+    Look& l = cur();
+    if (id == L_BACK) {
+        show(Screen::Menu);
+        return;
+    }
+    if (deckmenu::isPreset(screen, id)) {
+        applyPreset(deckmenu::presetSlot(screen, id));
+        return;  // applyPreset saved and drew
+    }
+    if (id < L_TILE0) {  // another page: show its look
+        target = static_cast<Target>(id - L_ZONE0);
+        drawZones();
+        drawGrid();
+        drawLevel();
+    } else if (id < L_PRE0) {
+        // A second tap on the lit colour within DOUBLE_MS turns the lights off; any other tap sets
+        // the colour and turns them on.
+        static constexpr uint32_t DOUBLE_MS = 450;
+        static int lastTile = -1;
+        static uint32_t lastTileMs = 0;
+        const int tile = id - L_TILE0;
+        const bool doubleTap = l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
+        lastTile = doubleTap ? -1 : tile;  // a third tap starts over
+        lastTileMs = millis();
+        bothlook::Change c;
+        if (doubleTap) c.power = 0;
+        else c.swatch = tile;
+        change(target, c);
+        drawLooks();
+    } else {  // L_MINUS / L_PLUS
+        bothlook::Change c;
+        c.step = id == L_PLUS ? 1 : -1;
+        const bool wasMixed = bothMixed();
+        change(target, c);
+        if (bothMixed() != wasMixed) drawGrid();  // a step can bring mixed lights to one look
+        drawLevel();
+    }
+    save();
+}
+
+// One settled tap on a button of the current screen.
+static void press(int id) {
+    if (screen == Screen::Lights) {
+        pressLights(id);
+        return;
+    }
+    if (screen == Screen::Karaoke) {
+        if (id == K_BACK) show(Screen::Menu);
+        return;
+    }
+    if (id < M_ITEM0 || id >= M_ITEM0 + deckmenu::N_ITEMS) return;
+    switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
+    case deckmenu::LIGHTS: show(Screen::Lights); break;
+    case deckmenu::KARAOKE:
+        // dimmed: no song to sing along, so only a message (on the trip row) says why
+        if (karaokeReady()) {
+            show(Screen::Karaoke);
+        } else {
+            setMessage(karaoke::whyNot(lyricsHeard(), song.wrongKey, song.deck.playing, song.deck));
+            drawMessage();
+        }
+        break;
+    }
+}
+
+static void act() {
+    tap.acted = true;
+    const int x = static_cast<int>(tap.sx / tap.n), y = static_cast<int>(tap.sy / tap.n);
+    tap.id = deckmenu::hit(screen, x, y);
+    Serial.printf("[tap] %d,%d -> button %d\n", x, y, tap.id);
+    if (tap.id < 0) return;
+    const Screen was = screen;
+    press(tap.id);
+    if (screen == was) drawButton(tap.id, true);  // else show() redrew all and cleared tap.id
+}
+
+// ---- Xbox controller input ----
+//   D-pad: move the focus (held: repeats; the sticks are ignored; on the Menu left / right between
+//          its two items)    A: press the focused button
+//   B: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
+//   Lights only: X next page    Y this page's lights on/off    LB / RB: - / +
+
+// Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
+// redrawn. On Lights, erasing the old ring can notch its button's edge, so that button is redrawn.
 static void setFocus(int to) {
     const int old = focus;
     if (to == old) return;
     focus = to;
+    if (screen == Screen::Menu) {
+        if (old >= 0) drawButton(old, pressedNow(old));
+        if (to >= 0) drawButton(to, pressedNow(to));
+        return;
+    }
     if (old >= 0) {
         drawFocus(old, false);
-        drawButton(old, padFlash == old);
+        drawButton(old, pressedNow(old));
     }
     if (to >= 0) drawFocus(to, true);
 }
 
-static void moveFocus(int dx, int dy) { setFocus(neighbour(focus, dx, dy)); }
+// focus is always a built id of the current screen (deckmenu::neighbour can't start from another).
+static void moveFocus(int dx, int dy) {
+    if (focus >= 0) setFocus(deckmenu::neighbour(screen, focus, dx, dy));
+}
 
 // A button press on the controller: the press looks (yellow) for PAD_FLASH_MS. One at a time: a
 // second press inside that window first restores the earlier button (else -/+ stayed yellow).
 static void padPress(int id) {
+    if (id < 0) return;
     if (padFlash >= 0 && padFlash != id) drawButton(padFlash);
+    const Screen was = screen;
     press(id);
+    if (screen != was) return;  // show() redrew the new screen
     drawButton(id, true);
     padFlash = id;
     padFlashAt = millis();
 }
 
 static void handlePad() {
-    static bool was = false;
     const bool is = xbox.isConnected() && !xbox.isWaitingForFirstNotification();
-    if (is != was) {
-        was = is;
+    if (is != padUp) {
+        padUp = is;
         Serial.printf("[pad] %s\n", is ? "connected" : "gone");
-        setFocus(is ? TILE0 + cur().swatch : -1);
+        setFocus(is ? homeFocus() : -1);
     }
     if (padFlash >= 0 && millis() - padFlashAt > PAD_FLASH_MS) {
         drawButton(padFlash);
@@ -634,26 +1460,316 @@ static void handlePad() {
     lastDx = dx;
     lastDy = dy;
 
-    // buttons act on the press, once
+    // buttons act on the press, once; every edge is taken on both screens, so a button held across
+    // a screen change doesn't fire on the next one
     static bool pA = false, pB = false, pX = false, pY = false, pLB = false, pRB = false;
     auto edge = [](bool now, bool& prev) {
         const bool down = now && !prev;
         prev = now;
         return down;
     };
-    if (edge(n.btnA, pA)) padPress(focus);
-    if (edge(n.btnB, pB)) padPress(ZONE0 + BOTH);
-    if (edge(n.btnX, pX)) padPress(ZONE0 + (target + 1) % 3);
-    if (edge(n.btnLB, pLB)) padPress(MINUS);
-    if (edge(n.btnRB, pRB)) padPress(PLUS);
-    if (edge(n.btnY, pY)) {
-        cur().lit = !cur().lit;
-        pushTargets();
-        drawGrid();
-        drawLevel();
-        drawZones();
+    const bool a = edge(n.btnA, pA), b = edge(n.btnB, pB), x = edge(n.btnX, pX), y = edge(n.btnY, pY);
+    const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
+    const Screen was = screen;
+    if (a) padPress(focus);
+    if (screen != was) return;  // A changed the screen: the other buttons wait for their next press
+    if (b && screen != Screen::Menu) {
+        show(Screen::Menu);
+        return;
+    }
+    if (screen != Screen::Lights) return;  // the rest is the Lights page's
+    if (x) padPress(L_ZONE0 + (target + 1) % 3);
+    if (lb) padPress(L_MINUS);
+    if (rb) padPress(L_PLUS);
+    if (y) {  // on / off; on BOTH while the lights differ, off if either is on
+        bothlook::Change c;
+        c.power = (bothMixed() ? looks[INSIDE].lit || looks[OUTSIDE].lit : cur().lit) ? 0 : 1;
+        change(target, c);
+        drawLooks();
         save();
     }
+}
+
+// ---- Weather: where the car is (ip-api.com) and its weather (Open-Meteo), over the hotspot ----
+// Its own task (core 1, idle priority like the voice server, which it never blocks): once WiFi is
+// up, at start and every 15 min, GET the place (once per boot, again while it fails), then the
+// weather, both plain http (no TLS on a heap shared with NimBLE, WiFi and the server), 5 s
+// timeouts, the body into a fixed 2 KB buffer. Each try is published under weatherMux; a failed
+// try keeps the last good reading and comes again in 2 min. loop() polls weatherFresh to redraw.
+// The place is the phone's public IP's: approximate (the operator's city, sometimes a
+// neighbour's), which is fine for the weather.
+static constexpr uint32_t WEATHER_EVERY_MS = 15 * 60 * 1000, WEATHER_RETRY_MS = 2 * 60 * 1000;
+static TaskHandle_t weatherHandle = nullptr;
+static portMUX_TYPE weatherMux = portMUX_INITIALIZER_UNLOCKED;
+static WeatherReading weatherPub;           // guarded by weatherMux
+static volatile bool weatherFresh = false;  // a try was published; loop() clears it
+static char weatherBody[2048];              // only the weather task touches it
+
+// GET `url` into weatherBody (cut at 2 KB, always terminated); the HTTP status, negative without an
+// answer. HTTP/1.0, so the body is never chunked.
+static int weatherGet(const char* url) {
+    weatherBody[0] = 0;
+    WiFiClient c;
+    HTTPClient h;
+    h.setTimeout(5000);
+    h.setConnectTimeout(5000);
+    h.useHTTP10(true);
+    if (!h.begin(c, url)) return -1;
+    const int rc = h.GET();
+    size_t len = 0;
+    if (rc == 200) {
+        WiFiClient* s = h.getStreamPtr();
+        readguard::Guard g(millis(), 5000, 8000);
+        while (len < sizeof(weatherBody) - 1 && (h.connected() || s->available())) {
+            const int a = s->available();
+            if (a <= 0) {
+                if (g.check(millis()) != readguard::State::Ok) break;
+                vTaskDelay(pdMS_TO_TICKS(5));
+                continue;
+            }
+            size_t want = sizeof(weatherBody) - 1 - len;
+            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
+            len += s->readBytes(weatherBody + len, want);
+            g.onData(millis());
+        }
+    }
+    weatherBody[len] = 0;
+    h.end();
+    return rc;
+}
+
+static void publishWeather(const WeatherReading& r) {
+    portENTER_CRITICAL(&weatherMux);
+    weatherPub = r;
+    portEXIT_CRITICAL(&weatherMux);
+    weatherFresh = true;
+}
+
+static void weatherTask(void*) {
+    geoip::Place place{};
+    bool placed = false;
+    WeatherReading r;  // the last good reading, with this try's outcome
+    for (;;) {
+        bool ok = false;
+        if (!net::isOnline()) {
+            Serial.println("[weather] offline");
+        } else {
+            if (!placed) {
+                const int rc = weatherGet(geoip::URL);
+                placed = rc == 200 && geoip::parse(weatherBody, &place);
+                if (placed) Serial.printf("[weather] place %s (%s, %s)\n", place.city, place.lat, place.lon);
+                else Serial.printf("[weather] place failed (http %d)\n", rc);
+            }
+            if (placed) {
+                char url[256];
+                weather::url(place.lat, place.lon, url, sizeof(url));
+                const int rc = weatherGet(url);
+                weather::Now now;
+                if (rc == 200 && weather::parse(weatherBody, &now)) {
+                    ok = true;
+                    r.ok = true;
+                    r.tempC = now.tempC;
+                    r.code = now.code;
+                    r.day = now.day;
+                    r.daily = weather::parseDaily(weatherBody, &r.maxC, &r.minC);
+                    snprintf(r.city, sizeof(r.city), "%s", place.city);
+                    Serial.printf("[weather] %s %.1fC %s, hi %.1f lo %.1f%s  (heap %u)\n", r.city, r.tempC,
+                                  weather::words(r.code), r.maxC, r.minC, r.daily ? "" : " (no daily)",
+                                  static_cast<unsigned>(ESP.getFreeHeap()));
+                } else {
+                    Serial.printf("[weather] forecast failed (http %d)\n", rc);
+                }
+            }
+        }
+        r.failed = !ok;
+        publishWeather(r);
+        if (!ok) Serial.println("[weather] retry in 2 min");
+        vTaskDelay(pdMS_TO_TICKS(ok ? WEATHER_EVERY_MS : WEATHER_RETRY_MS));
+    }
+}
+
+// From the voice task, once WiFi is up. 6 KB: HTTPClient and its Strings; the [mem] line shows
+// what's left.
+static void beginWeather() {
+    if (weatherHandle) return;
+    xTaskCreatePinnedToCore(weatherTask, "weather", 6144, nullptr, 0, &weatherHandle, 1);
+}
+
+// In loop(): takes a published try and, on the Menu, redraws the weather when one of its texts
+// changed (a try every 15 min mostly brings the same).
+static void takeWeather() {
+    if (!weatherFresh) return;
+    weatherFresh = false;  // before the copy: a try published meanwhile raises it again
+    portENTER_CRITICAL(&weatherMux);
+    wx = weatherPub;
+    portEXIT_CRITICAL(&weatherMux);
+    if (screen != Screen::Menu) return;
+    char t[N_WX_TEXT][48];
+    weatherTexts(t);
+    for (int i = 0; i < N_WX_TEXT; i++) {
+        if (strcmp(t[i], wxShown[i]) != 0) {
+            drawWeather();
+            return;
+        }
+    }
+}
+
+// ---- Lyrics: what the black deck (the S3) is playing, from its GET /state ----
+// Its own task (core 1, idle priority like the weather; core 0 is the lights' and the controller's
+// link), started with the weather once WiFi is up. It polls only while a screen that shows it is up
+// (loop() keeps lyricsWant): the KARAOKE screen every second, every 5 s after ten misses in a row
+// (util/pollpace); the Menu every MENU_POLL_MS, every 30 s after those ten misses (enough to light or
+// dim its KARAOKE item); at once when either opens. Otherwise it sleeps. On KARAOKE loop() also
+// nudges an extra poll (lyricsNudge, at most one per LYRICS_NUDGE_MS) when the line shown changes
+// and the next one isn't known, so the dim line under it needn't wait for the next second's poll. The black deck is at its fixed hotspot
+// address (COMPANION_DECK) on the iPhone hotspot, else looked up by its mDNS name (DECK_MDNS_NAME)
+// and kept through blips (util/deckaddr). HTTP/1.0, 1.5 s timeouts, the body into a fixed
+// statejson::MAX_JSON buffer, util/stateparse. Each poll is published under lyricsMux; loop() polls
+// lyricsFresh to redraw. The log tells when the deck is found, lost and back, not every poll.
+static TaskHandle_t lyricsHandle = nullptr;
+static portMUX_TYPE lyricsMux = portMUX_INITIALIZER_UNLOCKED;
+static LyricsReading lyricsPub;             // guarded by lyricsMux
+static volatile bool lyricsFresh = false;  // a poll was published; loop() clears it
+enum LyricsWant : uint8_t { WANT_NONE, WANT_MENU, WANT_KARAOKE };
+static volatile uint8_t lyricsWant = WANT_NONE;  // what the screen shown needs; loop() keeps it
+static pollpace::Pace lyricsPace;                 // only the lyrics task touches it (and lyricsHost)
+static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches these three
+static deckaddr::Keep lyricsAddr;
+static bool lyricsMdns = false;
+
+// Where the black deck is: its fixed address on the hotspot, else its mDNS name on whatever network
+// both are on. False when it can't be found.
+static bool lyricsHost(char* out, size_t n) {
+    if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()))) {
+        snprintf(out, n, "%s", COMPANION_DECK);
+        return true;
+    }
+    if (!lyricsMdns) lyricsMdns = MDNS.begin("cardeck-leds");
+    if (lyricsAddr.addr() == 0) {
+        // each failed lookup holds the task for up to 1.5 s: while the deck stays away, not every poll
+        const uint32_t now = millis();
+        if (!lyricsPace.mayLookup(now)) return false;
+        lyricsPace.lookedUp(now);
+        const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
+        if (static_cast<uint32_t>(a) == 0) return false;
+        lyricsAddr.found(static_cast<uint32_t>(a));
+        Serial.printf("[lyrics] deck found at %s (mDNS)\n", a.toString().c_str());
+    }
+    snprintf(out, n, "%s", IPAddress(lyricsAddr.addr()).toString().c_str());
+    return true;
+}
+
+// GET /state into lyricsBody (cut at MAX_JSON, always terminated); the HTTP status, negative without
+// an answer. Short timeouts: the deck is one hop away, and a missing deck must not hold the polls up.
+static int lyricsGet() {
+    lyricsBody[0] = 0;
+    if (!net::isOnline()) return -1;
+    char host[40], url[128];
+    if (!lyricsHost(host, sizeof(host))) return -1;
+    snprintf(url, sizeof(url), "http://%s/state?k=%s", host, REMOTE_TOKEN);
+    WiFiClient c;
+    HTTPClient h;
+    h.setTimeout(1500);
+    h.setConnectTimeout(1500);
+    h.useHTTP10(true);
+    if (!h.begin(c, url)) return -1;
+    const int rc = h.GET();
+    size_t len = 0;
+    if (rc == 200) {
+        WiFiClient* s = h.getStreamPtr();
+        readguard::Guard g(millis(), 1500, 3000);
+        while (len < sizeof(lyricsBody) - 1 && (h.connected() || s->available())) {
+            const int a = s->available();
+            if (a <= 0) {
+                if (g.check(millis()) != readguard::State::Ok) break;
+                vTaskDelay(pdMS_TO_TICKS(2));
+                continue;
+            }
+            size_t want = sizeof(lyricsBody) - 1 - len;
+            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
+            len += s->readBytes(lyricsBody + len, want);
+            g.onData(millis());
+        }
+    }
+    lyricsBody[len] = 0;
+    h.end();
+    return rc;
+}
+
+static void lyricsTask(void*) {
+    static stateparse::Deck deck;  // static: ~650 B, off the task stack
+    pollpace::Pace& pace = lyricsPace;
+    uint32_t lastPoll = 0;
+    uint8_t was = WANT_NONE;  // what was wanted at the last poll
+    for (;;) {
+        const uint8_t want = lyricsWant;
+        if (want == WANT_NONE) {
+            was = WANT_NONE;
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        const uint32_t now = millis();
+        const uint32_t every = want == WANT_MENU ? pace.menuIntervalMs() : pace.intervalMs();
+        // a nudge only helps while the deck answers (a missing one is polled at its own pace)
+        const bool nudged = lyricsNudge && want == WANT_KARAOKE && pace.misses() == 0 && now - lastPoll >= LYRICS_NUDGE_MS;
+        if (want != was || now - lastPoll >= every || nudged) {
+            // KARAOKE just opened: poll at once, at the fast pace, and look the name up again at once.
+            // (The Menu keeps the misses so far, or its 30 s back-off would restart on every visit.)
+            if (want == WANT_KARAOKE && was != WANT_KARAOKE) pace = pollpace::Pace();
+            was = want;
+            lastPoll = now;
+            lyricsNudge = false;
+            const int rc = lyricsGet();
+            const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
+            if (pace.misses() == 0 && !ok) Serial.printf("[lyrics] deck lost (rc=%d)\n", rc);
+            if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
+            pace.onResult(ok);
+            lyricsAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
+            const uint32_t at = millis();
+            portENTER_CRITICAL(&lyricsMux);
+            lyricsPub.wrongKey = rc == 403;
+            if (ok) {
+                lyricsPub.deck = deck;
+                lyricsPub.at = at ? at : 1;
+            }
+            portEXIT_CRITICAL(&lyricsMux);
+            lyricsFresh = true;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+
+// From the voice task, once WiFi is up. 6 KB: HTTPClient, its Strings and the mDNS query; the [mem]
+// line shows what's left.
+static void beginLyrics() {
+    if (lyricsHandle) return;
+    xTaskCreatePinnedToCore(lyricsTask, "lyrics", 6144, nullptr, 0, &lyricsHandle, 1);
+}
+
+// In loop(): tells the task how to poll, takes a published poll, and redraws what changed: on the
+// Menu the KARAOKE item when it turns lit or dimmed (a state also goes stale with time, so this looks
+// each pass), on KARAOKE the parts of the screen that changed (the line and the bar move between
+// polls, so this looks every KARAOKE_TICK_MS).
+static void lyricsTick() {
+    lyricsWant = screen == Screen::Karaoke ? WANT_KARAOKE : screen == Screen::Menu ? WANT_MENU : WANT_NONE;
+    bool fresh = false;
+    if (lyricsFresh) {
+        lyricsFresh = false;  // before the copy: a poll published meanwhile raises it again
+        portENTER_CRITICAL(&lyricsMux);
+        song = lyricsPub;
+        portEXIT_CRITICAL(&lyricsMux);
+        fresh = true;
+    }
+    if (screen == Screen::Menu) {
+        const int item = M_ITEM0 + deckmenu::KARAOKE;
+        if (karaokeReady() != karaokeShownReady) drawButton(item, pressedNow(item));
+        return;
+    }
+    if (screen != Screen::Karaoke) return;
+    static uint32_t drawnAt = 0;
+    if (!fresh && millis() - drawnAt < KARAOKE_TICK_MS) return;
+    drawnAt = millis();
+    drawKaraokeBody(false);
 }
 
 // ---- Voice: Siri Shortcuts over WiFi ----
@@ -662,6 +1778,9 @@ static void handlePad() {
 // ("Purple, 70 percent"). Without a zone it acts like the BOTH page (Siri: spoken zone words are
 // ignored); &zone=inside|outside (the Garmin app) acts on that zone's page only.
 // GET /state?k=[&zone=] answers that zone's line (level included) without changing anything.
+// A preset ("rose", "preset 2") is applied to both lights and answered with its line; the rest of
+// that phrase (a colour, a level, the zone) is ignored. GET /presets?k= lists the four presets (one
+// ledpresets::wireLine each), GET /status?k= each light's state.
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
 // the state) and the handler waits for loop()'s reply. Each job carries a sequence number that the
 // reply echoes, so a request that timed out (loop busy, e.g. calibrating) can't answer the next
@@ -679,49 +1798,82 @@ static remotegate::Gate gate(REMOTE_TOKEN);
 static QueueHandle_t voiceQueue = nullptr;
 static SemaphoreHandle_t voiceDone = nullptr;
 static portMUX_TYPE voiceMux = portMUX_INITIALIZER_UNLOCKED;
-static char voiceReply[64];  // guarded by voiceMux, with replySeq
+// 112: the longest preset line ("Purpura: inside Purple 40 percent, outside ...") fits.
+static char voiceReply[112];  // guarded by voiceMux, with replySeq
 static uint32_t replySeq = 0;
 
-// A zone's look as one line ("Purple, 70 percent", "Inside: Lights off"). withLevel: say the %
-// too; a voice reply only does when the command changed it ("Purple, 20 percent" after a plain
-// "purple" sounded like the deck wanted a percentage).
-static void describe(char* out, size_t n, Target zone = BOTH, bool withLevel = true) {
+// What /state and /status read (they run on the server task): loop() copies it from its own state
+// after every pass (and before each voice reply), under stateMux, so a handler never sees a
+// half-written look.
+struct Published {
+    Look looks[3];  // indexed by Target
+    bool up[N_CTRL];
+};
+static Published published;
+static portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
+
+static void publish() {
+    Published p;
+    for (int i = 0; i < 3; i++) p.looks[i] = looks[i];
+    for (int i = 0; i < N_CTRL; i++) p.up[i] = linkUp(controllers[i]);
+    portENTER_CRITICAL(&stateMux);
+    published = p;
+    portEXIT_CRITICAL(&stateMux);
+}
+
+static Published snapshot() {
+    portENTER_CRITICAL(&stateMux);
+    const Published p = published;
+    portEXIT_CRITICAL(&stateMux);
+    return p;
+}
+
+// Zone `zone`'s look `l` as one line ("Purple, 70 percent", "Inside: Lights off"). withLevel: say
+// the % too; a voice reply only does when the command changed it ("Purple, 20 percent" after a
+// plain "purple" sounded like the deck wanted a percentage).
+static void describe(char* out, size_t n, const Look& l, Target zone, bool withLevel = true) {
     static const char* prefix[] = {"", "Inside: ", "Outside: "};
-    const Look& l = looks[zone];
     if (!l.lit) snprintf(out, n, "%sLights off", prefix[zone]);
     else if (withLevel) snprintf(out, n, "%s%s, %u percent", prefix[zone], SWATCHES[l.swatch].name, l.pct);
     else snprintf(out, n, "%s%s", prefix[zone], SWATCHES[l.swatch].name);
 }
 
-// In loop(): applies one voice command to its zone's page, like a tap there: BOTH (no zone given)
-// copies to both lights; INSIDE or OUTSIDE changes only that light. The page on screen stays.
-// Then answers the waiting handler.
-static void applyVoice(const VoiceJob& job) {
-    const ledvoice::Command& c = job.c;
-    Look& l = looks[job.zone];
-    if (c.color >= 0) {
-        l.swatch = c.color;
-        l.lit = true;
-    }
-    if (c.power >= 0) l.lit = c.power == 1;
-    int pct = c.level >= 0 ? c.level : l.pct + 10 * c.levelStep;
-    l.pct = static_cast<uint8_t>(pct < MIN_INTENSITY ? MIN_INTENSITY : pct > 100 ? 100 : pct);
-    if (job.zone == BOTH) {
-        looks[INSIDE] = looks[OUTSIDE] = l;
-        for (int i = 0; i < N_CTRL; i++) push(i);
-    } else {
-        push(job.zone - 1);
-    }
-    save();
-    drawAll();
-    char line[64];
-    describe(line, sizeof(line), job.zone, c.level >= 0 || c.levelStep != 0);
+// Hands loop()'s reply line to the waiting handler, tagged with its job's seq.
+static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
     Serial.printf("[voice] -> %s\n", line);
+    publish();  // a /state right after this reply already sees the change
     portENTER_CRITICAL(&voiceMux);
     memcpy(voiceReply, line, sizeof(line));
-    replySeq = job.seq;
+    replySeq = seq;
     portEXIT_CRITICAL(&voiceMux);
     xSemaphoreGive(voiceDone);
+}
+
+// In loop(): applies one voice command to its zone's page, like a tap there: BOTH (no zone given)
+// goes to both lights (bothlook: while they differ each keeps its own look unless a colour is
+// given); INSIDE or OUTSIDE changes only that light; a preset sets both lights whatever the
+// zone, and a preset ignores the rest of the phrase ("rose 50" is ROSE as it is). The page on
+// screen stays. Then answers the waiting handler.
+static void applyVoice(const VoiceJob& job) {
+    const ledvoice::Command& c = job.c;
+    char line[sizeof(voiceReply)];
+    if (c.preset >= 1 && c.preset <= ledpresets::N) {  // "rose", "preset 2": both lights, whatever zone was asked
+        applyPreset(c.preset - 1);
+        ledpresets::describe(c.preset, line, sizeof(line));
+        answerVoice(line, job.seq);
+        return;
+    }
+    bothlook::Change ch;
+    ch.swatch = c.color;
+    ch.power = c.power;
+    ch.level = c.level;
+    ch.step = c.levelStep;
+    change(job.zone, ch);
+    save();
+    updateTheme();
+    drawLooks();  // on either screen; the page on Lights stays
+    describe(line, sizeof(line), looks[job.zone], job.zone, c.level >= 0 || c.levelStep != 0);
+    answerVoice(line, job.seq);
 }
 
 static void handleSay() {
@@ -741,7 +1893,7 @@ static void handleSay() {
         server->send(503, "text/plain", "The deck is busy, try again");
         return;
     }
-    char line[64] = "";
+    char line[sizeof(voiceReply)] = "";
     const uint32_t until = millis() + 1500;
     bool answered = false;
     while (!answered && static_cast<int32_t>(until - millis()) > 0 &&
@@ -763,8 +1915,35 @@ static void handleSay() {
 static void handleState() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
     const String zone = server->arg("zone");
+    const Target z = zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH;
+    const Published p = snapshot();
     char line[64];
-    describe(line, sizeof(line), zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH);
+    describe(line, sizeof(line), p.looks[z], z);
+    server->send(200, "text/plain", line);
+}
+
+// The four presets, one wireLine each ("1 ROSE pink 40 pink 100"), joined by \n. A fixed table: no
+// snapshot needed.
+static void handlePresets() {
+    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    char body[ledpresets::N * 32] = "";
+    size_t len = 0;
+    for (int i = 0; i < ledpresets::N && len < sizeof(body); i++) {
+        char l[32];
+        ledpresets::wireLine(i + 1, l, sizeof(l));
+        const int k = snprintf(body + len, sizeof(body) - len, "%s%s", i ? "\n" : "", l);
+        if (k > 0) len += static_cast<size_t>(k);
+    }
+    server->send(200, "text/plain", body);
+}
+
+// Each light on, off or out of reach: "inside=on outside=nolink".
+static void handleStatus() {
+    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    const Published p = snapshot();
+    char line[48];
+    lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
+                       line, sizeof(line));
     server->send(200, "text/plain", line);
 }
 
@@ -775,6 +1954,9 @@ static void voiceTask(void*) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     server->begin();
+    netclock::begin();  // SNTP, for night mode and the Menu's clock
+    beginWeather();
+    beginLyrics();
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
@@ -799,6 +1981,8 @@ static void beginVoice() {
     server = new WebServer(80);
     server->on("/say", HTTP_ANY, handleSay);
     server->on("/state", HTTP_GET, handleState);
+    server->on("/presets", HTTP_GET, handlePresets);
+    server->on("/status", HTTP_GET, handleStatus);
     xTaskCreatePinnedToCore(voiceTask, "voice", 6144, nullptr, 0, &voiceHandle, 1);
 }
 
@@ -817,11 +2001,65 @@ static void vividGamma() {
     for (uint8_t v : NEG) tft.writedata(v);
 }
 
+// Night mode and the Menu's clock. Polled each second (a time() call) so the clock turns over on the
+// minute; the mode follows the clock. On a change the backlight drops before the repaint, so no
+// frame shows at day brightness.
+static void updateDayNight() {
+    static uint32_t checkedAt = 0;
+    static bool first = true;
+    if (!first && millis() - checkedAt < 1000) return;
+    first = false;
+    checkedAt = millis();
+    int m = 0, y = 0, month = 0, day = 0;
+    const bool synced = netclock::localNow(&m, &y, &month, &day);
+    const int minute = synced ? m : -1;
+    bool want = synced && daynight::isNight(m);
+#ifdef NIGHT_TEST
+    want = true;
+#endif
+    if (minute != clockMin || day != clockDay) {
+        if (minute >= 0 && clockMin < 0) Serial.printf("[clock] synced, local %02d:%02d\n", m / 60, m % 60);
+        clockMin = minute;
+        clockY = y;
+        clockMonth = month;
+        clockDay = day;
+        if (want == night && screen == Screen::Menu) drawClock();
+    }
+    if (want == night) return;
+    night = want;
+    backlight::set(night);  // before the repaint
+    Serial.printf("[ui] night mode %s\n", night ? "on" : "off");
+    drawAll();
+}
+
+// The theme the INSIDE light asks for: its colour while it's on and linked (insideSeen), else -1.
+static int wantTheme() {
+#ifdef THEME_TEST
+    return THEME_TEST;
+#else
+    const Look& l = looks[INSIDE];
+    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? l.swatch : -1;
+#endif
+}
+
+// Called before anything draws a changed look or link (drawLooks, a preset, voice, the link edge),
+// and once more at the end of each loop as a backstop: a new theme repaints the current screen (the
+// backlight stays), with a button still under a finger or a controller press drawn pressed again.
+// The early return keeps the repaint (which may come back here) from recursing.
+static void updateTheme() {
+    const int want = wantTheme();
+    if (want == theme) return;
+    theme = want;
+    Serial.printf("[ui] theme %d\n", theme);
+    drawAll();
+    if (tap.down && tap.id >= 0) drawButton(tap.id, true);
+    if (padFlash >= 0) drawButton(padFlash, true);
+}
+
 void setup() {
     Serial.begin(115200);
-    pinMode(PIN_BL, OUTPUT);
-    digitalWrite(PIN_BL, HIGH);
     tft.init();
+    backlight::begin();  // PWM, at the day level
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
     tft.setRotation(1);
     vividGamma();
@@ -832,6 +2070,10 @@ void setup() {
 
     pinMode(PIN_BOOT, INPUT_PULLUP);
     if (!loadCalibration() || digitalRead(PIN_BOOT) == LOW) calibrate();
+    typeBoot();  // before the tasks start: nothing else draws while it types
+    showLastTrip();  // after the typing, so its few seconds start when the Menu shows
+    weatherOff = !gate.enabled();  // no REMOTE_TOKEN, no WiFi: the first draw already says >OFFLINE
+    theme = wantTheme();  // after the typing (always green); no link yet, so -1 but for THEME_TEST
     drawAll();
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
@@ -839,13 +2081,17 @@ void setup() {
     // 8 KB: the Xbox library's connect, discovery and subscribe (std::function, std::string) run on
     // this task too; the [mem] line shows what's left.
     xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);
+    publish();
     beginVoice();
 }
 
 void loop() {
     int x, y;
-    // The panel reports a phantom press at power-up (raw x=0): ignore the first second.
-    const bool down = touch::read(&x, &y) && millis() > 1000;
+    // The panel reports a phantom press at power-up (raw x=0): ignore the first second of the loop
+    // (not of the boot: typeBoot() eats ~1 s of that before loop() ever runs).
+    static uint32_t loopStart = 0;
+    if (loopStart == 0) loopStart = millis() | 1;
+    const bool down = touch::read(&x, &y) && millis() - loopStart > 1000;
     if (down) {
         if (!tap.down) tap = {true, false, millis(), 0, 0, 0, -1};
         if (!tap.acted) {
@@ -856,8 +2102,15 @@ void loop() {
         }
     } else if (tap.down) {
         if (!tap.acted && tap.n > 0) act();  // a quick tap
-        if (tap.id >= 0) drawButton(tap.id);  // released: back to the normal look
         tap.down = false;
+        if (tap.id >= 0) drawButton(tap.id);  // released: back to the normal look
+    }
+
+    // the message has had its time: the usual line comes back (show() already dropped one from
+    // another screen)
+    if (message[0] && millis() - messageAt >= messageMs) {
+        message[0] = 0;
+        drawMessage();
     }
 
     VoiceJob voice;
@@ -868,14 +2121,21 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, loop %u\n", static_cast<unsigned>(ESP.getFreeHeap()),
-                      static_cast<unsigned>(ESP.getMinFreeHeap()),
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, loop %u\n",
+                      static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
+                      weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
+                      lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 
     handlePad();
+    takeWeather();
+    lyricsTick();
+    updateDayNight();
+    tripTick();
+    blinkCursor();
 
     // BOOT held for 2 s: calibrate the touch again.
     static uint32_t bootSince = 0;
@@ -892,6 +2152,8 @@ void loop() {
 
     // A controller that just came up gets its zone's look, so it matches what the deck remembers.
     static bool shown[N_CTRL] = {};
+    static uint32_t edgeAt[N_CTRL] = {};  // when each light last changed link state, and which way
+    static bool edgeUp[N_CTRL] = {};
     for (int i = 0; i < N_CTRL; i++) {
         Controller& c = controllers[i];
         const bool up = linkUp(c);
@@ -901,8 +2163,25 @@ void loop() {
         }
         if (up != shown[i]) {
             shown[i] = up;
-            drawButton(ZONE0 + i + 1, tap.down && tap.id == ZONE0 + i + 1);
+            if (i == 0) {
+                insideSeen = up;
+                updateTheme();  // before drawLightState: the screen is in the right theme first
+            }
+            char m[sizeof(message)];
+            // both lights going the same way together (the phone hotspot, the car's power): one
+            // message, or the second would replace the first
+            const int o = 1 - i;
+            edgeAt[i] = millis() | 1;
+            edgeUp[i] = up;
+            if (edgeAt[o] && millis() - edgeAt[o] < 150 && edgeUp[o] == up) lightstatus::linkChangeBoth(up, m, sizeof(m));
+            else lightstatus::linkChange(i == 0, up, m, sizeof(m));
+            // the boot's ">LAST TRIP" has its 6 s: a link change doesn't cut it short (the lights still redraw)
+            if (!(message[0] && messageMs > MESSAGE_MS && millis() - messageAt < messageMs)) setMessage(m);
+            drawLightState();  // STATUS on Lights (the message too), the lights band on the Menu: NO LINK while it's gone
+            if (screen == Screen::Menu) drawMessage();
         }
     }
+    updateTheme();  // a backstop: every path above has already called it
+    publish();  // for /state and /status
     delay(10);
 }

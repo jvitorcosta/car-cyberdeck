@@ -210,9 +210,9 @@ known limitations and how to report a problem.
 
 ## Credits and legal
 
-Built on PokéAPI, PMD SpriteCollab, LRCLIB, GNU Unifont, Twemoji and several open-source libraries;
-see [CREDITS.md](CREDITS.md), which also lists the files in this repository that are **not**
-covered by the MIT license.
+Built on PokéAPI, PMD SpriteCollab, LRCLIB, GNU Unifont, Twemoji, the VT323 font and several
+open-source libraries; see [CREDITS.md](CREDITS.md), which also lists the files in this repository
+that are **not** covered by the MIT license.
 
 CarDeck is a personal, non-commercial fan project. It is not affiliated with, endorsed by or
 sponsored by Spotify, Nintendo, The Pokémon Company, Creatures Inc., GAME FREAK inc. or

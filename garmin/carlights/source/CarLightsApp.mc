@@ -2,10 +2,12 @@
 // (the Siri shortcut's endpoint) and GET /state through Garmin Connect on the iPhone, which is on
 // the same hotspot as the deck, with &zone=inside|outside unless the zone is Both. Plain http to
 // the hotspot works through Garmin Connect on iOS (tested 2026-10-22).
-//   ZonesView / ZonesDelegate: pages BOTH, INSIDE, OUTSIDE (UP/DOWN); START opens that zone's
-//                              list (ZoneMenuDelegate): colours with a dot, Brightness, Off
+//   ZonesView / ZonesDelegate: pages BOTH, INSIDE, OUTSIDE, PRESETS (UP/DOWN); START opens that
+//                              zone's list (ZoneMenuDelegate): colours with a dot, Brightness, Off;
+//                              on PRESETS, the deck's named presets to apply (PresetMenuDelegate)
+//   FavDots: a preset's two lights as two dots
 //   LevelView / LevelDelegate: a zone's brightness, UP/DOWN in 10 % steps
-//   Deck: both lights' state + the request queue
+//   Deck: both lights' state, the presets, the controllers' links + the request queue
 //   HondaGlance: the card in the watch's glance loop (last state the app saw)
 import Toybox.Application;
 import Toybox.Lang;

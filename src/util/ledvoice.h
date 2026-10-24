@@ -15,6 +15,7 @@ struct Command {
     int level = -1;      // absolute 10..100 %, or -1
     int levelStep = 0;   // +1 brighter, -1 dimmer (one 10 % step each)
     int zone = ZONE_NONE;
+    int preset = -1;     // preset 1..4 ("rose", "favourite two"), or -1
 };
 
 namespace detail {
@@ -59,6 +60,22 @@ static const Word ZONES[] = {
     {"both", ZONE_BOTH},       {"all", ZONE_BOTH},         {"everything", ZONE_BOTH},
     {"todas", ZONE_BOTH},      {"todos", ZONE_BOTH},       {"ambos", ZONE_BOTH},     {"tudo", ZONE_BOTH},
 };
+// A favourite word arms the slot: the next number word or digit picks it. Siri hears "two" as "to"
+// and "four" as "for", so those count, but only while armed ("set the lights to blue" stays a plain colour).
+static const Word FAVS[] = {
+    {"favourite", 1}, {"favorite", 1}, {"favourites", 1}, {"favorites", 1}, {"preset", 1},
+};
+static const Word SLOTS[] = {
+    {"one", 1},   {"won", 1}, {"1", 1},
+    {"two", 2},   {"to", 2},  {"too", 2}, {"2", 2},
+    {"three", 3}, {"tree", 3}, {"3", 3},
+    {"four", 4},  {"for", 4}, {"fore", 4}, {"4", 4},
+};
+// The four presets by name: ROSE, FIRE, CALM, PURPURA ("purpura" is the owner's spelling). They set the
+// preset directly, no arming. "rose" is not a colour word here (pink is "rosa"), so there is no clash.
+static const Word PRESET_NAMES[] = {
+    {"rose", 1}, {"fire", 2}, {"calm", 3}, {"purpura", 4},
+};
 #define LEDVOICE_N(t) static_cast<int>(sizeof(t) / sizeof(t[0]))
 }  // namespace detail
 
@@ -67,6 +84,7 @@ inline bool parse(const char* text, Command* out) {
     using namespace detail;
     *out = Command{};
     bool any = false;
+    bool armed = false;  // a favourite word was heard and its slot number hasn't come yet
     char w[24];
     for (const char* p = text; *p;) {
         // a word: letters, digits and UTF-8 bytes (accents); everything else separates
@@ -80,21 +98,46 @@ inline bool parse(const char* text, Command* out) {
             p++;
             continue;
         }
-        if (std::isdigit(static_cast<unsigned char>(w[0]))) {  // "50", "50%": a level
+        if (std::isdigit(static_cast<unsigned char>(w[0]))) {  // "50", "50%": a level, or a slot right after "favourite"
             int v = 0;
             for (int i = 0; i < n && std::isdigit(static_cast<unsigned char>(w[i])); i++) v = v * 10 + (w[i] - '0');
+            if (armed) {  // outside 1..4 there is no such favourite: preset stays -1 and nothing is parsed
+                armed = false;
+                if (v >= 1 && v <= 4) {
+                    out->preset = v;
+                    any = true;
+                }
+                continue;
+            }
             v = (v + 5) / 10 * 10;
             out->level = v < 10 ? 10 : v > 100 ? 100 : v;
             any = true;
             continue;
         }
         int v;
+        if (armed && (v = lookup(w, SLOTS, LEDVOICE_N(SLOTS))) >= 0) {
+            out->preset = v;
+            armed = false;
+            any = true;
+            continue;
+        }
+        if ((v = lookup(w, PRESET_NAMES, LEDVOICE_N(PRESET_NAMES))) >= 0) {
+            out->preset = v;  // a command word: it also drops a pending "favourite" arm
+            armed = false;
+            any = true;
+            continue;
+        }
+        if (lookup(w, FAVS, LEDVOICE_N(FAVS)) >= 0) {
+            armed = true;  // not a command by itself: "favourite" alone parses to nothing
+            continue;
+        }
         if ((v = lookup(w, COLORS, LEDVOICE_N(COLORS))) >= 0) out->color = v;
         else if ((v = lookup(w, POWER, LEDVOICE_N(POWER))) >= 0) out->power = v;
         else if ((v = lookup(w, LEVELS, LEDVOICE_N(LEVELS))) >= 0) out->level = v;
         else if ((v = lookup(w, ZONES, LEDVOICE_N(ZONES))) >= 0) out->zone = v;
         else if ((v = lookup(w, STEPS, LEDVOICE_N(STEPS))) >= 0) out->levelStep = v == UP ? 1 : -1;
-        else continue;  // a word that isn't a command ("set", "the", "lights", "please")
+        else continue;  // not a command ("set", "the", "please", or "number" in "favourite number 2"): stays armed
+        armed = false;  // a command word means no slot is coming
         any = true;
     }
     return any;

@@ -2,8 +2,9 @@ import Toybox.Lang;
 import Toybox.WatchUi;
 
 // The zone pages' buttons:
-//   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE (each one press from BOTH)
-//   START:     that zone's list (colours, Brightness >, Off)        BACK: leave
+//   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE -> PRESETS
+//   START:     that zone's list (colours, Brightness >, Off); on PRESETS the list of the deck's
+//              presets to apply                                  BACK: leave
 class ZonesDelegate extends WatchUi.BehaviorDelegate {
     private var _deck as Deck;
     private var _view as ZonesView;
@@ -15,19 +16,22 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
     }
 
     function onNextPage() as Boolean {
-        _view.page = (_view.page + 1) % 3;
+        _view.page = (_view.page + 1) % 4;
         WatchUi.requestUpdate();
         return true;
     }
 
     function onPreviousPage() as Boolean {
-        _view.page = (_view.page + 2) % 3;
+        _view.page = (_view.page + 3) % 4;
         WatchUi.requestUpdate();
         return true;
     }
 
     function onSelect() as Boolean {
         var zone = _view.page;
+        if (zone == PRESETS) {
+            return presets();
+        }
         var menu = new WatchUi.Menu2({:title => ["Both", "Inside", "Outside"][zone] as String});
         for (var i = 0; i < COLORS.size(); i++) {
             var c = COLORS[i] as Array;
@@ -39,6 +43,47 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
         menu.setFocus(_deck.look(zone == BOTH ? INSIDE : zone).color);
         WatchUi.pushView(menu, new ZoneMenuDelegate(_deck, zone), WatchUi.SLIDE_LEFT);
         return true;
+    }
+
+    // The Presets list: an item per preset (its name, "Pink 40 / Pink 100", the two dots). Nothing
+    // opens while the deck hasn't sent any.
+    private function presets() as Boolean {
+        if (_deck.presets.size() == 0) {
+            return true;
+        }
+        var menu = new WatchUi.Menu2({:title => "Presets"});
+        for (var i = 0; i < _deck.presets.size(); i++) {
+            var p = _deck.presets[i] as Array;
+            menu.addItem(new WatchUi.IconMenuItem(p[0] as String,
+                say(p[1] as Number, p[2] as Number, p[3] as Boolean) + " / "
+                + say(p[4] as Number, p[5] as Number, p[6] as Boolean),
+                p[7] as Number, new FavDots(p.slice(1, 7)), {}));
+        }
+        WatchUi.pushView(menu, new PresetMenuDelegate(_deck), WatchUi.SLIDE_LEFT);
+        return true;
+    }
+
+    // "Pink 40" or "Off" for one light of a preset.
+    private function say(color as Number, pct as Number, lit as Boolean) as String {
+        return lit ? ((COLORS[color] as Array)[0] as String) + " " + pct : "Off";
+    }
+}
+
+// The Presets list: a preset is applied on the deck and the list returns to the pages.
+class PresetMenuDelegate extends WatchUi.Menu2InputDelegate {
+    private var _deck as Deck;
+
+    function initialize(deck as Deck) {
+        Menu2InputDelegate.initialize();
+        _deck = deck;
+    }
+
+    function onSelect(item as WatchUi.MenuItem) as Void {
+        var id = item.getId();
+        if (id instanceof Number) {  // the preset's number on the deck
+            _deck.applyPreset(id);
+            WatchUi.popView(WatchUi.SLIDE_RIGHT);
+        }
     }
 }
 
