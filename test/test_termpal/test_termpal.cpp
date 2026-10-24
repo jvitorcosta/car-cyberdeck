@@ -189,7 +189,8 @@ void test_theme_panel_guards() {
 }
 
 // ALERT: white on the red / orange / pink themes, red on the rest; and always clearly apart from the
-// theme's TEXT: a channel at least 0x60 apart, or (two warm colours) a green/red under half TEXT's.
+// theme's TEXT: a channel at least 0x60 apart, or (two warm colours) a green/red under half TEXT's
+// and at least 0.1 under it.
 void test_theme_alert() {
     for (int t = -1; t < N_THEME; t++) {
         for (int night = 0; night < 2; night++) {
@@ -199,8 +200,11 @@ void test_theme_alert() {
             } else {
                 TEST_ASSERT_TRUE_MESSAGE(red(a) >= 0xF0 && green(a) * 3 < red(a) && blue(a) * 3 < red(a), "red alert");
             }
-            const bool apart = chanDiff(a, tx) >= 0x60 ||
-                               (red(a) && red(tx) && 2.0 * green(a) / red(a) < static_cast<double>(green(tx)) / red(tx));
+            // The warm-colour branch is for white's night (and the default night): today's amber TEXT
+            // FF6600 with today's red ALERT FF2A1A, only 0x3C apart; every other theme clears 0x60.
+            const double ga = red(a) ? static_cast<double>(green(a)) / red(a) : 1.0,
+                         gt = red(tx) ? static_cast<double>(green(tx)) / red(tx) : 0.0;
+            const bool apart = chanDiff(a, tx) >= 0x60 || (2.0 * ga < gt && gt - ga >= 0.1);
             TEST_ASSERT_TRUE_MESSAGE(apart, "ALERT apart from TEXT");
         }
     }

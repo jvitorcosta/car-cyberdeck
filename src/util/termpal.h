@@ -24,7 +24,8 @@ uint32_t rgb(Role r, bool night);
 // at night (no white glare); the night ambers (orange, yellow, white) keep green <= 0.6 x red.
 // ALERT is white (night 0xC8C8C8) on red, orange and pink, where a red would not stand out, else
 // the default red; it is always a channel 0x60 or more from TEXT (or, two warm colours, a green/red
-// under half TEXT's). Contrast on black, TEXT / MID / DIM / ALERT:
+// under half TEXT's and 0.1 or more under it: white at night, the default night). Contrast on
+// black, TEXT / MID / DIM / ALERT:
 //   red     day FF8C78 9.3  FF4A3A 6.3  F03424 5.2  FFFFFF 21    night FF5A46 6.8  E03C2A 4.9  C02818 3.6  C8C8C8 12.6
 //   orange  day FFAA64 11.2 F57814 7.6  DC6400 5.9  FFFFFF 21    night FF6600 7.2  C84E00 4.5  A03A00 3.1  C8C8C8 12.6
 //   pink    day FF8CCD 9.9  FF50B4 7.1  F0379E 5.8  FFFFFF 21    night FF4BAA 6.8  E0328C 5.0  C22678 3.8  C8C8C8 12.6

@@ -132,8 +132,11 @@ static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Men
 // redraws.
 static bool night = false;
 // The theme (see "Theme" above): a ledlook swatch index, or -1 for the green / amber. Loop-owned, as
-// `night`; updateTheme() keeps it.
+// `night`; updateTheme() keeps it, from the looks and `insideSeen`: the INSIDE light's link as loop()
+// last took it (its edge loop sets it before anything draws the change).
 static int theme = -1;
+static bool insideSeen = false;
+static void updateTheme();
 
 // The outside weather (see "Weather" below): the weather task publishes each try under weatherMux
 // and raises weatherFresh; loop() copies it into `wx`, which is all the drawing reads.
@@ -853,6 +856,7 @@ static void drawMessage() {
 // After a look changed (a tap, voice, the watch, Y): everything that shows it (Lights' STATUS line
 // shows only the links).
 static void drawLooks() {
+    updateTheme();  // a look that changes the theme repaints all in the new one, never a part in the old
     if (screen == Screen::Lights) {
         drawGrid();
         drawLevel();
@@ -1265,6 +1269,7 @@ static void applyPreset(int slot0) {
     char m[sizeof(message)];
     lightstatus::applied(p.name, m, sizeof(m));
     setMessage(m);
+    updateTheme();
     drawLooks();
     drawMessage();  // Lights' STATUS line, the Menu's trip row
 }
@@ -1865,6 +1870,7 @@ static void applyVoice(const VoiceJob& job) {
     ch.step = c.levelStep;
     change(job.zone, ch);
     save();
+    updateTheme();
     drawLooks();  // on either screen; the page on Lights stays
     describe(line, sizeof(line), looks[job.zone], job.zone, c.level >= 0 || c.levelStep != 0);
     answerVoice(line, job.seq);
@@ -2026,23 +2032,22 @@ static void updateDayNight() {
     drawAll();
 }
 
-// The theme the INSIDE light asks for: its colour while it's on and linked (`insideUp`: the link
-// state loop() last took), else -1.
-static int wantTheme(bool insideUp) {
+// The theme the INSIDE light asks for: its colour while it's on and linked (insideSeen), else -1.
+static int wantTheme() {
 #ifdef THEME_TEST
-    (void)insideUp;
     return THEME_TEST;
 #else
     const Look& l = looks[INSIDE];
-    return lightstatus::of(insideUp, l.lit) == lightstatus::State::On ? l.swatch : -1;
+    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? l.swatch : -1;
 #endif
 }
 
-// Polled every loop, after anything that changes a look (a tap, voice, the watch, the Xbox
-// controller, a preset) or the links: a new theme repaints the current screen (the backlight stays),
-// with a button still under a finger or a controller press drawn pressed again.
-static void updateTheme(bool insideUp) {
-    const int want = wantTheme(insideUp);
+// Called before anything draws a changed look or link (drawLooks, a preset, voice, the link edge),
+// and once more at the end of each loop as a backstop: a new theme repaints the current screen (the
+// backlight stays), with a button still under a finger or a controller press drawn pressed again.
+// The early return keeps the repaint (which may come back here) from recursing.
+static void updateTheme() {
+    const int want = wantTheme();
     if (want == theme) return;
     theme = want;
     Serial.printf("[ui] theme %d\n", theme);
@@ -2068,7 +2073,7 @@ void setup() {
     typeBoot();  // before the tasks start: nothing else draws while it types
     showLastTrip();  // after the typing, so its few seconds start when the Menu shows
     weatherOff = !gate.enabled();  // no REMOTE_TOKEN, no WiFi: the first draw already says >OFFLINE
-    theme = wantTheme(false);  // after the typing (always green); no link yet, so -1 but for THEME_TEST
+    theme = wantTheme();  // after the typing (always green); no link yet, so -1 but for THEME_TEST
     drawAll();
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
@@ -2158,6 +2163,10 @@ void loop() {
         }
         if (up != shown[i]) {
             shown[i] = up;
+            if (i == 0) {
+                insideSeen = up;
+                updateTheme();  // before drawLightState: the screen is in the right theme first
+            }
             char m[sizeof(message)];
             // both lights going the same way together (the phone hotspot, the car's power): one
             // message, or the second would replace the first
@@ -2172,7 +2181,7 @@ void loop() {
             if (screen == Screen::Menu) drawMessage();
         }
     }
-    updateTheme(shown[0]);
+    updateTheme();  // a backstop: every path above has already called it
     publish();  // for /state and /status
     delay(10);
 }
