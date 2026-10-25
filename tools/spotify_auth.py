@@ -11,7 +11,13 @@ registered in your app dashboard (Settings -> Redirect URIs).
 
 Run:  python tools/spotify_auth.py    (from the repo root)
 Then click "Agree" in the browser that opens.
+
+With --agent the same flow asks for the voice agent's wider scopes (playlists)
+and writes SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET / SPOTIFY_REFRESH_TOKEN into
+agent/.env instead (created from agent/.env.example if missing). In that mode
+src/config.h is only read, never written.
 """
+import argparse
 import base64
 import http.server
 import json
@@ -28,6 +34,9 @@ CONFIG = REPO / "src" / "config.h"
 REDIRECT = "http://127.0.0.1:8888/callback"
 PORT = 8888
 SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing"
+AGENT_SCOPES = SCOPES + " playlist-read-private playlist-modify-private playlist-modify-public"
+AGENT_ENV = REPO / "agent" / ".env"
+AGENT_ENV_EXAMPLE = REPO / "agent" / ".env.example"
 
 
 def read_define(text, name):
@@ -35,7 +44,35 @@ def read_define(text, name):
     return m.group(1) if m else None
 
 
+def write_env(path, values, example=None):
+    """Set KEY=value lines in a .env file, keeping every other line as is.
+
+    Creates the file from `example` (or empty) when missing; appends keys that
+    are not present yet.
+    """
+    if path.exists():
+        lines = path.read_text(encoding="utf-8").splitlines()
+    elif example is not None and example.exists():
+        lines = example.read_text(encoding="utf-8").splitlines()
+    else:
+        lines = []
+    pending = dict(values)
+    for i, line in enumerate(lines):
+        key = line.split("=", 1)[0].strip()
+        if "=" in line and key in pending:
+            lines[i] = f"{key}={pending.pop(key)}"
+    lines.extend(f"{k}={v}" for k, v in pending.items())
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main():
+    parser = argparse.ArgumentParser(description="One-time Spotify authorization helper.")
+    parser.add_argument("--agent", action="store_true",
+                        help="authorize the voice agent (playlist scopes) and write agent/.env "
+                             "instead of src/config.h")
+    args = parser.parse_args()
+    scopes = AGENT_SCOPES if args.agent else SCOPES
+
     if not CONFIG.exists():
         sys.exit(f"config.h not found at {CONFIG} — create it from include/config.example.h first")
     text = CONFIG.read_text(encoding="utf-8")
@@ -48,7 +85,7 @@ def main():
         "client_id": cid,
         "response_type": "code",
         "redirect_uri": REDIRECT,
-        "scope": SCOPES,
+        "scope": scopes,
     })
 
     holder = {}
@@ -100,6 +137,15 @@ def main():
     refresh = tok.get("refresh_token")
     if not refresh:
         sys.exit("No refresh_token in response: " + json.dumps(tok))
+
+    if args.agent:
+        write_env(AGENT_ENV, {
+            "SPOTIFY_CLIENT_ID": cid,
+            "SPOTIFY_CLIENT_SECRET": secret,
+            "SPOTIFY_REFRESH_TOKEN": refresh,
+        }, AGENT_ENV_EXAMPLE)
+        print("\nSUCCESS: Spotify credentials written to agent/.env (src/config.h untouched)")
+        return
 
     new_text = re.sub(r'(#define\s+SPOTIFY_REFRESH_TOKEN\s+)"[^"]*"',
                       r'\1"' + refresh + '"', text)
