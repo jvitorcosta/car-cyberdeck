@@ -120,12 +120,12 @@ Xbox (RT/LT) ──BLE──▶ yellow deck ──HTTP over hotspot──▶ bla
   reminders): the same tools as an in-process MCP server, hooks for "confirm before sending",
   Sonnet (`claude-sonnet-5-5`) by default. Zero Two says "deixa comigo~" while it works; its
   target is ~5 s, and after ~8 s she says it'll take a while and finishes in the background.
-- **Model-agnostic fast path (owner, 2026-10-23):** the fast path calls its model through a small
-  interface, so development can start on a free model (e.g. a Groq-hosted open model) and switch by
-  config. The production model is picked by the evals (wrong-action rate first, then p95 latency,
+- **Model-agnostic fast path (owner, 2026-10-23; updated 2026-10-25):** the fast path calls its
+  model through a small interface, so models switch by config. With the Max API credits,
+  development runs on Claude from the start; a free model (e.g. Groq-hosted) stays an optional eval
+  contender. The production model is picked by the evals (wrong-action rate first, then p95 latency,
   then cost), with Haiku, Sonnet and the free model as contenders; prompts and tool descriptions are
-  re-checked on the chosen model. The Agent SDK slow path only runs Claude, so it is developed on
-  Claude from the start (a small prepaid API credit).
+  re-checked on the chosen model. The Agent SDK slow path only runs Claude.
 - **Speech-to-text:** Brazilian Portuguese (v1), including English artist and song names inside a
   Portuguese sentence ("toca Tyler, the Creator"), biased with a word list; streaming.
   The builder picks the provider by measuring accuracy and latency on **recordings made in the car** (see the first step).
@@ -172,11 +172,14 @@ Both are part of v1, because the model choice depends on them and they are the p
 - The Anthropic API key, the STT/TTS keys and the Spotify refresh token live only in the server's
   environment secrets. The repo is public: no secrets, no generated voice files in git (they are
   git-ignored like the other media).
-- Billing: the Claude **subscription does not cover this**; it uses an API key from the Anthropic
-  Console, billed per use, with a **hard monthly spending cap** set in the Console. STT and TTS are
-  separate small bills.
-- **Budget: US$10 per month, everything included** (host, Claude, speech-to-text, voice). The
-  owner's number. It shapes the choices:
+- Billing (corrected 2026-10-25): the owner's **Claude Max plan includes monthly API credits**
+  ($100 on Max 5x, $200 on Max 20x; Anthropic's "API credits for Max and Team plans", since the
+  2026-10-07 update). They cover the Claude API and the Agent SDK, arrive in a linked Claude
+  Console organization (claude.ai → Settings → Billing → API credits), expire each cycle, and when
+  they run out requests simply stop: nothing is charged to the plan. The agent gets **its own
+  Console workspace with a spend limit** so it can't use up credits meant for other projects.
+- **Budget: US$10 per month for everything that isn't Claude** (host, speech-to-text, voice); the
+  Claude part runs on the Max credits. It shapes the choices:
   - Haiku for nearly everything; Sonnet only when Haiku can't do the job, and logged.
   - Stock phrases cover most replies, so live TTS stays small enough for ElevenLabs' free tier or
     its cheapest plan (the builder confirms the tier allows Voice Design voices over the API, with
