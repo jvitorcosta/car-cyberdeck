@@ -5,6 +5,7 @@
 #include "remote_config.h"
 #include "wifi.h"
 #include "../audio/greeting.h"
+#include "../audio/musicsvc.h"
 #include "../util/remotegate.h"
 #include "../util/qrfit.h"
 #include "../util/netplan.h"
@@ -147,6 +148,33 @@ static void handlePlay() {
     }
 }
 
+// Music mode (audio/musicsvc): the yellow deck sends on=1 every 10 s while it wants the mic's
+// features over UDP, on=0 to stop at once.
+static void handleMusic() {
+    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    const String on = s_server->arg("on");
+    if (on == "0") {
+        musicsvc::stop();
+        s_server->send(200, "application/json", "{\"on\":0}");
+        return;
+    }
+    if (on != "1") { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
+    switch (musicsvc::keepAlive(s_server->client().remoteIP())) {
+    case musicsvc::Start::On:        s_server->send(200, "application/json", "{\"on\":1}"); break;
+    case musicsvc::Start::LowMemory: s_server->send(503, "text/plain", "low memory"); break;
+    case musicsvc::Start::Stopping:  s_server->send(409, "text/plain", "stopping, ask again"); break;
+    case musicsvc::Start::NoTask:    s_server->send(503, "text/plain", "no memory for the task"); break;
+    }
+}
+
+static void handleMusicDebug() {
+    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    static char out[256];   // static: off this task's 4 KB stack (one request at a time)
+    if (!musicsvc::debugJson(out, sizeof out)) { s_server->send(500, "text/plain", "debug too big"); return; }
+    s_server->sendHeader("Cache-Control", "no-store");
+    s_server->send(200, "application/json", out);
+}
+
 // Own task at idle priority on the UI core: WebServer reads a request with blocking reads (a
 // slow or half-sent request holds it for seconds), so it must never run on the UI loop. At
 // priority 0 it only gets the CPU the display leaves free.
@@ -175,6 +203,8 @@ void begin(bool (*hold)()) {
     });
     s_server->on("/play", HTTP_POST, handlePlay);
     s_server->on("/state", HTTP_GET, handleState);
+    s_server->on("/music", HTTP_GET, handleMusic);
+    s_server->on("/music/debug", HTTP_GET, handleMusicDebug);
     s_server->on("/tunes", HTTP_POST, [] {
         if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
         greeting::setTunesMuted(s_server->arg("mute") == "1");   // the UI loop stops or starts it

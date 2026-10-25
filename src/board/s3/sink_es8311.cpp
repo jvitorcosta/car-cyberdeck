@@ -21,6 +21,7 @@ constexpr int CHUNK = 128;                 // mono samples per i2s_write
 constexpr uint8_t CODEC_GAIN = 0xCB;
 int s_rate = 16000;
 int16_t s_buf[2 * CHUNK];
+bool s_held = false;                       // open() holds the port: close() releases it once
 }
 
 bool open(int clipRate) {
@@ -34,6 +35,7 @@ bool open(int clipRate) {
     }
     pinMode(PIN_AMP_EN, OUTPUT);
     digitalWrite(PIN_AMP_EN, AMP_ON);      // only now: codec up, I2S sending silence (no pop)
+    s_held = true;
     return true;
 }
 
@@ -49,6 +51,8 @@ void write(const int16_t* s, size_t n) {
 }
 
 void close() {
+    if (!s_held) return;                    // open() failed (or never ran): nothing to release
+    s_held = false;
     const uint32_t dmaMs = 1000u * DMA_BUFS * DMA_LEN / (uint32_t)s_rate;
     vTaskDelay(pdMS_TO_TICKS(dmaMs + 20));  // let the queued DMA buffers play out
     digitalWrite(PIN_AMP_EN, !AMP_ON);

@@ -115,6 +115,14 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   phone icon and "REMOTE", 3 px modules on a cream panel, 2-module quiet zone, x 4-127,
   y 22-149), painted once with the screen and again only when the address changes; without a
   link the scene is painted back over it.
+- **Music mode, black deck** (`audio/musicsvc`, `board/s3/mic_es8311`, `util/musicfeat`,
+  `util/songpalette`, `util/musicwire`) — `GET /music?k=<token>&on=1` (the yellow deck, every 10 s)
+  starts or keeps a capture task (core 1, 4 KB stack, static buffers) that reads the mic, sends
+  the features (beat, energy, brightness, present) ~30 times a second and the song's palette (cover
+  colours from the decoded art, genre badge, time of day) on change and every 10 s, over UDP to the
+  requester's port 4210. `on=0` or 30 s without a keep-alive stops it and closes the socket. The
+  music box stays off while it runs. `GET /music/debug?k=<token>` and a `[music]` serial line every
+  2 s are the readout (band floors as RMS, energy, beats/min over 15 s, present, palette).
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with

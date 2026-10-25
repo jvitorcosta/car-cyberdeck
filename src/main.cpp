@@ -24,6 +24,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "util/backdrop.h"
 #include "util/ridersprite.h"
 #include "audio/greeting.h"
+#include "audio/musicsvc.h"
 #include "ui/theme.h"
 #include "util/daynight.h"
 #include "util/linkstatus.h"
@@ -400,7 +401,7 @@ void loop() {
         return;
     }
     if (lastMode == -2) lastMode = -1;
-    musicBox(mode == 2 && !greeting::tunesMuted());
+    musicBox(mode == 2 && !greeting::tunesMuted() && !musicsvc::on());   // music mode: the mic listens
 
     static uint32_t shownGen = 0;
     static bool walkerOn = false;

@@ -146,6 +146,24 @@ void test_block_size_does_not_matter() {
     TEST_ASSERT_TRUE(beats >= 14 && beats <= 18);
 }
 
+// The readout's floor: 0 before the warm-up, then near the hum's band power; other bands read 0.
+static void test_floor_readout() {
+    Analyzer a;
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, a.floorPower(0));
+    Noise n;
+    int16_t buf[256];
+    long i = 0;
+    for (int b = 0; b < 3 * RATE / 256; ++b) {
+        for (int k = 0; k < 256; ++k, ++i) buf[k] = clip16(hum(n, i));
+        a.feed(buf, 256, (uint32_t)(i * 1000 / RATE));
+    }
+    TEST_ASSERT_TRUE(a.floorPower(0) > 0.0f);
+    TEST_ASSERT_TRUE(a.floorPower(1) > 0.0f);
+    TEST_ASSERT_TRUE(a.floorPower(0) < 600.0f * 600.0f);   // a band of the hum, not all of it
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, a.floorPower(3));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, a.floorPower(-1));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_hum_only_is_silent);
@@ -155,5 +173,6 @@ int main(int, char**) {
     RUN_TEST(test_energy_normalises);
     RUN_TEST(test_brightness_orders);
     RUN_TEST(test_block_size_does_not_matter);
+    RUN_TEST(test_floor_readout);
     return UNITY_END();
 }

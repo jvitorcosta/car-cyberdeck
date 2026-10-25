@@ -52,4 +52,7 @@ bool takeWalker(uint32_t gen);
 // Genre badge (genrebadge index) for the track generation; true once per arrival (UI).
 void postGenre(uint32_t gen, uint8_t badge);
 bool takeGenre(uint32_t gen, uint8_t* badge);
+// The badge posted for gen, kept after takeGenre() (music mode's palette, audio/musicsvc); genre::NONE
+// until one is posted for gen. Any task.
+uint8_t genreNow(uint32_t gen);
 }

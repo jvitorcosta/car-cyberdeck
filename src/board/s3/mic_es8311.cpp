@@ -15,15 +15,18 @@ constexpr uint8_t PGA_GAIN = 7;            // +42 dB, the spike's max
 // every clip peaked at only ~160-355 of 32k, no louder than a silent room.
 constexpr uint8_t ADC_VOLUME = 0xEF;
 int16_t s_frames[2 * CHUNK];
+bool s_held = false;                       // begin() holds the port: end() releases it once
 }  // namespace
 
 bool begin() {
+    if (s_held) return true;
     if (!audioport::acquire(RATE)) return false;
     if (!es8311::enableMic(PGA_GAIN, ADC_VOLUME)) {
         Serial.println("[mic] adc setup FAILED");
         audioport::release();
         return false;
     }
+    s_held = true;
     return true;
 }
 
@@ -36,6 +39,10 @@ size_t read(int16_t* mono, size_t maxSamples) {
     return n;
 }
 
-void end() { audioport::release(); }
+void end() {
+    if (!s_held) return;                   // never begun, or begin() failed: nothing to release
+    s_held = false;
+    audioport::release();
+}
 
 }  // namespace mic

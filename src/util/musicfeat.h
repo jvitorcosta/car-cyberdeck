@@ -54,6 +54,9 @@ public:
     // The features since the last take(): beat = at least one beat happened (strength = the strongest, 0..255);
     // energy / brightness / present as of now.
     Features take();
+    // A band's noise floor (0 bass, 1 mid, 2 treble) as mean power per sample, for the debug readout;
+    // 0 during the warm-up or for another band.
+    float floorPower(int band) const { return band >= 0 && band < 3 ? floor_[band] : 0.0f; }
 private:
     struct Biquad { float b0, b1, b2, a1, a2, z1, z2; };
     static void bandPass(Biquad& q, float loHz, float hiHz);

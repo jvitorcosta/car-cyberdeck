@@ -1,5 +1,6 @@
 #include "shared.h"
 #include "../util/text.h"
+#include "../util/genre.h"
 #include <string.h>
 #include "../lyrics/lrclib.h"
 #include <freertos/FreeRTOS.h>
@@ -17,6 +18,8 @@ static uint32_t s_statusGen = 0;   // gen s_status belongs to (0 = none)
 static lyricstatus::Status s_status = lyricstatus::Status::Searching;
 static uint32_t s_genreGen = 0;    // gen s_genre was posted for (0 = none waiting)
 static uint8_t s_genre = 0;
+static uint32_t s_genreNowGen = 0; // gen s_genreNow belongs to; takeGenre() leaves it
+static uint8_t s_genreNow = genre::NONE;
 
 void begin() { if (!s_mtx) s_mtx = xSemaphoreCreateMutex(); }
 void lock() { xSemaphoreTake(s_mtx, portMAX_DELAY); }
@@ -99,6 +102,8 @@ void postGenre(uint32_t gen, uint8_t badge) {
     if (gen != s_state.trackGen) return;   // stale: track moved on
     s_genreGen = gen;
     s_genre = badge;
+    s_genreNowGen = gen;
+    s_genreNow = badge;
 }
 
 bool takeGenre(uint32_t gen, uint8_t* badge) {
@@ -107,6 +112,11 @@ bool takeGenre(uint32_t gen, uint8_t* badge) {
     s_genreGen = 0;
     *badge = s_genre;
     return true;
+}
+
+uint8_t genreNow(uint32_t gen) {
+    Guard g;
+    return gen != 0 && s_genreNowGen == gen ? s_genreNow : genre::NONE;
 }
 
 }
