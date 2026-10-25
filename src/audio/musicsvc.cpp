@@ -34,7 +34,7 @@ bool s_running = false;                     // from keepAlive()'s start until th
 bool s_stopReq = false;
 bool s_closing = false;                     // the task decided to stop: no more keep-alives for it
 uint32_t s_keepMs = 0;
-uint32_t s_peer = 0;                        // IPv4, network order (IPAddress's dword)
+uint32_t s_peer = 0;                        // IPv4, network order (IPAddress's dword); 0 between runs
 
 // The song's cover colours, from the network task.
 uint32_t s_gen = 0;
@@ -220,20 +220,21 @@ void task(void*) {
     portENTER_CRITICAL(&s_mux);
     s_running = false;
     s_closing = false;
+    s_peer = 0;                                // the next run streams to whoever starts it
     resetDebugLocked();
     portEXIT_CRITICAL(&s_mux);
     vTaskDelete(nullptr);
 }
 }  // namespace
 
-Start keepAlive(const IPAddress& peer) {
+Start keepAlive(const IPAddress& peer, bool takePeer) {
     const uint32_t ip = (uint32_t)peer;
     portENTER_CRITICAL(&s_mux);
     if (s_running) {
         const bool closing = s_closing;
         if (!closing) {
             s_keepMs = millis();
-            s_peer = ip;
+            if (takePeer || !s_peer) s_peer = ip;
             s_stopReq = false;                 // an on=1 before the task saw an on=0 cancels it: latest wins
         }
         portEXIT_CRITICAL(&s_mux);
@@ -249,7 +250,7 @@ Start keepAlive(const IPAddress& peer) {
     }
     s_running = true;
     s_keepMs = millis();
-    s_peer = ip;
+    if (takePeer || !s_peer) s_peer = ip;
     s_stopReq = false;
     s_closing = false;
     portEXIT_CRITICAL(&s_mux);

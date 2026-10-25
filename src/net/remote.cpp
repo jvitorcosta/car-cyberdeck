@@ -168,9 +168,10 @@ static void handleMusic() {
 }
 
 // &on=1 also counts as a keep-alive, so one URL in a loop is the owner's whole capture; without it, read-only.
+// It leaves the stream's peer (set by /music?on=1) alone: it streams here only when nobody else asked.
 static void handleMusicDebug() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
-    if (s_server->arg("on") == "1") musicsvc::keepAlive(s_server->client().remoteIP());
+    if (s_server->arg("on") == "1") musicsvc::keepAlive(s_server->client().remoteIP(), false);
     static char out[320];   // static: off this task's 4 KB stack (one request at a time); ~215 B at most
     if (!musicsvc::debugJson(out, sizeof out)) { s_server->send(500, "text/plain", "debug too big"); return; }
     s_server->sendHeader("Cache-Control", "no-store");

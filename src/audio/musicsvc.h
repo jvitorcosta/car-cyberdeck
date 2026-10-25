@@ -13,9 +13,11 @@ namespace musicsvc {
 constexpr uint32_t TIMEOUT_MS = 30000;
 enum class Start : uint8_t { On, LowMemory, Stopping, NoTask };
 // GET /music?on=1: starts music mode (stopping the music box), or keeps it alive; the packets go to
-// peer from now on. LowMemory: not started (Spotify's TLS comes first); Stopping: the last run is
+// peer from now on. takePeer false (GET /music/debug's on=1): only keeps it alive, and takes peer
+// only while none is set (a run's peer is cleared as it ends), so a laptop's debug loop never steals
+// the stream from the yellow deck. LowMemory: not started (Spotify's TLS comes first); Stopping: the last run is
 // still closing, ask again. Any task.
-Start keepAlive(const IPAddress& peer);
+Start keepAlive(const IPAddress& peer, bool takePeer = true);
 void stop();         // GET /music?on=0: the capture task closes at its next read (~16 ms). Any task.
 bool on();           // the capture task runs (or is closing). Any task.
 // The network task: a new song (no cover colours yet), then its art decoded into art::bitmap().
