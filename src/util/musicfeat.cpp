@@ -73,6 +73,7 @@ void Analyzer::hop(uint32_t hopMs) {
     }
 
     // Beat: bass flux against its median over the last second.
+    const float before = prevBass_;
     const float flux = p[0] > prevBass_ ? p[0] - prevBass_ : 0.0f;
     prevBass_ = p[0];
     float sorted[FLUX_RING];
@@ -89,7 +90,7 @@ void Analyzer::hop(uint32_t hopMs) {
     if (flux > fluxPeak_) fluxPeak_ = flux;
 
     const bool refractory = everBeat_ && (uint32_t)(hopMs - lastBeatMs_) < REFRACTORY_MS;
-    if (flux > BEAT_FLUX_X * median && flux > BEAT_FLUX_MIN_X * floor_[0] && p[0] > BEAT_POWER_X * floor_[0] && !refractory) {
+    if (flux > BEAT_FLUX_X * median && flux > BEAT_FLUX_MIN_X * floor_[0] && flux > BEAT_RISE_X * before && p[0] > BEAT_POWER_X * floor_[0] && !refractory) {
         uint8_t st = to255(255.0f * flux / fluxPeak_);
         if (st == 0) st = 1;
         if (!anyBeat_ || st > bestStrength_) bestStrength_ = st;

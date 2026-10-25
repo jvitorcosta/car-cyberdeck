@@ -31,6 +31,7 @@ constexpr int CATCHUP_HOPS = 62;              // ~2 s
 constexpr int FLUX_RING = 31;                 // ~1 s of hops
 constexpr float BEAT_FLUX_X = 1.6f, BEAT_POWER_X = 2.0f;
 constexpr float BEAT_FLUX_MIN_X = 0.3f;       // flux must also be this fraction of the bass floor (rectified flux has a ~0 median)
+constexpr float BEAT_RISE_X = 0.5f;           // and a transient: the power rose by this fraction of the previous hop (a stepped hum jitters far less)
 constexpr uint32_t REFRACTORY_MS = 250;
 constexpr float FLUX_PEAK_DECAY_S = 10.0f;    // strength = flux / rolling flux peak
 
@@ -40,7 +41,7 @@ constexpr float ENERGY_PEAK_DECAY_S = 10.0f, ENERGY_PEAK_MIN_X = 2.0f;
 constexpr float BRIGHT_SMOOTH_S = 0.2f;
 
 // Present: energy over PRESENT_ENERGY for PRESENT_NEED_HOPS of the last PRESENT_HOPS (1 s of 3 s).
-constexpr int PRESENT_ENERGY = 25;
+constexpr int PRESENT_ENERGY = 35;
 constexpr int PRESENT_HOPS = 94, PRESENT_NEED_HOPS = 31;
 
 struct Features { bool beat; uint8_t strength, energy, brightness; bool present; };

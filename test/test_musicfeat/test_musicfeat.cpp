@@ -15,7 +15,8 @@ static const double PI_D = 3.14159265358979323846;
 
 // Deterministic white noise (xorshift32), uniform scaled to the given RMS.
 struct Noise {
-    uint32_t s = 0x12345678u;
+    uint32_t s;
+    explicit Noise(uint32_t seed = 0x12345678u) : s(seed) {}
     double next(double rms) {
         s ^= s << 13; s ^= s >> 17; s ^= s << 5;
         return ((double)s / 4294967295.0 * 2.0 - 1.0) * rms * 1.7320508;   // uniform +-a has RMS a/sqrt(3)
@@ -56,9 +57,9 @@ struct Run {
 
 // Feed `seconds` of signal(i, noise) in 256-sample blocks, take() after each.
 template <class F>
-static Run run(double seconds, F signal) {
+static Run run(double seconds, F signal, uint32_t seed = 0x12345678u) {
     Analyzer a;
-    Noise n;
+    Noise n(seed);
     Run r;
     const long total = (long)(seconds * RATE);
     int16_t blk[256];
@@ -79,15 +80,17 @@ void test_hum_only_is_silent() {
 
 // Hum that steps up (engine revs, a louder fan) is not music: after a few seconds of settling it must
 // neither beat nor read as present. `gain` multiplies the whole hum from 3 s on.
-static void check_hum_step(double gain) {
-    const Run r = run(20.0, [gain](long i, Noise& n) { return hum(n, i) * (i >= 3 * RATE ? gain : 1.0); });
-    TEST_ASSERT_EQUAL_INT(0, r.beatsIn(14.0, 20.0));
+static void check_hum_step(double gain, uint32_t seed) {
+    const Run r = run(25.0, [gain](long i, Noise& n) { return hum(n, i) * (i >= 3 * RATE ? gain : 1.0); }, seed);
+    TEST_ASSERT_EQUAL_INT(0, r.beatsIn(14.0, 25.0));
     for (size_t k = 0; k < r.takes.size(); ++k)
         if ((double)(k + 1) * 256.0 / RATE > 14.0) TEST_ASSERT_FALSE(r.takes[k].present);
 }
 void test_hum_step_up_settles_to_silent() {
-    check_hum_step(1.2);
-    check_hum_step(1.5);
+    const uint32_t seeds[] = {0x12345678u, 0xdeadbeefu, 0x1badf00du};
+    const double gains[] = {1.2, 1.5, 2.0, 3.0};   // up to ~10 dB: an engine rev or a fan stepping up
+    for (double g : gains)
+        for (uint32_t sd : seeds) check_hum_step(g, sd);
 }
 
 void test_kicks_over_hum_beat_at_tempo() {
