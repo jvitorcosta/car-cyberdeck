@@ -160,7 +160,8 @@ async function run(name: string, args: Record<string, unknown>, ctx: ToolCtx): P
       target = Math.min(100, Math.max(0, target));
       await spotify.volume(target);
       // restore() does not reapply volume, and replaying the track would restart the song.
-      setUndo(async () => { if (before !== null) await spotify.volume(before); });
+      if (before !== null) setUndo(() => spotify.volume(before));
+      else sessions.takeUndo(deck); // old volume unknown: nothing to undo, and no older action either
       return outcome("ok", `spotify_volume ${target}`, { say: `hai~ volume ${target}` });
     }
 
@@ -211,6 +212,8 @@ export async function executeTool(name: string, input: unknown, ctx: ToolCtx): P
   try {
     return await run(name, args, ctx);
   } catch (err) {
+    // A failed change may have half-happened; undo must not revert an older action instead.
+    if (name.startsWith("spotify_") && name !== "spotify_now") ctx.sessions.takeUndo(ctx.deck);
     const msg = err instanceof Error ? err.message : String(err);
     if (err instanceof SpotifyError && err.code === "no_device") return outcome("sem_spotify", `${name} sem_spotify`);
     if (err instanceof SpotifyError && err.code === "not_found") {

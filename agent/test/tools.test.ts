@@ -68,6 +68,32 @@ describe("executeTool: spotify", () => {
     expect(calls.some((c) => c[0] === "restore")).toBe(false);
   });
 
+  it("absolute volume with an unknown current volume → a following undo answers nada_desfazer", async () => {
+    const { ctx, calls } = setup({ async now() { return { ...SNAPSHOT, volume: null }; } });
+    await executeTool("lights", { zone: "inside", ...LIGHTS_NULLS, colour: "red" }, ctx);
+    expect((await executeTool("spotify_volume", { level: 40, delta: null }, ctx)).stock).toBe("ok");
+    const undo = await executeTool("undo", {}, ctx);
+    expect(undo).toMatchObject({ stock: "nada_desfazer", lights: [] });
+    expect(calls.filter((c) => c[0] === "volume")).toEqual([["volume", 40]]);
+  });
+
+  it("a failed Spotify change clears the pending undo, so undo does not revert the earlier action", async () => {
+    let fail = false;
+    const { ctx, calls } = setup({
+      async play(query, kind) {
+        if (fail) throw new SpotifyError("no_device", "no active Spotify device");
+        calls.push(["play", query, kind]);
+        return { name: query };
+      },
+    });
+    await executeTool("spotify_play", { query: "Djavan", kind: "artist" }, ctx);
+    fail = true;
+    expect((await executeTool("spotify_play", { query: "Djonga", kind: "artist" }, ctx)).stock).toBe("sem_spotify");
+    const undo = await executeTool("undo", {}, ctx);
+    expect(undo.stock).toBe("nada_desfazer");
+    expect(calls.some((c) => c[0] === "restore")).toBe(false);
+  });
+
   it("(Review Focus) no active device → sem_spotify with the phone line", async () => {
     const { ctx } = setup({
       async now() { throw new SpotifyError("no_device", "no active Spotify device"); },
