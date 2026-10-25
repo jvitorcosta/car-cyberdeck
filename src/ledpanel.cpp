@@ -10,9 +10,9 @@
 //           on one row, "IN [chip] ROSE 40%" | "OUT [chip] YELLOW 100%" (OFF, or -- NO LINK when the
 //           deck has no link to it); the prompt line: a message, music mode's readout, or just ">",
 //           with a blinking block cursor; and at the bottom the three items "[LIGHTS]",
-//           "[KARAOKE]" (with a LIVE tag while the black deck plays a song with synced lyrics,
-//           dimmed otherwise: a tap then only says why) and "[MUSIC]" (a tap turns music mode on or
-//           off, an ON tag while on; see "Music mode" below). The song itself is on the Karaoke
+//           "[LYRICS]" (with a LIVE tag while the black deck plays a song with synced lyrics,
+//           dimmed otherwise: a tap then only says why) and "MUSIC MODE" (a tap turns music mode on or
+//           off, an ON or OFF tag under it; see "Music mode" below). The song itself is on the Karaoke
 //           screen only
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
 //           together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK 2/2",
@@ -478,8 +478,8 @@ static void drawChrome(const Rect& r, const char* s, Face f, bool pressed, bool 
 // the inverted bar when focused. Only the Xbox controller focuses (focus is -1 without it), so
 // without one the items look alike and the clock and the lights band lead. Dimmed (an item that
 // won't open now): DIM text in a DIM border, the bar in DIM; a press keeps that look (only a second
-// DIM outline inside the border), since it won't open: the message is the feedback. `tag` (KARAOKE's
-// LIVE while it opens, MUSIC's ON while on; nullptr for none): under the text at the right edge, an
+// DIM outline inside the border), since it won't open: the message is the feedback. `tag` (LYRICS's
+// LIVE while it opens, MUSIC MODE's ON / OFF; nullptr for none): under the text at the right edge, an
 // inverted mini-label in the text's ink with the ground's colour for letters (TEXT, not ALERT: red
 // is for problems).
 static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim, const char* tag) {
@@ -582,8 +582,8 @@ static void drawButtonBody(int id, bool pressed) {
             karaokeShownReady = karaokeReady();
             dim = !karaokeShownReady;
             if (karaokeShownReady) tag = LIVE_TAG;
-        } else if (id == M_ITEM0 + deckmenu::MUSIC && musicOn) {
-            tag = ON_TAG;
+        } else if (id == M_ITEM0 + deckmenu::MUSIC) {
+            tag = musicOn ? ON_TAG : OFF_TAG;
         }
         drawRow(r, MENU_ITEMS[id - M_ITEM0], pressed, id == focus, dim, tag);
         return;

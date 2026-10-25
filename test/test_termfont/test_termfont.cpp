@@ -134,16 +134,16 @@ void test_menu_items_fit() {
         fitsLeft(Face::BODY, label, ROW_TEXT_X, r.w);
         const Rows ink = fromCapTop(Face::BODY, ROW_TEXT_Y);
         TEST_ASSERT_TRUE_MESSAGE(ink.top >= MARGIN, label);
-        // a tag (KARAOKE's LIVE, MUSIC's ON: SMALL, an inverted mini-label, its caps TAG_PAD from its
+        // a tag (LYRICS's LIVE, MUSIC MODE's ON / OFF: SMALL, an inverted mini-label, its caps TAG_PAD from its
         // edges) bottom right, under the label's ink with a row to spare, inside the margins
-        for (const char* tag : {LIVE_TAG, ON_TAG}) {
+        for (const char* tag : {LIVE_TAG, ON_TAG, OFF_TAG}) {
             const int tagW = termfont::width(Face::SMALL, tag) + 2 * TAG_PAD;
             TEST_ASSERT_TRUE_MESSAGE(r.w - TAG_RIGHT - tagW >= MARGIN, tag);
             TEST_ASSERT_TRUE_MESSAGE(ink.bottom + 1 < r.h - TAG_BOTTOM - tagH, label);
         }
     }
-    TEST_ASSERT_EQUAL_STRING("[KARAOKE]", MENU_ITEMS[deckmenu::KARAOKE]);
-    TEST_ASSERT_EQUAL_STRING("[MUSIC]", MENU_ITEMS[deckmenu::MUSIC]);
+    TEST_ASSERT_EQUAL_STRING("[LYRICS]", MENU_ITEMS[deckmenu::KARAOKE]);
+    TEST_ASSERT_EQUAL_STRING("MUSIC MODE", MENU_ITEMS[deckmenu::MUSIC]);
 }
 
 void test_preset_names_fit() {

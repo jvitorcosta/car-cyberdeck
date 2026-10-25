@@ -47,8 +47,9 @@ the panel would turn teal.
     `-- NO LINK` (red) when the deck has no link to it (never its last colour);
   - the prompt line: `>` and a blinking block cursor; a message while one shows (see Messages), and
     music mode's readout while it is on;
-  - at the bottom, two big buttons (44 px tall): `> [LIGHTS]` opens the Lights page, `> [KARAOKE]`
-    the black deck's lyrics. KARAOKE is bright with a small inverted `LIVE` tag at its right edge
+  - at the bottom, three big buttons (44 px tall): `[LIGHTS]` opens the Lights page, `[LYRICS]`
+    the black deck's lyrics, `MUSIC MODE` turns music mode on or off, with an inverted `ON` or
+    `OFF` tag under its label. LYRICS is bright with a small inverted `LIVE` tag at its right edge
     while the black deck plays a song with synced lyrics, and dim (no tag) otherwise: a tap then
     says why. The song itself is on the Karaoke page only.
 - There is no Weather page any more: its data is on the main screen. The presets are on the Lights
@@ -72,14 +73,14 @@ the panel would turn teal.
   LED controllers can't be read back).
 - **Messages**: a terminal line shows on the main screen's prompt line (on
   Lights: in place of the status line) for 2.5 s when something happens: `>ROSE APPLIED` (a preset,
-  from any source), `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's link changed), why KARAOKE
+  from any source), `>INSIDE: NO LINK`, `>OUTSIDE: LINKED` (a light's link changed), why LYRICS
   won't open (`>LAST TRIP ...` at boot, 6 s); the blinking cursor moves to its end. Then the prompt
   line is back to `>` (on Lights: the status line).
-- **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the main screen's two
+- **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the main screen's three
   buttons, left / right between them; a green ring on Lights), **A** presses, **B** is Back (to the
   main screen; there it does nothing). On Lights only: **X** next page, **Y** this page's lights
   on/off, **LB / RB** `-` / `+`. B used to switch to the BOTH page; use X for that now. The focus
-  shows only while the controller is connected: without it the main screen's two buttons look
+  shows only while the controller is connected: without it the main screen's three buttons look
   alike, so the clock and the lights lead.
 
 ## Presets

@@ -10,14 +10,15 @@ namespace termlayout {
 // The Menu's three items (100 px wide), in deckmenu::Item order: the label (BODY) top left, its caps'
 // top ROW_TEXT_Y and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
 // it has one (SMALL, an inverted mini-label: TAG_PAD px of fill around the caps, TAG_RIGHT in from
-// the item's right edge, TAG_BOTTOM up from its bottom): KARAOKE's LIVE while it opens, MUSIC's ON
-// while music mode is on. "[KARAOKE]" and LIVE side by side don't fit 100 px, so the tag goes under
+// the item's right edge, TAG_BOTTOM up from its bottom): LYRICS's LIVE while it opens, MUSIC MODE's ON
+// or OFF (always one of them). "[LYRICS]" and LIVE side by side don't fit 100 px, so the tag goes under
 // the label, and the label always sits high (it doesn't jump when a tag comes).
-constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[KARAOKE]", "[MUSIC]"};
+constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[LYRICS]", "MUSIC MODE"};
 constexpr int N_MENU_ITEMS = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
 constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 7;
 constexpr const char* LIVE_TAG = "LIVE";
 constexpr const char* ON_TAG = "ON";
+constexpr const char* OFF_TAG = "OFF";
 constexpr int TAG_PAD = 3, TAG_RIGHT = 6, TAG_BOTTOM = 5;
 
 // A Lights colour button (75x44): the chip left, 16x28, so the name fits right of it in BODY, the
