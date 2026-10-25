@@ -147,6 +147,12 @@ void test_latin1_fold() {
         {"\xE6\x9D\xB1" "x\xF0\x9F\x8E\xB5", "x"},                   // CJK and an emoji dropped
         {"a\xC2\x85" "b\xC2\xAD" "c", "abc"},                       // a C1 control, a soft hyphen
         {"a\x80" "b\xC3" "c", "abc"},                                // a stray continuation, a lead without one
+        {"a\xC2\xA0" "b", "a b"},                                    // a no-break space: a plain one
+        {"a\xE2\x80\x89" "b\xE2\x80\xAF" "c\xE3\x80\x80" "d", "a b c d"},   // thin, narrow, ideographic spaces
+        {"e\xE2\x80\x80" "f\xE2\x80\x8A" "g\xE2\x81\x9F" "h", "e f g h"},   // U+2000, U+200A, U+205F
+        {"\xE2\x80\xB9" "x\xE2\x80\xBA", "<x>"},                     // "‹x›"
+        {"a \xE2\x80\xA2 b", "a * b"},                               // "a • b"
+        {"don\xCA\xBC" "t", "don't"},                                // "donʼt"
     };
     for (const auto& c : cases) {
         char o[32];

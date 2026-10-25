@@ -348,6 +348,11 @@ void test_karaoke_pitches() {
     auto rise = [](Face f) { return termfont::accentAscent(f) - termfont::ascent(f); };
     TEST_ASSERT_TRUE(rise(Face::TITLE) <= rise(Face::BIG) && rise(Face::BIG) <= 12);
     TEST_ASSERT_TRUE(rise(Face::BODY) <= 10);
+    // the song row (BODY, upper case: "SÃO JOÃO - ..."), its caps centred on y 20 (ML_DATUM, so the
+    // baseline at 20 + cap / 2), inside its clear (rows 2..37) with the accents and the descenders
+    const int songBase = 20 + termfont::capHeight(Face::BODY) / 2;
+    TEST_ASSERT_TRUE(songBase - termfont::accentAscent(Face::BODY) >= 2);
+    TEST_ASSERT_TRUE(songBase + termfont::descent(Face::BODY) - 1 <= 2 + 36 - 1);
 }
 
 // karaoke::wrap measures with the face it draws in.

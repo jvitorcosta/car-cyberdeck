@@ -14,8 +14,9 @@ enum class Mark : uint8_t { None, Acute, Grave, Circumflex, Tilde, Diaeresis, Ce
 // folded length.
 size_t foldMarks(const char* src, char* dst, Mark* marks, size_t n);
 // UTF-8 -> Latin-1 bytes, the yellow deck's lettering (its fonts cover 0x20-0xFF): ASCII and
-// U+00A0..00FF (accented letters, the degree sign) become one byte each; above that, curly quotes
-// fold to ' and ", dashes to -, the ellipsis to ..., Œ œ to OE oe, Ÿ to Y; anything else (CJK, emoji),
+// U+00A1..00FF (accented letters, the degree sign) become one byte each, the no-break space and the
+// other Unicode spaces a plain ' ' (lines wrap at it); above that, curly quotes and ʼ fold to ' and ",
+// ‹ › to < >, • to *, dashes to -, the ellipsis to ..., Œ œ to OE oe, Ÿ to Y; anything else (CJK, emoji),
 // the C1 controls and the soft hyphen are dropped. A character goes in whole or not at all, and text
 // cut mid-character stops at its NUL. Writes at most n bytes incl. NUL; returns the length. Pure.
 size_t latin1Fold(const char* utf8, char* dst, size_t n);

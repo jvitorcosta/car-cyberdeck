@@ -152,7 +152,13 @@ void asciiFold(const char* src, char* dst, size_t n) { foldMarks(src, dst, nullp
 // What a code point above U+00FF becomes in Latin-1 text ("" drops it).
 static const char* foldWide(uint32_t cp) {
     switch (cp) {
-        case 0x2018: case 0x2019: case 0x201A: case 0x201B: case 0x2032: return "'";
+        case 0x2000: case 0x2001: case 0x2002: case 0x2003: case 0x2004: case 0x2005: case 0x2006:
+        case 0x2007: case 0x2008: case 0x2009: case 0x200A: case 0x202F: case 0x205F: case 0x3000:
+            return " ";   // Unicode spaces: words stay apart
+        case 0x2018: case 0x2019: case 0x201A: case 0x201B: case 0x2032: case 0x02BC: return "'";
+        case 0x2039: return "<";
+        case 0x203A: return ">";
+        case 0x2022: return "*";
         case 0x201C: case 0x201D: case 0x201E: case 0x201F: case 0x2033: return "\"";
         case 0x2010: case 0x2011: case 0x2012: case 0x2013: case 0x2014: case 0x2015: case 0x2212: return "-";
         case 0x2026: return "...";
@@ -181,7 +187,10 @@ size_t latin1Fold(const char* utf8, char* dst, size_t n) {
         i += k;
         if (more == 0 || k <= more) continue;   // malformed: dropped
         if (cp <= 0xFF) {
-            if (cp >= 0xA0 && cp != 0xAD) dst[o++] = (char)cp;   // the C1 controls, the soft hyphen: dropped
+            // the no-break space a plain one (karaoke::wrap breaks lines at ' '); the C1 controls and
+            // the soft hyphen dropped
+            if (cp == 0xA0) dst[o++] = ' ';
+            else if (cp > 0xA0 && cp != 0xAD) dst[o++] = (char)cp;
             continue;
         }
         const char* r = foldWide(cp);
