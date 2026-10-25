@@ -153,10 +153,69 @@ describe("makeSlowPath", () => {
     expect(res.stock).toBe("deixa_comigo");
     expect(res.say).toBe("vai demorar um pouquinho~");
 
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
     vi.useRealTimers();
     release();
-    await vi.waitFor(() => expect(finished).toBe(true));
+    await vi.waitFor(() => expect(info).toHaveBeenCalledTimes(1));
+    info.mockRestore();
+    expect(finished).toBe(true);
     expect(calls).toEqual([["play", "Djavan", "artist"]]);
+  });
+
+  it("says the question when the last outcome is ask", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = fakeRunQuery([
+      { tool: "spotify_play", args: { query: "Djavan", kind: "artist" } },
+      { tool: "ask", args: { question: "qual do Djavan, Oceano ou Flor de Lis?" } },
+      result("Perguntei qual música ele quer."),
+    ], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "tarefa");
+    expect(res.say).toBe("qual do Djavan, Oceano ou Flor de Lis?");
+    expect(res.mood).toBe("smug");
+  });
+
+  it("late tool calls after the timeout leave the deck's undo alone, and the late finish logs its cost", async () => {
+    vi.useFakeTimers();
+    const infos: string[] = [];
+    const spy = vi.spyOn(console, "info").mockImplementation((...a) => { infos.push(a.join(" ")); });
+    try {
+      const { spotify, calls } = fakeSpotify();
+      const sessions = new Sessions();
+      let release!: () => void;
+      const gate = new Promise<void>((r) => { release = r; });
+      const runQuery = ((params: { options?: Options }) => (async function* () {
+        await gate;
+        const server = params.options!.mcpServers!.car as McpSdkServerConfigWithInstance;
+        const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+        await server.instance.connect(serverT);
+        const client = new Client({ name: "fake", version: "0" });
+        await client.connect(clientT);
+        await client.callTool({ name: "spotify_volume", arguments: { level: 70, delta: null } });
+        await client.callTool({ name: "spotify_queue", arguments: { query: "Flor de Lis" } });
+        await client.close();
+        yield result("pronto.", 0.033);
+      })()) as unknown as typeof query;
+      (spotify as unknown as { queue: (q: string) => Promise<{ name: string }> }).queue =
+        async (q) => { calls.push(["queue", q]); return { name: q }; };
+      const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions }, runQuery });
+
+      const pending = slow("yellow", "tarefa longa");
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect((await pending).stock).toBe("deixa_comigo");
+
+      const fastUndo = async () => {};
+      sessions.setUndo("yellow", fastUndo);     // the driver's next fast-path action
+      vi.useRealTimers();
+      release();
+      await vi.waitFor(() => expect(infos).toHaveLength(1));
+      expect(calls).toEqual([["volume", 70], ["queue", "Flor de Lis"]]);
+      expect(sessions.takeUndo("yellow")).toBe(fastUndo);
+      expect(infos[0]).toContain("spotify_volume 70; spotify_queue Flor de Lis");
+      expect(infos[0]).toContain("0.033");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("logs, not rejects, when the background query fails after the timeout", async () => {
