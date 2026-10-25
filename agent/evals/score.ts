@@ -2,10 +2,13 @@
 
 export type Expect =
   | "ask" | "none" | "handoff"
-  | { tool: string; args?: Record<string, unknown>; contains?: Record<string, string> };
+  | { tool: string; args?: Record<string, unknown>; contains?: Record<string, string>; atMost?: Record<string, number> };
+
+/** Outcomes besides the expected tool that also count as right, for genuinely two-way commands. */
+export type AlsoOk = "handoff" | "ask";
 
 /** One line of cases.jsonl. `before` texts run first in the same session (follow-ups, undo). */
-export interface Case { id: string; text: string; before?: string[]; expect: Expect; }
+export interface Case { id: string; text: string; before?: string[]; alsoOk?: AlsoOk[]; expect: Expect; }
 
 export type Verdict = "right" | "wrong_action" | "asked" | "missed";
 // wrong_action: a tool ran that isn't the expected one or with wrong args (the worst);
@@ -23,11 +26,16 @@ function argsMatch(exp: Exclude<Expect, string>, input: unknown): boolean {
   for (const [k, v] of Object.entries(exp.contains ?? {})) {
     if (typeof got[k] !== "string" || !fold(got[k] as string).includes(fold(v))) return false;
   }
+  for (const [k, v] of Object.entries(exp.atMost ?? {})) {
+    if (typeof got[k] !== "number" || (got[k] as number) > v) return false;
+  }
   return true;
 }
 
-export function judge(expect: Case["expect"], got: Got): Verdict {
+export function judge(expect: Case["expect"], got: Got, alsoOk: AlsoOk[] = []): Verdict {
   const tool = got.tool;
+  if (tool === "hand_off_to_agent" && alsoOk.includes("handoff")) return "right";
+  if (tool === "ask" && alsoOk.includes("ask")) return "right";
   if (expect === "none") {
     if (tool === null) return "right";
     return tool === "ask" ? "asked" : "wrong_action";
@@ -41,7 +49,8 @@ export function judge(expect: Case["expect"], got: Got): Verdict {
     if (tool === null) return "missed";
     return tool === "ask" ? "asked" : "wrong_action";
   }
-  if (tool === null || tool === "ask") return "asked";
+  // A hand-off is a deferral: nothing changes on the fast path, so it scores like an ask.
+  if (tool === null || tool === "ask" || tool === "hand_off_to_agent") return "asked";
   return tool === expect.tool && argsMatch(expect, got.input) ? "right" : "wrong_action";
 }
 
@@ -71,7 +80,8 @@ function validExpect(e: unknown): e is Expect {
   if (!e || typeof e !== "object") return false;
   const o = e as Record<string, unknown>;
   const isObj = (v: unknown) => v === undefined || (typeof v === "object" && v !== null && !Array.isArray(v));
-  return typeof o.tool === "string" && isObj(o.args) && isObj(o.contains);
+  const numbers = (v: unknown) => isObj(v) && Object.values((v ?? {}) as object).every((n) => typeof n === "number");
+  return typeof o.tool === "string" && isObj(o.args) && isObj(o.contains) && numbers(o.atMost);
 }
 
 /** Parses cases.jsonl: one JSON case per line, blank lines skipped. Throws on the first bad line. */
@@ -84,8 +94,10 @@ export function parseCases(text: string): Case[] {
     let c: Case;
     try { c = JSON.parse(line) as Case; } catch (e) { throw new Error(`${where}: ${e instanceof Error ? e.message : e}`); }
     const beforeOk = c.before === undefined || (Array.isArray(c.before) && c.before.every((b) => typeof b === "string"));
-    if (typeof c.id !== "string" || typeof c.text !== "string" || !beforeOk || !validExpect(c.expect)) {
-      throw new Error(`${where}: needs id, text, expect ("ask" | "none" | "handoff" | {tool, args?, contains?}) and an optional before list`);
+    const alsoOkOk = c.alsoOk === undefined || (Array.isArray(c.alsoOk) && c.alsoOk.every((a) => a === "handoff" || a === "ask"));
+    if (typeof c.id !== "string" || typeof c.text !== "string" || !beforeOk || !alsoOkOk || !validExpect(c.expect)) {
+      throw new Error(`${where}: needs id, text, expect ("ask" | "none" | "handoff" | {tool, args?, contains?, atMost?}), ` +
+        `an optional before list and an optional alsoOk list of "handoff" | "ask"`);
     }
     if (ids.has(c.id)) throw new Error(`${where}: duplicate id ${c.id}`);
     ids.add(c.id);

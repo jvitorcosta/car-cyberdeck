@@ -39,6 +39,34 @@ describe("judge", () => {
     expect(judge(PLAY_DJAVAN, { tool: null, input: null })).toBe("asked");
   });
 
+  it("a hand-off when a direct action was expected is a deferral, so asked", () => {
+    expect(judge(PLAY_DJAVAN, { tool: "hand_off_to_agent", input: { task: "tocar Djavan" } })).toBe("asked");
+  });
+
+  it("alsoOk makes a hand-off or an ask right for a two-way command, and nothing else", () => {
+    const album: Case["expect"] = { tool: "spotify_play", args: { kind: "album" }, contains: { query: "tyler" } };
+    expect(judge(album, { tool: "hand_off_to_agent", input: { task: "álbum novo do Tyler" } }, ["handoff"])).toBe("right");
+    expect(judge(album, { tool: "ask", input: { question: "qual?" } }, ["handoff"])).toBe("asked");
+    expect(judge(album, { tool: "ask", input: { question: "qual?" } }, ["ask"])).toBe("right");
+    expect(judge(album, { tool: null, input: null }, ["handoff", "ask"])).toBe("asked");
+    expect(judge(album, { tool: "spotify_play", input: { query: "Tyler", kind: "artist" } }, ["handoff"])).toBe("wrong_action");
+    expect(judge(album, { tool: "spotify_play", input: { query: "Chromakopia Tyler", kind: "album" } }, ["handoff"])).toBe("right");
+  });
+
+  it("atMost needs a number no higher than the bound", () => {
+    const dim: Case["expect"] = { tool: "lights", args: { zone: "inside", colour: "blue", step: null }, atMost: { level: 50 } };
+    const base = { zone: "inside", colour: "blue", power: null, step: null };
+    expect(judge(dim, { tool: "lights", input: { ...base, level: 20 } })).toBe("right");
+    expect(judge(dim, { tool: "lights", input: { ...base, level: 50 } })).toBe("right");
+    expect(judge(dim, { tool: "lights", input: { ...base, level: 80 } })).toBe("wrong_action");
+    expect(judge(dim, { tool: "lights", input: { ...base, level: null } })).toBe("wrong_action");
+  });
+
+  it("a set-style light case with step null rejects a step, which would drop the colour", () => {
+    const set: Case["expect"] = { tool: "lights", args: { zone: "inside", colour: "blue", step: null } };
+    expect(judge(set, { tool: "lights", input: { zone: "inside", colour: "blue", level: null, power: null, step: "down" } })).toBe("wrong_action");
+  });
+
   it("ask and handoff expectations", () => {
     expect(judge("ask", { tool: "ask", input: { question: "quem?" } })).toBe("right");
     expect(judge("ask", { tool: null, input: null })).toBe("missed");
@@ -80,6 +108,10 @@ describe("parseCases", () => {
     expect(ok.map((c) => c.id)).toEqual(["a", "b"]);
     expect(() => parseCases('{"id":"a","text":"x","expect":"maybe"}')).toThrow(/line 1/);
     expect(() => parseCases('{"id":"a","text":"x","expect":"none"}\n{"id":"a","text":"y","expect":"none"}')).toThrow(/duplicate id a/);
+    const two = parseCases('{"id":"a","text":"x","alsoOk":["handoff"],"expect":{"tool":"spotify_play","atMost":{"level":5}}}');
+    expect(two[0]!.alsoOk).toEqual(["handoff"]);
+    expect(() => parseCases('{"id":"a","text":"x","alsoOk":["none"],"expect":{"tool":"undo"}}')).toThrow(/line 1/);
+    expect(() => parseCases('{"id":"a","text":"x","expect":{"tool":"lights","atMost":{"level":"50"}}}')).toThrow(/line 1/);
   });
 });
 
@@ -101,6 +133,17 @@ describe("cases.jsonl", () => {
     expect(cases.some((c) => c.before?.length)).toBe(true);
   });
 
+  it("every set-style light case pins step to null, p02 caps the level, s09 also accepts a hand-off", () => {
+    for (const c of cases) {
+      const e = c.expect;
+      if (typeof e === "string" || e.tool !== "lights" || typeof e.args?.step === "string") continue;
+      expect(e.args && "step" in e.args ? e.args.step : "missing", `${c.id} step`).toBeNull();
+    }
+    expect(cases.find((c) => c.id === "s09")!.alsoOk).toEqual(["handoff"]);
+    const p02 = cases.find((c) => c.id === "p02")!.expect;
+    expect(typeof p02 === "object" && p02.atMost).toEqual({ level: 50 });
+  });
+
   it("expects only real tools, argument names and enum values", () => {
     for (const c of cases) {
       const e = c.expect;
@@ -108,7 +151,7 @@ describe("cases.jsonl", () => {
       const def = TOOL_DEFS.find((t) => t.name === e.tool);
       expect(def, `${c.id}: tool ${e.tool}`).toBeDefined();
       const props = def!.input_schema.properties as Record<string, { enum?: unknown[] }>;
-      for (const [k, v] of Object.entries({ ...e.args, ...e.contains })) {
+      for (const [k, v] of Object.entries({ ...e.args, ...e.contains, ...e.atMost })) {
         expect(props[k], `${c.id}: arg ${k}`).toBeDefined();
         if (props[k].enum && e.args && k in e.args) expect(props[k].enum, `${c.id}: ${k}=${v}`).toContain(v);
       }
@@ -160,6 +203,25 @@ describe("runCase", () => {
     expect(row.say).toBe("desfeito~");
   });
 
+  it("records each before step's tool and flags a case whose setup produced no tool", async () => {
+    const { model } = scripted([msg([{ type: "text", text: "hm" }]), msg([use("undo", {})])]);
+    const row = await runCase(
+      { id: "u2", text: "volta", before: ["apaga a luz de fora"], expect: { tool: "undo" } },
+      { model, modelId: "claude-haiku-5-5" },
+    );
+    expect(row.setup).toEqual([{ tool: null, input: null }]);
+    expect(row.setupFailed).toBe(true);
+    expect(row.say).toBe("nada pra desfazer~");
+
+    const ok = scripted([msg([use("lights", { zone: "outside", colour: null, level: null, power: "off", step: null })]), msg([use("undo", {})])]);
+    const good = await runCase(
+      { id: "u2", text: "volta", before: ["apaga a luz de fora"], expect: { tool: "undo" } },
+      { model: ok.model, modelId: "claude-haiku-5-5" },
+    );
+    expect(good.setup.map((g) => g.tool)).toEqual(["lights"]);
+    expect(good.setupFailed).toBe(false);
+  });
+
   it("gives every case fresh sessions, so nothing leaks between cases", async () => {
     const { model, prompts } = scripted([msg([use("spotify_control", { action: "next" })]), msg([use("spotify_control", { action: "next" })])]);
     const deps = { model, modelId: "claude-haiku-5-5" };
@@ -183,6 +245,7 @@ describe("runCase", () => {
     expect(row.got).toEqual({ tool: null, input: null });
     expect(row.verdict).toBe("right");
     expect(row.costUsd).toBe(0);
+    expect(row.setupFailed).toBe(false);
   });
 });
 

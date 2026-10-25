@@ -17,6 +17,8 @@ const DOC_FILE = fileURLToPath(new URL("../../docs/voice-agent-evals.md", import
 
 export interface Row {
   id: string; text: string; expect: Case["expect"]; got: Got; verdict: Verdict;
+  /** What each `before` text produced; setupFailed when one of them produced no tool. */
+  setup: Got[]; setupFailed: boolean;
   ms: number; costUsd: number; say: string; spotify: string[]; handoffs: string[];
 }
 
@@ -56,7 +58,12 @@ export async function runCase(c: Case, deps: { model: ModelClient; modelId: stri
   };
   const cmdDeps = { model, modelId: deps.modelId, ctx: { spotify: recordingSpotify(spotify), sessions: new Sessions() }, slow };
 
-  for (const text of c.before ?? []) await handleCommand({ deck: DECK, text }, cmdDeps);
+  const setup: Got[] = [];
+  for (const text of c.before ?? []) {
+    last = null;
+    await handleCommand({ deck: DECK, text }, cmdDeps);
+    setup.push(last ?? { tool: null, input: null });
+  }
   spotify.length = 0;
   handoffs.length = 0;
   last = null;
@@ -66,13 +73,14 @@ export async function runCase(c: Case, deps: { model: ModelClient; modelId: stri
   const ms = Date.now() - start;
   const got: Got = last ?? { tool: null, input: null };
   return {
-    id: c.id, text: c.text, expect: c.expect, got, verdict: judge(c.expect, got), ms,
+    id: c.id, text: c.text, expect: c.expect, got, verdict: judge(c.expect, got, c.alsoOk),
+    setup, setupFailed: setup.some((g) => g.tool === null), ms,
     costUsd: res.usage ? costOf(deps.modelId, res.usage) : 0, say: res.reply.say, spotify, handoffs,
   };
 }
 
 const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
-const show = (e: Case["expect"] | Got) => JSON.stringify(e);
+const show = (e: unknown) => JSON.stringify(e);
 
 /** Returns the exit code. Only reads the key and calls the model once it has one. */
 export async function main(
@@ -101,19 +109,25 @@ export async function main(
   for (const c of cases) {
     const row = await runCase(c, { model, modelId });
     rows.push(row);
-    process.stdout.write(row.verdict === "right" ? "." : "x");
+    process.stdout.write(row.setupFailed ? "s" : row.verdict === "right" ? "." : "x");
   }
   process.stdout.write("\n");
 
-  const s = summarise(rows);
+  // A case whose setup misfired says nothing about its own text: it is listed, not scored.
+  const scored = rows.filter((r) => !r.setupFailed);
+  const setupFailed = rows.filter((r) => r.setupFailed);
+  const s = summarise(scored);
   console.log(`accuracy ${pct(s.accuracy)}  wrong action ${pct(s.wrongActionRate)}  asked ${pct(s.askRate)}  ` +
     `p50 ${s.p50Ms} ms  p95 ${s.p95Ms} ms  $${s.costPerCmd.toFixed(6)}/cmd`);
-  for (const r of rows.filter((r) => r.verdict !== "right")) {
+  for (const r of setupFailed) {
+    console.log(`  setup-failed ${r.id} "${r.text}" (not scored)\n    before   ${show(r.setup)}`);
+  }
+  for (const r of scored.filter((r) => r.verdict !== "right")) {
     console.log(`  ${r.verdict.padEnd(12)} ${r.id} "${r.text}"\n    expected ${show(r.expect)}\n    got      ${show(r.got)}  say "${r.say}"`);
   }
 
   const date = new Date().toISOString().slice(0, 10);
-  appendFileSync(docFile, `| ${date} | ${modelId} | ${rows.length} | ${pct(s.accuracy)} | ${pct(s.wrongActionRate)} | ` +
+  appendFileSync(docFile, `| ${date} | ${modelId} | ${scored.length}${setupFailed.length ? ` (+${setupFailed.length} setup failed)` : ""} | ${pct(s.accuracy)} | ${pct(s.wrongActionRate)} | ` +
     `${pct(s.askRate)} | ${s.p50Ms} / ${s.p95Ms} | $${s.costPerCmd.toFixed(6)} |\n`);
   console.log(`eval: row appended to ${docFile}`);
   return 0;

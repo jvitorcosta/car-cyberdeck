@@ -6,9 +6,12 @@ the handoff. Every case runs in fresh sessions; a case with a `before` list runs
 the same session (follow-ups and undo), and only its last text is judged.
 
 Verdicts: **right**; **wrong action** (a tool ran that is not the expected one, or with the wrong
-arguments; the worst); **asked** (an ask or no tool when an action was expected); **missed** (no tool
-when an ask or a handoff was expected). Latency is the wall time of the judged command; cost is the
-fast-path model call only.
+arguments; the worst); **asked** (an ask, a hand-off or no tool when an action was expected: a
+deferral, nothing changes on the fast path); **missed** (no tool when an ask or a handoff was expected).
+A case's optional `alsoOk` (`"handoff"` / `"ask"`) makes that outcome right too, for commands that are
+genuinely two-way. If a `before` text produced no tool, the case is reported as setup-failed and left
+out of the scores (the row's n says how many). Latency is the wall time of the judged command; cost is
+the fast-path model call only.
 
 Run (costs real credits, a fraction of a cent on Haiku), from `agent/`:
 
