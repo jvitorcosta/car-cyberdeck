@@ -8,7 +8,7 @@
 
 namespace musicreadout {
 constexpr uint32_t WINDOW_MS = 15000;  // beats/min over this long
-constexpr uint32_t MIN_MS = 3000;      // listened less than this: no rate yet ("--")
+constexpr uint32_t MIN_MS = 5000;      // listened less than this: no rate yet ("--"), a steadier first BPM
 constexpr uint32_t SIGNAL_MS = 3000;   // no FeatPkt for this long: NO SIGNAL (and the count starts over)
 constexpr int RING = 64;               // the black deck's 250 ms refractory: <= 60 beats in WINDOW_MS
 

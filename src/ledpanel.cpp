@@ -1760,13 +1760,15 @@ static int lyricsGet() {
 
 // ---- Music mode: the black deck listens ----
 // From the lyrics task: while musicWant, GET /music?on=1 at once and every MUSIC_KEEP_MS (the black
-// deck stops after 30 s without one), MUSIC_RETRY_MS after a miss (no answer, low memory, "stopping,
-// ask again"); on=0 once when it goes. Each ask also records the black deck's address (musicPeer), the
-// one sender the music task takes packets from. The log tells each change of answer.
+// deck stops after 30 s without one), MUSIC_RETRY_MS after a miss (no answer, "stopping, ask again"),
+// but MUSIC_KEEP_MS after a 503 (its low memory: Spotify's TLS needs that heap, so no hurry); on=0 once
+// when it goes. Each ask also records the black deck's address (musicPeer), the one sender the music
+// task takes packets from, and counts toward lyricsAddr's misses like a lyrics poll (a stale mDNS
+// address is looked up again). The log tells each change of answer.
 static constexpr uint32_t MUSIC_KEEP_MS = 10000, MUSIC_RETRY_MS = 2000;
 static volatile uint32_t musicPeer = 0;  // IPv4, network order (IPAddress's dword); 0: not asked yet
 
-static int musicGet(bool on) {
+static int musicAsk(bool on) {
     if (!net::isOnline()) return -1;
     char host[40], url[128];
     if (!lyricsHost(host, sizeof(host))) return -1;
@@ -1781,6 +1783,12 @@ static int musicGet(bool on) {
     if (!h.begin(c, url)) return -1;
     const int rc = h.GET();
     h.end();
+    return rc;
+}
+
+static int musicGet(bool on) {
+    const int rc = musicAsk(on);
+    lyricsAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
     return rc;
 }
 
@@ -1802,7 +1810,7 @@ static void musicKeepAlive() {
     if (rc != lastRc) Serial.printf("[music] on=1: rc=%d\n", rc);
     lastRc = rc;
     asked = true;
-    nextAt = millis() + (rc == 200 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
+    nextAt = millis() + (rc == 200 || rc == 503 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
 }
 
 static void lyricsTask(void*) {
@@ -1980,7 +1988,10 @@ static void setMusic(bool on) {
     musicOn = on;
     musicWant = on;
     if (on) {
-        if (!musicHandle) xTaskCreatePinnedToCore(musicTask, "music", 4096, nullptr, 0, &musicHandle, 1);
+        if (!musicHandle && xTaskCreatePinnedToCore(musicTask, "music", 4096, nullptr, 0, &musicHandle, 1) != pdPASS) {
+            musicHandle = nullptr;  // the next tap tries again
+            Serial.println("[music] no memory for its task");
+        }
         snprintf(musicLine, sizeof(musicLine), ">NO SIGNAL");
         musicPalOk = false;
     }

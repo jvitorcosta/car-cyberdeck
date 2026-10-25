@@ -17,7 +17,7 @@ void test_no_rate_before_min() {
     Beats b;
     TEST_ASSERT_EQUAL_INT(-1, b.bpm(1000));
     uint16_t seq = 0;
-    const uint32_t t = feed(b, 1000, 2900, 500, &seq);
+    const uint32_t t = feed(b, 1000, MIN_MS - 100, 500, &seq);
     TEST_ASSERT_EQUAL_INT(-1, b.bpm(t));
 }
 
@@ -25,7 +25,7 @@ void test_no_rate_before_min() {
 void test_scaled_while_filling() {
     Beats b;
     uint16_t seq = 0;
-    uint32_t t = feed(b, 1000, 3000, 500, &seq);
+    uint32_t t = feed(b, 1000, MIN_MS, 500, &seq);
     TEST_ASSERT_INT_WITHIN(4, 120, b.bpm(t));
     t = feed(b, t, 5000, 500, &seq);
     TEST_ASSERT_INT_WITHIN(4, 120, b.bpm(t));
@@ -54,9 +54,11 @@ void test_edges_and_repeats() {
     b.onPacket(120, 4, true);  // a repeated seq never counts
     b.onPacket(150, 5, false);
     b.onPacket(180, 6, true);
-    b.onPacket(3000, 7, false);
-    // 2 beats in 3 s
-    TEST_ASSERT_EQUAL_INT(40, b.bpm(3000));
+    b.onPacket(2000, 7, false);  // packets under SIGNAL_MS apart, no beats, out to 6 s
+    b.onPacket(4000, 8, false);
+    b.onPacket(6000, 9, false);
+    // 2 beats in 6 s
+    TEST_ASSERT_EQUAL_INT(20, b.bpm(6000));
 }
 
 // A gap of SIGNAL_MS without packets starts the count over (no beats from before it, no undercount).
@@ -66,6 +68,8 @@ void test_gap_starts_over() {
     uint32_t t = feed(b, 0, 10000, 250, &seq);  // 240 BPM
     t += SIGNAL_MS;
     t = feed(b, t, 4000, 1000, &seq);
+    TEST_ASSERT_EQUAL_INT(-1, b.bpm(t));  // listened 4 s since the gap: under MIN_MS
+    t = feed(b, t, 2000, 1000, &seq);
     TEST_ASSERT_INT_WITHIN(4, 60, b.bpm(t));
     b.reset();
     TEST_ASSERT_EQUAL_INT(-1, b.bpm(t));
