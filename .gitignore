@@ -64,3 +64,8 @@ garmin/carlights/bin/
 
 # Car mic test recordings (the owner's voice): tools/micrec_pull.py, never committed
 micrec/
+
+# Voice agent service
+agent/.env
+agent/node_modules/
+agent/traces/
