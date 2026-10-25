@@ -172,8 +172,8 @@ Both are part of v1, because the model choice depends on them and they are the p
 - The Anthropic API key, the STT/TTS keys and the Spotify refresh token live only in the server's
   environment secrets. The repo is public: no secrets, no generated voice files in git (they are
   git-ignored like the other media).
-- Billing (corrected 2026-10-25): the owner's **Claude Max plan includes monthly API credits**
-  ($100 on Max 5x, $200 on Max 20x; Anthropic's "API credits for Max and Team plans", since the
+- Billing (corrected 2026-10-25): the owner's **Claude Max 5x plan includes US$100 of monthly API credits**
+  (Max 20x would be $200; Anthropic's "API credits for Max and Team plans", since the
   2026-10-07 update). They cover the Claude API and the Agent SDK, arrive in a linked Claude
   Console organization (claude.ai → Settings → Billing → API credits), expire each cycle, and when
   they run out requests simply stop: nothing is charged to the plan. The agent gets **its own
