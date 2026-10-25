@@ -121,8 +121,11 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   the features (beat, energy, brightness, present) ~30 times a second and the song's palette (cover
   colours from the decoded art, genre badge, time of day) on change and every 10 s, over UDP to the
   requester's port 4210. `on=0` or 30 s without a keep-alive stops it and closes the socket. The
-  music box stays off while it runs. `GET /music/debug?k=<token>` and a `[music]` serial line every
-  2 s are the readout (band floors as RMS, energy, beats/min over 15 s, present, palette).
+  music box stays off while it runs, and a phone howl is the synthesised 16 kHz one. Below
+  TLS_NEED + 4 KB in the largest block the mic gives the I2S port back until TLS_NEED + 12 KB is
+  free. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive) and a `[music]` serial line every
+  2 s are the readout (band floors as RMS, energy, beats/min over 15 s, present, palette, mic/udp
+  up, the features' age, the largest free block).
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with

@@ -57,6 +57,10 @@ bool install(int rate) {
 }  // namespace
 
 bool acquire(int rate) {
+    if (!lock()) {                         // no memory for the mutex: no audio rather than a crash
+        Serial.println("[audio] no memory for the port's lock");
+        return false;
+    }
     xSemaphoreTake(lock(), portMAX_DELAY);
     bool ok;
     if (s_users > 0) {
@@ -72,6 +76,7 @@ bool acquire(int rate) {
 }
 
 void release() {
+    if (!lock()) return;                   // acquire() never succeeded
     xSemaphoreTake(lock(), portMAX_DELAY);
     if (s_users > 0 && --s_users == 0) i2s_driver_uninstall(PORT);
     xSemaphoreGive(lock());

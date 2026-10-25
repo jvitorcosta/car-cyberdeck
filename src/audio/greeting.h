@@ -24,7 +24,8 @@ uint32_t openerMs();                // 0 when there's no opener clip
 // may be empty), started by ui/intro with its first frame.
 void playIntro(intropick::Opening o);
 // Wolf howl for the phone remote (net/remote): a real recording (data/howl.pcm from
-// tools/gen_howl.py, git-ignored) when the build has one, else synthesised on the fly (util/howl).
+// tools/gen_howl.py, git-ignored) when the build has one, else synthesised on the fly (util/howl);
+// the synthesised one while music mode's mic holds the port (the recording is 48 kHz).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
 // The music box behind "Nothing playing" (util/musicbox): loops data/tunes.txt (tools/
