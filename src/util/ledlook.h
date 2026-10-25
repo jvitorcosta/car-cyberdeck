@@ -19,7 +19,7 @@ constexpr int N_SWATCH = 8;
 // Order matches ledvoice's colour indices: red, orange, pink, purple, blue, green, white, yellow.
 inline constexpr Swatch SWATCHES[N_SWATCH] = {
     {"Red", "red", 255, 0, 0, 0xFF0000},          {"Orange", "orange", 255, 40, 0, 0xFF6A00},
-    {"Pink", "pink", 255, 0, 70, 0xFF0090},       {"Purple", "purple", 120, 0, 255, 0x9000FF},
+    {"Pink", "pink", 255, 0, 70, 0xFF0090},       {"Purple", "purple", 130, 10, 209, 0x820AD1},
     {"Blue", "blue", 0, 0, 255, 0x0040FF},        {"Green", "green", 0, 255, 0, 0x00FF30},
     {"White", "white", 255, 215, 170, 0xFFFFFF},  {"Yellow", "yellow", 255, 110, 0, 0xFFD400},  // LED yellow: full green goes lime
 };

@@ -8,7 +8,7 @@ const DECK_URL = "http://172.20.10.11";
 
 // [label, word sent to the deck, screen colour]: the deck's own screen colours.
 const COLORS = [
-    ["Purple", "purple", 0x9000FF], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
+    ["Purple", "purple", 0x820AD1], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
     ["Pink", "pink", 0xFF0090], ["Green", "green", 0x00FF30], ["White", "white", 0xFFFFFF],
     ["Orange", "orange", 0xFF6A00], ["Yellow", "yellow", 0xFFD400],
 ];
