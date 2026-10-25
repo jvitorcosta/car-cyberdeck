@@ -164,6 +164,47 @@ static void test_floor_readout() {
     TEST_ASSERT_EQUAL_FLOAT(0.0f, a.floorPower(-1));
 }
 
+// Talking in the car: noise band-limited to 300-2000 Hz (two high-pass + two low-pass biquads), in
+// ~4 Hz syllables with a 0.5 s pause every 2 s, at twice the hum's RMS. It has no kick, but its onsets
+// leak into the bass band through the band-pass's 2nd-order skirt: 0-3 beats per 12 s across the seeds
+// (<= 15/min, far below a song's tempo). Pinned at that, not 0 (a "bass rose more than the mid" gate
+// stopped some of them but also lost the kicks over hum). Energy and present rise too (a known
+// caveat; printed, not pinned: present in every take after 4 s, energy 255).
+struct Bq {
+    double b0, b1, b2, a1, a2, z1, z2;
+    double step(double x) { const double y = b0 * x + z1; z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y; return y; }
+};
+static Bq butter(double hz, bool high) {   // RBJ Butterworth (Q = 0.7071) low- or high-pass
+    const double w = 2.0 * PI_D * hz / RATE, al = sin(w) / (2.0 * 0.70710678), c = cos(w), a0 = 1.0 + al;
+    const double b0 = high ? (1.0 + c) / 2.0 : (1.0 - c) / 2.0, b1 = high ? -(1.0 + c) : 1.0 - c;
+    return Bq{b0 / a0, b1 / a0, b0 / a0, -2.0 * c / a0, (1.0 - al) / a0, 0.0, 0.0};
+}
+static Run speech(double seconds, uint32_t seed) {
+    const long total = (long)(seconds * RATE);
+    std::vector<double> v((size_t)total);
+    Bq f[4] = {butter(300.0, true), butter(300.0, true), butter(2000.0, false), butter(2000.0, false)};
+    Noise src(seed ^ 0xc0ffee11u);
+    double sum = 0.0;
+    for (long i = 0; i < total; ++i) {
+        const double t = (double)i / RATE;
+        double x = src.next(1000.0);
+        for (Bq& q : f) x = q.step(x);
+        const double env = fmod(t, 2.0) >= 1.5 ? 0.0 : pow(sin(PI_D * fmod(t, 0.25) / 0.25), 2.0);
+        v[(size_t)i] = x * env;
+        sum += v[(size_t)i] * v[(size_t)i];
+    }
+    const double humRms = sqrt(600.0 * 600.0 + 150.0 * 150.0);
+    const double scale = 2.0 * humRms / sqrt(sum / (double)total);
+    return run(seconds, [&](long i, Noise& n) { return hum(n, i) + v[(size_t)i] * scale; }, seed);
+}
+static void test_speech_rarely_beats() {
+    const uint32_t seeds[] = {0x12345678u, 0xdeadbeefu, 0x1badf00du, 0x0badcafeu};
+    for (uint32_t sd : seeds) {
+        const Run r = speech(12.0, sd);
+        TEST_ASSERT_TRUE_MESSAGE(r.beatsIn(0.0, 12.0) <= 3, "speech should beat at most 3 times in 12 s");
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_hum_only_is_silent);
@@ -174,5 +215,6 @@ int main(int, char**) {
     RUN_TEST(test_brightness_orders);
     RUN_TEST(test_block_size_does_not_matter);
     RUN_TEST(test_floor_readout);
+    RUN_TEST(test_speech_rarely_beats);
     return UNITY_END();
 }

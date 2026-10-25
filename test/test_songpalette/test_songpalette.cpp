@@ -96,12 +96,31 @@ void test_nudge_toward_genre() {
     int nearest = 0, bestD = 999;
     for (int k = 0; k < 3; ++k)
         if (dist(h0, hueOf(fam[k])) < bestD) { bestD = dist(h0, hueOf(fam[k])); nearest = hueOf(fam[k]); }
-    TEST_ASSERT_TRUE(dist(h1, nearest) < dist(h0, nearest));   // moved toward it
-    // a hue already within 15 deg of the family lands on it, not past it
-    Rgb close = {200, 0, 255};    // ~285, purple family hue ~276
+    TEST_ASSERT_TRUE(dist(h1, nearest) < dist(h0, nearest));   // moved toward it, by the 15 deg cap
+    // a hue ~8 deg from a family hue lands on it, not past it (the step is the whole distance)
+    Rgb close = {178, 0, 255};    // hue ~281; electro's purple {160, 32, 255} is ~274
+    TEST_ASSERT_TRUE(dist(hueOf(close), hueOf(fam[1])) >= 6 && dist(hueOf(close), hueOf(fam[1])) <= 9);
     Rgb c2[2] = {close, other};
     songpalette::Palette q = songpalette::build(c2, 2, 9, 720);
-    TEST_ASSERT_TRUE(dist(hueOf(q.c[0]), hueOf(fam[1])) <= 2);
+    TEST_ASSERT_TRUE(dist(hueOf(q.c[0]), hueOf(fam[1])) <= 1);
+}
+void test_one_cover_colour_uses_genre() {
+    Rgb cover[1] = {{255, 0, 0}};
+    songpalette::Palette p = songpalette::build(cover, 1, 9, 720);
+    Rgb fam[3];
+    songpalette::family(9, fam);
+    for (int i = 0; i < 3; ++i) TEST_ASSERT_TRUE(same(p.c[i], fam[i]));
+}
+void test_two_cover_colours_fill_third_from_genre() {
+    Rgb cover[2] = {{255, 0, 0}, {0, 255, 0}};   // red ~0, green ~120
+    songpalette::Palette p = songpalette::build(cover, 2, 9, 720);   // electro: blue ~221, purple ~274, cyan ~188
+    Rgb fam[3];
+    songpalette::family(9, fam);
+    // the two cover hues, nudged (red toward purple to ~345, green toward cyan to ~135)...
+    TEST_ASSERT_TRUE(dist(hueOf(p.c[0]), 345) <= 2);
+    TEST_ASSERT_TRUE(dist(hueOf(p.c[1]), 135) <= 2);
+    // ...and the family colour farthest from both fills the third slot: blue (86 deg away; purple 71, cyan 53)
+    TEST_ASSERT_TRUE(same(p.c[2], fam[0]));
 }
 void test_time_of_day() {
     Rgb blue = {0, 80, 255}, red = {255, 0, 0};
@@ -139,6 +158,8 @@ int main(int, char**) {
     RUN_TEST(test_no_genre_no_cover_neutral);
     RUN_TEST(test_families_differ);
     RUN_TEST(test_nudge_toward_genre);
+    RUN_TEST(test_one_cover_colour_uses_genre);
+    RUN_TEST(test_two_cover_colours_fill_third_from_genre);
     RUN_TEST(test_time_of_day);
     RUN_TEST(test_whites_turn_amber_at_night);
     return UNITY_END();
