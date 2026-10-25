@@ -114,7 +114,7 @@ describe("makeSlowPath", () => {
     expect(calls).toEqual([["play", "Djavan", "artist"], ["volume", 50]]);
     expect(res.lights).toEqual([{ kind: "set", zone: "inside", colour: "blue" }]);
     expect(res.stock).toBe("ok");                           // the last outcome's
-    expect(res.say).toBe("Hai~ Djavan tocando e volume no 50.");
+    expect(res.say).toBe("hai~ volume 50");                // the last outcome's, never the prose
     expect(res.did).toBe("spotify_play Djavan; lights inside azul; spotify_volume 50");
     expect(res.costUsd).toBe(0.021);
   });
@@ -308,14 +308,57 @@ describe("makeSlowPath", () => {
     expect(res.did).toBe("slow nada");
   });
 
-  it("says the question when no tool ran and the model only asked", async () => {
+  it("(b) says nao_entendi when no tool ran, even if the model's claim ends in a question mark", async () => {
     const { spotify } = fakeSpotify();
-    const runQuery = fakeRunQuery([result("Hmm. Qual playlist você quer?")], {});
+    const runQuery = fakeRunQuery([result("Apaguei as luzes, tá?")], {});
     const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
-    const res = await slow("yellow", "toca a playlist");
-    expect(res.stock).toBe("ok");
-    expect(res.say).toBe("Qual playlist você quer?");
+    const res = await slow("yellow", "apaga as luzes");
+    expect(res.stock).toBe("nao_entendi");
+    expect(res.say).toBe(STOCK.nao_entendi);
+    expect(res.lights).toEqual([]);
+  });
+
+  it("(a) says the first failed outcome when an earlier tool failed and the last worked", async () => {
+    const calls: unknown[][] = [];
+    const spotify = {
+      async now() { return { title: "Oceano", artist: "Djavan", volume: 40 }; },
+      async play() { throw new SpotifyError("no_device", "no active Spotify device"); },
+      async volume(v: number) { calls.push(["volume", v]); },
+    } as unknown as Spotify;
+    const runQuery = fakeRunQuery([
+      { tool: "spotify_play", args: { query: "Djavan", kind: "artist" } },
+      { tool: "spotify_volume", args: { level: null, delta: 10 } },
+      result("Pus Djavan e aumentei o volume"),
+    ], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "põe Djavan e aumenta o volume");
+    expect(calls).toEqual([["volume", 50]]);
+    expect(res.stock).toBe("sem_spotify");
+    expect(res.say).toBe(STOCK.sem_spotify);
+    expect(res.did).toBe("spotify_play sem_spotify; spotify_volume 50");
+  });
+
+  it("(c) treats nothing to undo as a failure, not the model's 'desfeito!'", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = fakeRunQuery([{ tool: "undo", args: {} }, result("desfeito!")], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "desfaz");
+    expect(res.stock).toBe("nada_desfazer");
+    expect(res.say).toBe(STOCK.nada_desfazer);
     expect(res.mood).toBe("smug");
+  });
+
+  it("(d) says the last outcome, not the prose, when every tool worked", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = fakeRunQuery([
+      { tool: "spotify_play", args: { query: "Djavan", kind: "artist" } },
+      { tool: "spotify_volume", args: { level: null, delta: 10 } },
+      result("Prontinho, tudo feito e mais um pouco!"),
+    ], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "tarefa");
+    expect(res.stock).toBe("ok");
+    expect(res.say).toBe("hai~ volume 50");
   });
 
   it("reports the late finish's cost through onLate", async () => {

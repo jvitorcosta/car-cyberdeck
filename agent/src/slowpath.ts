@@ -49,18 +49,6 @@ export function carMcpTools(ctx: ToolCtx, out: ToolOutcome[]): SdkMcpToolDefinit
   });
 }
 
-/** The last question in the text, or "" when it asks nothing. */
-function lastQuestion(text: string): string {
-  const qs = text.match(/[^.!?\n]*\?/g) ?? [];
-  return (qs.at(-1) ?? "").trim();
-}
-
-function firstSentence(text: string): string {
-  const t = text.trim();
-  const m = /^.+?[.!?](?=\s|$)/s.exec(t);
-  return (m ? m[0] : t.split("\n")[0]!).trim();
-}
-
 // The deck's sessions, with every undo write (set or clear) checked at the moment it happens:
 // once off() is true they do nothing, even for a tool call that started earlier.
 function undoUnless(sessions: Sessions, off: () => boolean): Sessions {
@@ -70,25 +58,26 @@ function undoUnless(sessions: Sessions, off: () => boolean): Sessions {
   return guarded;
 }
 
-// The model's prose is only trusted after a tool that worked: it must never claim an action
-// that failed or never ran.
+/** For what she says: a failed tool, plus an undo that found nothing to undo. */
+const NOT_DONE: ReadonlySet<StockId> = new Set<StockId>([...FAILED, "nada_desfazer"]);
+
+// say, stock and mood come only from the tool outcomes, never from the model's prose: the prose
+// could claim an action that failed or never ran. `text` only tells "talked but did nothing"
+// (nao_entendi) from "no result at all" (erro).
 function merge(outs: ToolOutcome[], text: string, costUsd?: number): ToolOutcome & { costUsd?: number } {
   const cost = costUsd === undefined ? {} : { costUsd };
-  const last = outs.at(-1);
-  if (!last) {
-    // No tool ran. A question is fine to say (nothing claimed); anything else is not understood.
-    const question = lastQuestion(text);
-    if (question) return { lights: [], stock: "ok", say: question, mood: "smug", did: `slow ask ${question}`, ...cost };
+  if (!outs.length) {
     const stock: StockId = text.trim() ? "nao_entendi" : "erro";
     return { lights: [], stock, say: STOCK[stock], mood: "happy", did: "slow nada", ...cost };
   }
-  const lights = outs.flatMap((o) => o.lights);
-  const did = outs.map((o) => o.did).join("; ");
-  if (FAILED.has(last.stock)) return { lights, stock: last.stock, say: last.say, mood: last.mood, did, ...cost };
-  // A question is what she must say; the result text would contradict the ask.
-  const asked = last.stock === "ok" && last.did.startsWith("ask ") ? last.say : "";
-  const say = asked || firstSentence(text) || last.say;
-  return { lights, stock: last.stock, say, mood: last.mood, did, ...cost };
+  // The first failure, if any; otherwise the last outcome (an ask's say is its question).
+  const pick = outs.find((o) => NOT_DONE.has(o.stock)) ?? outs.at(-1)!;
+  return {
+    lights: outs.flatMap((o) => o.lights),
+    stock: pick.stock, say: pick.say, mood: pick.mood,
+    did: outs.map((o) => o.did).join("; "),
+    ...cost,
+  };
 }
 
 export function makeSlowPath(cfg: {
