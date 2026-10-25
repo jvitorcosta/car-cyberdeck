@@ -1,0 +1,55 @@
+{"id": "p01", "text": "liga as luzes", "expect": {"tool": "lights", "args": {"zone": "both", "power": "on"}}}
+{"id": "p02", "text": "deixa azul fraquinho dentro", "expect": {"tool": "lights", "args": {"zone": "inside", "colour": "blue"}}}
+{"id": "p03", "text": "apaga a luz de fora", "expect": {"tool": "lights", "args": {"zone": "outside", "power": "off"}}}
+{"id": "p04", "text": "roxo cinquenta por cento", "expect": {"tool": "lights", "args": {"zone": "both", "colour": "purple", "level": 50}}}
+{"id": "p05", "text": "toca Djavan", "expect": {"tool": "spotify_play", "args": {"kind": "artist"}, "contains": {"query": "djavan"}}}
+{"id": "p06", "text": "pula essa música", "expect": {"tool": "spotify_control", "args": {"action": "next"}}}
+{"id": "p07", "text": "volta a música anterior", "expect": {"tool": "spotify_control", "args": {"action": "previous"}}}
+{"id": "p08", "text": "toca Tyler, the Creator", "expect": {"tool": "spotify_play", "args": {"kind": "artist"}, "contains": {"query": "tyler"}}}
+{"id": "p09", "text": "toca Billie Eilish", "expect": {"tool": "spotify_play", "args": {"kind": "artist"}, "contains": {"query": "billie eilish"}}}
+{"id": "p10", "text": "aumenta o volume", "expect": {"tool": "spotify_volume", "args": {"level": null, "delta": 10}}}
+{"id": "l01", "text": "deixa fora vermelho no máximo", "expect": {"tool": "lights", "args": {"zone": "outside", "colour": "red", "level": 100}}}
+{"id": "l02", "text": "dentro mais fraco", "expect": {"tool": "lights", "args": {"zone": "inside", "step": "down"}}}
+{"id": "l03", "text": "deixa azul ai dentro", "expect": {"tool": "lights", "args": {"zone": "inside", "colour": "blue"}}}
+{"id": "l04", "text": "a luz de dentro mais forte", "expect": {"tool": "lights", "args": {"zone": "inside", "step": "up"}}}
+{"id": "l05", "text": "apaga tudo", "expect": {"tool": "lights", "args": {"zone": "both", "power": "off"}}}
+{"id": "l06", "text": "acende so a de dentro", "expect": {"tool": "lights", "args": {"zone": "inside", "power": "on"}}}
+{"id": "l07", "text": "verde la fora", "expect": {"tool": "lights", "args": {"zone": "outside", "colour": "green"}}}
+{"id": "l08", "text": "deixa tudo rosa", "expect": {"tool": "lights", "args": {"zone": "both", "colour": "pink"}}}
+{"id": "l09", "text": "luz de fora em trinta por cento", "expect": {"tool": "lights", "args": {"zone": "outside", "level": 30}}}
+{"id": "l10", "text": "coloca branco nas duas", "expect": {"tool": "lights", "args": {"zone": "both", "colour": "white"}}}
+{"id": "l11", "text": "amarelo dentro", "expect": {"tool": "lights", "args": {"zone": "inside", "colour": "yellow"}}}
+{"id": "l12", "text": "deixa lilás aqui dentro", "expect": {"tool": "lights", "args": {"zone": "inside", "colour": "purple"}}}
+{"id": "s01", "text": "pula", "expect": {"tool": "spotify_control", "args": {"action": "next"}}}
+{"id": "s02", "text": "pula essa", "expect": {"tool": "spotify_control", "args": {"action": "next"}}}
+{"id": "s03", "text": "volta a anterior", "expect": {"tool": "spotify_control", "args": {"action": "previous"}}}
+{"id": "s04", "text": "pausa", "expect": {"tool": "spotify_control", "args": {"action": "pause"}}}
+{"id": "s05", "text": "continua a musica", "expect": {"tool": "spotify_control", "args": {"action": "resume"}}}
+{"id": "s06", "text": "abaixa o som", "expect": {"tool": "spotify_volume", "args": {"level": null, "delta": -10}}}
+{"id": "s07", "text": "mais alto", "expect": {"tool": "spotify_volume", "args": {"level": null, "delta": 10}}}
+{"id": "s08", "text": "volume no trinta", "expect": {"tool": "spotify_volume", "args": {"level": 30, "delta": null}}}
+{"id": "s09", "text": "põe o álbum novo do Tyler, the Creator", "expect": {"tool": "spotify_play", "args": {"kind": "album"}, "contains": {"query": "tyler"}}}
+{"id": "s10", "text": "salva essa", "expect": {"tool": "spotify_save", "args": {"playlist": null}}}
+{"id": "s11", "text": "salva essa na Treino", "expect": {"tool": "spotify_save", "contains": {"playlist": "treino"}}}
+{"id": "s12", "text": "que musica é essa", "expect": {"tool": "spotify_now"}}
+{"id": "s13", "text": "toca a playlist Carro", "expect": {"tool": "spotify_play", "args": {"kind": "playlist"}, "contains": {"query": "carro"}}}
+{"id": "s14", "text": "toca Garota de Ipanema", "expect": {"tool": "spotify_play", "args": {"kind": "track"}, "contains": {"query": "ipanema"}}}
+{"id": "s15", "text": "bota um Racionais ai", "expect": {"tool": "spotify_play", "args": {"kind": "artist"}, "contains": {"query": "racionais"}}}
+{"id": "s16", "text": "coloca Evidências na fila", "expect": {"tool": "spotify_queue", "contains": {"query": "evidencias"}}}
+{"id": "a01", "text": "toca aquele cara", "expect": "ask"}
+{"id": "a02", "text": "deixa a luz bonita", "expect": "ask"}
+{"id": "a03", "text": "muda a cor", "expect": "ask"}
+{"id": "a04", "text": "aumenta", "expect": "ask"}
+{"id": "a05", "text": "toca aquela musica", "expect": "ask"}
+{"id": "h01", "text": "toca a que tocou antes do Djavan", "expect": "handoff"}
+{"id": "h02", "text": "põe três músicas do Djavan na fila", "expect": "handoff"}
+{"id": "h03", "text": "monta uma playlist pra viagem com as que eu mais escuto", "expect": "handoff"}
+{"id": "n01", "text": "", "expect": "none"}
+{"id": "n02", "text": "é...", "expect": "none"}
+{"id": "n03", "text": "ai ai coração, vem dançar comigo na beira do mar", "expect": "none"}
+{"id": "n04", "text": "nossa que trânsito hoje", "expect": "none"}
+{"id": "u01", "text": "desfaz", "before": ["deixa azul ai dentro"], "expect": {"tool": "undo"}}
+{"id": "u02", "text": "volta", "before": ["apaga a luz de fora"], "expect": {"tool": "undo"}}
+{"id": "u03", "text": "desfaz isso", "before": ["pula essa"], "expect": {"tool": "undo"}}
+{"id": "f01", "text": "agora mais forte", "before": ["deixa fora vermelho"], "expect": {"tool": "lights", "args": {"zone": "outside", "step": "up"}}}
+{"id": "f02", "text": "o Djavan", "before": ["toca aquele cara"], "expect": {"tool": "spotify_play", "args": {"kind": "artist"}, "contains": {"query": "djavan"}}}
