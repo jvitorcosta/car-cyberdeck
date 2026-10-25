@@ -20,11 +20,17 @@ constexpr int WARMUP_HOPS = 8;                // filters settling; the floor sta
 // Noise floor per band: the band power's lower envelope; held while beats are coming.
 constexpr float FLOOR_RISE_S = 30.0f, FLOOR_FALL_S = 2.0f;
 constexpr uint32_t FLOOR_HOLD_MS = 2000;
+// Deviation from the plain 30 s rise: a level step is not music. Bass power sitting over the floor for
+// CATCHUP_HOPS makes the floor rise at FLOOR_CATCHUP_S instead, so hum drift is absorbed in seconds
+// (beats still hold the floor, so kicks over hum are untouched).
+constexpr float FLOOR_CATCHUP_S = 2.0f, CATCHUP_OVER_X = 1.1f;
+constexpr int CATCHUP_HOPS = 62;              // ~2 s
 
 // Beat: bass flux (power rise per hop) over a multiple of its 1 s median, bass power over a multiple
 // of its floor, then a refractory.
 constexpr int FLUX_RING = 31;                 // ~1 s of hops
 constexpr float BEAT_FLUX_X = 1.6f, BEAT_POWER_X = 2.0f;
+constexpr float BEAT_FLUX_MIN_X = 0.3f;       // flux must also be this fraction of the bass floor (rectified flux has a ~0 median)
 constexpr uint32_t REFRACTORY_MS = 250;
 constexpr float FLUX_PEAK_DECAY_S = 10.0f;    // strength = flux / rolling flux peak
 
@@ -59,6 +65,8 @@ private:
     int fill_;                     // samples in that hop
     int hops_;                     // hops done (warm-up counter)
     float floor_[3];
+    int overHops_;                 // hops the bass power has sat over its floor
+    float cFall_, cRise_, cCatch_, cFluxPeak_, cAttack_, cRelease_, cEPeak_, cBright_;   // per-hop filter steps
     float prevBass_;
     float flux_[FLUX_RING];
     int fluxPos_;

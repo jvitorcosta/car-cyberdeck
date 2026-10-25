@@ -30,9 +30,17 @@ float Analyzer::run(Biquad& q, float x) {   // transposed direct form II
 }
 
 Analyzer::Analyzer()
-    : sum_{0, 0, 0}, fill_(0), hops_(0), floor_{0, 0, 0}, prevBass_(0), flux_{}, fluxPos_(0), fluxPeak_(0),
+    : sum_{0, 0, 0}, fill_(0), hops_(0), floor_{0, 0, 0}, overHops_(0), prevBass_(0), flux_{}, fluxPos_(0), fluxPeak_(0),
       everBeat_(false), lastBeatMs_(0), anyBeat_(false), bestStrength_(0), eSmooth_(0), ePeak_(0),
       bright_(0), energy_(0), brightness_(0), presentRing_{}, presentPos_(0) {
+    cFall_ = coef(HOP_S, FLOOR_FALL_S);
+    cRise_ = coef(HOP_S, FLOOR_RISE_S);
+    cCatch_ = coef(HOP_S, FLOOR_CATCHUP_S);
+    cFluxPeak_ = coef(HOP_S, FLUX_PEAK_DECAY_S);
+    cAttack_ = coef(HOP_S, ENERGY_ATTACK_S);
+    cRelease_ = coef(HOP_S, ENERGY_RELEASE_S);
+    cEPeak_ = coef(HOP_S, ENERGY_PEAK_DECAY_S);
+    cBright_ = coef(HOP_S, BRIGHT_SMOOTH_S);
     bandPass(bass_, BASS_LO_HZ, BASS_HI_HZ);
     bandPass(mid_, MID_LO_HZ, MID_HI_HZ);
     highPass(treble_, TREBLE_HZ);
@@ -77,11 +85,11 @@ void Analyzer::hop(uint32_t hopMs) {
     const float median = sorted[FLUX_RING / 2];
     flux_[fluxPos_] = flux;
     fluxPos_ = (fluxPos_ + 1) % FLUX_RING;
-    fluxPeak_ *= 1.0f - coef(HOP_S, FLUX_PEAK_DECAY_S);
+    fluxPeak_ *= 1.0f - cFluxPeak_;
     if (flux > fluxPeak_) fluxPeak_ = flux;
 
     const bool refractory = everBeat_ && (uint32_t)(hopMs - lastBeatMs_) < REFRACTORY_MS;
-    if (flux > BEAT_FLUX_X * median && p[0] > BEAT_POWER_X * floor_[0] && !refractory) {
+    if (flux > BEAT_FLUX_X * median && flux > BEAT_FLUX_MIN_X * floor_[0] && p[0] > BEAT_POWER_X * floor_[0] && !refractory) {
         uint8_t st = to255(255.0f * flux / fluxPeak_);
         if (st == 0) st = 1;
         if (!anyBeat_ || st > bestStrength_) bestStrength_ = st;
@@ -92,25 +100,27 @@ void Analyzer::hop(uint32_t hopMs) {
     const bool holding = everBeat_ && (uint32_t)(hopMs - lastBeatMs_) < FLOOR_HOLD_MS;
 
     // Floors: fast down, slow up, held while beats are coming.
-    const float fall = coef(HOP_S, FLOOR_FALL_S), rise = coef(HOP_S, FLOOR_RISE_S);
+    if (p[0] > CATCHUP_OVER_X * floor_[0]) { if (overHops_ < CATCHUP_HOPS) ++overHops_; }
+    else overHops_ = 0;
+    const float rise = overHops_ >= CATCHUP_HOPS ? cCatch_ : cRise_;
     float over = 0.0f, floorSum = 0.0f;
     for (int k = 0; k < 3; ++k) {
-        if (p[k] < floor_[k]) floor_[k] += (p[k] - floor_[k]) * fall;
+        if (p[k] < floor_[k]) floor_[k] += (p[k] - floor_[k]) * cFall_;
         else if (!holding) floor_[k] += (p[k] - floor_[k]) * rise;
         floorSum += floor_[k];
         if (p[k] > floor_[k]) over += p[k] - floor_[k];
     }
 
     // Energy: power above the floor, attack/release smoothing, normalised by a rolling peak.
-    eSmooth_ += (over - eSmooth_) * coef(HOP_S, over > eSmooth_ ? ENERGY_ATTACK_S : ENERGY_RELEASE_S);
-    ePeak_ *= 1.0f - coef(HOP_S, ENERGY_PEAK_DECAY_S);
+    eSmooth_ += (over - eSmooth_) * (over > eSmooth_ ? cAttack_ : cRelease_);
+    ePeak_ *= 1.0f - cEPeak_;
     if (eSmooth_ > ePeak_) ePeak_ = eSmooth_;
     const float peak = ePeak_ > ENERGY_PEAK_MIN_X * floorSum ? ePeak_ : ENERGY_PEAK_MIN_X * floorSum;
     energy_ = peak > 0.0f ? to255(255.0f * eSmooth_ / peak) : 0;
 
     // Brightness: treble against the rest, squashed to 0..1 (equal power = half).
     const float r = p[2] / (p[0] + p[1] + 1.0f);
-    bright_ += (r / (1.0f + r) - bright_) * coef(HOP_S, BRIGHT_SMOOTH_S);
+    bright_ += (r / (1.0f + r) - bright_) * cBright_;
     brightness_ = to255(255.0f * bright_);
 
     presentRing_[presentPos_] = energy_ > PRESENT_ENERGY;

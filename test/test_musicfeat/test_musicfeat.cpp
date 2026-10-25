@@ -74,7 +74,20 @@ void test_hum_only_is_silent() {
     const Run r = run(10.0, [](long i, Noise& n) { return hum(n, i); });
     TEST_ASSERT_EQUAL_INT(0, r.beatsIn(0.0, 10.0));
     for (size_t k = 0; k < r.takes.size(); ++k)
-        if ((double)(k + 1) * 256.0 / RATE > 5.0) TEST_ASSERT_FALSE(r.takes[k].present);
+        if ((double)(k + 1) * 256.0 / RATE > 1.0) TEST_ASSERT_FALSE(r.takes[k].present);
+}
+
+// Hum that steps up (engine revs, a louder fan) is not music: after a few seconds of settling it must
+// neither beat nor read as present. `gain` multiplies the whole hum from 3 s on.
+static void check_hum_step(double gain) {
+    const Run r = run(20.0, [gain](long i, Noise& n) { return hum(n, i) * (i >= 3 * RATE ? gain : 1.0); });
+    TEST_ASSERT_EQUAL_INT(0, r.beatsIn(14.0, 20.0));
+    for (size_t k = 0; k < r.takes.size(); ++k)
+        if ((double)(k + 1) * 256.0 / RATE > 14.0) TEST_ASSERT_FALSE(r.takes[k].present);
+}
+void test_hum_step_up_settles_to_silent() {
+    check_hum_step(1.2);
+    check_hum_step(1.5);
 }
 
 void test_kicks_over_hum_beat_at_tempo() {
@@ -95,10 +108,16 @@ void test_energy_normalises() {
     const Run loud = run(6.0, [](long i, Noise& n) { return hum(n, i) + kick(i, 500, 500, 8000.0); });
     TEST_ASSERT_TRUE(quiet.maxEnergyAfter(3.0) >= 150);
     TEST_ASSERT_TRUE(loud.maxEnergyAfter(3.0) >= 150);
-    // Full-scale clipped square: the energy stays in 0..255 (uint8 does not wrap).
-    const Run clipped = run(6.0, [](long i, Noise&) { return ((i / 80) & 1) ? 32767.0 : -32767.0; });   // 100 Hz
-    for (const Features& f : clipped.takes) TEST_ASSERT_TRUE(f.energy <= 255);
-    TEST_ASSERT_TRUE(clipped.maxEnergyAfter(0.0) > 0);
+    // Kicks hard-clipped to full scale: the energy must still saturate at the top, not wrap round to a low value.
+    const Run clipped = run(6.0, [](long i, Noise& n) { return hum(n, i) + kick(i, 500, 500, 30000.0); });
+    for (int sec = 1; sec < 6; ++sec) {
+        int m = 0;
+        for (size_t k = 0; k < clipped.takes.size(); ++k) {
+            const double t = (double)(k + 1) * 256.0 / RATE;
+            if (t > sec && t <= sec + 1 && clipped.takes[k].energy > m) m = clipped.takes[k].energy;
+        }
+        TEST_ASSERT_TRUE_MESSAGE(m >= 200, "clipped kicks should read near full energy in every second");
+    }
 }
 
 void test_brightness_orders() {
@@ -127,6 +146,7 @@ void test_block_size_does_not_matter() {
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_hum_only_is_silent);
+    RUN_TEST(test_hum_step_up_settles_to_silent);
     RUN_TEST(test_kicks_over_hum_beat_at_tempo);
     RUN_TEST(test_refractory);
     RUN_TEST(test_energy_normalises);
