@@ -149,4 +149,57 @@ size_t foldMarks(const char* src, char* dst, Mark* marks, size_t n) {
 
 void asciiFold(const char* src, char* dst, size_t n) { foldMarks(src, dst, nullptr, n); }
 
+// What a code point above U+00FF becomes in Latin-1 text ("" drops it).
+static const char* foldWide(uint32_t cp) {
+    switch (cp) {
+        case 0x2018: case 0x2019: case 0x201A: case 0x201B: case 0x2032: return "'";
+        case 0x201C: case 0x201D: case 0x201E: case 0x201F: case 0x2033: return "\"";
+        case 0x2010: case 0x2011: case 0x2012: case 0x2013: case 0x2014: case 0x2015: case 0x2212: return "-";
+        case 0x2026: return "...";
+        case 0x0152: return "OE";
+        case 0x0153: return "oe";
+        case 0x0178: return "Y";
+        default: return "";
+    }
+}
+
+size_t latin1Fold(const char* utf8, char* dst, size_t n) {
+    if (n == 0) return 0;
+    size_t o = 0;
+    if (!utf8) { dst[0] = '\0'; return 0; }
+    for (size_t i = 0; utf8[i] && o + 1 < n; ) {
+        const unsigned char c = (unsigned char)utf8[i];
+        if (c < 0x80) { dst[o++] = (char)c; ++i; continue; }
+        // A lead byte and its continuation bytes. Anything malformed (a stray continuation, a lead
+        // cut short by the NUL or by another lead) skips just the bytes it has, nothing past them.
+        const size_t more = c >= 0xF5 ? 0 : c >= 0xF0 ? 3 : c >= 0xE0 ? 2 : c >= 0xC2 ? 1 : 0;
+        uint32_t cp = more == 3 ? (c & 0x07u) : more == 2 ? (c & 0x0Fu) : (c & 0x1Fu);
+        size_t k = 1;
+        for (; k <= more && (((unsigned char)utf8[i + k]) & 0xC0) == 0x80; ++k) {
+            cp = (cp << 6) | ((unsigned char)utf8[i + k] & 0x3Fu);
+        }
+        i += k;
+        if (more == 0 || k <= more) continue;   // malformed: dropped
+        if (cp <= 0xFF) {
+            if (cp >= 0xA0 && cp != 0xAD) dst[o++] = (char)cp;   // the C1 controls, the soft hyphen: dropped
+            continue;
+        }
+        const char* r = foldWide(cp);
+        const size_t len = strlen(r);
+        if (o + len + 1 > n) break;   // whole or not at all
+        memcpy(dst + o, r, len);
+        o += len;
+    }
+    dst[o] = '\0';
+    return o;
+}
+
+void latin1Upper(char* s) {
+    for (; s && *s; ++s) {
+        const unsigned char c = (unsigned char)*s;
+        if ((c >= 'a' && c <= 'z') || (c >= 0xE0 && c <= 0xFE && c != 0xF7)) *s = (char)(c - 0x20);
+        else if (c == 0xFF) *s = 'Y';
+    }
+}
+
 }

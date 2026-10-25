@@ -680,9 +680,10 @@ static void drawHeader() {
     drawRule(HEADER_RULE_Y);
 }
 
-// The clock band's last row (trip, HI / LO, messages): the first row its ink reaches, where its clear
-// starts and the parts above it stop theirs, so neither takes the other.
-static int tripRowTop() { return TRIP_ROW_BASE - termfont::ascent(Face::SMALL); }
+// The clock band's last row (trip, HI / LO, messages): the first row its ink reaches (an accented
+// capital in the HI / LO line's city, "SÃO PAULO"), where its clear starts and the parts above it
+// stop theirs, so neither takes the other.
+static int tripRowTop() { return TRIP_ROW_BASE - termfont::accentAscent(Face::SMALL); }
 
 // The clock's minute of the day on screen (-1: not synced, "--:--") and its date, read together
 // (netclock::localNow) so they never straddle midnight; updateDayNight keeps them.
@@ -957,7 +958,7 @@ static constexpr int KARAOKE_BIG_Y = 56;                         // the line due
 static constexpr int KARAOKE_NEXT_Y = 156;                       // the next line
 static constexpr int KARAOKE_BAR_Y = 224, KARAOKE_BAR_H = 3;
 
-// The texts are accent-folded into karaokeFolded and wrapped into karaokeLines (only loop draws).
+// The texts are folded to Latin-1 into karaokeFolded and wrapped into karaokeLines (only loop draws).
 static char karaokeFolded[sizeof(stateparse::Deck::line)];
 static karaoke::Line karaokeLines[4];
 
@@ -968,10 +969,14 @@ static void drawLines(int n, Face f, int y, int dy, uint16_t ink) {
     for (int i = 0; i < n; i++) text(karaokeLines[i].s, KARAOKE_CX, y + i * dy + termfont::ascent(f), f, BC_DATUM);
 }
 
+// How far an accented capital (À, Ã, Å) rises above the row drawLines puts a face's tallest ASCII
+// glyph at: a lyric area's clear starts that much higher.
+static int accentRise(Face f) { return termfont::accentAscent(f) - termfont::ascent(f); }
+
 // The big text: BIG over up to 3 lines, or TITLE over up to 4 when BIG would cut it; the block
 // centred in its area. Each is measured in the face it is drawn in.
 static void drawBig(const char* s, uint16_t ink) {
-    txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
+    txt::latin1Fold(s, karaokeFolded, sizeof(karaokeFolded));
     bool cut = false;
     Face f = Face::BIG;
     int n = karaoke::wrap(karaokeFolded, static_cast<int>(f), termfont::widthOf, KARAOKE_W, 3, karaokeLines, &cut);
@@ -986,7 +991,7 @@ static void drawBig(const char* s, uint16_t ink) {
 
 // The next line: BODY over up to 2 lines, DIM.
 static void drawNext(const char* s) {
-    txt::asciiFold(s, karaokeFolded, sizeof(karaokeFolded));
+    txt::latin1Fold(s, karaokeFolded, sizeof(karaokeFolded));
     const int n = karaoke::wrap(karaokeFolded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_W, 2, karaokeLines);
     drawLines(n, Face::BODY, KARAOKE_NEXT_Y, KARAOKE_NEXT_DY, pal(termpal::DIM));
 }
@@ -1019,8 +1024,8 @@ static void drawKaraokeBody(bool all) {
         snprintf(karaokeShownSong, sizeof(karaokeShownSong), "%s", songText);
         static char folded[sizeof(songText)];
         static karaoke::Line fit[1];
-        txt::asciiFold(songText, folded, sizeof(folded));
-        upper(folded, folded, sizeof(folded));
+        txt::latin1Fold(songText, folded, sizeof(folded));
+        txt::latin1Upper(folded);
         const int n = karaoke::wrap(folded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_SONG_W, 1, fit);
         clearBg(KARAOKE_SONG_X, 2, KARAOKE_SONG_W, 36);
         tft.setTextColor(pal(termpal::MID));
@@ -1035,13 +1040,15 @@ static void drawKaraokeBody(bool all) {
     if (bigChanged) {
         snprintf(karaokeShownBig, sizeof(karaokeShownBig), "%s", big);
         karaokeShownWord = isWord;
-        clearBg(KARAOKE_X, KARAOKE_BIG_Y, KARAOKE_W, KARAOKE_BIG_H);
+        const int rise = accentRise(Face::BIG);  // BIG's accents rise further than TITLE's
+        clearBg(KARAOKE_X, KARAOKE_BIG_Y - rise, KARAOKE_W, KARAOKE_BIG_H + rise);
         drawBig(big, pal(karaoke::isAlert(big) ? termpal::ALERT : isWord ? termpal::DIM : termpal::TEXT));
     }
     const char* next = isWord ? "" : karaoke::nextLine(d, pos);
     if (all || strcmp(next, karaokeShownNext) != 0) {
         snprintf(karaokeShownNext, sizeof(karaokeShownNext), "%s", next);
-        clearBg(KARAOKE_X, KARAOKE_NEXT_Y, KARAOKE_W, KARAOKE_NEXT_H);
+        const int rise = accentRise(Face::BODY);
+        clearBg(KARAOKE_X, KARAOKE_NEXT_Y - rise, KARAOKE_W, KARAOKE_NEXT_H + rise);
         drawNext(next);
     }
     // The line switched between polls (the position is interpolated) and the one after it isn't known
@@ -2373,6 +2380,9 @@ void setup() {
     backlight::begin();  // PWM, at the day level
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
     tft.setRotation(1);
+    // The texts are Latin-1 bytes (txt::latin1Fold) and the fonts cover 0x20-0xFF: each byte is its
+    // glyph. TFT_eSPI would read them as UTF-8 (its default) and lose the accents and the degree sign.
+    tft.setAttribute(UTF8_SWITCH, 0);
     vividGamma();
     touch::begin();
 

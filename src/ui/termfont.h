@@ -18,7 +18,7 @@ struct Glyph {                  // = GFXglyph
 struct Font {                   // = GFXfont
     const uint8_t* bitmap;
     const Glyph* glyph;
-    uint16_t first, last;       // the characters covered (0x20..0x7E)
+    uint16_t first, last;       // the characters covered (0x20..0xFF, Latin-1; 0x7F..0x9F empty)
     uint8_t yAdvance;           // line height
 };
 
@@ -37,9 +37,12 @@ const Font& font(Face f);
 
 // Rows of 'H' above the baseline: what centring and "caps top at y" go by (the text is upper case).
 int capHeight(Face f);
-// The deepest rows any glyph reaches above / below the baseline ('(' '/' '[' 'Q' 'g' go past the
-// caps): what a clear must cover.
+// The deepest rows ASCII glyphs reach above / below the baseline ('(' '/' '[' 'Q' 'g' go past the
+// caps): what the layout spaces lines by. descent() holds for every glyph; above, the accented
+// capitals (À É Ã, Å the highest) rise past ascent(), to accentAscent(): what a clear under text
+// that can hold them must reach up to.
 int ascent(Face f);
+int accentAscent(Face f);
 int descent(Face f);
 // One step of the (monospace) pen: the width of a cell, e.g. the block cursor.
 int cell(Face f);

@@ -44,8 +44,29 @@ void test_metrics() {
         TEST_ASSERT_TRUE(termfont::ascent(f) >= termfont::capHeight(f));
         TEST_ASSERT_TRUE(termfont::descent(f) > 0);
         TEST_ASSERT_EQUAL_UINT16(0x20, termfont::font(f).first);
-        TEST_ASSERT_EQUAL_UINT16(0x7E, termfont::font(f).last);
+        TEST_ASSERT_EQUAL_UINT16(0xFF, termfont::font(f).last);
         TEST_ASSERT_EQUAL_INT(termfont::cell(f) * 4, termfont::advance(f, "M i."));  // monospace
+    }
+}
+
+// Latin-1: every face draws the accented letters and the degree sign (bytes 0x80-0xFF count, never
+// as negative chars), monospace like ASCII; DEL and the C1 controls (0x7F-0x9F) are empty and don't
+// move the pen. The accented capitals rise above the ASCII ascent; nothing goes below its descent.
+void test_latin1() {
+    const int ascii[] = {12, 13, 16, 24}, descent[] = {3, 3, 4, 6};  // ASCII's, as before Latin-1
+    for (int i = 0; i < termfont::N_FACES; i++) {
+        const Face f = static_cast<Face>(i);
+        for (const char* s : {"\xE3", "\xC3", "\xB0", "\xE7", "\xC9"}) TEST_ASSERT_TRUE_MESSAGE(termfont::width(f, s) > 0, s);
+        TEST_ASSERT_EQUAL_INT(termfont::width(f, "SAO"), termfont::width(f, "S\xC3O"));
+        TEST_ASSERT_EQUAL_INT(termfont::cell(f) * 3, termfont::advance(f, "\xE3\xB0\xFF"));
+        TEST_ASSERT_EQUAL_INT(0, termfont::advance(f, "\x7F\x80\x9F"));
+        const termfont::Font& ft = termfont::font(f);
+        for (int c = 0x7F; c <= 0x9F; c++) TEST_ASSERT_EQUAL_INT(0, ft.glyph[c - ft.first].height);
+        TEST_ASSERT_EQUAL_INT(ascii[i], termfont::ascent(f));
+        TEST_ASSERT_EQUAL_INT(descent[i], termfont::descent(f));
+        const termfont::Glyph& a = ft.glyph[0xC3 - ft.first];  // Ã: its tilde over the caps, past ASCII
+        TEST_ASSERT_TRUE(-a.yOffset > termfont::ascent(f));
+        TEST_ASSERT_TRUE(termfont::accentAscent(f) >= -a.yOffset);
     }
 }
 
@@ -183,7 +204,7 @@ void test_dash_clock_and_weather_fit() {
     for (const char* s : {"--:--", "00:00", "23:59", "18:47", "20:08", "11:11"}) fitsLeft(Face::BIG, s, DASH_X, DASH_SPLIT);
     for (const char* s : {"--- -- ---", "WED 23 SEP", "THU 30 NOV", "SAT 28 MAY"}) fitsLeft(Face::SMALL, s, DASH_X, DASH_SPLIT);
     // the temperature (BIG) and the sky (SMALL) right of it
-    for (const char* s : {"--C", "-10C", "32C", "40C"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
+    for (const char* s : {"--\xB0" "C", "-10\xB0" "C", "32\xB0" "C", "40\xB0" "C"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
     for (int code : {0, 1, 3, 45, 51, 61, 71, 80, 85, 95, 999}) fitsRight(Face::SMALL, weather::words(code), DASH_RIGHT, DASH_SPLIT);
     for (const char* s : {"PARTLY CLOUDY", "THUNDERSTORM", "SNOW SHOWERS"}) fitsRight(Face::SMALL, s, DASH_RIGHT, DASH_SPLIT);
     // rows: the clock over the date, both over the band's last row (trip, HI / LO, messages), all
@@ -205,7 +226,11 @@ void test_dash_clock_and_weather_fit() {
         for (int h : gaps) TEST_ASSERT_TRUE(g - h <= 1 && h - g <= 1);
     }
     // the split clears: the left column's clear ends before the right column's ink starts
-    TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "-10C"));
+    TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "-10\xB0" "C"));
+    // the trip row's clear reaches up to an accented capital in the HI / LO city ("SÃO PAULO") and
+    // still starts under the date's and the sky's ink (capitals: nothing below their baseline)
+    TEST_ASSERT_TRUE(TRIP_ROW_BASE - termfont::accentAscent(Face::SMALL) > DATE_Y + termfont::capHeight(Face::SMALL) - 1);
+    TEST_ASSERT_TRUE(TRIP_ROW_BASE - termfont::accentAscent(Face::SMALL) > WORDS_Y + termfont::capHeight(Face::SMALL) - 1);
 }
 
 void test_dash_lights_fit() {
@@ -317,6 +342,12 @@ void test_karaoke_pitches() {
     TEST_ASSERT_TRUE(rows(Face::BODY) <= KARAOKE_NEXT_DY && 2 * KARAOKE_NEXT_DY <= KARAOKE_NEXT_H);
     fitsCentred(Face::BIG, ">NO SYNCED LYRICS", KARAOKE_W + 2 * MARGIN);
     fitsCentred(Face::BIG, ">WRONG KEY", KARAOKE_W + 2 * MARGIN);
+    // ledpanel clears a lyric area from as high as its face's accented capitals rise over its first
+    // line: the big area (BIG or TITLE, from y 56) into the 12 rows under the body's top (y 44), the
+    // next line's (BODY, from y 156) into the 10 rows under the big area (to y 146)
+    auto rise = [](Face f) { return termfont::accentAscent(f) - termfont::ascent(f); };
+    TEST_ASSERT_TRUE(rise(Face::TITLE) <= rise(Face::BIG) && rise(Face::BIG) <= 12);
+    TEST_ASSERT_TRUE(rise(Face::BODY) <= 10);
 }
 
 // karaoke::wrap measures with the face it draws in.
@@ -347,6 +378,7 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_width_follows_tft_espi);
     RUN_TEST(test_metrics);
+    RUN_TEST(test_latin1);
     RUN_TEST(test_bitmap_packing);
     RUN_TEST(test_menu_items_fit);
     RUN_TEST(test_preset_names_fit);

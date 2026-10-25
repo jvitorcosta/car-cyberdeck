@@ -15,6 +15,16 @@ const Glyph* glyphOf(const Font& f, unsigned char c) {
     return &f.glyph[c - f.first];
 }
 
+// The tallest ink above the baseline of the characters first..last.
+int above(const Font& ft, int first, int last) {
+    int a = 0;
+    for (int c = first; c <= last; c++) {
+        const Glyph& g = ft.glyph[c - ft.first];
+        if (g.height > 0 && -g.yOffset > a) a = -g.yOffset;
+    }
+    return a;
+}
+
 }  // namespace
 
 const Font& font(Face f) {
@@ -29,12 +39,12 @@ int capHeight(Face f) {
 
 int ascent(Face f) {
     const Font& ft = font(f);
-    int a = 0;
-    for (int c = ft.first; c <= ft.last; c++) {
-        const Glyph& g = ft.glyph[c - ft.first];
-        if (g.height > 0 && -g.yOffset > a) a = -g.yOffset;
-    }
-    return a;
+    return above(ft, ft.first, ft.last < 0x7E ? ft.last : 0x7E);
+}
+
+int accentAscent(Face f) {
+    const Font& ft = font(f);
+    return above(ft, ft.first, ft.last);
 }
 
 int descent(Face f) {

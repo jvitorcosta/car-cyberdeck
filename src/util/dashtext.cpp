@@ -30,8 +30,8 @@ void date(bool known, int y, int month, int day, char* out, size_t n) {
 }
 
 void temp(bool ok, double c, char* out, size_t n) {
-    if (ok) snprintf(out, n, "%dC", rounded(c));
-    else snprintf(out, n, "--C");
+    if (ok) snprintf(out, n, "%d\xB0" "C", rounded(c));  // 0xB0: the degree sign in Latin-1
+    else snprintf(out, n, "--\xB0" "C");
 }
 
 void hiLo(bool daily, double maxC, double minC, const char* city, char* out, size_t n) {
@@ -41,10 +41,8 @@ void hiLo(bool daily, double maxC, double minC, const char* city, char* out, siz
         snprintf(lo, sizeof(lo), "%d", rounded(minC));
     }
     char folded[48] = "";
-    if (city) txt::asciiFold(city, folded, sizeof(folded));
-    for (char* p = folded; *p; p++) {
-        if (*p >= 'a' && *p <= 'z') *p = static_cast<char>(*p - 'a' + 'A');
-    }
+    if (city) txt::latin1Fold(city, folded, sizeof(folded));
+    txt::latin1Upper(folded);
     if (folded[0]) snprintf(out, n, "HI %s LO %s  %s", hi, lo, folded);
     else snprintf(out, n, "HI %s LO %s", hi, lo);
 }
