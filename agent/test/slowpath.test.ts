@@ -218,6 +218,54 @@ describe("makeSlowPath", () => {
     }
   });
 
+  it("a tool call that straddles the timeout leaves the deck's undo alone", async () => {
+    vi.useFakeTimers();
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const sessions = new Sessions();
+      let release!: () => void;
+      const gate = new Promise<void>((r) => { release = r; });
+      let started = false, changed = false;
+      const spotify = {
+        async now() { return { title: "Oceano", artist: "Djavan", volume: 40 }; },
+        async volume() { started = true; await gate; changed = true; },
+      } as unknown as Spotify;
+      const runQuery = fakeRunQuery([
+        { tool: "spotify_volume", args: { level: 70, delta: null } },
+        result("pronto.", 0.02),
+      ], {});
+      const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions }, runQuery });
+
+      const pending = slow("yellow", "tarefa longa");
+      await vi.advanceTimersByTimeAsync(100);
+      expect(started).toBe(true);                // the call began before the timeout
+      await vi.advanceTimersByTimeAsync(7_900);
+      expect((await pending).stock).toBe("deixa_comigo");
+
+      const fastUndo = async () => {};
+      sessions.setUndo("yellow", fastUndo);
+      vi.useRealTimers();
+      release();
+      await vi.waitFor(() => expect(info).toHaveBeenCalledTimes(1));
+      expect(changed).toBe(true);
+      expect(sessions.takeUndo("yellow")).toBe(fastUndo);
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("says the result text, not the failure, when an ask failed", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = fakeRunQuery([
+      { tool: "ask", args: { question: " " } },
+      result("Não consegui perguntar."),
+    ], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "tarefa");
+    expect(res.stock).toBe("erro");
+    expect(res.say).toBe("Não consegui perguntar.");
+  });
+
   it("logs, not rejects, when the background query fails after the timeout", async () => {
     vi.useFakeTimers();
     const errors: unknown[] = [];

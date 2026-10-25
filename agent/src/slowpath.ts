@@ -50,18 +50,19 @@ function firstSentence(text: string): string {
   return (m ? m[0] : t.split("\n")[0]!).trim();
 }
 
-// The deck's sessions with undo switched off: neither set nor cleared.
-function withoutUndo(sessions: Sessions): Sessions {
-  const quiet = Object.create(sessions) as Sessions;
-  quiet.setUndo = () => {};
-  quiet.takeUndo = () => null;
-  return quiet;
+// The deck's sessions, with every undo write (set or clear) checked at the moment it happens:
+// once off() is true they do nothing, even for a tool call that started earlier.
+function undoUnless(sessions: Sessions, off: () => boolean): Sessions {
+  const guarded = Object.create(sessions) as Sessions;
+  guarded.setUndo = (deck, fn) => { if (!off()) sessions.setUndo(deck, fn); };
+  guarded.takeUndo = (deck) => (off() ? null : sessions.takeUndo(deck));
+  return guarded;
 }
 
 function merge(outs: ToolOutcome[], text: string, costUsd?: number): ToolOutcome & { costUsd?: number } {
   const last = outs.at(-1);
   // A question is what she must say; the result text would contradict the ask.
-  const asked = last?.did.startsWith("ask ") ? last.say : "";
+  const asked = last && last.stock === "ok" && last.did.startsWith("ask ") ? last.say : "";
   const say = asked || firstSentence(text) || last?.say || STOCK.erro;
   return {
     lights: outs.flatMap((o) => o.lights),
@@ -81,11 +82,7 @@ export function makeSlowPath(cfg: { modelId: string; ctx: Omit<ToolCtx, "deck">;
     const outs: ToolOutcome[] = [];
     // Once the reply has gone out, the deck has moved on: late tool calls must not touch its undo.
     let late = false;
-    const quiet = withoutUndo(cfg.ctx.sessions);
-    const ctx: ToolCtx = {
-      ...cfg.ctx, deck,
-      get sessions() { return late ? quiet : cfg.ctx.sessions; },
-    };
+    const ctx: ToolCtx = { ...cfg.ctx, deck, sessions: undoUnless(cfg.ctx.sessions, () => late) };
     const tools = carMcpTools(ctx, outs);
 
     const job = (async () => {
