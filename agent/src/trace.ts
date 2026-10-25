@@ -20,6 +20,10 @@ const PRICES: Record<string, Price> = {
   "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.10, cacheWrite: 2.50 },
 };
 
+/** A slow-path run that finished after its command's reply went out: only its spend matters. */
+export interface LateRun { deck: string; did: string[]; costUsd: number; }
+export interface LateTrace extends LateRun { type: "late"; at: string; path: "slow"; }
+
 const warned = new Set<string>();
 
 export function costOf(model: string, usage: Anthropic.Usage): number {
@@ -53,15 +57,26 @@ export class TraceLog {
     appendFileSync(join(this.dir, `${dayName(this.now())}.jsonl`), JSON.stringify(t) + "\n");
   }
 
+  /** Appends a late line: /stats adds its cost but does not count it as a command. */
+  writeLate(l: LateRun): void {
+    const line: LateTrace = { type: "late", at: new Date(this.now()).toISOString(), path: "slow", ...l };
+    mkdirSync(this.dir, { recursive: true });
+    appendFileSync(join(this.dir, `${dayName(this.now())}.jsonl`), JSON.stringify(line) + "\n");
+  }
+
   stats(days: number): { n: number; p50Ms: number; p95Ms: number; costUsd: number; byPath: Record<string, number> } {
     const traces: Trace[] = [];
+    let lateUsd = 0;
     const span = Math.min(MAX_DAYS, Math.max(1, Math.floor(Number(days)) || 1));
     for (let i = 0; i < span; i++) {
       const file = join(this.dir, `${dayName(this.now() - i * DAY_MS)}.jsonl`);
       if (!existsSync(file)) continue;
       for (const line of readFileSync(file, "utf8").split("\n")) {
         if (!line.trim()) continue;
-        try { traces.push(JSON.parse(line) as Trace); } catch { /* a torn line must not break stats */ }
+        let t: Trace | LateTrace;
+        try { t = JSON.parse(line) as Trace | LateTrace; } catch { continue; /* a torn line must not break stats */ }
+        if ("type" in t && t.type === "late") lateUsd += Number(t.costUsd) || 0;
+        else traces.push(t as Trace);
       }
     }
     const ms = traces.map((t) => t.totalMs).sort((a, b) => a - b);
@@ -71,7 +86,7 @@ export class TraceLog {
       n: traces.length,
       p50Ms: percentile(ms, 0.5),
       p95Ms: percentile(ms, 0.95),
-      costUsd: traces.reduce((s, t) => s + t.costUsd, 0),
+      costUsd: traces.reduce((s, t) => s + t.costUsd, lateUsd),
       byPath,
     };
   }

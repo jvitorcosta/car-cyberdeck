@@ -56,16 +56,25 @@ export async function handleCommand(
       ({ reply: r, stages, usage: msg.usage, model: modelId, ...extra });
 
     if (msg.stop_reason === "refusal" || msg.stop_reason === "max_tokens") return done(stockReply(text, "erro"));
-    const use = msg.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-    if (!use) return done(stockReply(text, "nao_entendi"));
+    const uses = msg.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+    if (!uses.length) return done(stockReply(text, "nao_entendi"));
 
-    const outcome = await timed("tool", () => executeTool(use.name, use.input, { ...deps.ctx, deck }));
-    if (!outcome.handoff) {
-      sessions.remember(deck, { user: text, did: outcome.did });
-      return done(reply(text, outcome, "fast"));
+    // Several tool calls means several steps: running only one would claim a success it didn't
+    // have, so none runs here and the slow path gets the driver's own words.
+    let task: string;
+    if (uses.length > 1) {
+      task = text;
+    } else {
+      const use = uses[0]!;
+      const outcome = await timed("tool", () => executeTool(use.name, use.input, { ...deps.ctx, deck }));
+      if (!outcome.handoff) {
+        sessions.remember(deck, { user: text, did: outcome.did });
+        return done(reply(text, outcome, "fast"));
+      }
+      task = outcome.handoff;
     }
 
-    const slow = await timed("slow", () => deps.slow(deck, outcome.handoff!));
+    const slow = await timed("slow", () => deps.slow(deck, task));
     sessions.remember(deck, { user: text, did: slow.did });
     return done(reply(text, slow, "slow"), { slowCostUsd: slow.costUsd });
   });

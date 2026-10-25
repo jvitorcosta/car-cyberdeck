@@ -2,10 +2,10 @@ import type { McpSdkServerConfigWithInstance, Options, SDKMessage, query } from 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SLOW_SYSTEM } from "../src/persona.js";
+import { SLOW_SYSTEM, STOCK } from "../src/persona.js";
 import { Sessions } from "../src/session.js";
 import { carMcpTools, makeSlowPath } from "../src/slowpath.js";
-import type { Spotify } from "../src/spotify.js";
+import { SpotifyError, type Spotify } from "../src/spotify.js";
 import { TOOL_DEFS, type ToolOutcome } from "../src/tools.js";
 
 function fakeSpotify() {
@@ -62,6 +62,21 @@ describe("carMcpTools", () => {
     expect(calls).toEqual([["play", "Djavan", "artist"]]);
     expect(out.map((o) => o.did)).toEqual(["spotify_play Djavan"]);
     expect(res.content).toEqual([{ type: "text", text: "spotify_play Djavan" }]);
+    expect(res.isError).toBeUndefined();
+  });
+
+  it("marks erro, sem_spotify and nao_entendi outcomes as tool errors", async () => {
+    const spotify = {
+      async now() { return null; },
+      async play() { throw new SpotifyError("no_device", "no active Spotify device"); },
+      async control() { throw new Error("boom"); },
+    } as unknown as Spotify;
+    const tools = carMcpTools({ deck: "yellow", spotify, sessions: new Sessions() }, []);
+    const run = (name: string, args: Record<string, unknown>) => tools.find((t) => t.name === name)!.handler(args as never, {});
+    expect((await run("spotify_play", { query: "Djavan", kind: "artist" })).isError).toBe(true);
+    expect((await run("spotify_control", { action: "pause" })).isError).toBe(true);
+    expect((await run("lights", { zone: "both", colour: null, level: null, power: null, step: null })).isError).toBe(true);
+    expect((await run("undo", {})).isError).toBeUndefined();   // nada_desfazer is an answer, not a failure
   });
 });
 
@@ -91,6 +106,7 @@ describe("makeSlowPath", () => {
     expect(o.maxTurns).toBe(8);
     expect(o.maxBudgetUsd).toBe(0.05);
     expect(o.env).toEqual({ ...process.env });
+    expect(o.persistSession).toBe(false);
     expect(Object.keys(o.mcpServers!)).toEqual(["car"]);
     expect(o.allowedTools).toEqual(TOOL_DEFS.map((t) => t.name).filter((n) => n !== "hand_off_to_agent")
       .map((n) => `mcp__car__${n}`));
@@ -254,7 +270,7 @@ describe("makeSlowPath", () => {
     }
   });
 
-  it("says the result text, not the failure, when an ask failed", async () => {
+  it("says the failure, not the model's prose, when an ask failed", async () => {
     const { spotify } = fakeSpotify();
     const runQuery = fakeRunQuery([
       { tool: "ask", args: { question: " " } },
@@ -263,7 +279,70 @@ describe("makeSlowPath", () => {
     const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
     const res = await slow("yellow", "tarefa");
     expect(res.stock).toBe("erro");
-    expect(res.say).toBe("Não consegui perguntar.");
+    expect(res.say).toBe(STOCK.erro);
+  });
+
+  it("says the failed outcome, not the model's claim, when the last tool failed", async () => {
+    const spotify = {
+      async now() { return null; },
+      async play() { throw new SpotifyError("no_device", "no active Spotify device"); },
+    } as unknown as Spotify;
+    const runQuery = fakeRunQuery([
+      { tool: "spotify_play", args: { query: "Djavan", kind: "artist" } },
+      result("Pronto, Djavan tocando!"),
+    ], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "toca Djavan");
+    expect(res.stock).toBe("sem_spotify");
+    expect(res.say).toBe(STOCK.sem_spotify);
+  });
+
+  it("says nao_entendi, not the model's claim, when no tool ran", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = fakeRunQuery([result("Pronto, apaguei as luzes.")], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "apaga as luzes");
+    expect(res.stock).toBe("nao_entendi");
+    expect(res.say).toBe(STOCK.nao_entendi);
+    expect(res.lights).toEqual([]);
+    expect(res.did).toBe("slow nada");
+  });
+
+  it("says the question when no tool ran and the model only asked", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = fakeRunQuery([result("Hmm. Qual playlist você quer?")], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "toca a playlist");
+    expect(res.stock).toBe("ok");
+    expect(res.say).toBe("Qual playlist você quer?");
+    expect(res.mood).toBe("smug");
+  });
+
+  it("reports the late finish's cost through onLate", async () => {
+    vi.useFakeTimers();
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const { spotify } = fakeSpotify();
+      let release!: () => void;
+      const gate = new Promise<void>((r) => { release = r; });
+      const runQuery = fakeRunQuery([
+        { tool: "spotify_play", args: { query: "Djavan", kind: "artist" } },
+        result("pronto.", 0.044),
+      ], {});
+      const gated = ((p: unknown) => (async function* () { await gate; yield* (runQuery as any)(p); })()) as unknown as typeof query;
+      const late: unknown[] = [];
+      const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery: gated,
+        onLate: (l) => { late.push(l); } });
+      const pending = slow("yellow", "tarefa longa");
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect((await pending).stock).toBe("deixa_comigo");
+      vi.useRealTimers();
+      release();
+      await vi.waitFor(() => expect(late).toHaveLength(1));
+      expect(late[0]).toEqual({ deck: "yellow", did: ["spotify_play Djavan"], costUsd: 0.044 });
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it("logs, not rejects, when the background query fails after the timeout", async () => {

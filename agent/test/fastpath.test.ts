@@ -116,4 +116,22 @@ describe("handleCommand", () => {
     expect(sessions.context("yellow").map((e) => [e.user, e.did]))
       .toEqual([["põe Djavan e aumenta", "spotify_play Djavan; spotify_volume 50"]]);
   });
+  it("runs none of several tool_use blocks and hands the original text to the slow path", async () => {
+    const calls: [string, string][] = [];
+    const slow: SlowPath = async (deck, task) => {
+      calls.push([deck, task]);
+      return { lights: [], stock: "ok", say: "feito~", mood: "happy", did: "lights both apagado; spotify_control pause" };
+    };
+    const lightsOff = toolUse("lights", { zone: "both", colour: null, level: null, power: "off", step: null });
+    const pause = { ...toolUse("spotify_control", { action: "pause" }), id: "tu_2" } as Anthropic.ContentBlock;
+    const { deps, plays, sessions } = setup(message([lightsOff, pause]), slow);
+    const res = await handleCommand({ deck: "yellow", text: "apaga a luz e pausa a música" }, deps);
+    expect(calls).toEqual([["yellow", "apaga a luz e pausa a música"]]);
+    expect(plays).toEqual([]);
+    expect(res.reply.lights).toEqual([]);
+    expect(res.reply.path).toBe("slow");
+    expect(res.reply.say).toBe("feito~");
+    expect(res.stages.map((s) => s.name)).toEqual(["model", "slow"]);
+    expect(sessions.context("yellow").map((e) => e.did)).toEqual(["lights both apagado; spotify_control pause"]);
+  });
 });

@@ -34,6 +34,8 @@ export interface SpotifyConfig { clientId: string; clientSecret: string; refresh
 const API = "https://api.spotify.com/v1";
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const EXPIRY_MARGIN_MS = 30_000;
+/** Each request's limit: commands wait in the deck's queue, so a stalled call must not hold it. */
+export const SPOTIFY_TIMEOUT_MS = 4_000;
 
 interface ApiTrack { uri: string; name: string; artists?: { name: string }[]; }
 interface ApiPlayer {
@@ -45,13 +47,26 @@ interface ApiPlayer {
 }
 interface ApiItem { uri: string; name: string; }
 
-export function createSpotify(cfg: SpotifyConfig, fetchFn: typeof fetch = fetch): Spotify {
+export function createSpotify(cfg: SpotifyConfig, fetchFn: typeof fetch = fetch, timeoutMs = SPOTIFY_TIMEOUT_MS): Spotify {
   let accessToken: string | null = null;
   let expiresAt = 0;
 
+  // fetch with a deadline; a timeout becomes a SpotifyError, which the tools map to the erro reply.
+  async function timedFetch(what: string, url: string, init: RequestInit): Promise<Response> {
+    try {
+      return await fetchFn(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (e) {
+      const name = (e as { name?: string } | null)?.name;
+      if (name === "TimeoutError" || name === "AbortError") {
+        throw new SpotifyError("other", `Spotify ${what} timed out after ${timeoutMs} ms`);
+      }
+      throw e;
+    }
+  }
+
   async function refresh(): Promise<string> {
     const basic = Buffer.from(`${cfg.clientId}:${cfg.clientSecret}`).toString("base64");
-    const res = await fetchFn(TOKEN_URL, {
+    const res = await timedFetch("token refresh", TOKEN_URL, {
       method: "POST",
       headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: cfg.refreshToken }).toString(),
@@ -75,7 +90,7 @@ export function createSpotify(cfg: SpotifyConfig, fetchFn: typeof fetch = fetch)
     const send = async (tok: string) => {
       const headers: Record<string, string> = { Authorization: `Bearer ${tok}` };
       if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-      return fetchFn(url.toString(), {
+      return timedFetch(`${method} ${path}`, url.toString(), {
         method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
       });
     };

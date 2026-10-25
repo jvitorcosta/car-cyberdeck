@@ -1,8 +1,9 @@
 // Text evals for the fast path: every case in cases.jsonl through handleCommand with the real model,
 // a recording Spotify fake and a slow-path stub. Usage: npm run eval -- --model claude-haiku-5-5
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createAnthropic } from "../src/anthropic.js";
 import { parseEnv } from "../src/config.js";
 import { handleCommand, type ModelClient, type SlowPath } from "../src/fastpath.js";
 import { Sessions } from "../src/session.js";
@@ -17,6 +18,8 @@ const DOC_FILE = fileURLToPath(new URL("../../docs/voice-agent-evals.md", import
 
 export interface Row {
   id: string; text: string; expect: Case["expect"]; got: Got; verdict: Verdict;
+  /** Every tool_use block of the judged reply; got (the judged one) is the first. */
+  uses: Got[];
   /** What each `before` text produced; setupFailed when one of them produced no tool. */
   setup: Got[]; setupFailed: boolean;
   ms: number; costUsd: number; say: string; spotify: string[]; handoffs: string[];
@@ -44,11 +47,13 @@ export async function runCase(c: Case, deps: { model: ModelClient; modelId: stri
   const spotify: string[] = [];
   const handoffs: string[] = [];
   let last: Got | null = null;
+  let uses: Got[] = [];
   const model: ModelClient = {
     async create(p) {
       const m = await deps.model.create(p);
-      const use = m.content.find((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-      last = use ? { tool: use.name, input: use.input } : { tool: null, input: null };
+      uses = m.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")
+        .map((b) => ({ tool: b.name, input: b.input }));
+      last = uses[0] ?? { tool: null, input: null };
       return m;
     },
   };
@@ -67,13 +72,14 @@ export async function runCase(c: Case, deps: { model: ModelClient; modelId: stri
   spotify.length = 0;
   handoffs.length = 0;
   last = null;
+  uses = [];
 
   const start = Date.now();
   const res = await handleCommand({ deck: DECK, text: c.text }, cmdDeps);
   const ms = Date.now() - start;
   const got: Got = last ?? { tool: null, input: null };
   return {
-    id: c.id, text: c.text, expect: c.expect, got, verdict: judge(c.expect, got, c.alsoOk),
+    id: c.id, text: c.text, expect: c.expect, got, verdict: judge(c.expect, got, c.alsoOk), uses,
     setup, setupFailed: setup.some((g) => g.tool === null), ms,
     costUsd: res.usage ? costOf(deps.modelId, res.usage) : 0, say: res.reply.say, spotify, handoffs,
   };
@@ -86,7 +92,7 @@ const show = (e: unknown) => JSON.stringify(e);
 export async function main(
   argv: string[],
   env: NodeJS.ProcessEnv = process.env,
-  opts: { envFile?: string; docFile?: string; casesFile?: string } = {},
+  opts: { envFile?: string; docFile?: string; casesFile?: string; model?: ModelClient } = {},
 ): Promise<number> {
   const envFile = opts.envFile ?? ENV_FILE;
   const docFile = opts.docFile ?? DOC_FILE;
@@ -101,13 +107,24 @@ export async function main(
   }
 
   const cases = parseCases(readFileSync(opts.casesFile ?? CASES_FILE, "utf8"));
-  const client = new Anthropic({ apiKey });
-  const model: ModelClient = { create: (p) => client.messages.create(p) };
+  const model: ModelClient = opts.model ?? (() => {
+    const client = createAnthropic(apiKey);
+    return { create: (p) => client.messages.create(p) };
+  })();
   console.log(`eval: ${cases.length} cases on ${modelId}`);
 
   const rows: Row[] = [];
+  // A case that throws (a 429, a timeout) is reported and left out of the scores; the run goes on.
+  const errored: { c: Case; message: string }[] = [];
   for (const c of cases) {
-    const row = await runCase(c, { model, modelId });
+    let row: Row;
+    try {
+      row = await runCase(c, { model, modelId });
+    } catch (e) {
+      errored.push({ c, message: e instanceof Error ? e.message : String(e) });
+      process.stdout.write("E");
+      continue;
+    }
     rows.push(row);
     process.stdout.write(row.setupFailed ? "s" : row.verdict === "right" ? "." : "x");
   }
@@ -119,6 +136,12 @@ export async function main(
   const s = summarise(scored);
   console.log(`accuracy ${pct(s.accuracy)}  wrong action ${pct(s.wrongActionRate)}  asked ${pct(s.askRate)}  ` +
     `p50 ${s.p50Ms} ms  p95 ${s.p95Ms} ms  $${s.costPerCmd.toFixed(6)}/cmd`);
+  for (const { c, message } of errored) {
+    console.log(`  error        ${c.id} "${c.text}" (not scored): ${message}`);
+  }
+  for (const r of rows.filter((r) => r.uses.length > 1)) {
+    console.log(`  note         ${r.id} "${r.text}" had ${r.uses.length} tool_use blocks (judged the first): ${show(r.uses)}`);
+  }
   for (const r of setupFailed) {
     console.log(`  setup-failed ${r.id} "${r.text}" (not scored)\n    before   ${show(r.setup)}`);
   }
@@ -127,7 +150,7 @@ export async function main(
   }
 
   const date = new Date().toISOString().slice(0, 10);
-  appendFileSync(docFile, `| ${date} | ${modelId} | ${scored.length}${setupFailed.length ? ` (+${setupFailed.length} setup failed)` : ""} | ${pct(s.accuracy)} | ${pct(s.wrongActionRate)} | ` +
+  appendFileSync(docFile, `| ${date} | ${modelId} | ${scored.length}${setupFailed.length ? ` (+${setupFailed.length} setup failed)` : ""}${errored.length ? ` (+${errored.length} errored)` : ""} | ${pct(s.accuracy)} | ${pct(s.wrongActionRate)} | ` +
     `${pct(s.askRate)} | ${s.p50Ms} / ${s.p95Ms} | $${s.costPerCmd.toFixed(6)} |\n`);
   console.log(`eval: row appended to ${docFile}`);
   return 0;

@@ -260,3 +260,30 @@ describe("restore", () => {
     expect(f.calls.at(-1)!.url.pathname).toBe("/v1/me/player/pause");
   });
 });
+
+describe("timeouts", () => {
+  it("gives up on a request that never answers and maps it to a SpotifyError", async () => {
+    const signals: (AbortSignal | undefined)[] = [];
+    // Never resolves on its own; rejects only when its signal aborts.
+    const hang = ((_input: unknown, init?: RequestInit) => new Promise<Response>((_res, rej) => {
+      signals.push(init?.signal ?? undefined);
+      init?.signal?.addEventListener("abort", () => rej(init.signal!.reason));
+    })) as unknown as typeof fetch;
+    const s = createSpotify(cfg, hang, 30);
+    const err = await s.control("pause").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SpotifyError);
+    expect((err as SpotifyError).code).toBe("other");
+    expect((err as SpotifyError).message).toMatch(/timed out/);
+    expect(signals).toHaveLength(1);
+    expect(signals[0]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("puts a timeout signal on every request, the token refresh included", async () => {
+    const seen: (AbortSignal | undefined | null)[] = [];
+    const f = fake({ "POST /api/token": tokenRoute, "PUT /v1/me/player/pause": { status: 204 } });
+    const spy = ((input: unknown, init?: RequestInit) => { seen.push(init?.signal); return f.fetchFn(input as string, init); }) as typeof fetch;
+    await createSpotify(cfg, spy).control("pause");
+    expect(seen).toHaveLength(2);
+    for (const sig of seen) expect(sig).toBeInstanceOf(AbortSignal);
+  });
+});

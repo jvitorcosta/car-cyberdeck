@@ -187,3 +187,16 @@ describe("TOOL_DEFS", () => {
     }
   });
 });
+
+describe("executeTool: a Spotify timeout", () => {
+  it("ends as the error reply, not a crash", async () => {
+    const { createSpotify } = await import("../src/spotify.js");
+    const hang = ((_i: unknown, init?: RequestInit) => new Promise<Response>((_r, rej) => {
+      init?.signal?.addEventListener("abort", () => rej(init.signal!.reason));
+    })) as unknown as typeof fetch;
+    const spotify = createSpotify({ clientId: "a", clientSecret: "b", refreshToken: "c" }, hang, 20);
+    const out = await executeTool("spotify_control", { action: "pause" }, { deck: "yellow", spotify, sessions: new Sessions() });
+    expect(out.stock).toBe("erro");
+    expect(out.say).toBe(STOCK.erro);
+  });
+});

@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -247,6 +247,16 @@ describe("runCase", () => {
     expect(row.costUsd).toBe(0);
     expect(row.setupFailed).toBe(false);
   });
+
+  it("records every tool_use block, judging only the first", async () => {
+    const { model } = scripted([msg([
+      use("lights", { zone: "both", colour: null, level: null, power: "off", step: null }),
+      use("spotify_control", { action: "pause" }),
+    ])]);
+    const row = await runCase({ id: "m1", text: "apaga a luz e pausa a música", expect: "handoff" }, { model, modelId: "claude-haiku-5-5" });
+    expect(row.got.tool).toBe("lights");
+    expect(row.uses.map((u) => u.tool)).toEqual(["lights", "spotify_control"]);
+  });
 });
 
 describe("main", () => {
@@ -261,6 +271,37 @@ describe("main", () => {
       expect(existsSync(docFile)).toBe(false);
     } finally {
       err.mockRestore();
+    }
+  });
+  it("reports a case that throws, leaves it out of the scores and still writes the row", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "evals-"));
+    const docFile = join(dir, "evals.md");
+    const casesFile = join(dir, "cases.jsonl");
+    writeFileSync(casesFile, [
+      JSON.stringify({ id: "a", text: "toca Djavan", expect: PLAY_DJAVAN }),
+      JSON.stringify({ id: "b", text: "toca Djavan agora", expect: PLAY_DJAVAN }),
+    ].join("\n") + "\n");
+    let n = 0;
+    const model: ModelClient = {
+      async create() {
+        if (n++ === 0) throw Object.assign(new Error("429 rate_limit_error"), { status: 429 });
+        return msg([use("spotify_play", { query: "Djavan", kind: "artist" })]);
+      },
+    };
+    const logs: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((...a) => { logs.push(a.join(" ")); });
+    const write = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    try {
+      const code = await main(["--model", "claude-haiku-5-5"], { ANTHROPIC_API_KEY: "k" },
+        { envFile: join(dir, "none.env"), docFile, casesFile, model });
+      expect(code).toBe(0);
+      expect(logs.join("\n")).toMatch(/error\s+a .*429/);
+      expect(logs.join("\n")).toMatch(/accuracy 100\.0%/);
+      const row = readFileSync(docFile, "utf8");
+      expect(row).toMatch(/\| 1 \(\+1 errored\) \|/);
+    } finally {
+      log.mockRestore();
+      write.mockRestore();
     }
   });
 });

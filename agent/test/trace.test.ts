@@ -53,3 +53,22 @@ describe("TraceLog", () => {
     expect(Date.now() - t0).toBeLessThan(1000);
   });
 });
+
+describe("late slow-path finishes", () => {
+  it("writes a late line whose cost /stats counts, without counting it as a command", () => {
+    const dir = mkdtempSync(join(tmpdir(), "traces-"));
+    const log = new TraceLog(dir);
+    log.write(trace(100, { costUsd: 0.25 }));
+    log.writeLate({ deck: "yellow", did: ["spotify_play Djavan", "spotify_volume 50"], costUsd: 0.04 });
+    const [file] = readdirSync(dir);
+    const late = JSON.parse(readFileSync(join(dir, file!), "utf8").trim().split("\n")[1]!);
+    expect(late).toMatchObject({ type: "late", deck: "yellow", path: "slow", costUsd: 0.04,
+      did: ["spotify_play Djavan", "spotify_volume 50"] });
+    expect(typeof late.at).toBe("string");
+    const s = log.stats(1);
+    expect(s.n).toBe(1);
+    expect(s.p50Ms).toBe(100);
+    expect(s.byPath).toEqual({ fast: 1 });
+    expect(s.costUsd).toBeCloseTo(0.29);
+  });
+});

@@ -2,7 +2,9 @@ import { createSdkMcpServer, query, tool, type SdkMcpToolDefinition } from "@ant
 import { z } from "zod";
 import type { SlowPath } from "./fastpath.js";
 import { SLOW_SYSTEM, STOCK } from "./persona.js";
+import type { StockId } from "./protocol.js";
 import type { Sessions } from "./session.js";
+import type { LateRun } from "./trace.js";
 import { executeTool, TOOL_DEFS, type ToolCtx, type ToolOutcome } from "./tools.js";
 
 const SERVER = "car";
@@ -32,6 +34,9 @@ const SHAPES: Record<string, z.ZodRawShape> = {
 
 const CAR_DEFS = TOOL_DEFS.filter((t) => t.name !== "hand_off_to_agent");
 
+/** Outcomes where nothing (or not what was asked) happened: the model sees them as tool errors. */
+const FAILED: ReadonlySet<StockId> = new Set<StockId>(["erro", "sem_spotify", "nao_entendi"]);
+
 export function carMcpTools(ctx: ToolCtx, out: ToolOutcome[]): SdkMcpToolDefinition<any>[] {
   return CAR_DEFS.map((def) => {
     const shape = SHAPES[def.name];
@@ -39,9 +44,15 @@ export function carMcpTools(ctx: ToolCtx, out: ToolOutcome[]): SdkMcpToolDefinit
     return tool(def.name, def.description ?? "", shape, async (args) => {
       const o = await executeTool(def.name, args, ctx);
       out.push(o);
-      return { content: [{ type: "text" as const, text: o.did }] };
+      return { content: [{ type: "text" as const, text: o.did }], ...(FAILED.has(o.stock) ? { isError: true } : {}) };
     });
   });
+}
+
+/** The last question in the text, or "" when it asks nothing. */
+function lastQuestion(text: string): string {
+  const qs = text.match(/[^.!?\n]*\?/g) ?? [];
+  return (qs.at(-1) ?? "").trim();
 }
 
 function firstSentence(text: string): string {
@@ -59,22 +70,32 @@ function undoUnless(sessions: Sessions, off: () => boolean): Sessions {
   return guarded;
 }
 
+// The model's prose is only trusted after a tool that worked: it must never claim an action
+// that failed or never ran.
 function merge(outs: ToolOutcome[], text: string, costUsd?: number): ToolOutcome & { costUsd?: number } {
+  const cost = costUsd === undefined ? {} : { costUsd };
   const last = outs.at(-1);
+  if (!last) {
+    // No tool ran. A question is fine to say (nothing claimed); anything else is not understood.
+    const question = lastQuestion(text);
+    if (question) return { lights: [], stock: "ok", say: question, mood: "smug", did: `slow ask ${question}`, ...cost };
+    const stock: StockId = text.trim() ? "nao_entendi" : "erro";
+    return { lights: [], stock, say: STOCK[stock], mood: "happy", did: "slow nada", ...cost };
+  }
+  const lights = outs.flatMap((o) => o.lights);
+  const did = outs.map((o) => o.did).join("; ");
+  if (FAILED.has(last.stock)) return { lights, stock: last.stock, say: last.say, mood: last.mood, did, ...cost };
   // A question is what she must say; the result text would contradict the ask.
-  const asked = last && last.stock === "ok" && last.did.startsWith("ask ") ? last.say : "";
-  const say = asked || firstSentence(text) || last?.say || STOCK.erro;
-  return {
-    lights: outs.flatMap((o) => o.lights),
-    stock: last?.stock ?? (text.trim() ? "ok" : "erro"),
-    say,
-    mood: last?.mood ?? "happy",
-    did: outs.length ? outs.map((o) => o.did).join("; ") : "slow nada",
-    ...(costUsd === undefined ? {} : { costUsd }),
-  };
+  const asked = last.stock === "ok" && last.did.startsWith("ask ") ? last.say : "";
+  const say = asked || firstSentence(text) || last.say;
+  return { lights, stock: last.stock, say, mood: last.mood, did, ...cost };
 }
 
-export function makeSlowPath(cfg: { modelId: string; ctx: Omit<ToolCtx, "deck">; runQuery?: typeof query }): SlowPath {
+export function makeSlowPath(cfg: {
+  modelId: string; ctx: Omit<ToolCtx, "deck">; runQuery?: typeof query;
+  /** Called when a run finishes after its reply went out (its cost was not in that command's trace). */
+  onLate?: (l: LateRun) => void;
+}): SlowPath {
   const runQuery = cfg.runQuery ?? query;
   const allowedTools = CAR_DEFS.map((t) => `mcp__${SERVER}__${t.name}`);
 
@@ -101,6 +122,7 @@ export function makeSlowPath(cfg: { modelId: string; ctx: Omit<ToolCtx, "deck">;
           maxTurns: 8,
           maxBudgetUsd: 0.05,
           env: { ...process.env },
+          persistSession: false, // the driver's words stay out of ~/.claude/projects
         },
       })) {
         if (msg.type !== "result") continue;
@@ -108,7 +130,12 @@ export function makeSlowPath(cfg: { modelId: string; ctx: Omit<ToolCtx, "deck">;
         if (msg.subtype === "success") text = msg.result;
       }
       const merged = merge(outs, text, costUsd);
-      if (late) console.info(`slow path finished late for ${deck}: ${merged.did}, US$${costUsd ?? "?"}`);
+      if (late) {
+        console.info(`slow path finished late for ${deck}: ${merged.did}, US$${costUsd ?? "?"}`);
+        try {
+          cfg.onLate?.({ deck, did: outs.map((o) => o.did), costUsd: costUsd ?? 0 });
+        } catch (e) { console.error("slow path onLate failed:", e); }
+      }
       return merged;
     })();
 
