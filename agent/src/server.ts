@@ -3,7 +3,7 @@ import http from "node:http";
 import type { FastResult } from "./fastpath.js";
 import { STOCK } from "./persona.js";
 import type { CommandRequest, Reply } from "./protocol.js";
-import { costOf, type Trace, type TraceLog } from "./trace.js";
+import { costOf, MAX_DAYS, type Trace, type TraceLog } from "./trace.js";
 
 export interface ServerDeps {
   secret: string;
@@ -38,6 +38,7 @@ function readBody(req: http.IncomingMessage): Promise<string | null> {
     });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
     req.on("error", () => resolve(null));
+    req.on("close", () => resolve(null));
   });
 }
 
@@ -88,7 +89,7 @@ export function createServer(deps: ServerDeps): http.Server {
       if (req.method === "GET" && url.pathname === "/stats") {
         if (!authorized(req, deps.secret)) return send(res, 401, { error: "unauthorized" });
         const days = Number(url.searchParams.get("days") ?? 1);
-        return send(res, 200, deps.traces.stats(Number.isFinite(days) && days >= 1 ? Math.floor(days) : 1));
+        return send(res, 200, deps.traces.stats(Number.isFinite(days) && days >= 1 ? Math.min(MAX_DAYS, Math.floor(days)) : 1));
       }
       if (req.method === "POST" && url.pathname === "/command") {
         if (!authorized(req, deps.secret)) return send(res, 401, { error: "unauthorized" });

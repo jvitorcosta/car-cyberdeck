@@ -87,4 +87,11 @@ describe("server", () => {
     const r = await fetch(`${base}/stats?days=1`, { headers: { Authorization: `Bearer ${SECRET}` } });
     expect((await r.json()).n).toBe(1);
   });
+
+  it("GET /stats clamps a huge days value", async () => {
+    const { base, post } = await start(async () => ok);
+    await post({ deck: "black", text: "toca Djavan" });
+    const get = (q: string) => fetch(`${base}/stats?days=${q}`, { headers: { Authorization: `Bearer ${SECRET}` } }).then((r) => r.json());
+    expect(await get("1e12")).toEqual(await get("90"));
+  });
 });

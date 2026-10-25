@@ -45,4 +45,11 @@ describe("TraceLog", () => {
   it("is empty-safe", () => {
     expect(new TraceLog(join(tmpdir(), "no-such-traces-dir")).stats(1)).toEqual({ n: 0, p50Ms: 0, p95Ms: 0, costUsd: 0, byPath: {} });
   });
+  it("clamps days to 90 so a huge value cannot loop forever", () => {
+    const log = new TraceLog(mkdtempSync(join(tmpdir(), "traces-")));
+    log.write(trace(100));
+    const t0 = Date.now();
+    expect(log.stats(1e12)).toEqual(log.stats(90));
+    expect(Date.now() - t0).toBeLessThan(1000);
+  });
 });

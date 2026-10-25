@@ -37,6 +37,7 @@ export function costOf(model: string, usage: Anthropic.Usage): number {
 }
 
 const DAY_MS = 86_400_000;
+export const MAX_DAYS = 90;
 const dayName = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 function percentile(sorted: number[], q: number): number {
@@ -54,7 +55,8 @@ export class TraceLog {
 
   stats(days: number): { n: number; p50Ms: number; p95Ms: number; costUsd: number; byPath: Record<string, number> } {
     const traces: Trace[] = [];
-    for (let i = 0; i < Math.max(1, days); i++) {
+    const span = Math.min(MAX_DAYS, Math.max(1, Math.floor(Number(days)) || 1));
+    for (let i = 0; i < span; i++) {
       const file = join(this.dir, `${dayName(this.now() - i * DAY_MS)}.jsonl`);
       if (!existsSync(file)) continue;
       for (const line of readFileSync(file, "utf8").split("\n")) {
