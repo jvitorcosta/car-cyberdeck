@@ -27,23 +27,24 @@ static void check_screen(Screen s, const Rect* shown, int nShown) {
 }
 
 void test_rects_inside_screen_and_apart() {
-    const Rect menu[] = {HEADER, CLOCK_BAND, LIGHTS_BAND};
+    const Rect menu[] = {HEADER, CLOCK_BAND, TRIP_BAND, LIGHTS_BAND, PROMPT_BAND};
     const Rect lights[] = {STATUS, LEVEL};
     const Rect karaoke[] = {KARAOKE_BODY};
-    check_screen(Screen::Menu, menu, 3);
+    check_screen(Screen::Menu, menu, 5);
     check_screen(Screen::Lights, lights, 2);
     check_screen(Screen::Karaoke, karaoke, 1);
 }
 
-// The dashboard: header, clock + weather (with the trip row), lights, then the three items at the
-// bottom, top to bottom.
+// The dashboard: header, clock + weather (with the HI / LO row), the trip, the lights, the prompt
+// line, then the three items at the bottom, top to bottom, each band right under the one before.
 void test_menu_bands_stack() {
-    TEST_ASSERT_TRUE(HEADER.y == 0 && HEADER.y + HEADER.h == CLOCK_BAND.y);
-    TEST_ASSERT_EQUAL_INT(CLOCK_BAND.y + CLOCK_BAND.h, LIGHTS_BAND.y);
+    const Rect bands[] = {HEADER, CLOCK_BAND, TRIP_BAND, LIGHTS_BAND, PROMPT_BAND};
+    TEST_ASSERT_EQUAL_INT(0, HEADER.y);
+    for (int i = 1; i < 5; i++) TEST_ASSERT_EQUAL_INT(bands[i - 1].y + bands[i - 1].h, bands[i].y);
+    for (const Rect& r : bands) TEST_ASSERT_TRUE(r.x == 0 && r.w == 320 && r.h > 0);
     const Rect items = rect(Screen::Menu, M_ITEM0);
-    TEST_ASSERT_TRUE(LIGHTS_BAND.y + LIGHTS_BAND.h <= items.y);
+    TEST_ASSERT_EQUAL_INT(items.y - 4, PROMPT_BAND.y + PROMPT_BAND.h);  // 4 rows that snap to the items
     TEST_ASSERT_EQUAL_INT(236, items.y + items.h);  // 4 px off the screen's bottom, as off its sides
-    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND}) TEST_ASSERT_TRUE(r.x == 0 && r.w == 320);
 }
 
 void test_menu_ids_and_hits() {
@@ -65,7 +66,8 @@ void test_menu_ids_and_hits() {
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 107, 214));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 212, 214));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 213, 214));
-    // just above the row (under the lights band) and below it (the screen's last rows), still the item
+    // just above the row (under the prompt line) and below it (the screen's last rows), still the item
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 188));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 189));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 239));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 319, 239));
@@ -92,7 +94,7 @@ void test_hit_snaps_and_ignores_display_rects() {
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, LEVEL.x + 50, LEVEL.y + 20));
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, STATUS.x + 50, STATUS.y + 5));
     // The dashboard's bands are display only, even the rows next to the items.
-    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND}) {
+    for (const Rect& r : {HEADER, CLOCK_BAND, TRIP_BAND, LIGHTS_BAND, PROMPT_BAND}) {
         for (int y = r.y; y < r.y + r.h; y++)
             for (int x = 0; x < 320; x += 7) TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, x, y));
     }

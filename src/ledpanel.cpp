@@ -1,16 +1,19 @@
 // The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
 // red only for problems, amber at night, faint scanlines, all caps) that drives the car's two
 // ELK-family LED controllers. Three screens, laid out by util/deckmenu:
-//   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands. The header line
-//           (CYBERDECK // HONDA CITY); the clock big with the date under it ("FRI 23 OCT"), and
-//           right of it the outside temperature big and the sky in words (see "Weather" below);
-//           under them one row: the trip line ending in a blinking block cursor left and
-//           "HI 32 LO 26  MANAUS" right (a message takes the whole row while it shows); a row per
-//           light with its colour chip, colour name and level (OFF, or -- NO LINK when the deck has
-//           no link to it); and at the bottom the three items "[LIGHTS]", "[KARAOKE]" (with a LIVE
-//           tag while the black deck plays a song with synced lyrics, dimmed otherwise: a tap then
-//           only says why) and "[MUSIC]" (a tap turns music mode on or off, an ON tag while on; see
-//           "Music mode" below). The song itself is on the Karaoke screen only
+//   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands, for what the
+//           car's panel and CarPlay don't show: the trip and the lights. The header line
+//           (CYBERDECK // HONDA CITY TOURING 2022); the clock big with the date under it ("FRI 23
+//           OCT"), and right of it the outside temperature big and the sky in words (see "Weather"
+//           below), "HI 32 LO 26  MANAUS" right-aligned under them; the trip: TRIP, its time big and
+//           the distance right ("12.4 KM", "-- NO LINK" while no speed source feeds it); both lights
+//           on one row, "IN [chip] ROSE 40%" | "OUT [chip] YELLOW 100%" (OFF, or -- NO LINK when the
+//           deck has no link to it); the prompt line: a message, music mode's readout, or just ">",
+//           with a blinking block cursor; and at the bottom the three items "[LIGHTS]",
+//           "[KARAOKE]" (with a LIVE tag while the black deck plays a song with synced lyrics,
+//           dimmed otherwise: a tap then only says why) and "[MUSIC]" (a tap turns music mode on or
+//           off, an ON tag while on; see "Music mode" below). The song itself is on the Karaoke
+//           screen only
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
 //           together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK 2/2",
 //           or "OUTSIDE: NO LINK" in ALERT), 2x4 colour buttons (tap one to set it and turn on,
@@ -24,8 +27,8 @@
 //           (see "Lyrics" below)
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
-// The STATUS line on Lights and the trip row on the Menu show a terminal message for 2.5 s
-// (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again (on the Menu: trip and HI / LO).
+// The STATUS line on Lights and the prompt line on the Menu show a terminal message for 2.5 s
+// (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again (on the Menu: ">" or the readout).
 // Each page's colour, intensity and power and the page last shown survive a reboot (NVS); the deck
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
@@ -41,7 +44,7 @@
 // (white turns to the amber at night; problems show in white on the red, orange and pink themes).
 // The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
 // Music mode: the MUSIC item has the black deck (the S3) listen with its mic and stream what it hears
-// over UDP (util/musicwire); the trip row then shows ">MUSIC 120 BPM  LVL 70%", ">LISTENING" (packets,
+// over UDP (util/musicwire); the prompt line then shows ">MUSIC 120 BPM  LVL 70%", ">LISTENING" (packets,
 // no music in them) or ">NO SIGNAL" (no packets for 3 s), and the song's three colours right of it.
 // Not kept over a reboot. The lights don't follow the music yet (see "Music mode" below).
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
@@ -205,8 +208,8 @@ static bool karaokeShownReady = false;  // as the Menu item was last drawn (lit 
 
 // Music mode (see "Music mode" below): on and off from the Menu's MUSIC item, never saved (boots
 // off). musicOn is loop()'s; musicWant is the same for the lyrics task (the keep-alive) and the music
-// task (the UDP socket). musicLine and musicPal are the readout and the song's colours as the trip
-// row draws them; musicTick() keeps them.
+// task (the UDP socket). musicLine and musicPal are the readout and the song's colours as the prompt
+// line draws them; musicTick() keeps them.
 static bool musicOn = false;
 static volatile bool musicWant = false;
 static char musicLine[32] = "";
@@ -629,8 +632,8 @@ static void drawLevel() {
 }
 
 // A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS
-// line, or in place of the Menu's trip row (trip and HI / LO), for MESSAGE_MS since messageAt;
-// loop() then puts the usual line back. A newer message replaces it, and so does a screen change (show() drops it), so none
+// line, or on the Menu's prompt line (in place of ">" or the music readout), for MESSAGE_MS since
+// messageAt; loop() then puts the usual line back. A newer message replaces it, and so does a screen change (show() drops it), so none
 // outlives its screen. Only loop() touches it (and setup(), before loop() starts).
 static constexpr uint32_t MESSAGE_MS = 2500;
 static constexpr uint32_t LAST_TRIP_MS = 6000;  // the boot's ">LAST TRIP ..." is worth longer to read
@@ -662,13 +665,14 @@ static void drawStatus() {
 }
 
 // ---- The Menu: a dashboard of stacked bands ----
-// Top to bottom (termlayout's DASH_* place them, test_termfont checks they fit): the header line;
-// the clock and the date left, the weather right, then the band's last row: the trip line left
-// (the block cursor after it) and today's HI / LO right, or a message across both while one shows;
-// the lights; the three items at the bottom. A MID rule under each band. Each part clears and draws
-// its own rows, so it is redrawn alone when what it shows changes: the clock each minute, the
-// weather on a new reading, the lights on a look or link change, the trip row when the trip's text
-// moves, the HI / LO line changes or a message comes or goes, the cursor's cell on a blink.
+// Top to bottom (termlayout places them, test_termfont checks they fit): the header line; the clock
+// and the date left, the weather right, today's HI / LO under them; the trip (its time big, the
+// distance right); both lights on one row; the prompt line (a message, music mode's readout, or just
+// ">") with its block cursor; the three items at the bottom. A MID rule under each band but the
+// prompt line. Each part clears and draws its own rows, so it is redrawn alone when what it shows
+// changes: the clock each minute, the weather on a new reading, the trip when its minute or its
+// tenth of a km moves, the lights on a look or link change, the prompt line when a message comes or
+// goes or the readout changes, the cursor's cell on a blink.
 
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
@@ -680,10 +684,10 @@ static void drawHeader() {
     drawRule(HEADER_RULE_Y);
 }
 
-// The clock band's last row (trip, HI / LO, messages): the first row its ink reaches (an accented
-// capital in the HI / LO line's city, "SÃO PAULO"), where its clear starts and the parts above it
-// stop theirs, so neither takes the other.
-static int tripRowTop() { return TRIP_ROW_BASE - termfont::accentAscent(Face::SMALL); }
+// The clock band's last row (HI / LO): the first row its ink reaches (an accented capital in the
+// city, "SÃO PAULO"), where its clear starts and the parts above it stop theirs, so neither takes
+// the other.
+static int hiLoRowTop() { return HILO_BASE - termfont::accentAscent(Face::SMALL); }
 
 // The clock's minute of the day on screen (-1: not synced, "--:--") and its date, read together
 // (netclock::localNow) so they never straddle midnight; updateDayNight keeps them.
@@ -699,7 +703,7 @@ static void drawClock() {
     char date[16];
     dashtext::date(clockMin >= 0, clockY, clockMonth, clockDay, date, sizeof(date));
     const int top = HEADER_RULE_Y + 1;
-    clearBg(RULE_X0, top, DASH_SPLIT - RULE_X0, tripRowTop() - top);  // down to the trip row
+    clearBg(RULE_X0, top, DASH_SPLIT - RULE_X0, hiLoRowTop() - top);  // down to the HI / LO row
     tft.setTextColor(pal(termpal::TEXT));
     text(s, DASH_X, CLOCK_Y, Face::BIG, TL_DATUM);
     tft.setTextColor(pal(termpal::MID));
@@ -709,9 +713,9 @@ static void drawClock() {
 // The weather's four texts as shown: the temperature ("32C", "--C" before the first reading), the sky
 // in words ("PARTLY CLOUDY"; nothing before a reading), "HI 32 LO 26  MANAUS" (">OFFLINE", in ALERT,
 // while no reading ever came and the last try failed, or there's no WiFi; "HI -- LO --" before the
-// first try), and the same without the city ("HI 32 LO 26"), for when the city wouldn't clear the
-// trip line. A failed try keeps the last good reading on screen. wxShown is what is on screen: a new
-// reading redraws the part only when one of them changed.
+// first try), and the same without the city ("HI 32 LO 26"), for when the city wouldn't fit its row.
+// A failed try keeps the last good reading on screen. wxShown is what is on screen: a new reading
+// redraws the part only when one of them changed.
 static constexpr int N_WX_TEXT = 4;
 static char wxShown[N_WX_TEXT][48];
 
@@ -727,60 +731,93 @@ static void weatherTexts(char (&t)[N_WX_TEXT][48]) {
     else snprintf(t[3], sizeof(t[3]), "%s", t[2]);  // already short
 }
 
-// The clock band's right above the trip row, right-aligned: the temperature (BIG, TEXT) and the sky
-// (SMALL, MID). Takes the weather's texts into wxShown; the HI / LO line is the trip row's.
+// The clock band's right above the HI / LO row, right-aligned: the temperature (BIG, TEXT) and the
+// sky (SMALL, MID). Takes the weather's texts into wxShown; the HI / LO row is drawHiLoRow's.
 static void drawWeatherTop() {
     weatherTexts(wxShown);
     const int top = HEADER_RULE_Y + 1;
-    clearBg(DASH_SPLIT, top, RULE_X1 - DASH_SPLIT, tripRowTop() - top);
+    clearBg(DASH_SPLIT, top, RULE_X1 - DASH_SPLIT, hiLoRowTop() - top);
     tft.setTextColor(pal(termpal::TEXT));
     text(wxShown[0], DASH_RIGHT, CLOCK_Y, Face::BIG, TR_DATUM);
     tft.setTextColor(pal(termpal::MID));
     text(wxShown[1], DASH_RIGHT, WORDS_Y, Face::SMALL, TR_DATUM);
 }
 
-// The lights band: a row per light, no label (the rows name the lights, and the clock leads): its
-// name (BODY, MID) and what lightstatus::of says of it: on, a chip of its colour, the colour name
-// (TITLE, TEXT) and its level right-aligned; off, a DIM outlined chip and OFF in DIM; no link,
-// "-- NO LINK" in ALERT and no chip (never its last look: the deck can't tell what a light it has
-// lost shows).
-static void drawLightsBand() {
-    const int top = CLOCK_RULE_Y + 1;
-    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, LIGHTS_RULE_Y - top);
-    for (int i = 0; i < N_CTRL; i++) {
-        const int base = LIGHT_ROW_BASE + i * LIGHT_ROW_DY;
-        const Look& l = looks[i + 1];
-        tft.setTextColor(pal(termpal::MID));
-        text(controllers[i].label, DASH_X, base, Face::BODY, BL_DATUM);  // INSIDE, OUTSIDE
-        const lightstatus::State st = lightstatus::of(linkUp(controllers[i]), l.lit);
-        if (st == lightstatus::State::NoLink) {
-            tft.setTextColor(pal(termpal::ALERT));
-            text("-- NO LINK", LIGHT_NAME_X, base, Face::TITLE, BL_DATUM);
-            continue;
-        }
-        drawChip(LIGHT_CHIP_X, base - LIGHT_CHIP_H, LIGHT_CHIP_W, LIGHT_CHIP_H, l, false);  // on TITLE's caps
-        if (st == lightstatus::State::Off) {
-            tft.setTextColor(pal(termpal::DIM));
-            text("OFF", LIGHT_NAME_X, base, Face::TITLE, BL_DATUM);
-            continue;
-        }
-        char name[12], pct[8];
-        upper(SWATCHES[l.swatch].name, name, sizeof(name));
-        snprintf(pct, sizeof(pct), "%u%%", static_cast<unsigned>(l.pct));
-        tft.setTextColor(pal(termpal::TEXT));
-        text(name, LIGHT_NAME_X, base, Face::TITLE, BL_DATUM);
-        text(pct, DASH_RIGHT, base, Face::TITLE, BR_DATUM);
-    }
+// The clock band's last row, cleared whole (from its ink's top to the band's rule, rule to rule
+// across): the HI / LO line (SMALL, DIM; ">OFFLINE" in ALERT) right-aligned, without its city when
+// that wouldn't fit (termlayout::hiLoFits; alone on its row, even a 23-letter city does).
+static void drawHiLoRow() {
+    const int top = hiLoRowTop();
+    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, CLOCK_RULE_Y - top);
+    const char* hiLo = hiLoFits(wxShown[2]) ? wxShown[2] : wxShown[3];
+    tft.setTextColor(pal(isOffline(hiLo) ? termpal::ALERT : termpal::DIM));
+    text(hiLo, DASH_RIGHT, HILO_BASE, Face::SMALL, BR_DATUM);
+}
+
+// The weather after a new reading: the temperature and the sky, then the HI / LO row.
+static void drawWeather() {
+    drawWeatherTop();
+    drawHiLoRow();
 }
 
 // The trip meter: time since the first loop() pass (the car started the deck), kilometres once a
-// speed feeds it. The trip row shows it; tripTick() redraws that row when its text would change
+// speed feeds it. The trip band shows it; tripTick() redraws the band when its text would change
 // (every minute, or every 0.1 km).
 static tripmeter::Meter tripMeter;
 
+// The trip band, cleared between its rules and drawn again: TRIP (SMALL, MID), the time (BIG, TEXT)
+// after it and the distance right-aligned (BODY, MID: "12.4 KM", "-- NO LINK" while no speed source
+// has fed the meter), on one baseline. Digits and capitals: no accent rises past BIG's ascent.
+static void drawTripBand() {
+    const tripmeter::Trip t = tripMeter.trip();
+    char hm[16], dist[16];
+    tripmeter::elapsed(t, hm, sizeof(hm));
+    tripmeter::distance(t, dist, sizeof(dist));
+    clearBg(RULE_X0, CLOCK_RULE_Y + 1, RULE_X1 - RULE_X0, TRIP_RULE_Y - CLOCK_RULE_Y - 1);
+    tft.setTextColor(pal(termpal::MID));
+    text(TRIP_LABEL, DASH_X, TRIP_BASE, Face::SMALL, BL_DATUM);
+    text(dist, DASH_RIGHT, TRIP_BASE, Face::BODY, BR_DATUM);
+    tft.setTextColor(pal(termpal::TEXT));
+    text(hm, tripTimeX(), TRIP_BASE, Face::BIG, BL_DATUM);
+}
+
+// The lights row, cleared between its rules and drawn again: INSIDE left of a vertical MID rule,
+// OUTSIDE right of it, each its label (IN / OUT, BODY, MID) and what lightstatus::of says of it: on,
+// a chip of its colour on the caps and "ROSE 40%" (BODY, TEXT); off, a DIM outlined chip and OFF in
+// DIM; no link, "-- NO LINK" in ALERT and no chip (never its last look: the deck can't tell what a
+// light it has lost shows).
+static_assert(N_CTRL == N_LIGHT_LABELS, "a label per light");
+static void drawLightsBand() {
+    const int top = TRIP_RULE_Y + 1;
+    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, LIGHTS_RULE_Y - top);
+    tft.drawFastVLine(LIGHTS_SPLIT, top, LIGHTS_RULE_Y - top, pal(termpal::MID));
+    for (int i = 0; i < N_CTRL; i++) {
+        const Look& l = looks[i + 1];
+        tft.setTextColor(pal(termpal::MID));
+        text(LIGHT_LABELS[i], lightX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+        const lightstatus::State st = lightstatus::of(linkUp(controllers[i]), l.lit);
+        if (st == lightstatus::State::NoLink) {
+            tft.setTextColor(pal(termpal::ALERT));
+            text("-- NO LINK", lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+            continue;
+        }
+        drawChip(lightChipX(i), LIGHT_ROW_BASE - LIGHT_CHIP_H, LIGHT_CHIP_W, LIGHT_CHIP_H, l, false);  // on BODY's caps
+        if (st == lightstatus::State::Off) {
+            tft.setTextColor(pal(termpal::DIM));
+            text("OFF", lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+            continue;
+        }
+        char name[12], s[32];
+        upper(SWATCHES[l.swatch].name, name, sizeof(name));
+        snprintf(s, sizeof(s), "%s %u%%", name, static_cast<unsigned>(l.pct));
+        tft.setTextColor(pal(termpal::TEXT));
+        text(s, lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+    }
+}
+
 // The block cursor: one SMALL cell (as wide as a character, as tall as the caps) at the end of the
-// trip line, or of the message while one shows, blinking at ~1 Hz. Only its cell is redrawn. -1 when
-// it would pass DASH_RIGHT; the longest trip line and message still leave it room (test_termfont).
+// prompt line's text, blinking at ~1 Hz. Only its cell is redrawn. -1 when it would pass DASH_RIGHT;
+// the longest message and readout still leave it room (test_termfont).
 static constexpr uint32_t BLINK_MS = 500;
 static int cursorX = -1;
 static bool cursorOn = false;
@@ -789,13 +826,13 @@ static void drawCursor(bool on) {
     cursorOn = on;
     if (cursorX < 0) return;
     const int cap = termfont::capHeight(Face::SMALL), w = termfont::cell(Face::SMALL);
-    if (on) tft.fillRect(cursorX, TRIP_ROW_BASE - cap, w, cap, pal(termpal::TEXT));
-    else clearBg(cursorX, TRIP_ROW_BASE - cap, w, cap);
+    if (on) tft.fillRect(cursorX, PROMPT_BASE - cap, w, cap, pal(termpal::TEXT));
+    else clearBg(cursorX, PROMPT_BASE - cap, w, cap);
 }
 
 static bool blinkPhase() { return (millis() / BLINK_MS) % 2 == 0; }
 
-// The cursor goes to x on the trip row (whose clear has taken its old cell).
+// The cursor goes to x on the prompt line (whose clear has taken its old cell).
 static void placeCursor(int x) {
     cursorX = x + termfont::cell(Face::SMALL) <= DASH_RIGHT ? x : -1;
     drawCursor(blinkPhase());
@@ -806,49 +843,32 @@ static void blinkCursor() {
     if (screen == Screen::Menu && blinkPhase() != cursorOn) drawCursor(!cursorOn);
 }
 
-// The clock band's last row, cleared whole (from its ink's top to the band's rule, rule to rule
-// across) and drawn again: while a message shows, just the message (TEXT, ALERT for a problem) with
-// the cursor after it; else the trip line (SMALL, TEXT) with the cursor after it, and right-aligned
-// the HI / LO line (SMALL, DIM; ">OFFLINE" in ALERT), without its city when that wouldn't clear the
-// cursor (termlayout::besideTrip; a 23-letter city beside the longest trip). In music mode the
-// readout (TEXT, ">NO SIGNAL" too: it's no fault of the deck's) takes the trip line's place, its
-// cursor after it, and the song's three colours right-aligned in place of HI / LO. Redrawn on a trip
-// change, a weather change, a readout change, or a message coming or going.
-static void drawTripRow() {
-    const int top = tripRowTop();
-    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, CLOCK_RULE_Y - top);
+// The prompt line, cleared whole (under the lights' rule, rule to rule across, down to the band's
+// end: an accented capital and a descender stay inside) and drawn again, the cursor after its text:
+// while a message shows, the message (SMALL, TEXT, ALERT for a problem); in music mode the readout
+// (TEXT, ">NO SIGNAL" too: it's no fault of the deck's) and the song's three colours right-aligned;
+// else just ">". Redrawn on a message coming or going and on a readout change.
+static void drawPrompt() {
+    const int top = LIGHTS_RULE_Y + 1;
+    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, deckmenu::PROMPT_BAND.y + deckmenu::PROMPT_BAND.h - top);
     if (message[0]) {
         tft.setTextColor(msgInk(message));
-        placeCursor(DASH_X + text(message, DASH_X, TRIP_ROW_BASE, Face::SMALL, BL_DATUM));
+        placeCursor(DASH_X + text(message, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
         return;
     }
-    if (musicOn) {
-        tft.setTextColor(pal(termpal::TEXT));
-        const int endX = DASH_X + text(musicLine, DASH_X, TRIP_ROW_BASE, Face::SMALL, BL_DATUM);
-        for (int k = 0; musicPalOk && k < 3; k++) {
-            const songpalette::Rgb& c = musicPal.c[k];
-            const int x = DASH_RIGHT - (3 - k) * MUSIC_CHIP - (2 - k) * MUSIC_CHIP_GAP;
-            const uint32_t rgb = (static_cast<uint32_t>(c.r) << 16) | (static_cast<uint32_t>(c.g) << 8) | c.b;
-            tft.fillRect(x, TRIP_ROW_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, tint(rgb));
-        }
-        placeCursor(endX);
-        return;
-    }
-    char s[40];
-    tripmeter::line(tripMeter.trip(), s, sizeof(s));
     tft.setTextColor(pal(termpal::TEXT));
-    const int tripEndX = DASH_X + text(s, DASH_X, TRIP_ROW_BASE, Face::SMALL, BL_DATUM);
-    const char* hiLo = besideTrip(s, wxShown[2]) ? wxShown[2] : wxShown[3];
-    tft.setTextColor(pal(isOffline(hiLo) ? termpal::ALERT : termpal::DIM));
-    text(hiLo, DASH_RIGHT, TRIP_ROW_BASE, Face::SMALL, BR_DATUM);
-    placeCursor(tripEndX);
-}
-
-// The weather after a new reading: the temperature and the sky, then the trip row for the HI / LO
-// line (not while a message holds the row: it comes back with the weather's texts when that goes).
-static void drawWeather() {
-    drawWeatherTop();
-    if (!message[0]) drawTripRow();
+    if (!musicOn) {
+        placeCursor(DASH_X + text(PROMPT_IDLE, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
+        return;
+    }
+    const int endX = DASH_X + text(musicLine, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM);
+    for (int k = 0; musicPalOk && k < 3; k++) {
+        const songpalette::Rgb& c = musicPal.c[k];
+        const int x = DASH_RIGHT - (3 - k) * MUSIC_CHIP - (2 - k) * MUSIC_CHIP_GAP;
+        const uint32_t rgb = (static_cast<uint32_t>(c.r) << 16) | (static_cast<uint32_t>(c.g) << 8) | c.b;
+        tft.fillRect(x, PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, tint(rgb));
+    }
+    placeCursor(endX);
 }
 
 // The whole dashboard but its three items (drawAll draws those as buttons).
@@ -856,10 +876,13 @@ static void drawDash() {
     drawHeader();
     drawClock();
     drawWeatherTop();
-    drawTripRow();
+    drawHiLoRow();
     drawRule(CLOCK_RULE_Y);
+    drawTripBand();
+    drawRule(TRIP_RULE_Y);
     drawLightsBand();
     drawRule(LIGHTS_RULE_Y);
+    drawPrompt();
 }
 
 // The terminal's boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
@@ -903,11 +926,11 @@ static void drawLightState() {
     else if (screen == Screen::Menu) drawLightsBand();
 }
 
-// What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's trip row
-// (then the trip and HI / LO again).
+// What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's prompt
+// line (then the music readout or ">" again).
 static void drawMessage() {
     if (screen == Screen::Lights) drawStatus();
-    else if (screen == Screen::Menu) drawTripRow();
+    else if (screen == Screen::Menu) drawPrompt();
 }
 
 // After a look changed (a tap, voice, the watch, Y): everything that shows it (Lights' STATUS line
@@ -1253,7 +1276,7 @@ static bool tripSavedValid = false;
 
 // The OBD link will call this with each speed reading (km/h). It may run on another core, so it
 // only stores the latest reading; tripTick() on the loop task integrates it once a second (the
-// Meter isn't thread-safe). Nothing calls it yet and no speed is faked, so the trip line shows "--" km.
+// Meter isn't thread-safe). Nothing calls it yet and no speed is faked, so the trip band shows "-- NO LINK".
 static void tripSpeed(uint16_t kmh) __attribute__((unused));
 static void tripSpeed(uint16_t kmh) {
     // The speed first, then the time that makes it count: 32-bit and 16-bit writes are atomic on the
@@ -1277,7 +1300,7 @@ static void showLastTrip() {
     setMessage(m, LAST_TRIP_MS);
 }
 
-// Each loop pass: once a second the seconds, and the trip row if the trip's text changed; once a minute
+// Each loop pass: once a second the seconds, and the trip band if the trip's text changed; once a minute
 // the NVS record (when it differs from the last one written).
 static void tripTick() {
     const uint32_t now = millis();
@@ -1302,7 +1325,7 @@ static void tripTick() {
     if (!shown || t.seconds / 60 != on.seconds / 60 || t.meters / 100 != on.meters / 100 || t.hasDistance != on.hasDistance) {
         shown = true;
         on = t;
-        if (screen == Screen::Menu && !message[0]) drawTripRow();  // a message holds the row: it brings the trip back
+        if (screen == Screen::Menu) drawTripBand();
     }
     static uint32_t savedAt = 0;
     if (!savedAt) savedAt = now ? now : 1;
@@ -1334,7 +1357,7 @@ static void applyPreset(int slot0) {
     setMessage(m);
     updateTheme();
     drawLooks();
-    drawMessage();  // Lights' STATUS line, the Menu's trip row
+    drawMessage();  // Lights' STATUS line, the Menu's prompt line
 }
 
 // A press is averaged over its first SETTLE_MS (a fingertip's first readings jump around) and acts
@@ -1429,7 +1452,7 @@ static void press(int id) {
     switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
     case deckmenu::LIGHTS: show(Screen::Lights); break;
     case deckmenu::KARAOKE:
-        // dimmed: no song to sing along, so only a message (on the trip row) says why
+        // dimmed: no song to sing along, so only a message (on the prompt line) says why
         if (karaokeReady()) {
             show(Screen::Karaoke);
         } else {
@@ -1903,8 +1926,8 @@ static void lyricsTick() {
 // closed again when music mode goes off or an update has the WiFi. It takes packets only from the
 // black deck's address (musicPeer), counts the beats itself (musicreadout::Beats, every FeatPkt) and
 // publishes the latest FeatPkt, its time and the beat rate, and the latest PalPkt, under musicMux.
-// musicTick() (loop) reads them at most MUSIC_TICK_MS apart and redraws the trip row when its text or
-// the colours changed. The lights don't follow the music yet.
+// musicTick() (loop) reads them at most MUSIC_TICK_MS apart and redraws the prompt line when its text
+// or the colours changed. The lights don't follow the music yet.
 struct MusicHeard {
     bool heard = false;  // a FeatPkt came since the socket opened
     uint32_t at = 0;     // millis() it came
@@ -1989,8 +2012,8 @@ static void musicTask(void*) {
 }
 
 // Music mode on or off (the MUSIC item): the tasks follow musicWant (the music task is started the
-// first time), and ">MUSIC ON" / ">MUSIC OFF" shows on the trip row like any message; the readout
-// (or the trip line) comes back after it. The caller redraws the item.
+// first time), and ">MUSIC ON" / ">MUSIC OFF" shows on the prompt line like any message; the readout
+// (or the idle ">") comes back after it. The caller redraws the item.
 static void setMusic(bool on) {
     musicOn = on;
     musicWant = on;
@@ -2014,8 +2037,8 @@ static bool samePalette(const songpalette::Palette& a, const songpalette::Palett
 }
 
 // In loop(), while music mode is on: the readout from the latest packets, at most every
-// MUSIC_TICK_MS; the trip row is redrawn only when its text or the colours changed (and not while a
-// message holds the row: it brings the readout back as it goes).
+// MUSIC_TICK_MS; the prompt line is redrawn only when its text or the colours changed (and not while
+// a message holds the line: it brings the readout back as it goes).
 static void musicTick() {
     static uint32_t tickAt = 0;
     if (!musicOn || millis() - tickAt < MUSIC_TICK_MS) return;
@@ -2033,7 +2056,7 @@ static void musicTick() {
     snprintf(musicLine, sizeof(musicLine), "%s", line);
     musicPalOk = h.palOk;
     musicPal = h.pal.p;
-    if (screen == Screen::Menu && !message[0]) drawTripRow();
+    if (screen == Screen::Menu && !message[0]) drawPrompt();
 }
 
 // ---- Update over WiFi (net/ota): its page holds the screen ----

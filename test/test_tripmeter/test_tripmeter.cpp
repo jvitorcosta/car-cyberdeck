@@ -6,12 +6,12 @@
 void setUp() {}
 void tearDown() {}
 
-static void lineOf(uint32_t sec, uint32_t m, bool has, char* b, size_t n) {
+static tripmeter::Trip tripOf(uint32_t sec, uint32_t m, bool has) {
     tripmeter::Trip t;
     t.seconds = sec;
     t.meters = m;
     t.hasDistance = has;
-    tripmeter::line(t, b, n);
+    return t;
 }
 
 void test_sixty_kmh_for_a_minute_is_a_kilometre() {
@@ -57,24 +57,36 @@ void test_seconds_are_kept() {
     TEST_ASSERT_EQUAL_UINT32(754, m.trip().seconds);
 }
 
-void test_line_times() {
-    char b[40];
-    lineOf(0, 0, false, b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING("TRIP -- KM  0:00", b);
-    lineOf(59 * 60, 0, false, b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING("TRIP -- KM  0:59", b);
-    lineOf(125 * 60, 0, false, b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING("TRIP -- KM  2:05", b);
-    lineOf(12 * 3600 + 5 * 60, 1000, true, b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING("TRIP 1.0 KM  12:05", b);
+// The dashboard's trip band: the time (h:mm) and, apart, the distance.
+void test_elapsed() {
+    char b[16];
+    tripmeter::elapsed(tripOf(0, 0, false), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("0:00", b);
+    tripmeter::elapsed(tripOf(59 * 60 + 59, 0, false), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("0:59", b);
+    tripmeter::elapsed(tripOf(125 * 60, 0, false), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("2:05", b);
+    tripmeter::elapsed(tripOf(12 * 3600 + 5 * 60, 1000, true), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("12:05", b);
+    tripmeter::elapsed(tripOf(100 * 3600, 0, false), b, sizeof(b));  // hours aren't capped
+    TEST_ASSERT_EQUAL_STRING("100:00", b);
 }
 
-void test_line_distance_rounds_down() {
-    char b[40];
-    lineOf(32 * 60, 12345, true, b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING("TRIP 12.3 KM  0:32", b);
-    lineOf(0, 50, true, b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING("TRIP 0.0 KM  0:00", b);
+void test_distance_rounds_down() {
+    char b[16];
+    tripmeter::distance(tripOf(32 * 60, 12345, true), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("12.3 KM", b);
+    tripmeter::distance(tripOf(0, 50, true), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("0.0 KM", b);
+    tripmeter::distance(tripOf(0, 999900, true), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("999.9 KM", b);
+}
+
+// No speed source has fed the meter: no made-up 0.0, the link it lacks.
+void test_distance_without_a_speed() {
+    char b[16];
+    tripmeter::distance(tripOf(32 * 60, 0, false), b, sizeof(b));
+    TEST_ASSERT_EQUAL_STRING("-- NO LINK", b);
 }
 
 void test_last_fits_the_message_buffer() {
@@ -134,8 +146,9 @@ int main(int, char**) {
     RUN_TEST(test_remainder_carries_across_calls);
     RUN_TEST(test_has_distance_only_after_a_speed);
     RUN_TEST(test_seconds_are_kept);
-    RUN_TEST(test_line_times);
-    RUN_TEST(test_line_distance_rounds_down);
+    RUN_TEST(test_elapsed);
+    RUN_TEST(test_distance_rounds_down);
+    RUN_TEST(test_distance_without_a_speed);
     RUN_TEST(test_last_fits_the_message_buffer);
     RUN_TEST(test_encode_decode_round_trip);
     RUN_TEST(test_decode_rejects_bad_input);

@@ -10,7 +10,7 @@ namespace deckmenu {
 struct Rect { int16_t x, y, w, h; };
 enum class Screen : uint8_t { Menu, Lights, Karaoke };
 
-// Menu (the dashboard): three items side by side, finger-sized, at the bottom under the lights band;
+// Menu (the dashboard): three items side by side, finger-sized, at the bottom under the prompt line;
 // everything else on it is display only (the bands below).
 enum MenuId : int { M_ITEM0 = 0, M_N = 3 };
 enum Item : uint8_t { LIGHTS, KARAOKE, MUSIC };  // later: CAR, HEART
@@ -26,10 +26,12 @@ enum KaraokeId : int { K_BACK = 0, K_N = 1 };
 Rect rect(Screen s, int id);
 
 // Display only: never a hit, never a neighbour.
-// The Menu's bands, top to bottom: the header line, the clock and the weather (its last row the
-// trip, HI / LO and the messages), the lights, then (the items). A tap in a band doesn't snap to an
-// item; the 4 rows between the lights band and the items, and those under them, do.
-constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 72}, LIGHTS_BAND{0, 94, 320, 94};  // menu
+// The Menu's bands, top to bottom, each from the rule above it: the header line, the clock and the
+// weather (its last row HI / LO), the trip, the two lights on one row, the prompt line (the
+// messages, the music readout), then (the items). A tap in a band doesn't snap to an item; the 4
+// rows between the prompt line and the items, and those under them, do.
+constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 72}, TRIP_BAND{0, 94, 320, 41};      // menu
+constexpr Rect LIGHTS_BAND{0, 135, 320, 31}, PROMPT_BAND{0, 166, 320, 22};                        // menu
 constexpr Rect STATUS{4, 40, 312, 12}, LEVEL{106, 190, 108, 46};                                 // lights
 constexpr Rect KARAOKE_BODY{0, 44, 320, 196};                                                    // karaoke
 
