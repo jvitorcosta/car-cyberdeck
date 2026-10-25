@@ -100,8 +100,9 @@ on the deck and there is no hold-to-save. Each sets **both** lights, both on:
   asked, and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
   `Rose: inside Pink 40 percent, outside Pink 100 percent`. Siri may hear "purpura" as "purple",
   which is the colour; say "preset four" for that one.
-- **Watch**: the Honda City app has a fourth page, **PRESETS** (the names with the two dots each).
-  START there lists them by name; pick one to apply it. "No presets yet" shows if `/presets` didn't
+- **Watch**: the Honda City app has a fourth page, **PRESETS**: each preset as a bar, inside on the
+  left and outside on the right, each half filled with its colour to its level. START there opens
+  the same bars as a list; START on one applies it. "No presets yet" shows if `/presets` didn't
   answer.
 - Presets with different looks inside and outside make the BOTH page show `MIX` (see "BOTH while
   the lights differ" above); the main screen shows each light's colour and level.
@@ -194,8 +195,14 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
   A colour or Off is sent for that zone (BOTH: both lights). Brightness opens a level screen whose
   fill rises and falls with UP/DOWN in 10 % steps; the deck gets the level 0.5 s after the last
   press.
-- **PRESETS page** (fourth page): the deck's four presets, names with their two dots. START opens a
-  list by name ("No presets yet" if the deck didn't answer); picking one applies it.
+- **PRESETS page** (fourth page): the deck's four presets as bars, the name over each. The left
+  half is the inside light, the right half the outside one, each filled from its left edge to its
+  level (the rest dark grey; a light that's off says OFF). START opens the same bars as a list
+  ("No presets yet" if the deck didn't answer): the focused bar is taller, outlined in white and
+  shows both levels. START on it applies it, buzzes, says APPLIED for a second and returns to the
+  pages; BACK leaves without applying.
+- **Purple** is `AA00FF` on the watch, not the deck's `#820AD1`: the watch's 64 colours turn that
+  into a pink next to Pink.
 - **Not connected**: when a light has no link, its page's bottom line says "Not connected" (on
   BOTH: "Inside not connected", "Outside not connected", or "Not connected" for both) in orange in
   place of the "START: change" hint. The page still shows that light's last known colour. The app

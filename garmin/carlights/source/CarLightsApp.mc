@@ -4,8 +4,9 @@
 // the hotspot works through Garmin Connect on iOS (tested 2026-10-22).
 //   ZonesView / ZonesDelegate: pages BOTH, INSIDE, OUTSIDE, PRESETS (UP/DOWN); START opens that
 //                              zone's list (ZoneMenuDelegate): colours with a dot, Brightness, Off;
-//                              on PRESETS, the deck's named presets to apply (PresetMenuDelegate)
-//   FavDots: a preset's two lights as two dots
+//                              on PRESETS, the deck's named presets as bars, START applies one
+//                              (PresetMenuDelegate)
+//   PresetBar: a preset as a bar, inside and outside filled to their levels; the list's rows
 //   LevelView / LevelDelegate: a zone's brightness, UP/DOWN in 10 % steps
 //   Deck: both lights' state, the presets, the controllers' links + the request queue
 //   HondaGlance: the card in the watch's glance loop (last state the app saw)

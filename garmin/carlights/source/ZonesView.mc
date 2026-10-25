@@ -1,10 +1,12 @@
 import Toybox.Graphics;
 import Toybox.Lang;
+import Toybox.Math;
 import Toybox.WatchUi;
 
 // The zone pages, all in the "filled" look (see Fill): BOTH shows inside (left) and outside
 // (right) as two columns filled up to their brightness; INSIDE and OUTSIDE fill the whole face.
-// A fourth page lists the deck's named presets. A controller that isn't linked says "Not connected".
+// A fourth page shows the deck's named presets as bars (see PresetBar). A controller that isn't
+// linked says "Not connected".
 // Page dots on the right; the status shows while something is being sent or failed.
 class ZonesView extends WatchUi.View {
     var page as Number = BOTH;  // opens on BOTH: every zone is one press away from it
@@ -62,8 +64,9 @@ class ZonesView extends WatchUi.View {
         }
     }
 
-    // The Presets page: PRESETS on top, a row per preset (its name and its two dots), and the hint
-    // or status at the bottom. "No presets yet" when /presets hasn't answered.
+    // The Presets page: PRESETS on top, each preset's bar as the list will show it (PresetBar; up
+    // to four, narrower where the round face is), and the hint or status at the bottom. "No presets
+    // yet" when /presets hasn't answered.
     private function presets(dc as Dc, cx as Number, h as Number) as Void {
         pill(dc, cx, 40, "PRESETS", Graphics.COLOR_WHITE);
         var list = _deck.presets;
@@ -72,13 +75,20 @@ class ZonesView extends WatchUi.View {
             dc.drawText(cx, cx, Graphics.FONT_SMALL, "No presets yet",
                         Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
+        // rows between the two pills, centred on the face: 32 px apart and 24 tall on the 255
+        var pitch = (h - 104) / 4;
+        pitch = pitch > 32 ? 32 : pitch;
+        var bh = pitch - 8;
+        var cy = h / 2;
         for (var i = 0; i < list.size() && i < 4; i++) {
-            var y = 82 + i * 32;
+            var y = cy - pitch * 3 / 2 + i * pitch;
+            var d = (y > cy ? y - cy : cy - y) + bh / 2;  // the row's edge farthest from the centre
+            var half = Math.sqrt(cx * cx - d * d).toNumber() - 10;
+            if (half > PresetBar.LIST_W / 2) {
+                half = PresetBar.LIST_W / 2;  // as wide as the list's (and clear of the page dots)
+            }
             var p = list[i] as Array;
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx - 62, y, Graphics.FONT_SMALL, p[0] as String,
-                        Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
-            new FavDots(p.slice(1, 7)).paint(dc, cx + 36, cx + 66, y, 11);
+            PresetBar.draw(dc, cx - half, y - bh / 2, half * 2, bh, p, p[0] as String, false);
         }
         var busy = _deck.status.length() > 0;
         if (busy || list.size() > 0) {

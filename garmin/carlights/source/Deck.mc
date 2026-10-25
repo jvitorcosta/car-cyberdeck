@@ -6,9 +6,10 @@ import Toybox.WatchUi;
 // The deck on the iPhone hotspot (net/wifi pins it there).
 const DECK_URL = "http://172.20.10.11";
 
-// [label, word sent to the deck, screen colour]: the deck's own screen colours.
+// [label, word sent to the deck, screen colour]: the deck's own screen colours, but purple, which
+// is #820AD1 on the deck and the lights: on the watch's 64 colours that turns pink, so AA00FF here.
 const COLORS = [
-    ["Purple", "purple", 0x820AD1], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
+    ["Purple", "purple", 0xAA00FF], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
     ["Pink", "pink", 0xFF0090], ["Green", "green", 0x00FF30], ["White", "white", 0xFFFFFF],
     ["Orange", "orange", 0xFF6A00], ["Yellow", "yellow", 0xFFD400],
 ];
