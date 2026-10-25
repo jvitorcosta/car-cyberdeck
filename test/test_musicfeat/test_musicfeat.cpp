@@ -205,6 +205,43 @@ static void test_speech_rarely_beats() {
     }
 }
 
+// The mic delivers ~0 for its first moments: the floor must not learn that as the room's level.
+static void check_startup_silence_then_hum(double silenceNoise) {
+    const Run r = run(15.5, [silenceNoise](long i, Noise& n) {
+        return i < RATE / 2 ? n.next(silenceNoise) : hum(n, i);
+    });
+    TEST_ASSERT_EQUAL_INT(0, r.beatsIn(5.0, 15.5));
+    for (size_t k = 0; k < r.takes.size(); ++k)
+        if ((double)(k + 1) * 256.0 / RATE > 5.0) TEST_ASSERT_FALSE(r.takes[k].present);
+    // The hum's bass power, from a hum-only run.
+    Analyzer ref, a;
+    Noise n1, n2;
+    int16_t buf[256];
+    long i = 0;
+    for (int b = 0; b < 15 * RATE / 256; ++b) {
+        for (int k = 0; k < 256; ++k, ++i) buf[k] = clip16(hum(n1, i));
+        ref.feed(buf, 256, (uint32_t)(i * 1000 / RATE));
+    }
+    i = 0;
+    for (int b = 0; b < 31 * RATE / 2 / 256; ++b) {
+        for (int k = 0; k < 256; ++k, ++i) buf[k] = clip16(i < RATE / 2 ? n2.next(silenceNoise) : hum(n2, i));
+        a.feed(buf, 256, (uint32_t)(i * 1000 / RATE));
+    }
+    TEST_ASSERT_TRUE(a.floorPower(0) > 0.5f * ref.floorPower(0));
+    TEST_ASSERT_TRUE(a.floorPower(0) < 2.0f * ref.floorPower(0));
+}
+static void test_startup_silence_then_hum() {
+    check_startup_silence_then_hum(0.0);
+    check_startup_silence_then_hum(2.0 / 1.0);
+}
+static void test_startup_silence_then_kicks() {
+    const Run r = run(10.5, [](long i, Noise& n) {
+        return i < RATE / 2 ? 0.0 : hum(n, i) + kick(i, 500, 1000, 2000.0);
+    });
+    const int beats = r.beatsIn(3.0, 10.0);
+    TEST_ASSERT_TRUE_MESSAGE(beats >= 14 && beats <= 18, "beats in seconds 3-10 should be about 2 per second");
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_hum_only_is_silent);
@@ -216,5 +253,7 @@ int main(int, char**) {
     RUN_TEST(test_block_size_does_not_matter);
     RUN_TEST(test_floor_readout);
     RUN_TEST(test_speech_rarely_beats);
+    RUN_TEST(test_startup_silence_then_hum);
+    RUN_TEST(test_startup_silence_then_kicks);
     return UNITY_END();
 }

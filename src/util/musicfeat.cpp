@@ -30,7 +30,7 @@ float Analyzer::run(Biquad& q, float x) {   // transposed direct form II
 }
 
 Analyzer::Analyzer()
-    : sum_{0, 0, 0}, fill_(0), hops_(0), floor_{0, 0, 0}, overHops_(0), prevBass_(0), flux_{}, fluxPos_(0), fluxPeak_(0),
+    : sum_{0, 0, 0}, fill_(0), hops_(0), seeded_(false), seedHops_(0), seedSum_{0, 0, 0}, floor_{0, 0, 0}, overHops_(0), prevBass_(0), flux_{}, fluxPos_(0), fluxPeak_(0),
       everBeat_(false), lastBeatMs_(0), anyBeat_(false), bestStrength_(0), eSmooth_(0), ePeak_(0),
       bright_(0), energy_(0), brightness_(0), presentRing_{}, presentPos_(0) {
     cFall_ = coef(HOP_S, FLOOR_FALL_S);
@@ -65,10 +65,19 @@ void Analyzer::hop(uint32_t hopMs) {
     float p[3];
     for (int k = 0; k < 3; ++k) p[k] = sum_[k] / (float)HOP;
     if (hops_ < WARMUP_HOPS) {
-        if (++hops_ == WARMUP_HOPS) {
-            for (int k = 0; k < 3; ++k) floor_[k] = p[k];
-            prevBass_ = p[0];
+        ++hops_;
+        return;
+    }
+    if (!seeded_) {
+        if (seedHops_ == 0 && p[0] + p[1] + p[2] <= FLOOR_MIN_POWER) return;   // start-up silence: nothing to learn yet
+        for (int k = 0; k < 3; ++k) seedSum_[k] += p[k];
+        if (++seedHops_ < FLOOR_SEED_HOPS) return;
+        for (int k = 0; k < 3; ++k) {
+            const float mean = seedSum_[k] / (float)FLOOR_SEED_HOPS;
+            floor_[k] = mean > FLOOR_MIN_POWER ? mean : FLOOR_MIN_POWER;
         }
+        prevBass_ = p[0];
+        seeded_ = true;
         return;
     }
 
@@ -107,7 +116,9 @@ void Analyzer::hop(uint32_t hopMs) {
     float over = 0.0f, floorSum = 0.0f;
     for (int k = 0; k < 3; ++k) {
         if (p[k] < floor_[k]) floor_[k] += (p[k] - floor_[k]) * cFall_;
+        else if (floor_[k] <= FLOOR_MIN_POWER) floor_[k] += (p[k] - floor_[k]) * cCatch_;   // never learned the hum yet: the hold must not freeze it
         else if (!holding) floor_[k] += (p[k] - floor_[k]) * rise;
+        if (floor_[k] < FLOOR_MIN_POWER) floor_[k] = FLOOR_MIN_POWER;
         floorSum += floor_[k];
         if (p[k] > floor_[k]) over += p[k] - floor_[k];
     }

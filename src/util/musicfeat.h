@@ -15,7 +15,13 @@ constexpr float TREBLE_HZ = 3000.0f;
 
 constexpr int HOP = 512;                      // analysis hop: 32 ms
 constexpr float HOP_S = 0.032f;
-constexpr int WARMUP_HOPS = 8;                // filters settling; the floor starts from this hop
+constexpr int WARMUP_HOPS = 8;                // filters settling; the floor can start from this hop
+// The ES8311 delivers ~0 samples right after mic::begin, so the floor must not learn that silence: it
+// waits for the first hop whose total power is over FLOOR_MIN_POWER (RMS 100; the real hum is ~400-750),
+// seeds from the mean of the next FLOOR_SEED_HOPS (~0.5 s), never sits below FLOOR_MIN_POWER, and a floor
+// at that minimum rises at FLOOR_CATCHUP_S even while beats hold it (so it cannot stay frozen at ~0).
+constexpr float FLOOR_MIN_POWER = 1.0e4f;
+constexpr int FLOOR_SEED_HOPS = 16;
 
 // Noise floor per band: the band power's lower envelope; held while beats are coming.
 constexpr float FLOOR_RISE_S = 30.0f, FLOOR_FALL_S = 2.0f;
@@ -68,6 +74,9 @@ private:
     float sum_[3];                 // power sums over the hop in progress
     int fill_;                     // samples in that hop
     int hops_;                     // hops done (warm-up counter)
+    bool seeded_;                  // the floors hold real audio
+    int seedHops_;                 // hops averaged into the seed so far
+    float seedSum_[3];
     float floor_[3];
     int overHops_;                 // hops the bass power has sat over its floor
     float cFall_, cRise_, cCatch_, cFluxPeak_, cAttack_, cRelease_, cEPeak_, cBright_;   // per-hop filter steps
