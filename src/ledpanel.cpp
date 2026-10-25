@@ -7,9 +7,10 @@
 //           under them one row: the trip line ending in a blinking block cursor left and
 //           "HI 32 LO 26  MANAUS" right (a message takes the whole row while it shows); a row per
 //           light with its colour chip, colour name and level (OFF, or -- NO LINK when the deck has
-//           no link to it); and at the bottom the two items "> [LIGHTS]" and "> [KARAOKE]" (the
-//           second with a LIVE tag while the black deck plays a song with synced lyrics, dimmed
-//           otherwise: a tap then only says why). The song itself is on the Karaoke screen only
+//           no link to it); and at the bottom the three items "[LIGHTS]", "[KARAOKE]" (with a LIVE
+//           tag while the black deck plays a song with synced lyrics, dimmed otherwise: a tap then
+//           only says why) and "[MUSIC]" (a tap turns music mode on or off, an ON tag while on; see
+//           "Music mode" below). The song itself is on the Karaoke screen only
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
 //           together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK 2/2",
 //           or "OUTSIDE: NO LINK" in ALERT), 2x4 colour buttons (tap one to set it and turn on,
@@ -29,7 +30,7 @@
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
 // /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
-// drives it too: the D-pad moves the focus (an inverted bar on the Menu's two items, a TEXT ring on
+// drives it too: the D-pad moves the focus (an inverted bar on the Menu's three items, a TEXT ring on
 // Lights and Karaoke; none is drawn while no controller is connected), A presses, B goes back to the
 // Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see "Xbox controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
@@ -39,6 +40,10 @@
 // typing or the calibration) takes that light's colour, termpal's three levels of it, day and night
 // (white turns to the amber at night; problems show in white on the red, orange and pink themes).
 // The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
+// Music mode: the MUSIC item has the black deck (the S3) listen with its mic and stream what it hears
+// over UDP (util/musicwire); the trip row then shows ">MUSIC 120 BPM  LVL 70%", ">LISTENING" (packets,
+// no music in them) or ">NO SIGNAL" (no packets for 3 s), and the song's three colours right of it.
+// Not kept over a reboot. The lights don't follow the music yet (see "Music mode" below).
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
 // mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
 // (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
@@ -64,6 +69,7 @@
 #include <Preferences.h>
 #include <TFT_eSPI.h>
 #include <WebServer.h>
+#include <lwip/sockets.h>
 #include "pins.h"
 #include "ui/backlight.h"
 #include "ui/termfont.h"
@@ -85,6 +91,8 @@
 #include "util/ledlook.h"
 #include "util/ledpresets.h"
 #include "util/ledvoice.h"
+#include "util/musicreadout.h"
+#include "util/musicwire.h"
 #include "util/otapage.h"
 #include "util/lightstatus.h"
 #include "util/pollpace.h"
@@ -194,6 +202,16 @@ static bool lyricsHeard() {
 // The black deck plays a song with synced lyrics: the Menu's KARAOKE item is lit and opens.
 static bool karaokeReady() { return karaoke::available(lyricsHeard(), song.deck.playing, song.deck); }
 static bool karaokeShownReady = false;  // as the Menu item was last drawn (lit or dimmed)
+
+// Music mode (see "Music mode" below): on and off from the Menu's MUSIC item, never saved (boots
+// off). musicOn is loop()'s; musicWant is the same for the lyrics task (the keep-alive) and the music
+// task (the UDP socket). musicLine and musicPal are the readout and the song's colours as the trip
+// row draws them; musicTick() keeps them.
+static bool musicOn = false;
+static volatile bool musicWant = false;
+static char musicLine[32] = "";
+static songpalette::Palette musicPal{};
+static bool musicPalOk = false;
 
 // ---- BLE ----
 
@@ -453,14 +471,15 @@ static void drawChrome(const Rect& r, const char* s, Face f, bool pressed, bool 
     text(s, r.x + r.w / 2, r.y + r.h / 2, f, MC_DATUM);
 }
 
-// A Menu item ("> [LIGHTS]"): a MID outline (it stands among the dashboard's text), the text left;
+// A Menu item ("[LIGHTS]"): a MID outline (it stands among the dashboard's text), the text top left;
 // the inverted bar when focused. Only the Xbox controller focuses (focus is -1 without it), so
-// without one both items look alike and the clock and the lights band lead. Dimmed (an item that
+// without one the items look alike and the clock and the lights band lead. Dimmed (an item that
 // won't open now): DIM text in a DIM border, the bar in DIM; a press keeps that look (only a second
-// DIM outline inside the border), since it won't open: the message is the feedback. `live`
-// (KARAOKE while it opens): a LIVE tag at the right edge, an inverted mini-label in the text's ink
-// with the ground's colour for letters (TEXT, not ALERT: red is for problems).
-static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim, bool live) {
+// DIM outline inside the border), since it won't open: the message is the feedback. `tag` (KARAOKE's
+// LIVE while it opens, MUSIC's ON while on; nullptr for none): under the text at the right edge, an
+// inverted mini-label in the text's ink with the ground's colour for letters (TEXT, not ALERT: red
+// is for problems).
+static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, bool dim, const char* tag) {
     uint16_t ink;
     if (dim) {
         clearBg(r);
@@ -476,13 +495,13 @@ static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, b
         ink = drawBox(r, pressed, inverted, 1, pal(termpal::TEXT));
     }
     tft.setTextColor(ink);
-    text(s, r.x + ROW_TEXT_X, r.y + r.h / 2, Face::BODY, ML_DATUM);
-    if (!live) return;
-    const int w = termfont::width(Face::SMALL, LIVE_TAG) + 2 * LIVE_PAD, h = termfont::capHeight(Face::SMALL) + 2 * LIVE_PAD;
-    const int x = r.x + r.w - LIVE_RIGHT - w, y = r.y + (r.h - h) / 2;
+    text(s, r.x + ROW_TEXT_X, r.y + ROW_TEXT_Y, Face::BODY, TL_DATUM);
+    if (!tag) return;
+    const int w = termfont::width(Face::SMALL, tag) + 2 * TAG_PAD, h = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
+    const int x = r.x + r.w - TAG_RIGHT - w, y = r.y + r.h - TAG_BOTTOM - h;
     tft.fillRect(x, y, w, h, ink);
     tft.setTextColor(pressed ? tint(PRESSED) : inverted ? pal(termpal::TEXT) : pal(termpal::BG));  // the ground's
-    text(LIVE_TAG, x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
+    text(tag, x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
 }
 
 // A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
@@ -553,14 +572,17 @@ static void drawButtonBody(int id, bool pressed) {
     const Rect r = deckmenu::rect(screen, id);
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
-        static const char* const ITEM[deckmenu::N_ITEMS] = {"> [LIGHTS]", "> [KARAOKE]"};  // in deckmenu::Item order
-        bool dim = false, live = false;
+        static_assert(N_MENU_ITEMS == deckmenu::N_ITEMS, "a label per Menu item");
+        bool dim = false;
+        const char* tag = nullptr;
         if (id == M_ITEM0 + deckmenu::KARAOKE) {
             karaokeShownReady = karaokeReady();
             dim = !karaokeShownReady;
-            live = karaokeShownReady;
+            if (karaokeShownReady) tag = LIVE_TAG;
+        } else if (id == M_ITEM0 + deckmenu::MUSIC && musicOn) {
+            tag = ON_TAG;
         }
-        drawRow(r, ITEM[id - M_ITEM0], pressed, id == focus, dim, live);
+        drawRow(r, MENU_ITEMS[id - M_ITEM0], pressed, id == focus, dim, tag);
         return;
     }
     if (screen == Screen::Karaoke || id == L_BACK) {  // K_BACK: its only button
@@ -643,7 +665,7 @@ static void drawStatus() {
 // Top to bottom (termlayout's DASH_* place them, test_termfont checks they fit): the header line;
 // the clock and the date left, the weather right, then the band's last row: the trip line left
 // (the block cursor after it) and today's HI / LO right, or a message across both while one shows;
-// the lights; the two items at the bottom. A MID rule under each band. Each part clears and draws
+// the lights; the three items at the bottom. A MID rule under each band. Each part clears and draws
 // its own rows, so it is redrawn alone when what it shows changes: the clock each minute, the
 // weather on a new reading, the lights on a look or link change, the trip row when the trip's text
 // moves, the HI / LO line changes or a message comes or goes, the cursor's cell on a blink.
@@ -787,14 +809,28 @@ static void blinkCursor() {
 // across) and drawn again: while a message shows, just the message (TEXT, ALERT for a problem) with
 // the cursor after it; else the trip line (SMALL, TEXT) with the cursor after it, and right-aligned
 // the HI / LO line (SMALL, DIM; ">OFFLINE" in ALERT), without its city when that wouldn't clear the
-// cursor (termlayout::besideTrip; a 23-letter city beside the longest trip). Redrawn on a trip
-// change, a weather change, or a message coming or going.
+// cursor (termlayout::besideTrip; a 23-letter city beside the longest trip). In music mode the
+// readout (TEXT, ">NO SIGNAL" too: it's no fault of the deck's) takes the trip line's place, its
+// cursor after it, and the song's three colours right-aligned in place of HI / LO. Redrawn on a trip
+// change, a weather change, a readout change, or a message coming or going.
 static void drawTripRow() {
     const int top = tripRowTop();
     clearBg(RULE_X0, top, RULE_X1 - RULE_X0, CLOCK_RULE_Y - top);
     if (message[0]) {
         tft.setTextColor(msgInk(message));
         placeCursor(DASH_X + text(message, DASH_X, TRIP_ROW_BASE, Face::SMALL, BL_DATUM));
+        return;
+    }
+    if (musicOn) {
+        tft.setTextColor(pal(termpal::TEXT));
+        const int endX = DASH_X + text(musicLine, DASH_X, TRIP_ROW_BASE, Face::SMALL, BL_DATUM);
+        for (int k = 0; musicPalOk && k < 3; k++) {
+            const songpalette::Rgb& c = musicPal.c[k];
+            const int x = DASH_RIGHT - (3 - k) * MUSIC_CHIP - (2 - k) * MUSIC_CHIP_GAP;
+            const uint32_t rgb = (static_cast<uint32_t>(c.r) << 16) | (static_cast<uint32_t>(c.g) << 8) | c.b;
+            tft.fillRect(x, TRIP_ROW_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, tint(rgb));
+        }
+        placeCursor(endX);
         return;
     }
     char s[40];
@@ -814,7 +850,7 @@ static void drawWeather() {
     if (!message[0]) drawTripRow();
 }
 
-// The whole dashboard but its two items (drawAll draws those as buttons).
+// The whole dashboard but its three items (drawAll draws those as buttons).
 static void drawDash() {
     drawHeader();
     drawClock();
@@ -1370,6 +1406,8 @@ static void pressLights(int id) {
     save();
 }
 
+static void setMusic(bool on);
+
 // One settled tap on a button of the current screen.
 static void press(int id) {
     if (screen == Screen::Lights) {
@@ -1392,6 +1430,7 @@ static void press(int id) {
             drawMessage();
         }
         break;
+    case deckmenu::MUSIC: setMusic(!musicOn); break;  // the caller redraws the item (its ON tag)
     }
 }
 
@@ -1407,8 +1446,8 @@ static void act() {
 }
 
 // ---- Xbox controller input ----
-//   D-pad: move the focus (held: repeats; the sticks are ignored; on the Menu left / right between
-//          its two items)    A: press the focused button
+//   D-pad: move the focus (held: repeats; the sticks are ignored; on the Menu left / right along
+//          its three items, no wrap)    A: press the focused button
 //   B: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
 //   Lights only: X next page    Y this page's lights on/off    LB / RB: - / +
 
@@ -1647,6 +1686,8 @@ static void takeWeather() {
 // and kept through blips (util/deckaddr). HTTP/1.0, 1.5 s timeouts, the body into a fixed
 // statejson::MAX_JSON buffer, util/stateparse. Each poll is published under lyricsMux; loop() polls
 // lyricsFresh to redraw. The log tells when the deck is found, lost and back, not every poll.
+// The same task keeps music mode alive on the black deck (musicKeepAlive, below), whatever screen
+// shows: it owns lyricsHost.
 static TaskHandle_t lyricsHandle = nullptr;
 static portMUX_TYPE lyricsMux = portMUX_INITIALIZER_UNLOCKED;
 static LyricsReading lyricsPub;             // guarded by lyricsMux
@@ -1717,12 +1758,60 @@ static int lyricsGet() {
     return rc;
 }
 
+// ---- Music mode: the black deck listens ----
+// From the lyrics task: while musicWant, GET /music?on=1 at once and every MUSIC_KEEP_MS (the black
+// deck stops after 30 s without one), MUSIC_RETRY_MS after a miss (no answer, low memory, "stopping,
+// ask again"); on=0 once when it goes. Each ask also records the black deck's address (musicPeer), the
+// one sender the music task takes packets from. The log tells each change of answer.
+static constexpr uint32_t MUSIC_KEEP_MS = 10000, MUSIC_RETRY_MS = 2000;
+static volatile uint32_t musicPeer = 0;  // IPv4, network order (IPAddress's dword); 0: not asked yet
+
+static int musicGet(bool on) {
+    if (!net::isOnline()) return -1;
+    char host[40], url[128];
+    if (!lyricsHost(host, sizeof(host))) return -1;
+    IPAddress a;
+    if (a.fromString(host)) musicPeer = static_cast<uint32_t>(a);
+    snprintf(url, sizeof(url), "http://%s/music?k=%s&on=%d", host, REMOTE_TOKEN, on ? 1 : 0);
+    WiFiClient c;
+    HTTPClient h;
+    h.setTimeout(1500);
+    h.setConnectTimeout(1500);
+    h.useHTTP10(true);
+    if (!h.begin(c, url)) return -1;
+    const int rc = h.GET();
+    h.end();
+    return rc;
+}
+
+static void musicKeepAlive() {
+    static bool asked = false;  // an on=1 went out since the last on=0
+    static uint32_t nextAt = 0;
+    static int lastRc = 0;
+    if (ota::active()) return;
+    if (!musicWant) {
+        if (asked) {
+            asked = false;
+            lastRc = 0;
+            Serial.printf("[music] off (rc=%d)\n", musicGet(false));
+        }
+        return;
+    }
+    if (asked && static_cast<int32_t>(millis() - nextAt) < 0) return;
+    const int rc = musicGet(true);
+    if (rc != lastRc) Serial.printf("[music] on=1: rc=%d\n", rc);
+    lastRc = rc;
+    asked = true;
+    nextAt = millis() + (rc == 200 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
+}
+
 static void lyricsTask(void*) {
     static stateparse::Deck deck;  // static: ~650 B, off the task stack
     pollpace::Pace& pace = lyricsPace;
     uint32_t lastPoll = 0;
     uint8_t was = WANT_NONE;  // what was wanted at the last poll
     for (;;) {
+        musicKeepAlive();
         const uint8_t want = lyricsWant;
         if (want == WANT_NONE || ota::active()) {  // nothing shows it, or an update has the WiFi
             was = WANT_NONE;
@@ -1791,6 +1880,142 @@ static void lyricsTick() {
     if (!fresh && millis() - drawnAt < KARAOKE_TICK_MS) return;
     drawnAt = millis();
     drawKaraokeBody(false);
+}
+
+// ---- Music mode: what the black deck's mic hears ----
+// Its own task (core 1, idle priority, 4 KB), started the first time music mode goes on. While
+// musicWant and online it holds a UDP socket on musicwire::PORT (raw lwip, 200 ms receive timeout),
+// closed again when music mode goes off or an update has the WiFi. It takes packets only from the
+// black deck's address (musicPeer), counts the beats itself (musicreadout::Beats, every FeatPkt) and
+// publishes the latest FeatPkt, its time and the beat rate, and the latest PalPkt, under musicMux.
+// musicTick() (loop) reads them at most MUSIC_TICK_MS apart and redraws the trip row when its text or
+// the colours changed. The lights don't follow the music yet.
+struct MusicHeard {
+    bool heard = false;  // a FeatPkt came since the socket opened
+    uint32_t at = 0;     // millis() it came
+    musicwire::FeatPkt feat{};
+    int bpm = -1;        // musicreadout::Beats::bpm at that packet
+    bool palOk = false;  // a PalPkt came since the socket opened
+    musicwire::PalPkt pal{};
+};
+static TaskHandle_t musicHandle = nullptr;
+static portMUX_TYPE musicMux = portMUX_INITIALIZER_UNLOCKED;
+static MusicHeard musicPub;  // guarded by musicMux
+static constexpr uint32_t MUSIC_TICK_MS = 250;
+
+static int musicOpen() {
+    const int sock = lwip_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock < 0) return -1;
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(musicwire::PORT);
+    a.sin_addr.s_addr = htonl(INADDR_ANY);
+    timeval tv{0, 200000};
+    lwip_setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    if (lwip_bind(sock, reinterpret_cast<const sockaddr*>(&a), sizeof(a)) < 0) {
+        lwip_close(sock);
+        return -1;
+    }
+    return sock;
+}
+
+static void musicTask(void*) {
+    static musicreadout::Beats beats;  // static: ~280 B, off the task stack
+    int sock = -1;
+    uint8_t buf[32];
+    for (;;) {
+        if (!musicWant || !net::isOnline() || ota::active()) {
+            if (sock >= 0) {
+                lwip_close(sock);
+                sock = -1;
+                Serial.println("[music] socket closed");
+            }
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        if (sock < 0) {
+            sock = musicOpen();
+            if (sock < 0) {
+                Serial.println("[music] no UDP socket");
+                vTaskDelay(pdMS_TO_TICKS(1000));
+                continue;
+            }
+            Serial.printf("[music] listening on udp %u\n", static_cast<unsigned>(musicwire::PORT));
+            beats.reset();
+            portENTER_CRITICAL(&musicMux);
+            musicPub = MusicHeard();
+            portEXIT_CRITICAL(&musicMux);
+        }
+        sockaddr_in from{};
+        socklen_t fromLen = sizeof(from);
+        const int n = lwip_recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromLen);
+        if (n <= 0) continue;  // the timeout: look at musicWant again
+        const uint32_t peer = musicPeer;
+        if (peer == 0 || from.sin_addr.s_addr != peer) continue;  // not the black deck
+        const uint32_t now = millis();
+        musicwire::FeatPkt f;
+        musicwire::PalPkt p;
+        if (musicwire::decode(buf, static_cast<size_t>(n), &f)) {
+            beats.onPacket(now, f.seq, f.f.beat);
+            const int bpm = beats.bpm(now);
+            portENTER_CRITICAL(&musicMux);
+            musicPub.heard = true;
+            musicPub.at = now;
+            musicPub.feat = f;
+            musicPub.bpm = bpm;
+            portEXIT_CRITICAL(&musicMux);
+        } else if (musicwire::decode(buf, static_cast<size_t>(n), &p)) {
+            portENTER_CRITICAL(&musicMux);
+            musicPub.palOk = true;
+            musicPub.pal = p;
+            portEXIT_CRITICAL(&musicMux);
+        }
+    }
+}
+
+// Music mode on or off (the MUSIC item): the tasks follow musicWant (the music task is started the
+// first time), and ">MUSIC ON" / ">MUSIC OFF" shows on the trip row like any message; the readout
+// (or the trip line) comes back after it. The caller redraws the item.
+static void setMusic(bool on) {
+    musicOn = on;
+    musicWant = on;
+    if (on) {
+        if (!musicHandle) xTaskCreatePinnedToCore(musicTask, "music", 4096, nullptr, 0, &musicHandle, 1);
+        snprintf(musicLine, sizeof(musicLine), ">NO SIGNAL");
+        musicPalOk = false;
+    }
+    setMessage(on ? ">MUSIC ON" : ">MUSIC OFF");
+    drawMessage();
+}
+
+static bool samePalette(const songpalette::Palette& a, const songpalette::Palette& b) {
+    for (int k = 0; k < 3; k++) {
+        if (a.c[k].r != b.c[k].r || a.c[k].g != b.c[k].g || a.c[k].b != b.c[k].b) return false;
+    }
+    return true;
+}
+
+// In loop(), while music mode is on: the readout from the latest packets, at most every
+// MUSIC_TICK_MS; the trip row is redrawn only when its text or the colours changed (and not while a
+// message holds the row: it brings the readout back as it goes).
+static void musicTick() {
+    static uint32_t tickAt = 0;
+    if (!musicOn || millis() - tickAt < MUSIC_TICK_MS) return;
+    tickAt = millis();
+    MusicHeard h;
+    portENTER_CRITICAL(&musicMux);
+    h = musicPub;
+    portEXIT_CRITICAL(&musicMux);
+    const uint32_t now = millis();  // after the copy: never before the packet's time
+    char line[sizeof(musicLine)];
+    musicreadout::format(musicreadout::state(h.heard, h.at, h.feat.f.present, now), h.bpm, h.feat.f.energy, line,
+                         sizeof(line));
+    const bool palChanged = h.palOk != musicPalOk || (h.palOk && !samePalette(h.pal.p, musicPal));
+    if (!palChanged && strcmp(line, musicLine) == 0) return;
+    snprintf(musicLine, sizeof(musicLine), "%s", line);
+    musicPalOk = h.palOk;
+    musicPal = h.pal.p;
+    if (screen == Screen::Menu && !message[0]) drawTripRow();
 }
 
 // ---- Update over WiFi (net/ota): its page holds the screen ----
@@ -2210,12 +2435,13 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, ota %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, ota %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
+                      musicHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(musicHandle)) : 0u,
                       ota::stackLeft(),
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
@@ -2223,6 +2449,7 @@ void loop() {
     handlePad();
     takeWeather();
     lyricsTick();
+    musicTick();
     updateDayNight();
     tripTick();
     blinkCursor();

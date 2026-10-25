@@ -7,12 +7,18 @@
 
 namespace termlayout {
 
-// The Menu's items ("> [LIGHTS]", BODY): text x from the rect's left.
-constexpr int ROW_TEXT_X = 8;
-// KARAOKE's LIVE tag while it opens (SMALL, an inverted mini-label): LIVE_PAD px of fill around the
-// caps, its right edge LIVE_RIGHT in from the item's.
+// The Menu's three items (100 px wide), in deckmenu::Item order: the label (BODY) top left, its caps'
+// top ROW_TEXT_Y and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
+// it has one (SMALL, an inverted mini-label: TAG_PAD px of fill around the caps, TAG_RIGHT in from
+// the item's right edge, TAG_BOTTOM up from its bottom): KARAOKE's LIVE while it opens, MUSIC's ON
+// while music mode is on. "[KARAOKE]" and LIVE side by side don't fit 100 px, so the tag goes under
+// the label, and the label always sits high (it doesn't jump when a tag comes).
+constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[KARAOKE]", "[MUSIC]"};
+constexpr int N_MENU_ITEMS = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
+constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 7;
 constexpr const char* LIVE_TAG = "LIVE";
-constexpr int LIVE_PAD = 3, LIVE_RIGHT = 6;
+constexpr const char* ON_TAG = "ON";
+constexpr int TAG_PAD = 3, TAG_RIGHT = 6, TAG_BOTTOM = 5;
 
 // A Lights colour button (75x44): the chip left, 16x28, so the name fits right of it in BODY, the
 // preset names' face ("ORANGE", "PURPLE", "YELLOW" are the widest).
@@ -47,6 +53,9 @@ constexpr int DASH_TITLE_Y = 5, HEADER_RULE_Y = 20;
 // place of both while one shows. The caps sit 8 rows apart: rule, clock, date, row, rule.
 constexpr int DASH_SPLIT = 160;
 constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, TRIP_ROW_BASE = 86, CLOCK_RULE_Y = 94;
+// music mode's readout takes the trip line's place (no HI / LO), the song's three colours right-
+// aligned at DASH_RIGHT as MUSIC_CHIP px squares (SMALL's caps) MUSIC_CHIP_GAP apart, on its baseline
+constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 3;
 // the block cursor (a SMALL cell) ends the trip line, or the message while one shows, by DASH_RIGHT;
 // the HI / LO line keeps TRIP_GAP clear of it, and drops its city when it can't (besideTrip)
 constexpr int TRIP_GAP = 7;

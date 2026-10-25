@@ -35,7 +35,7 @@ void test_rects_inside_screen_and_apart() {
     check_screen(Screen::Karaoke, karaoke, 1);
 }
 
-// The dashboard: header, clock + weather (with the trip row), lights, then the two items at the
+// The dashboard: header, clock + weather (with the trip row), lights, then the three items at the
 // bottom, top to bottom.
 void test_menu_bands_stack() {
     TEST_ASSERT_TRUE(HEADER.y == 0 && HEADER.y + HEADER.h == CLOCK_BAND.y);
@@ -48,21 +48,27 @@ void test_menu_bands_stack() {
 
 void test_menu_ids_and_hits() {
     TEST_ASSERT_EQUAL_INT(M_N, count(Screen::Menu));
-    TEST_ASSERT_EQUAL_INT(2, N_ITEMS);
+    TEST_ASSERT_EQUAL_INT(3, N_ITEMS);
     TEST_ASSERT_EQUAL_INT(0, M_ITEM0);
-    TEST_ASSERT_EQUAL_INT(2, M_N);
-    // LIGHTS and KARAOKE side by side, finger-sized.
-    const Rect lights = rect(Screen::Menu, M_ITEM0 + LIGHTS), karaoke = rect(Screen::Menu, M_ITEM0 + KARAOKE);
-    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 192 && lights.w == 154 && lights.h == 44);
-    TEST_ASSERT_TRUE(karaoke.x == 162 && karaoke.y == 192 && karaoke.w == 154 && karaoke.h == 44);
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 80, 214));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 240, 214));
-    // the gap between them (x 158..161) snaps to the nearer
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 159, 214));
+    TEST_ASSERT_EQUAL_INT(3, M_N);
+    // LIGHTS, KARAOKE and MUSIC side by side, finger-sized.
+    const Rect lights = rect(Screen::Menu, M_ITEM0 + LIGHTS), karaoke = rect(Screen::Menu, M_ITEM0 + KARAOKE),
+               music = rect(Screen::Menu, M_ITEM0 + MUSIC);
+    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 192 && lights.w == 100 && lights.h == 44);
+    TEST_ASSERT_TRUE(karaoke.x == 110 && karaoke.y == 192 && karaoke.w == 100 && karaoke.h == 44);
+    TEST_ASSERT_TRUE(music.x == 216 && music.y == 192 && music.w == 100 && music.h == 44);
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 214));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 214));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 270, 214));
+    // the gaps between them (x 104..109, 210..215) snap to the nearer
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 106, 214));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 107, 214));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 212, 214));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 213, 214));
     // just above the row (under the lights band) and below it (the screen's last rows), still the item
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 80, 189));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 240, 239));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 189));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 239));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 319, 239));
     // Out-of-range ids have no rect, and any tap is -1 or a valid id.
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, M_N).w);
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, 99).w);
@@ -97,11 +103,14 @@ void test_neighbour() {
     TEST_ASSERT_EQUAL_INT(L_PRE0, neighbour(Screen::Lights, L_TILE0 + 4, 0, 1));
     TEST_ASSERT_EQUAL_INT(L_ZONE0, neighbour(Screen::Lights, L_ZONE0, 0, -1));
     TEST_ASSERT_EQUAL_INT(L_TILE0, neighbour(Screen::Lights, L_TILE0 + 1, -1, 0));
-    // The Menu: left / right between the two items; up, down and past the ends nothing lies that way.
+    // The Menu: left / right along the three items, one step at a time; up, down and past the ends
+    // (no wrap) nothing lies that way.
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + MUSIC, -1, 0));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, -1, 0));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, -1, 0));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, neighbour(Screen::Menu, M_ITEM0 + MUSIC, 1, 0));
     for (int i = 0; i < N_ITEMS; i++) {
         TEST_ASSERT_EQUAL_INT(M_ITEM0 + i, neighbour(Screen::Menu, M_ITEM0 + i, 0, 1));
         TEST_ASSERT_EQUAL_INT(M_ITEM0 + i, neighbour(Screen::Menu, M_ITEM0 + i, 0, -1));

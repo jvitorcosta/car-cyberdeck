@@ -10,11 +10,11 @@ namespace deckmenu {
 struct Rect { int16_t x, y, w, h; };
 enum class Screen : uint8_t { Menu, Lights, Karaoke };
 
-// Menu (the dashboard): two items side by side, finger-sized, at the bottom under the lights band;
+// Menu (the dashboard): three items side by side, finger-sized, at the bottom under the lights band;
 // everything else on it is display only (the bands below).
-enum MenuId : int { M_ITEM0 = 0, M_N = 2 };
-enum Item : uint8_t { LIGHTS, KARAOKE };  // later: CAR, HEART, MUSIC
-constexpr int N_ITEMS = 2;              // items shown, in slot order
+enum MenuId : int { M_ITEM0 = 0, M_N = 3 };
+enum Item : uint8_t { LIGHTS, KARAOKE, MUSIC };  // later: CAR, HEART
+constexpr int N_ITEMS = 3;                     // items shown, in slot order
 
 // Lights: Back, 3 zones, 8 tiles, 4 presets, -, +
 enum LightsId : int { L_BACK = 0, L_ZONE0 = 1, L_TILE0 = 4, L_PRE0 = 12, L_MINUS = 16, L_PLUS = 17, L_N = 18 };

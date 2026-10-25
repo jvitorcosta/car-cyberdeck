@@ -9,6 +9,7 @@
 #include "../../src/util/karaoke.h"
 #include "../../src/util/ledlook.h"
 #include "../../src/util/ledpresets.h"
+#include "../../src/util/musicreadout.h"
 #include "../../src/util/otapage.h"
 #include "../../src/util/tripmeter.h"
 #include "../../src/util/weather.h"
@@ -99,21 +100,28 @@ static void fitsRight(Face f, const char* s, int right, int left) {
 }
 
 void test_menu_items_fit() {
+    TEST_ASSERT_EQUAL_INT(deckmenu::N_ITEMS, N_MENU_ITEMS);
+    const int tagH = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
+    TEST_ASSERT_TRUE(TAG_PAD >= 2 && TAG_RIGHT >= MARGIN && TAG_BOTTOM >= MARGIN);
     for (int i = 0; i < deckmenu::N_ITEMS; i++) {
         const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + i);
-        TEST_ASSERT_EQUAL_INT(154, r.w);
-        for (const char* s : {"> [LIGHTS]", "> [KARAOKE]"}) fitsLeft(Face::BODY, s, ROW_TEXT_X, r.w);
-        TEST_ASSERT_TRUE(termfont::capHeight(Face::BODY) <= r.h - 2 * MARGIN);
+        TEST_ASSERT_EQUAL_INT(100, r.w);
         TEST_ASSERT_TRUE(r.h == 44 && r.y + r.h <= 240 - MARGIN);  // at the bottom, 4 px off the edge
+        // the label (BODY) top left, its ink inside the margins
+        const char* label = MENU_ITEMS[i];
+        fitsLeft(Face::BODY, label, ROW_TEXT_X, r.w);
+        const Rows ink = fromCapTop(Face::BODY, ROW_TEXT_Y);
+        TEST_ASSERT_TRUE_MESSAGE(ink.top >= MARGIN, label);
+        // a tag (KARAOKE's LIVE, MUSIC's ON: SMALL, an inverted mini-label, its caps TAG_PAD from its
+        // edges) bottom right, under the label's ink with a row to spare, inside the margins
+        for (const char* tag : {LIVE_TAG, ON_TAG}) {
+            const int tagW = termfont::width(Face::SMALL, tag) + 2 * TAG_PAD;
+            TEST_ASSERT_TRUE_MESSAGE(r.w - TAG_RIGHT - tagW >= MARGIN, tag);
+            TEST_ASSERT_TRUE_MESSAGE(ink.bottom + 1 < r.h - TAG_BOTTOM - tagH, label);
+        }
     }
-    // KARAOKE's LIVE tag: inside the item at its right edge, clear of the item's text, its caps
-    // LIVE_PAD from the label's edges
-    const deckmenu::Rect k = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + deckmenu::KARAOKE);
-    const int tagW = termfont::width(Face::SMALL, LIVE_TAG) + 2 * LIVE_PAD, tagH = termfont::capHeight(Face::SMALL) + 2 * LIVE_PAD;
-    TEST_ASSERT_TRUE(LIVE_RIGHT >= MARGIN);
-    TEST_ASSERT_TRUE(ROW_TEXT_X + termfont::width(Face::BODY, "> [KARAOKE]") + MARGIN <= k.w - LIVE_RIGHT - tagW);
-    TEST_ASSERT_TRUE(tagH <= k.h - 2 * MARGIN);
-    TEST_ASSERT_TRUE(LIVE_PAD >= 2);
+    TEST_ASSERT_EQUAL_STRING("[KARAOKE]", MENU_ITEMS[deckmenu::KARAOKE]);
+    TEST_ASSERT_EQUAL_STRING("[MUSIC]", MENU_ITEMS[deckmenu::MUSIC]);
 }
 
 void test_preset_names_fit() {
@@ -265,9 +273,24 @@ void test_dash_trip_row_fits() {
     tripmeter::last(t, last, sizeof(last));
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", last);
     for (const char* m : {static_cast<const char*>(last), ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED",
-                          ">LIGHTS: NO LINK", ">WRONG KEY", ">NO SIGNAL", ">STANDBY"}) {
+                          ">LIGHTS: NO LINK", ">WRONG KEY", ">NO SIGNAL", ">STANDBY", ">MUSIC ON", ">MUSIC OFF"}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
+}
+
+// Music mode's readout in the trip row's place: the longest line, its cursor and the song's three
+// colour chips right-aligned at DASH_RIGHT (as tall as SMALL's caps, on the row's baseline).
+void test_music_readout_fits() {
+    char s[40];
+    musicreadout::format(musicreadout::State::Music, 999, 255, s, sizeof s);
+    TEST_ASSERT_EQUAL_STRING(">MUSIC 999 BPM  LVL 100%", s);
+    const int chipsW = 3 * MUSIC_CHIP + 2 * MUSIC_CHIP_GAP;
+    for (const char* m : {static_cast<const char*>(s), ">LISTENING", ">NO SIGNAL", ">MUSIC -- BPM  LVL 100%"}) {
+        TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) + MARGIN <=
+                                     DASH_RIGHT - chipsW, m);
+    }
+    TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::SMALL), MUSIC_CHIP);
+    TEST_ASSERT_TRUE(MUSIC_CHIP_GAP >= 2);
 }
 
 void test_status_fits() {
@@ -334,6 +357,7 @@ int main() {
     RUN_TEST(test_dash_clock_and_weather_fit);
     RUN_TEST(test_dash_lights_fit);
     RUN_TEST(test_dash_trip_row_fits);
+    RUN_TEST(test_music_readout_fits);
     RUN_TEST(test_status_fits);
     RUN_TEST(test_karaoke_pitches);
     RUN_TEST(test_wrap_with_a_face);
