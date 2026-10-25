@@ -107,4 +107,13 @@ describe("handleCommand", () => {
     expect(res.slowCostUsd).toBe(0.03);
     expect(res.stages.map((s) => s.name)).toEqual(["model", "tool", "slow"]);
   });
+
+  it("remembers what the slow path did, not just the handoff", async () => {
+    const slow: SlowPath = async () =>
+      ({ lights: [], stock: "ok", say: "feito~", mood: "happy", did: "spotify_play Djavan; spotify_volume 50" });
+    const { deps, sessions } = setup(message([toolUse("hand_off_to_agent", { task: "Djavan e mais alto" })]), slow);
+    await handleCommand({ deck: "yellow", text: "põe Djavan e aumenta" }, deps);
+    expect(sessions.context("yellow").map((e) => [e.user, e.did]))
+      .toEqual([["põe Djavan e aumenta", "spotify_play Djavan; spotify_volume 50"]]);
+  });
 });

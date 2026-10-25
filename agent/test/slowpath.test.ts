@@ -1,0 +1,191 @@
+import type { McpSdkServerConfigWithInstance, Options, SDKMessage, query } from "@anthropic-ai/claude-agent-sdk";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { SLOW_SYSTEM } from "../src/persona.js";
+import { Sessions } from "../src/session.js";
+import { carMcpTools, makeSlowPath } from "../src/slowpath.js";
+import type { Spotify } from "../src/spotify.js";
+import { TOOL_DEFS, type ToolOutcome } from "../src/tools.js";
+
+function fakeSpotify() {
+  const calls: unknown[][] = [];
+  const spotify = {
+    async now() { return { title: "Oceano", artist: "Djavan", volume: 40 }; },
+    async play(q: string, k: string) { calls.push(["play", q, k]); return { name: q }; },
+    async volume(v: number) { calls.push(["volume", v]); },
+  } as unknown as Spotify;
+  return { spotify, calls };
+}
+
+type Step = { tool: string; args: Record<string, unknown> } | SDKMessage;
+
+// Plays the part of the Agent SDK: calls the car tools through the real in-process MCP server
+// it was given, then yields the scripted messages.
+function fakeRunQuery(steps: Step[], seen: { prompt?: unknown; options?: Options }) {
+  return ((params: { prompt: unknown; options?: Options }) => {
+    seen.prompt = params.prompt;
+    seen.options = params.options;
+    return (async function* () {
+      const server = params.options!.mcpServers!.car as McpSdkServerConfigWithInstance;
+      const [clientT, serverT] = InMemoryTransport.createLinkedPair();
+      await server.instance.connect(serverT);
+      const client = new Client({ name: "fake", version: "0" });
+      await client.connect(clientT);
+      try {
+        for (const s of steps) {
+          if ("tool" in s) await client.callTool({ name: s.tool, arguments: s.args });
+          else yield s;
+        }
+      } finally { await client.close(); }
+    })();
+  }) as unknown as typeof query;
+}
+
+const result = (text: string, cost = 0.012): SDKMessage =>
+  ({ type: "result", subtype: "success", result: text, total_cost_usd: cost, is_error: false }) as unknown as SDKMessage;
+
+describe("carMcpTools", () => {
+  it("offers every car tool except hand_off_to_agent", () => {
+    const { spotify } = fakeSpotify();
+    const tools = carMcpTools({ deck: "yellow", spotify, sessions: new Sessions() }, []);
+    const want = TOOL_DEFS.map((t) => t.name).filter((n) => n !== "hand_off_to_agent");
+    expect(tools.map((t) => t.name)).toEqual(want);
+  });
+
+  it("runs executeTool from the handler, records the outcome and returns its did", async () => {
+    const { spotify, calls } = fakeSpotify();
+    const out: ToolOutcome[] = [];
+    const tools = carMcpTools({ deck: "yellow", spotify, sessions: new Sessions() }, out);
+    const play = tools.find((t) => t.name === "spotify_play")!;
+    const res = await play.handler({ query: "Djavan", kind: "artist" }, {});
+    expect(calls).toEqual([["play", "Djavan", "artist"]]);
+    expect(out.map((o) => o.did)).toEqual(["spotify_play Djavan"]);
+    expect(res.content).toEqual([{ type: "text", text: "spotify_play Djavan" }]);
+  });
+});
+
+describe("makeSlowPath", () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("runs the query with only the car tools and merges the outcomes", async () => {
+    const { spotify, calls } = fakeSpotify();
+    const seen: { prompt?: unknown; options?: Options } = {};
+    const runQuery = fakeRunQuery([
+      { tool: "spotify_play", args: { query: "Djavan", kind: "artist" } },
+      { tool: "lights", args: { zone: "inside", colour: "blue", level: null, power: null, step: null } },
+      { tool: "spotify_volume", args: { level: null, delta: 10 } },
+      result("Hai~ Djavan tocando e volume no 50. Mais alguma coisa?", 0.021),
+    ], seen);
+    const slow = makeSlowPath({ modelId: "slow-model", ctx: { spotify, sessions: new Sessions() }, runQuery });
+
+    const res = await slow("yellow", "põe uma do Djavan e depois aumenta o volume");
+
+    expect(seen.prompt).toBe("põe uma do Djavan e depois aumenta o volume");
+    const o = seen.options!;
+    expect(o.model).toBe("slow-model");
+    expect(o.systemPrompt).toBe(SLOW_SYSTEM);
+    expect(o.tools).toEqual([]);
+    expect(o.settingSources).toEqual([]);
+    expect(o.permissionMode).toBe("dontAsk");
+    expect(o.maxTurns).toBe(8);
+    expect(o.maxBudgetUsd).toBe(0.05);
+    expect(o.env).toEqual({ ...process.env });
+    expect(Object.keys(o.mcpServers!)).toEqual(["car"]);
+    expect(o.allowedTools).toEqual(TOOL_DEFS.map((t) => t.name).filter((n) => n !== "hand_off_to_agent")
+      .map((n) => `mcp__car__${n}`));
+
+    expect(calls).toEqual([["play", "Djavan", "artist"], ["volume", 50]]);
+    expect(res.lights).toEqual([{ kind: "set", zone: "inside", colour: "blue" }]);
+    expect(res.stock).toBe("ok");                           // the last outcome's
+    expect(res.say).toBe("Hai~ Djavan tocando e volume no 50.");
+    expect(res.did).toBe("spotify_play Djavan; lights inside azul; spotify_volume 50");
+    expect(res.costUsd).toBe(0.021);
+  });
+
+  it("falls back to the last outcome's say when the result has no text", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = fakeRunQuery([
+      { tool: "spotify_play", args: { query: "Djavan", kind: "artist" } },
+      ({ type: "result", subtype: "error_max_turns", total_cost_usd: 0.04, is_error: true }) as unknown as SDKMessage,
+    ], {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "tarefa");
+    expect(res.say).toBe("hai~ tocando Djavan");
+    expect(res.stock).toBe("tocando");
+    expect(res.costUsd).toBe(0.04);
+  });
+
+  it("says it failed when nothing ran and the query threw", async () => {
+    const { spotify } = fakeSpotify();
+    const runQuery = (() => (async function* () { throw new Error("boom"); })()) as unknown as typeof query;
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+    const res = await slow("yellow", "tarefa");
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
+    expect(res.stock).toBe("erro");
+    expect(res.lights).toEqual([]);
+  });
+
+  it("answers deixa_comigo after 8 s and lets the query finish in the background", async () => {
+    vi.useFakeTimers();
+    const { spotify, calls } = fakeSpotify();
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let finished = false;
+    const runQuery = (() => (async function* () {
+      await gate;
+      await spotify.play("Djavan", "artist");
+      finished = true;
+      yield result("pronto.");
+    })()) as unknown as typeof query;
+    const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+
+    const pending = slow("yellow", "tarefa longa");
+    await vi.advanceTimersByTimeAsync(7_999);
+    let settled = false;
+    void pending.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const res = await pending;
+    expect(res.stock).toBe("deixa_comigo");
+    expect(res.say).toBe("vai demorar um pouquinho~");
+
+    vi.useRealTimers();
+    release();
+    await vi.waitFor(() => expect(finished).toBe(true));
+    expect(calls).toEqual([["play", "Djavan", "artist"]]);
+  });
+
+  it("logs, not rejects, when the background query fails after the timeout", async () => {
+    vi.useFakeTimers();
+    const errors: unknown[] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...a) => { errors.push(a); });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown) => { unhandled.push(e); };
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      let fail!: () => void;
+      const gate = new Promise<void>((r) => { fail = r; });
+      const runQuery = (() => (async function* () {
+        await gate;
+        throw new Error("late boom");
+      })()) as unknown as typeof query;
+      const { spotify } = fakeSpotify();
+      const slow = makeSlowPath({ modelId: "m", ctx: { spotify, sessions: new Sessions() }, runQuery });
+      const pending = slow("yellow", "tarefa");
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect((await pending).stock).toBe("deixa_comigo");
+      vi.useRealTimers();
+      fail();
+      await vi.waitFor(() => expect(errors).toHaveLength(1));
+      await new Promise((r) => setTimeout(r, 10));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      spy.mockRestore();
+    }
+  });
+});

@@ -60,10 +60,13 @@ export async function handleCommand(
     if (!use) return done(stockReply(text, "nao_entendi"));
 
     const outcome = await timed("tool", () => executeTool(use.name, use.input, { ...deps.ctx, deck }));
-    sessions.remember(deck, { user: text, did: outcome.did });
-    if (!outcome.handoff) return done(reply(text, outcome, "fast"));
+    if (!outcome.handoff) {
+      sessions.remember(deck, { user: text, did: outcome.did });
+      return done(reply(text, outcome, "fast"));
+    }
 
     const slow = await timed("slow", () => deps.slow(deck, outcome.handoff!));
+    sessions.remember(deck, { user: text, did: slow.did });
     return done(reply(text, slow, "slow"), { slowCostUsd: slow.costUsd });
   });
 }
