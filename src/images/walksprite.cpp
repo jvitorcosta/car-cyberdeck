@@ -158,11 +158,11 @@ static Res decodeRegion(uint8_t* data, size_t n, int rowY0, int rowH, int frameW
 // ---------------------------------------------------------------- PMD sheet
 static constexpr int DIR_RIGHT = 2;          // PMD row order: Down, DownRight, Right, ...
 
-// Download into the scratch buffer (NUL-terminated).
+// Download into the scratch buffer (NUL-terminated), on the session's connection.
 // partial: the beginning is enough (AnimData.xml: Walk is anim index 0, near the top).
-static bool get(const String& url, size_t* n, int* code, bool partial = false) {
+static bool get(fetch::Session& https, const String& url, size_t* n, int* code, bool partial = false) {
     *code = 0;
-    return fetch::httpsGetInto(url.c_str(), s_scratch, SCRATCH, n, code, partial);
+    return https.getInto(url.c_str(), s_scratch, SCRATCH, n, code, partial);
 }
 
 // Pokemon whose PMD sheet can never work this boot (missing, no Walk anim, too big,
@@ -185,21 +185,25 @@ bool loadPmd(int dex) {
              "https://raw.githubusercontent.com/PMDCollab/SpriteCollab/master/sprite/%04d/", dex);
 
     size_t n = 0; int code = 0;
-    if (!get(String(base) + "AnimData.xml", &n, &code, true)) {
-        if (code == 404) s_noPmd.add(dex);
-        Serial.printf("[walk] fallback (xml http %d)\n", code);
-        return false;
-    }
-    animdata::WalkAnim a = animdata::parseWalk((const char*)s_scratch);   // scratch is free after this
-    if (!a.ok) {
-        s_noPmd.add(dex);
-        Serial.println("[walk] fallback (no Walk anim)");
-        return false;
-    }
-    if (!get(String(base) + "Walk-Anim.png", &n, &code)) {
-        if (code == 404 || code == 413) s_noPmd.add(dex);
-        Serial.printf("[walk] fallback (png http %d or > %d B)\n", code, SCRATCH);
-        return false;
+    animdata::WalkAnim a{};
+    {   // both files from one host on one TLS connection, closed before the decode below
+        fetch::Session https;
+        if (!get(https, String(base) + "AnimData.xml", &n, &code, true)) {
+            if (code == 404) s_noPmd.add(dex);
+            Serial.printf("[walk] fallback (xml http %d)\n", code);
+            return false;
+        }
+        a = animdata::parseWalk((const char*)s_scratch);   // scratch is free after this
+        if (!a.ok) {
+            s_noPmd.add(dex);
+            Serial.println("[walk] fallback (no Walk anim)");
+            return false;
+        }
+        if (!get(https, String(base) + "Walk-Anim.png", &n, &code)) {
+            if (code == 404 || code == 413) s_noPmd.add(dex);
+            Serial.printf("[walk] fallback (png http %d or > %d B)\n", code, SCRATCH);
+            return false;
+        }
     }
     Res r = decodeRegion(s_scratch, n, DIR_RIGHT * a.frameH, a.frameH, a.frameW, a.frames, true);
     if (r == Res::NoMemory) return false;                  // nothing wrong with the sheet: retry later
