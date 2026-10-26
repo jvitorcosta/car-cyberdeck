@@ -5,7 +5,7 @@ Open items, not scheduled. Newest decisions first within each section.
 ## Verification (on device)
 
 - **Yellow deck menu** (`feat/yellow-menu`): **tested in the car 2026-10-24, owner: "works great
-  in the car"**: the dashboard (layout B), presets (touch, voice, Xbox, watch), KARAOKE, weather, trip,
+  in the car"**: the dashboard (layout B), presets (touch, voice, Xbox, watch), LYRICS, weather, trip,
   VT323, the inside-colour theme and night mode. Shades were tuned on the panel (day contrast
   picks, the owner's night ambers T3/M3/D3); the 8 themes were previewed with `-D THEME_TEST`.
 
