@@ -26,11 +26,11 @@
 //           is a preset's only: not on the grid, never a song colour; the theme takes blue's for it
 //   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
 //           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
-//           >STANDBY / >NO SIGNAL / >WRONG KEY big in place of the lyrics). Read from the black
-//           deck's GET /state every second while this screen shows, every 5 s while the Menu shows
-//           (see "Lyrics" below)
+//           >NOTHING PLAYING / >LYRICS: NO SIGNAL / >WRONG KEY big in place of the lyrics). Read
+//           from the black deck's GET /state every second while this screen shows, every 5 s while
+//           the Menu shows (see "Lyrics" below)
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
-// button; it shows as the button's look inverted (in the theme's colours). After a screen or page
+// button; it shows as the bar with a ring cut in it (ui/presslook). After a screen or page
 // change touch waits for the finger to lift and 250 ms (util/tapguard). The iPhone's Bluetooth
 // must be off (Settings): each controller takes one connection.
 // The STATUS line on Lights and the prompt line on the Menu show a terminal message for 2.5 s
@@ -98,6 +98,7 @@
 #include "pins.h"
 #include "ui/backlight.h"
 #include "ui/gojiraname.h"
+#include "ui/presslook.h"
 #include "ui/termfont.h"
 #include "ui/termlayout.h"
 #include "companion/touch.h"
@@ -465,7 +466,7 @@ static int homeFocus() {
 // The background is black with a faint scanline on every 3rd screen row: every clear goes through
 // clearBg(), which repaints a rect's lines on absolute rows, so a partial redraw stays aligned.
 // Text over it is drawn transparent (free fonts always are: no black box punching through the
-// lines); the solid fills (the inverted selection bar, a press's inverted look, the chips) are the
+// lines); the solid fills (the inverted selection bar, a press's ringed bar, the chips) are the
 // design.
 using termfont::Face;
 using namespace termlayout;
@@ -577,20 +578,27 @@ static void upper(const char* s, char* out, size_t n) {
     out[i] = 0;
 }
 
-// The box of a terminal button: the scanlined bg inside a MID border (`border` px), or the solid
-// TEXT bar when selected, 1 px in from the edge so a Lights focus ring around it stays apart. A press
-// (under the finger, or a controller's flash) inverts that look, in the theme's own colours so it
-// shows on every theme: a box turns into the bar, a bar into a hollow box with a TEXT border and
-// TEXT ink. Returns the ink for what goes on it (BG on a bar, else `ink`).
+// A press's BG ring (ui/presslook) cut into the bar over the rect (x, y, w, h).
+static void drawPressRing(int x, int y, int w, int h) {
+    for (int k = presslook::INSET; k < presslook::INSET + presslook::RING; k++) {
+        tft.drawRect(x + k, y + k, w - 2 * k, h - 2 * k, pal(termpal::BG));
+    }
+}
+
+// The box of a terminal button, as ui/presslook says: the scanlined bg inside a MID border (`border`
+// px); the solid TEXT bar when selected, 1 px in from the edge so a Lights focus ring around it stays
+// apart; pressed (selected or not), the bar with a BG ring in it. Theme colours only, so a press shows
+// on every theme. Returns the ink for what goes on it (BG on a bar, else `ink`).
 static uint16_t drawBox(const Rect& r, bool pressed, bool selected, int border, uint16_t ink) {
     clearBg(r);
-    if (pressed != selected) {
+    const presslook::Box b = presslook::box(pressed, selected);
+    if (b.bar) {
         tft.fillRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, pal(termpal::TEXT));
+        if (b.ring) drawPressRing(r.x, r.y, r.w, r.h);
         return pal(termpal::BG);
     }
-    const uint16_t edge = pal(pressed ? termpal::TEXT : termpal::MID);
-    for (int k = 0; k < border; k++) tft.drawRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, edge);
-    return pressed ? pal(termpal::TEXT) : ink;
+    for (int k = 0; k < border; k++) tft.drawRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, pal(termpal::MID));
+    return ink;
 }
 
 // A bordered button (< BACK, [-], [+]): the label centred.
@@ -629,7 +637,7 @@ static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, b
     const int w = termfont::width(Face::SMALL, tag) + 2 * TAG_PAD, h = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
     const int x = r.x + r.w - TAG_RIGHT - w, y = r.y + r.h - TAG_BOTTOM - h;
     tft.fillRect(x, y, w, h, ink);
-    const bool onBar = dim ? inverted : pressed != inverted;  // drawBox's bar (a press inverts the look)
+    const bool onBar = dim ? inverted : presslook::box(pressed, inverted).bar;  // drawBox's bar
     tft.setTextColor(pal(onBar ? termpal::TEXT : termpal::BG));  // the ground's
     text(tag, x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
 }
@@ -643,7 +651,7 @@ static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
 }
 
 // A preset on the PRESETS tab (100x60): the name (TITLE) over two chips big enough to tell apart at
-// a glance (inside, outside); the TEXT bar when pressed. The Xbox focus is the ring around it.
+// a glance (inside, outside); drawBox's pressed look. The Xbox focus is the ring around it.
 static void drawPresetSlot(const Rect& r, int slot, bool pressed) {
     const ledpresets::Preset& p = ledpresets::PRESETS[slot];
     const uint16_t ink = drawBox(r, pressed, false, 1, pal(termpal::TEXT));
@@ -665,7 +673,7 @@ static void drawTile(const Rect& r, int swatch, bool pressed) {
     const uint16_t ink = drawBox(r, pressed, sel, 1, pal(termpal::TEXT));
     Look l;
     l.swatch = swatch;
-    const bool onBar = pressed != sel;  // drawBox's bar
+    const bool onBar = presslook::box(pressed, sel).bar;
     drawChip(r.x + TILE_CHIP_X, r.y + (r.h - TILE_CHIP_H) / 2, TILE_CHIP_W, TILE_CHIP_H, l, onBar);
     char name[12];
     upper(s.name, name, sizeof(name));
@@ -690,12 +698,11 @@ static void drawTab(const Rect& r, const char* s, bool pressed, bool current) {
     clearBg(r);
     drawTabRule(r.x - 2, r.x + r.w + 2);  // under it and its focus ring
     uint16_t ink = pal(termpal::MID);
-    if (pressed != current) {  // a press inverts the look, as drawBox's
+    const presslook::Box b = presslook::box(pressed, current);  // as drawBox's, the bar down into the rule
+    if (b.bar) {
         tft.fillRect(r.x + 1, r.y + 1, r.w - 2, TAB_RULE_Y - r.y, pal(termpal::TEXT));
+        if (b.ring) drawPressRing(r.x, r.y, r.w, TAB_RULE_Y + 1 - r.y);
         ink = pal(termpal::BG);
-    } else if (pressed) {  // the current tab pressed: hollow, down to the rule
-        tft.drawRect(r.x + 1, r.y + 1, r.w - 2, TAB_RULE_Y - r.y, pal(termpal::TEXT));
-        ink = pal(termpal::TEXT);
     }
     tft.setTextColor(ink);
     text(s, r.x + r.w / 2, r.y + r.h / 2, Face::SMALL, MC_DATUM);
@@ -1111,8 +1118,8 @@ static void drawFocus(int id, bool on) {
 // it (BODY, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). The
 // lyrics keep their case (they read better than caps); all texts are accent-folded (the font is
 // ASCII only). Without a song to sing along the big text is the state word in DIM (>NO SYNCED
-// LYRICS, >STANDBY, >NO SIGNAL; >WRONG KEY, a problem, in ALERT) and the screen stays. The line
-// switches at its start time: karaoke interpolates the position between polls and lyricsTick looks
+// LYRICS, >NOTHING PLAYING, >LYRICS: NO SIGNAL; >WRONG KEY, a problem, in ALERT) and the screen
+// stays. The line switches at its start time: karaoke interpolates the position between polls and lyricsTick looks
 // every KARAOKE_TICK_MS. Each part is redrawn only when what it shows changed.
 static constexpr uint32_t KARAOKE_TICK_MS = 50;
 // The areas' sizes and pitches are termlayout's (test_termfont checks each face's lines fit them).
@@ -2504,9 +2511,9 @@ static void describe(char* out, size_t n, const Look& l, Target zone, bool withL
 }
 
 // A voice reply's note for a change to `zone` that reached a light the deck has no link to ("Purple,
-// 70 percent, outside not connected"): from the published link state, what /status says.
+// 70 percent, outside not connected"): from the link state loop() last published, what /status says
+// (answerVoice publishes the change itself).
 static void noteUnlinked(char* line, size_t n, Target zone) {
-    publish();
     const Published p = snapshot();
     const bool inMissed = zone != OUTSIDE && !p.up[0];  // up[]: the controllers, 0 inside, 1 outside
     const bool outMissed = zone != INSIDE && !p.up[1];
@@ -2845,6 +2852,7 @@ void loop() {
         if (bootSince == 0) bootSince = millis();
         else if (millis() - bootSince > 2000) {
             calibrate();
+            tapGuard.arm();  // the last cross's tap must not land on the screen drawn next
             drawAll();
             bootSince = 0;
         }

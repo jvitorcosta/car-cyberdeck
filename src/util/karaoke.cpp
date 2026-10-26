@@ -23,8 +23,8 @@ bool available(bool answered, bool playing, const stateparse::Deck& d) {
 
 const char* state(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d) {
     if (wrongKey) return ">WRONG KEY";
-    if (!answered) return ">NO SIGNAL";
-    if (!playing || !d.track[0]) return ">STANDBY";
+    if (!answered) return ">LYRICS: NO SIGNAL";
+    if (!playing || !d.track[0]) return ">NOTHING PLAYING";
     if (!available(answered, playing, d)) return ">NO SYNCED LYRICS";
     return "";
 }

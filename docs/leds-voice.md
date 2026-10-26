@@ -67,7 +67,9 @@ the panel would turn teal.
   six presets as big buttons, two rows of three, each its name over two colour chips (inside,
   outside); a tap applies it (`>ROSE APPLIED`) and the tab stays. The page last shown (PRESETS too)
   is kept over a reboot, and `[LIGHTS]` opens on it. The Lyrics page's song row is in capitals
-  like the rest of the chrome; the lyrics keep their case.
+  like the rest of the chrome; the lyrics keep their case. With nothing to sing along it shows,
+  big and dim, the same words as LYRICS's messages: `>NOTHING PLAYING`, `>NO SYNCED LYRICS`,
+  `>LYRICS: NO SIGNAL` (or `>WRONG KEY` in red).
 - **BOTH while the lights differ** (after a preset like ROSE, whose lights differ, or after the
   INSIDE / OUTSIDE pages): no tile is ringed and the level box says `MIX`. On/off (Y,
   voice "off", the watch's Off) and `-` / `+` (LB / RB, "brighter" / "dimmer") act on each light's
@@ -85,8 +87,8 @@ the panel would turn teal.
   boot the trip before (`>LAST TRIP 12.4 KM 0:47`, or `>LAST TRIP 0:47` without a distance; 6 s).
   The cursor moves to its end and blinks while it shows. Then the prompt line is back to `>` (on
   Lights: the status line).
-- **Taps**: a press shows as the button's look inverted, in the theme's own colours (a box turns
-  into the solid bar, the lit bar into a hollow box), so it shows on every theme. After a screen or
+- **Taps**: a pressed button is the solid bar with a ring cut into it, in the theme's own colours,
+  so it differs from an idle box and from the selected (plain) bar on every theme, day and night. After a screen or
   page change the deck waits for the finger to lift and a quarter second to pass before it takes
   another touch, so a double tap on `[LIGHTS]` can't press `-` or PURPURA on the next screen.
 - **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the main screen's three

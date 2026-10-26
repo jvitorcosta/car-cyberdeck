@@ -86,11 +86,11 @@ void test_state_words() {
     TEST_ASSERT_EQUAL_STRING("", karaoke::state(true, false, true, d));  // sing
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::state(false, true, true, d));
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::state(true, true, true, d));
-    TEST_ASSERT_EQUAL_STRING(">NO SIGNAL", karaoke::state(false, false, true, d));
-    TEST_ASSERT_EQUAL_STRING(">STANDBY", karaoke::state(true, false, false, d));  // paused
+    TEST_ASSERT_EQUAL_STRING(">LYRICS: NO SIGNAL", karaoke::state(false, false, true, d));
+    TEST_ASSERT_EQUAL_STRING(">NOTHING PLAYING", karaoke::state(true, false, false, d));  // paused
     stateparse::Deck e = d;
     e.track[0] = 0;
-    TEST_ASSERT_EQUAL_STRING(">STANDBY", karaoke::state(true, false, true, e));  // nothing plays
+    TEST_ASSERT_EQUAL_STRING(">NOTHING PLAYING", karaoke::state(true, false, true, e));  // nothing plays
     e = d;
     strcpy(e.lyricKind, "plain");
     TEST_ASSERT_EQUAL_STRING(">NO SYNCED LYRICS", karaoke::state(true, false, true, e));
@@ -236,7 +236,6 @@ void test_wrap_text_longer_than_a_line_buffer() {
 void test_is_alert() {
     TEST_ASSERT_TRUE(karaoke::isAlert(">WRONG KEY"));
     TEST_ASSERT_FALSE(karaoke::isAlert(">NO SIGNAL"));
-    TEST_ASSERT_FALSE(karaoke::isAlert(">STANDBY"));
     TEST_ASSERT_FALSE(karaoke::isAlert(">NO SYNCED LYRICS"));
     TEST_ASSERT_FALSE(karaoke::isAlert(""));
     TEST_ASSERT_FALSE(karaoke::isAlert(nullptr));

@@ -413,6 +413,8 @@ void test_karaoke_pitches() {
     TEST_ASSERT_TRUE(rows(Face::BODY) <= KARAOKE_NEXT_DY && 2 * KARAOKE_NEXT_DY <= KARAOKE_NEXT_H);
     fitsCentred(Face::BIG, ">NO SYNCED LYRICS", KARAOKE_W + 2 * MARGIN);
     fitsCentred(Face::BIG, ">WRONG KEY", KARAOKE_W + 2 * MARGIN);
+    fitsCentred(Face::BIG, ">NOTHING PLAYING", KARAOKE_W + 2 * MARGIN);  // the state words, on one line
+    fitsCentred(Face::BIG, ">LYRICS: NO SIGNAL", KARAOKE_W + 2 * MARGIN);
     // ledpanel clears a lyric area from as high as its face's accented capitals rise over its first
     // line: the big area (BIG or TITLE, from y 56) into the 12 rows under the body's top (y 44), the
     // next line's (BODY, from y 156) into the 10 rows under the big area (to y 146)
