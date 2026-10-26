@@ -1395,10 +1395,9 @@ static void waitTap(int* rx, int* ry) {
 static void calibrate() {
     for (;;) {
         tft.fillScreen(TFT_BLACK);
-        tft.setTextDatum(MC_DATUM);
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        tft.drawString("Touch calibration", 160, 82, 4);
-        tft.drawString("Tap each cross with the pen", 160, 160, 2);
+        text("Touch calibration", 160, 82, Face::TITLE, MC_DATUM);
+        text("Tap each cross with the pen", 160, 160, Face::BODY, MC_DATUM);
         int rx[N_TARGET], ry[N_TARGET];
         for (int i = 0; i < N_TARGET; i++) {
             drawTarget(CAL_SX[i], CAL_SY[i], TFT_RED);
@@ -1420,13 +1419,13 @@ static void calibrate() {
             touch::setCalibration(k);
             tft.fillScreen(TFT_BLACK);
             tft.setTextColor(TFT_GREEN, TFT_BLACK);
-            tft.drawString("Calibrated", 160, 120, 4);
+            text("Calibrated", 160, 120, Face::TITLE, MC_DATUM);
             delay(800);
             return;
         }
         tft.fillScreen(TFT_BLACK);
         tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-        tft.drawString("Missed a cross - again", 160, 120, 4);
+        text("Missed a cross - again", 160, 120, Face::TITLE, MC_DATUM);
         delay(1500);
     }
 }
