@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <cstdio>
 #include <cstring>
 #include "../../src/util/lightstatus.h"
 
@@ -59,6 +60,26 @@ void test_messages() {
     TEST_ASSERT_EQUAL_STRING(">LIGHTS: LINKED", buf);
 }
 
+// A voice / watch reply for a change that reached a light the deck has no link to says so.
+void test_not_connected_note() {
+    char buf[64];
+    snprintf(buf, sizeof buf, "Purple, 70 percent");
+    lightstatus::notConnected(false, false, buf, sizeof buf);  // both reached: as it was
+    TEST_ASSERT_EQUAL_STRING("Purple, 70 percent", buf);
+    lightstatus::notConnected(false, true, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("Purple, 70 percent, outside not connected", buf);
+    snprintf(buf, sizeof buf, "Inside: Lights off");
+    lightstatus::notConnected(true, false, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("Inside: Lights off, inside not connected", buf);
+    snprintf(buf, sizeof buf, "Purple");
+    lightstatus::notConnected(true, true, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("Purple, lights not connected", buf);
+    char small[12];  // cut to the buffer, still terminated
+    snprintf(small, sizeof small, "Purple");
+    lightstatus::notConnected(true, true, small, sizeof small);
+    TEST_ASSERT_EQUAL_STRING("Purple, lig", small);
+}
+
 void test_is_alert() {
     TEST_ASSERT_TRUE(lightstatus::isAlert(">INSIDE: NO LINK"));
     TEST_ASSERT_TRUE(lightstatus::isAlert(">OUTSIDE: NO LINK"));
@@ -78,6 +99,7 @@ int main(int, char**) {
     RUN_TEST(test_link_cut_to_buffer);
     RUN_TEST(test_reply);
     RUN_TEST(test_messages);
+    RUN_TEST(test_not_connected_note);
     RUN_TEST(test_is_alert);
     return UNITY_END();
 }

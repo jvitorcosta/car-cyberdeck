@@ -82,11 +82,11 @@ void test_distance_rounds_down() {
     TEST_ASSERT_EQUAL_STRING("999.9 KM", b);
 }
 
-// No speed source has fed the meter: no made-up 0.0, the link it lacks.
+// No speed source has fed the meter: no made-up 0.0, just the unit (the band draws it in DIM).
 void test_distance_without_a_speed() {
     char b[16];
     tripmeter::distance(tripOf(32 * 60, 0, false), b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING("-- NO LINK", b);
+    TEST_ASSERT_EQUAL_STRING("-- KM", b);
 }
 
 void test_last_fits_the_message_buffer() {
@@ -99,7 +99,7 @@ void test_last_fits_the_message_buffer() {
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 12.4 KM 0:47", b);
     t.hasDistance = false;
     tripmeter::last(t, b, sizeof(b));
-    TEST_ASSERT_EQUAL_STRING(">LAST TRIP -- KM 0:47", b);
+    TEST_ASSERT_EQUAL_STRING(">LAST TRIP 0:47", b);  // no km part when there was none
     t.seconds = 99 * 3600 + 59 * 60;  // a long one
     t.meters = 999900;
     t.hasDistance = true;

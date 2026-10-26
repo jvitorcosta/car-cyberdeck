@@ -271,9 +271,9 @@ void test_dash_trip_band_fits() {
     TEST_ASSERT_EQUAL_STRING("99:59", hm);
     TEST_ASSERT_EQUAL_STRING("999.9 KM", dist);
     TEST_ASSERT_TRUE(tripTimeX() >= DASH_X + termfont::width(Face::SMALL, TRIP_LABEL) + MARGIN);
-    // the longest time (hours aren't capped: 999:59 too) clears the longest distance and NO LINK
+    // the longest time (hours aren't capped: 999:59 too) clears the longest distance and "-- KM"
     for (const char* tm : {static_cast<const char*>(hm), "999:59"}) {
-        for (const char* d : {static_cast<const char*>(dist), "-- NO LINK", "0.0 KM"}) {
+        for (const char* d : {static_cast<const char*>(dist), "-- KM", "0.0 KM"}) {
             fitsRight(Face::BODY, d, DASH_RIGHT, tripTimeX() + termfont::width(Face::BIG, tm));
         }
     }
@@ -311,12 +311,13 @@ void test_dash_lights_fit() {
             int k = 0;
             for (; sw.name[k]; k++) name[k] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[k])));
             name[k] = 0;
-            if (n == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);
+            if (n == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);  // CYAN
             snprintf(s, sizeof(s), "%s 100%%", name);
             fitsLeft(Face::BODY, s, lightTextX(i), right);
         }
         for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(Face::BODY, s, lightTextX(i), right);
     }
+    TEST_ASSERT_EQUAL_STRING("CYAN", LIGHT_BLUE_SHORT);  // what voice takes for it too ("cyan")
     // the longest case, pinned: "OUT [chip] YELLOW 100%" is about 136 px, in its half's 145
     const int outRow = lightTextX(1) + termfont::width(Face::BODY, "YELLOW 100%") - lightX(1);
     TEST_ASSERT_TRUE(outRow >= 130 && outRow <= 140);
@@ -345,7 +346,8 @@ void test_dash_prompt_fits() {
     tripmeter::last(t, last, sizeof(last));
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", last);
     for (const char* m : {static_cast<const char*>(last), PROMPT_IDLE, ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED",
-                          ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">WRONG KEY", ">NO SIGNAL", ">STANDBY", ">MUSIC ON", ">MUSIC OFF"}) {
+                          ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">WRONG KEY", ">LYRICS: NO SIGNAL", ">NOTHING PLAYING",
+                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
     const deckmenu::Rect& band = deckmenu::PROMPT_BAND;
@@ -357,10 +359,15 @@ void test_dash_prompt_fits() {
     TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
 }
 
-// Music mode's line on the prompt line: SONG_PROMPT, the swatch's chip (as tall as SMALL's caps, on
-// the line's baseline) and its name, the longest one's cursor still by DASH_RIGHT; NO SIGNAL alone.
+// Music mode's line on the prompt line: MUSIC_PROMPT, the swatch's chip (as tall as SMALL's caps, on
+// the line's baseline, inside the prompt band) and its name, the longest one's cursor still by
+// DASH_RIGHT; WAITING and NO SIGNAL alone. The texts are the owner's (pinned), NO SIGNAL apart from
+// LYRICS's.
 void test_song_colours_fit() {
-    TEST_ASSERT_TRUE(songChipX() >= DASH_X + termfont::advance(Face::SMALL, SONG_PROMPT) + 2);
+    TEST_ASSERT_EQUAL_STRING(">MUSIC", MUSIC_PROMPT);
+    TEST_ASSERT_EQUAL_STRING(">MUSIC: WAITING", MUSIC_WAITING);
+    TEST_ASSERT_EQUAL_STRING(">MUSIC: NO SIGNAL", MUSIC_NO_SIGNAL);
+    TEST_ASSERT_TRUE(songChipX() >= DASH_X + termfont::advance(Face::SMALL, MUSIC_PROMPT) + 2);
     TEST_ASSERT_TRUE(songNameX() >= songChipX() + MUSIC_CHIP + 2);
     for (int k = 0; k < ledlook::N_GRID; k++) {  // a song's colour is always one of the grid's
         const ledlook::Swatch& sw = ledlook::SWATCHES[k];
@@ -371,8 +378,14 @@ void test_song_colours_fit() {
         TEST_ASSERT_TRUE_MESSAGE(songNameX() + termfont::advance(Face::SMALL, name) + termfont::cell(Face::SMALL) + MARGIN <= DASH_RIGHT,
                                  name);
     }
-    TEST_ASSERT_TRUE(DASH_X + termfont::advance(Face::SMALL, MUSIC_NO_SIGNAL) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
+    for (const char* m : {MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
+        TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
+    }
     TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::SMALL), MUSIC_CHIP);
+    // the chip's rows (PROMPT_BASE - MUSIC_CHIP .. PROMPT_BASE - 1) inside the band, clear of its rule
+    const deckmenu::Rect& band = deckmenu::PROMPT_BAND;
+    TEST_ASSERT_TRUE(PROMPT_BASE - MUSIC_CHIP > band.y);
+    TEST_ASSERT_TRUE(PROMPT_BASE <= band.y + band.h);
 }
 
 void test_status_fits() {
@@ -380,7 +393,8 @@ void test_status_fits() {
     // its ink, '/' included, stays inside, and nothing goes below the baseline (the clear is the rect)
     const termfont::Font& f = termfont::font(Face::SMALL);
     for (const char* s : {"LINK 2/2", "OUTSIDE: NO LINK", "INSIDE: NO LINK", "NO LINK", ">PURPURA APPLIED", ">INSIDE: NO LINK",
-                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">NO SYNCED LYRICS", ">WRONG KEY", ">STANDBY", ">NO SIGNAL"}) {
+                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">NO SYNCED LYRICS", ">WRONG KEY", ">NOTHING PLAYING",
+                          ">LYRICS: NO SIGNAL"}) {
         for (const char* p = s; *p; p++) {
             const termfont::Glyph& g = f.glyph[static_cast<unsigned char>(*p) - f.first];
             if (g.height == 0) continue;

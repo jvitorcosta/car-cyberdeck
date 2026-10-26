@@ -47,9 +47,9 @@ constexpr int BOOT_X = 8, BOOT_Y0 = 2, BOOT_DY = 13;
 
 // ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, TRIP_BAND, LIGHTS_BAND,
 // PROMPT_BAND, then the items at the bottom), each band but the prompt line under a MID rule from x 4
-// to 315 (from the clock band down, the next band's first row). Text starts at DASH_X; right-aligned text ends at DASH_RIGHT. A
-// _Y is the caps' top row, a _BASE the baseline (the row under the caps), as ledpanel's text() places
-// them.
+// to 315 (from the clock band down, the next band's first row). Text starts at DASH_X; right-aligned
+// text ends at DASH_RIGHT. A _Y is the caps' top row, a _BASE the baseline (the row under the caps),
+// as ledpanel's text() places them.
 constexpr int DASH_X = 8, DASH_RIGHT = 312;
 // the header: one line (SMALL) and its rule
 constexpr const char* DASH_TITLE = "CYBERDECK // HONDA CITY TOURING 2022";
@@ -71,18 +71,21 @@ constexpr const char* LIGHT_LABELS[] = {"IN", "OUT"};  // the controllers' order
 constexpr int N_LIGHT_LABELS = sizeof(LIGHT_LABELS) / sizeof(LIGHT_LABELS[0]);
 constexpr int LIGHT_ROW_BASE = 157, LIGHTS_RULE_Y = 166, LIGHTS_SPLIT = 159;
 constexpr int LIGHT_CHIP_W = 14, LIGHT_CHIP_H = 11, LIGHT_GAP = 6;
-// light blue's name on the row: "LIGHT BLUE 100%" doesn't fit OUT's half, "LT BLUE 100%" just does
-constexpr const char* LIGHT_BLUE_SHORT = "LT BLUE";
+// light blue's name on the row: "LIGHT BLUE 100%" doesn't fit OUT's half; CYAN (a word voice takes
+// for it too) does
+constexpr const char* LIGHT_BLUE_SHORT = "CYAN";
 // the prompt line (SMALL, on PROMPT_BASE, the caps centred between the lights' rule and the items): a
 // message while one shows, music mode's line, else PROMPT_IDLE; the block cursor (a SMALL cell)
 // after it, by DASH_RIGHT
 constexpr const char* PROMPT_IDLE = ">";
 constexpr int PROMPT_BASE = 185;
-// music mode's line: SONG_PROMPT, then (once the song's palette came) its swatch as a MUSIC_CHIP px
+// music mode's line: once the song's palette came, MUSIC_PROMPT and its swatch as a MUSIC_CHIP px
 // square (SMALL's caps, on the baseline) MUSIC_CHIP_GAP after it and the swatch's name MUSIC_CHIP_GAP
-// after that; or MUSIC_NO_SIGNAL alone
-constexpr const char* SONG_PROMPT = ">SONG COLOURS";
-constexpr const char* MUSIC_NO_SIGNAL = ">NO SIGNAL";
+// after that (">MUSIC [chip] PINK"); before, MUSIC_WAITING alone; with no palette for a while,
+// MUSIC_NO_SIGNAL alone (not LYRICS's ">LYRICS: NO SIGNAL")
+constexpr const char* MUSIC_PROMPT = ">MUSIC";
+constexpr const char* MUSIC_WAITING = ">MUSIC: WAITING";
+constexpr const char* MUSIC_NO_SIGNAL = ">MUSIC: NO SIGNAL";
 constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 5;
 
 // Whether the HI / LO line `s`, right-aligned at DASH_RIGHT, fits the row from DASH_X. When not,
@@ -93,7 +96,7 @@ inline bool hiLoFits(const char* s) { return DASH_X <= DASH_RIGHT - termfont::wi
 inline int tripTimeX() { return DASH_X + termfont::advance(termfont::Face::SMALL, TRIP_LABEL) + TRIP_TIME_GAP; }
 
 // Music mode's swatch chip and its name on the prompt line.
-inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, SONG_PROMPT) + MUSIC_CHIP_GAP; }
+inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, MUSIC_PROMPT) + MUSIC_CHIP_GAP; }
 inline int songNameX() { return songChipX() + MUSIC_CHIP + MUSIC_CHIP_GAP; }
 
 // A light's half of the lights row (0 inside, 1 outside): where it starts, its chip, its text.

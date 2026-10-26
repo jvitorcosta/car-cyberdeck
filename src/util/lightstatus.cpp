@@ -41,6 +41,14 @@ void linkChange(bool inside, bool up, char* buf, size_t n) {
 
 void linkChangeBoth(bool up, char* buf, size_t n) { snprintf(buf, n, ">LIGHTS: %s", up ? "LINKED" : "NO LINK"); }
 
+void notConnected(bool inMissed, bool outMissed, char* line, size_t n) {
+    if (!inMissed && !outMissed) return;
+    const size_t len = strlen(line);
+    if (len + 1 >= n) return;
+    const char* which = inMissed && outMissed ? "lights" : inMissed ? "inside" : "outside";
+    snprintf(line + len, n - len, ", %s not connected", which);
+}
+
 void reply(State in, State out, char* buf, size_t n) {
     snprintf(buf, n, "inside=%s outside=%s", word(in), word(out));
 }

@@ -98,13 +98,13 @@ void test_state_words() {
 
 void test_why_not() {
     stateparse::Deck d = synced();
-    TEST_ASSERT_EQUAL_STRING(">NO SIGNAL", karaoke::whyNot(false, false, true, d));
+    TEST_ASSERT_EQUAL_STRING(">LYRICS: NO SIGNAL", karaoke::whyNot(false, false, true, d));  // not MUSIC's
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::whyNot(false, true, true, d));
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::whyNot(true, true, true, d));
-    TEST_ASSERT_EQUAL_STRING(">STANDBY", karaoke::whyNot(true, false, false, d));  // paused
+    TEST_ASSERT_EQUAL_STRING(">NOTHING PLAYING", karaoke::whyNot(true, false, false, d));  // paused
     stateparse::Deck e = d;
     e.track[0] = 0;
-    TEST_ASSERT_EQUAL_STRING(">STANDBY", karaoke::whyNot(true, false, true, e));  // nothing plays
+    TEST_ASSERT_EQUAL_STRING(">NOTHING PLAYING", karaoke::whyNot(true, false, true, e));  // nothing plays
     e = d;
     strcpy(e.lyricKind, "plain");
     TEST_ASSERT_EQUAL_STRING(">NO SYNCED LYRICS", karaoke::whyNot(true, false, true, e));

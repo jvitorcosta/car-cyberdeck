@@ -32,7 +32,7 @@ static void km(const Trip& t, char* buf, size_t n) {
 
 void distance(const Trip& t, char* buf, size_t n) {
     if (!t.hasDistance) {
-        snprintf(buf, n, "-- NO LINK");
+        snprintf(buf, n, "-- KM");
         return;
     }
     char k[16];
@@ -42,9 +42,12 @@ void distance(const Trip& t, char* buf, size_t n) {
 
 void last(const Trip& t, char* buf, size_t n) {
     char k[16], hm[16];
-    if (t.hasDistance) km(t, k, sizeof(k));
-    else snprintf(k, sizeof(k), "--");
     elapsed(t, hm, sizeof(hm));
+    if (!t.hasDistance) {
+        snprintf(buf, n, ">LAST TRIP %s", hm);
+        return;
+    }
+    km(t, k, sizeof(k));
     snprintf(buf, n, ">LAST TRIP %s KM %s", k, hm);
 }
 

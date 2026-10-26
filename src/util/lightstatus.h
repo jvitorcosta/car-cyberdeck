@@ -24,6 +24,11 @@ void linkChange(bool inside, bool up, char* buf, size_t n);
 void linkChangeBoth(bool up, char* buf, size_t n);
 // A message that reports a problem (drawn in the ALERT colour): ">INSIDE: NO LINK" and its kin.
 bool isAlert(const char* msg);
+// A voice / watch reply ("Purple, 70 percent") for a change that reached a light the deck has no
+// link to: ", inside not connected" / ", outside not connected", or ", lights not connected" for
+// both, appended to `line` (cut to n bytes). inMissed / outMissed: the change was for that light and
+// it isn't linked. Neither: the line stays as it is.
+void notConnected(bool inMissed, bool outMissed, char* line, size_t n);
 // The GET /status reply: "inside=on outside=nolink". Cut to n bytes.
 void reply(State in, State out, char* buf, size_t n);
 }  // namespace lightstatus

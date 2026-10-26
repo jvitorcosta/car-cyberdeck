@@ -10,7 +10,7 @@
 namespace musiclights {
 constexpr int FLOOR_PCT = 40;          // the cap never takes a light below this (unless the owner's is lower)
 constexpr int WHITE_SAT_PCT = 50;      // a colour less saturated than this is white
-constexpr uint32_t SIGNAL_MS = 15000;  // no palette for this long: NO SIGNAL
+constexpr uint32_t SIGNAL_MS = 15000;  // no palette for this long: ">MUSIC: NO SIGNAL"
 
 // The Lights grid's swatch (ledlook's first N_GRID: never the preset-only light blue) whose screen
 // colour is nearest: by hue (circular) among the saturated ones, or the white one for a colour under
@@ -23,8 +23,8 @@ int level(int ownerPct, int capPct);
 // n <= 0) is to.
 songpalette::Rgb blend(songpalette::Rgb from, songpalette::Rgb to, int k, int n);
 
-// The prompt line: Waiting (no palette yet, ">SONG COLOURS" alone), Colour (">SONG COLOURS" and the
-// swatch) or NoSignal (">NO SIGNAL"). heard: a palette came this run, the latest at lastAt; until one
+// The prompt line: Waiting (no palette yet, ">MUSIC: WAITING"), Colour (">MUSIC" and the swatch) or
+// NoSignal (">MUSIC: NO SIGNAL"). heard: a palette came this run, the latest at lastAt; until one
 // has, lastAt is when the mode went on. NoSignal from SIGNAL_MS after lastAt.
 enum class State : uint8_t { Waiting, Colour, NoSignal };
 State state(bool heard, uint32_t lastAt, uint32_t now);

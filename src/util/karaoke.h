@@ -18,8 +18,9 @@ bool available(bool answered, bool playing, const stateparse::Deck& d);
 // The KARAOKE screen's word in place of the lyrics: ">WRONG KEY" (the deck turned the key down),
 // ">NO SIGNAL" (no state came), ">STANDBY" (paused, or no track), ">NO SYNCED LYRICS", or "" (sing).
 const char* state(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d);
-// Why the Menu's KARAOKE item doesn't open: ">WRONG KEY", ">NO SIGNAL", ">STANDBY" (heard, but paused
-// or no track: what the KARAOKE screen would show) or ">NO SYNCED LYRICS" (heard, plays, nothing synced).
+// Why the Menu's LYRICS item doesn't open, on the Menu's prompt line: ">WRONG KEY", ">LYRICS: NO
+// SIGNAL" (named, as music mode's ">MUSIC: NO SIGNAL" shares the line), ">NOTHING PLAYING" (heard, but
+// paused or no track) or ">NO SYNCED LYRICS" (heard, plays, nothing synced).
 const char* whyNot(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d);
 // A state word / message that reports a problem (drawn in the ALERT colour): ">WRONG KEY".
 bool isAlert(const char* msg);
