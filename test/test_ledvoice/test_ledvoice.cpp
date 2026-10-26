@@ -57,8 +57,8 @@ void test_nothing_to_do() {
 }
 
 void test_preset_names() {
-    const char* in[] = {"Rose.", "FIRE!", "calm", "Purpura"};
-    for (int i = 0; i < 4; i++) {
+    const char* in[] = {"Rose.", "FIRE!", "calm", "Purpura", "Forest", "ocean."};
+    for (int i = 0; i < 6; i++) {
         const ledvoice::Command c = parsed(in[i]);
         TEST_ASSERT_EQUAL_INT_MESSAGE(i + 1, c.preset, in[i]);
         TEST_ASSERT_EQUAL_INT(-1, c.level);
@@ -100,6 +100,14 @@ void test_favourite_words_and_mishearings() {
     TEST_ASSERT_EQUAL_INT(3, parsed("preset three").preset);
     TEST_ASSERT_EQUAL_INT(4, parsed("favourite for").preset);
     TEST_ASSERT_EQUAL_INT(4, parsed("Favourite four please").preset);
+    TEST_ASSERT_EQUAL_INT(5, parsed("preset five").preset);
+    TEST_ASSERT_EQUAL_INT(6, parsed("Preset six.").preset);
+}
+void test_preset_five_and_six_digits() {
+    TEST_ASSERT_EQUAL_INT(5, parsed("preset 5").preset);
+    ledvoice::Command c = parsed("favourite 6");
+    TEST_ASSERT_EQUAL_INT(6, c.preset);
+    TEST_ASSERT_EQUAL_INT(-1, c.level);
 }
 void test_filler_to_is_not_a_favourite() {
     const ledvoice::Command c = parsed("set the lights to blue");
@@ -156,6 +164,7 @@ int main(int, char**) {
     RUN_TEST(test_name_disarms_a_favourite_word);
     RUN_TEST(test_favourite_digit);
     RUN_TEST(test_favourite_words_and_mishearings);
+    RUN_TEST(test_preset_five_and_six_digits);
     RUN_TEST(test_filler_to_is_not_a_favourite);
     RUN_TEST(test_favourite_without_slot);
     RUN_TEST(test_level_still_works);

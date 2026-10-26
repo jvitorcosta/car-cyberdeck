@@ -147,16 +147,20 @@ void test_menu_items_fit() {
 }
 
 void test_preset_names_fit() {
-    const deckmenu::Rect lights = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_PRE0);
-    TEST_ASSERT_TRUE(lights.w == 75 && lights.h == 36);
-    for (int i = 0; i < ledpresets::N; i++) fitsCentred(Face::BODY, ledpresets::PRESETS[i].name, lights.w);
-    // the name over the two chips (12-14 px squares), the chips' 1 px edge on a bar clear of the
+    TEST_ASSERT_EQUAL_INT(deckmenu::P_N - deckmenu::P_PRE0, ledpresets::N);
+    for (int i = 0; i < ledpresets::N; i++) {
+        const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Presets, deckmenu::P_PRE0 + i);
+        TEST_ASSERT_TRUE(r.w == 100 && r.h == 60);
+        fitsCentred(Face::TITLE, ledpresets::PRESETS[i].name, r.w);  // "PURPURA", the widest: 69 px
+    }
+    // the name over the two chips (16-20 px squares), the chips' 1 px edge on a bar clear of the
     // name's ink and the margin, the pair centred within the margins
-    TEST_ASSERT_TRUE(PRESET_CHIP >= 12 && PRESET_CHIP <= 14);
-    TEST_ASSERT_TRUE(fromCapTop(Face::BODY, PRESET_NAME_Y).bottom < PRESET_CHIP_Y - 1);
+    const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Presets, deckmenu::P_PRE0);
+    TEST_ASSERT_TRUE(PRESET_CHIP >= 16 && PRESET_CHIP <= 20);
+    TEST_ASSERT_TRUE(fromCapTop(Face::TITLE, PRESET_NAME_Y).bottom < PRESET_CHIP_Y - 1);
     TEST_ASSERT_TRUE(PRESET_NAME_Y >= MARGIN);  // the names are capitals: their ink starts at the caps
-    TEST_ASSERT_TRUE(PRESET_CHIP_Y + PRESET_CHIP <= lights.h - MARGIN);
-    TEST_ASSERT_TRUE(2 * PRESET_CHIP + PRESET_CHIP_GAP <= lights.w - 2 * MARGIN);
+    TEST_ASSERT_TRUE(PRESET_CHIP_Y + PRESET_CHIP <= r.h - MARGIN);
+    TEST_ASSERT_TRUE(2 * PRESET_CHIP + PRESET_CHIP_GAP <= r.w - 2 * MARGIN);
 }
 
 void test_colour_names_fit() {
@@ -164,7 +168,7 @@ void test_colour_names_fit() {
     TEST_ASSERT_EQUAL_INT(75, r.w);
     TEST_ASSERT_TRUE(TILE_CHIP_X + TILE_CHIP_W + MARGIN <= TILE_TEXT_X);
     TEST_ASSERT_TRUE(TILE_CHIP_H <= r.h - 2 * MARGIN);
-    TEST_ASSERT_TRUE(TILE_CHIP_X >= MARGIN && TILE_CHIP_W == 16 && TILE_CHIP_H == 28);
+    TEST_ASSERT_TRUE(TILE_CHIP_X >= MARGIN && TILE_CHIP_W == 16 && TILE_CHIP_H == 48);
     for (const ledlook::Swatch& s : ledlook::SWATCHES) {
         char name[16];
         size_t i = 0;
@@ -176,9 +180,13 @@ void test_colour_names_fit() {
 
 void test_chrome_fits() {
     fitsCentred(Face::BODY, "< BACK", deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_BACK).w);
-    const int tab = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_ZONE0).w;
-    TEST_ASSERT_EQUAL_INT(76, tab);
-    for (const char* s : {"BOTH", "INSIDE", "OUTSIDE"}) fitsCentred(Face::BODY, s, tab);
+    // the four tabs are SMALL: at 56 px, BODY's "PRESETS" (55 px) would touch the edges
+    const int tab = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_TAB0).w;
+    TEST_ASSERT_EQUAL_INT(56, tab);
+    TEST_ASSERT_EQUAL_INT(deckmenu::N_TABS, N_TAB_LABELS);
+    TEST_ASSERT_EQUAL_STRING("PRESETS", TAB_LABELS[deckmenu::TAB_PRESETS]);
+    TEST_ASSERT_TRUE(termfont::width(Face::BODY, "PRESETS") > tab - 2 * MARGIN);
+    for (const char* s : TAB_LABELS) fitsCentred(Face::SMALL, s, tab);
     const int pm = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_MINUS).w;
     for (const char* s : {"[-]", "[+]"}) fitsCentred(Face::TITLE, s, pm);
     for (const char* s : {"100%", "MIX", "OFF"}) fitsCentred(Face::TITLE, s, deckmenu::LEVEL.w);

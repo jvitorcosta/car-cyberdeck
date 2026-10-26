@@ -9,7 +9,7 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 - `GET /state?k=<REMOTE_TOKEN>` answers the same line without changing anything.
 - Both take an optional `&zone=inside|outside`: then only that light's page changes (or is read),
   and the reply is prefixed: `Inside: Purple, 70 percent`. Without it, both lights (the BOTH page).
-- `GET /presets?k=<REMOTE_TOKEN>` lists the four presets, one line each, joined by newlines:
+- `GET /presets?k=<REMOTE_TOKEN>` lists the six presets, one line each, joined by newlines:
   `1 ROSE pink 40 pink 100` (slot, name, inside colour and level, outside colour and level). The
   list is fixed, so it never changes between calls.
 - `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on:
@@ -53,14 +53,17 @@ the panel would turn teal.
     while the black deck plays a song with synced lyrics, and dim (no tag) otherwise: a tap then
     says why. The song itself is on the Karaoke page only.
 - There is no Weather page any more: its data is on the main screen. The presets are on the Lights
-  page only (and voice, the watch, `/presets`).
+  page's PRESETS tab only (and voice, the watch, `/presets`).
 - **Lights**: `< BACK` (the same boxed button as on Karaoke) returns to the main screen. Then
-  Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE, the status line, the 2x4 colour boxes (a colour
-  chip and the name; the chosen one is the inverted box), the presets (the name over two colour
-  chips, inside and outside), and a 10-cell level bar with `-` / `+` (its label is the %, `MIX` or
-  `OFF`). Colour and preset names share one size. Tap a tile to set the colour and turn on;
-  double-tap the lit one to turn off. The Karaoke page's song row is in capitals like the rest of
-  the chrome; the lyrics keep their case.
+  Pip-Boy style tabs for BOTH / INSIDE / OUTSIDE / PRESETS (in the small face: four tabs fit beside
+  `< BACK` only at 56 px each, too narrow for the body face's `PRESETS`), and the status line. On
+  BOTH, INSIDE and OUTSIDE: the 2x4 colour boxes (a tall colour chip and the name; the chosen one is
+  the inverted box) and a 10-cell level bar with `-` / `+` (its label is the %, `MIX` or `OFF`).
+  Tap a tile to set the colour and turn on; double-tap the lit one to turn off. On **PRESETS**: the
+  six presets as big buttons, two rows of three, each its name over two colour chips (inside,
+  outside); a tap applies it (`>ROSE APPLIED`) and the tab stays. The page last shown (PRESETS too)
+  is kept over a reboot, and `[LIGHTS]` opens on it. The Karaoke page's song row is in capitals
+  like the rest of the chrome; the lyrics keep their case.
 - **BOTH while the lights differ** (after a preset like ROSE, whose lights differ, or after the
   INSIDE / OUTSIDE pages): no tile is ringed and the level box says `MIX`. On/off (Y,
   voice "off", the watch's Off) and `-` / `+` (LB / RB, "brighter" / "dimmer") act on each light's
@@ -78,31 +81,38 @@ the panel would turn teal.
   line is back to `>` (on Lights: the status line).
 - **Xbox controller** (BLE): D-pad moves the focus (an inverted bar on the main screen's three
   buttons, left / right between them; a green ring on Lights), **A** presses, **B** is Back (to the
-  main screen; there it does nothing). On Lights only: **X** next page, **Y** this page's lights
-  on/off, **LB / RB** `-` / `+`. B used to switch to the BOTH page; use X for that now. The focus
-  shows only while the controller is connected: without it the main screen's three buttons look
-  alike, so the clock and the lights lead.
+  main screen; there it does nothing). On Lights only: **X** next page (BOTH, INSIDE, OUTSIDE,
+  PRESETS, round again); on BOTH / INSIDE / OUTSIDE **Y** this page's lights on/off, **LB / RB**
+  `-` / `+` (on PRESETS they do nothing; the D-pad moves over the six presets, A applies). B
+  used to switch to the BOTH page; use X for that now. The focus shows only while the controller
+  is connected: without it the main screen's three buttons look alike, so the clock and the
+  lights lead.
 
 ## Presets
 
-Four fixed presets replace the old saved favourites. They are in the firmware, so nothing is saved
-on the deck and there is no hold-to-save. Each sets **both** lights, both on:
+Six fixed presets replace the old saved favourites. They are in the firmware, so nothing is saved
+on the deck and there is no hold-to-save. Each sets **both** lights, both on, one colour at 40 %
+inside and 100 % outside:
 
 | # | Name | Inside | Outside |
 |---|---|---|---|
 | 1 | ROSE | pink 40 % | pink 100 % |
-| 2 | FIRE | red 50 % | red 100 % |
-| 3 | CALM | white 40 % | white 40 % |
+| 2 | FIRE | red 40 % | red 100 % |
+| 3 | CALM | white 40 % | white 100 % |
 | 4 | PURPURA | purple 40 % | purple 100 % |
+| 5 | FOREST | green 40 % | green 100 % |
+| 6 | OCEAN | blue 40 % | blue 100 % |
 
-- **Apply**: tap a preset on the Lights page, or Xbox A on it. That is all: no hold.
-- **Voice**: "rose", "fire", "calm" or "purpura", or "preset one" ... "preset four" (also
+- **Apply**: tap a preset on the Lights page's PRESETS tab, or Xbox A on it. That is all: no hold.
+- **Voice**: "rose", "fire", "calm", "purpura", "forest" or "ocean", or "preset one" ... "preset
+  six" (also
   `favourite`/`favorite`, and digits: "preset 2"). It applies to both lights, whatever zone was
   asked, and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
   `Rose: inside Pink 40 percent, outside Pink 100 percent`. Siri may hear "purpura" as "purple",
   which is the colour; say "preset four" for that one.
 - **Watch**: the Honda City app has a fourth page, **PRESETS**: each preset as a bar, inside on the
-  left and outside on the right, each half filled with its colour to its level. START there opens
+  left and outside on the right, each half filled with its colour to its level (all six, in shorter
+  bars than four would get). START there opens
   the same bars as a list; START on one applies it. "No presets yet" shows if `/presets` didn't
   answer.
 - Presets with different looks inside and outside make the BOTH page show `MIX` (see "BOTH while
@@ -144,7 +154,7 @@ English or Portuguese, any order, other words ignored (`src/util/ledvoice.h`):
 | Power | on, off / liga, desliga, acende, apaga |
 | Brighter / dimmer (10 % steps) | brighter, up, more / mais, aumenta, forte; dimmer, down, less / menos, diminui, fraco |
 | Level | a number (`50`, `50%`, rounded to 10), max/máximo, min/mínimo |
-| Preset | rose, fire, calm, purpura; or preset/favourite/favorite + 1-4, as a word or digit ("preset two", "preset 2") |
+| Preset | rose, fire, calm, purpura, forest, ocean; or preset/favourite/favorite + 1-6, as a word or digit ("preset two", "preset 2") |
 
 A colour also turns the lights on.
 
@@ -196,7 +206,8 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
   A colour or Off is sent for that zone (BOTH: both lights). Brightness opens a level screen whose
   fill rises and falls with UP/DOWN in 10 % steps; the deck gets the level 0.5 s after the last
   press.
-- **PRESETS page** (fourth page): the deck's four presets as bars, the name over each. The left
+- **PRESETS page** (fourth page): the deck's six presets as bars, the name over each (a size smaller
+  than with four, so all six fit between the pills). The left
   half is the inside light, the right half the outside one, each filled from its left edge to its
   level (the rest dark grey; a light that's off says OFF). START opens the same bars as a list
   ("No presets yet" if the deck didn't answer): the focused bar is taller, outlined in white and

@@ -14,12 +14,13 @@
 //           dimmed otherwise: a tap then only says why) and "MUSIC MODE" (a tap turns music mode on or
 //           off, an ON or OFF tag under it; see "Music mode" below). The song itself is on the Karaoke
 //           screen only
-//   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE as Pip-Boy tabs (BOTH sets both lights
-//           together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK 2/2",
-//           or "OUTSIDE: NO LINK" in ALERT), 2x4 colour buttons (tap one to set it and turn on,
-//           double-tap the lit one to turn the lights off), the four presets (tap: apply),
-//           and  [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two
-//           lights differ]  [+]
+//   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE / PRESETS as Pip-Boy tabs (BOTH sets both
+//           lights together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK
+//           2/2", or "OUTSIDE: NO LINK" in ALERT), then on the three look pages 2x4 colour buttons
+//           (tap one to set it and turn on, double-tap the lit one to turn the lights off) and
+//           [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two lights
+//           differ]  [+]; on PRESETS the six presets, two rows of three, each its name over its
+//           inside and outside chips (tap: apply, ">ROSE APPLIED"; the tab stays)
 //   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
 //           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
 //           >STANDBY / >NO SIGNAL / >WRONG KEY big in place of the lyrics). Read from the black
@@ -35,7 +36,8 @@
 // /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
 // drives it too: the D-pad moves the focus (an inverted bar on the Menu's three items, a TEXT ring on
 // Lights and Karaoke; none is drawn while no controller is connected), A presses, B goes back to the
-// Menu; on Lights X is the next page, Y on/off, LB / RB - / + (see "Xbox controller input" below).
+// Menu; on Lights X is the next page, and on the look pages Y on/off, LB / RB - / + (see "Xbox
+// controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
 // palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
 // there is no WiFi, no clock, and the deck stays in day mode.
@@ -130,7 +132,12 @@ using ledlook::Look;
 // one's own colour and level unless the change sets a colour). INSIDE and OUTSIDE each keep their
 // own look and change only their light. Voice works like the BOTH page.
 enum Target { BOTH, INSIDE, OUTSIDE };
-static Target target = BOTH;  // the page on screen
+static Target target = BOTH;  // the look page on screen, or the last one shown while PRESETS is
+// The PRESETS tab is a page of no look: while it shows, the screen is deckmenu's Presets (the same
+// < BACK and tabs, then the presets) and `target` keeps the look page it came from. LIGHTS on the
+// Menu opens the page last shown, this one too.
+static bool presetsTab = false;
+static int currentTab() { return presetsTab ? deckmenu::TAB_PRESETS : static_cast<int>(target); }
 
 static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
 static Look& cur() { return looks[target]; }
@@ -142,14 +149,16 @@ using deckmenu::Rect;
 using deckmenu::Screen;
 using deckmenu::M_ITEM0;
 using deckmenu::L_BACK;
-using deckmenu::L_ZONE0;
+using deckmenu::L_TAB0;
 using deckmenu::L_TILE0;
-using deckmenu::L_PRE0;
 using deckmenu::L_MINUS;
 using deckmenu::L_PLUS;
 using deckmenu::K_BACK;
+using deckmenu::P_PRE0;
 
 static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Menu
+// Lights on any of its tabs (Presets is its PRESETS tab).
+static bool onLights() { return screen == Screen::Lights || screen == Screen::Presets; }
 // The palette: every colour goes through termpal with this flag, so night mode only flips it and
 // redraws.
 static bool night = false;
@@ -357,7 +366,11 @@ static void linkTask(void*) {
 
 // The grid is all colours; there is no power tile: double-tapping the lit colour turns the lights
 // off, and tapping any colour turns them back on.
-static_assert(N_SWATCH == 8 && L_PRE0 - L_TILE0 == N_SWATCH, "the grid is 2x4 colours");
+static_assert(N_SWATCH == 8 && L_MINUS - L_TILE0 == N_SWATCH, "the grid is 2x4 colours");
+static_assert(deckmenu::P_N - P_PRE0 == ledpresets::N, "a button per preset");
+static_assert(static_cast<int>(deckmenu::TAB_BOTH) == BOTH && static_cast<int>(deckmenu::TAB_INSIDE) == INSIDE &&
+                  static_cast<int>(deckmenu::TAB_OUTSIDE) == OUTSIDE,
+              "the look pages' tabs come first, in Target order");
 
 static bool built(int id) { return deckmenu::rect(screen, id).w > 0; }
 
@@ -367,10 +380,12 @@ static int focus = -1;
 static bool padUp = false;  // an Xbox controller is connected and reporting
 static void drawFocus(int id, bool on);
 
-// Where the focus starts on each screen: the first item, or the colour the page shows.
+// Where the focus starts on each screen: the first item, the first preset, or the colour the page
+// shows.
 static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Karaoke) return K_BACK;
+    if (screen == Screen::Presets) return P_PRE0;
     return L_TILE0 + cur().swatch;
 }
 
@@ -515,23 +530,22 @@ static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
     if (onBar) tft.drawRect(x - 1, y - 1, w + 2, h + 2, pal(termpal::BG));
 }
 
-// A Lights preset block (75x36): the name (BODY, the colour names' face too: TITLE's "PURPURA" is too
-// wide for the slot) over two chips big enough to tell apart at a glance (inside, outside); yellow
-// when pressed. The Xbox focus is the ring around it.
+// A preset on the PRESETS tab (100x60): the name (TITLE) over two chips big enough to tell apart at
+// a glance (inside, outside); yellow when pressed. The Xbox focus is the ring around it.
 static void drawPresetSlot(const Rect& r, int slot, bool pressed) {
     const ledpresets::Preset& p = ledpresets::PRESETS[slot];
     const uint16_t ink = drawBox(r, pressed, false, 1, pal(termpal::TEXT));
     const Look* sides[] = {&p.in, &p.out};
     tft.setTextColor(ink);
     const int cx = r.x + r.w / 2, x0 = cx - (2 * PRESET_CHIP + PRESET_CHIP_GAP) / 2;
-    text(p.name, cx, r.y + PRESET_NAME_Y, Face::BODY, TC_DATUM);
+    text(p.name, cx, r.y + PRESET_NAME_Y, Face::TITLE, TC_DATUM);
     for (int k = 0; k < 2; k++) {
         drawChip(x0 + k * (PRESET_CHIP + PRESET_CHIP_GAP), r.y + PRESET_CHIP_Y, PRESET_CHIP, PRESET_CHIP, *sides[k], pressed);
     }
 }
 
 // A colour button: a box with a MID border, a tall chip of the colour (left, centred) and its name
-// (BODY, the preset names' face: "YELLOW" is 47 px, what the 75 px button has right of the chip).
+// (BODY: "YELLOW" is 47 px, what the 75 px button has right of the chip).
 // The lit colour is the inverted bar, chip kept; the Xbox focus is a separate ring around it.
 static void drawTile(const Rect& r, int swatch, bool pressed) {
     const Swatch& s = SWATCHES[swatch];
@@ -546,9 +560,9 @@ static void drawTile(const Rect& r, int swatch, bool pressed) {
     text(name, r.x + TILE_TEXT_X, r.y + r.h / 2, Face::BODY, ML_DATUM);
 }
 
-// Lights' zone tabs are Pip-Boy tabs: a TEXT rule under the tab row, the current tab a TEXT bar
-// that runs down into the rule, the others MID text. TAB_RULE_Y is just under the tab row (rects
-// end at y 37) and over STATUS (y 40).
+// Lights' tabs are Pip-Boy tabs: a TEXT rule under the tab row, the current tab a TEXT bar that
+// runs down into the rule, the others MID text (SMALL: four fit beside < BACK, termlayout).
+// TAB_RULE_Y is just under the tab row (rects end at y 37) and over STATUS (y 40).
 static constexpr int TAB_RULE_Y = 39;
 static constexpr int RULE_X0 = 4, RULE_X1 = 316;
 
@@ -568,7 +582,7 @@ static void drawTab(const Rect& r, const char* s, bool pressed, bool current) {
         ink = pal(termpal::BG);
     }
     tft.setTextColor(ink);
-    text(s, r.x + r.w / 2, r.y + r.h / 2, Face::BODY, MC_DATUM);
+    text(s, r.x + r.w / 2, r.y + r.h / 2, Face::SMALL, MC_DATUM);
 }
 
 static void drawButtonBody(int id, bool pressed) {
@@ -591,13 +605,13 @@ static void drawButtonBody(int id, bool pressed) {
     if (screen == Screen::Karaoke || id == L_BACK) {  // K_BACK: its only button
         drawChrome(r, "< BACK", Face::BODY, pressed, false);
         drawTabRule(r.x - 2, r.x + r.w + 2);  // its focus ring crosses the rule too
-    } else if (id < L_TILE0) {
-        static const char* const ZONE[] = {"BOTH", "INSIDE", "OUTSIDE"};
-        drawTab(r, ZONE[id - L_ZONE0], pressed, target == static_cast<Target>(id - L_ZONE0));
-    } else if (id < L_PRE0) {
-        drawTile(r, id - L_TILE0, pressed);
-    } else if (id < L_MINUS) {
+    } else if (id < L_TAB0 + deckmenu::N_TABS) {
+        static_assert(N_TAB_LABELS == deckmenu::N_TABS, "a label per tab");
+        drawTab(r, TAB_LABELS[id - L_TAB0], pressed, currentTab() == id - L_TAB0);
+    } else if (screen == Screen::Presets) {
         drawPresetSlot(r, deckmenu::presetSlot(screen, id), pressed);
+    } else if (id < L_MINUS) {
+        drawTile(r, id - L_TILE0, pressed);
     } else {
         drawChrome(r, id == L_MINUS ? "[-]" : "[+]", Face::TITLE, pressed, false);
     }
@@ -912,29 +926,29 @@ static void typeBoot() {
 }
 
 static void drawGrid() {
-    for (int id = L_TILE0; id < L_PRE0; id++) drawButton(id);
+    for (int id = L_TILE0; id < L_MINUS; id++) drawButton(id);
 }
 
-static void drawZones() {
-    for (int id = L_ZONE0; id < L_TILE0; id++) drawButton(id);
+static void drawTabs() {
+    for (int id = L_TAB0; id < L_TAB0 + deckmenu::N_TABS; id++) drawButton(id);
 }
 
 // What shows the lights' links on the current screen: Lights' STATUS line (the message too), the
 // Menu's lights band.
 static void drawLightState() {
-    if (screen == Screen::Lights) drawStatus();
+    if (onLights()) drawStatus();
     else if (screen == Screen::Menu) drawLightsBand();
 }
 
 // What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's prompt
 // line (then the music readout or ">" again).
 static void drawMessage() {
-    if (screen == Screen::Lights) drawStatus();
+    if (onLights()) drawStatus();
     else if (screen == Screen::Menu) drawPrompt();
 }
 
 // After a look changed (a tap, voice, the watch, Y): everything that shows it (Lights' STATUS line
-// shows only the links).
+// shows only the links, and the PRESETS tab no look).
 static void drawLooks() {
     updateTheme();  // a look that changes the theme repaints all in the new one, never a part in the old
     if (screen == Screen::Lights) {
@@ -1104,7 +1118,7 @@ static void drawAll() {
     } else if (screen == Screen::Karaoke) {
         drawKaraokeBody(true);
     } else {
-        drawLevel();
+        if (screen == Screen::Lights) drawLevel();
         drawStatus();
     }
 }
@@ -1199,13 +1213,14 @@ static bool loadCalibration() {
 
 // ---- Input ----
 
-// NVS keys per look: sw0/pct0/lit0 (BOTH), ...1 (INSIDE), ...2 (OUTSIDE), and the page.
+// NVS keys per look: sw0/pct0/lit0 (BOTH), ...1 (INSIDE), ...2 (OUTSIDE), and the page ("target":
+// the tab, 0..2 the look pages as Target, 3 PRESETS).
 // save() only marks the state dirty; flushSave() (from loop) writes what changed, SAVE_AFTER_MS
 // after the last change: a burst of +/- taps is one write, not 10 commits per tap. A change in
 // the last SAVE_AFTER_MS before the power goes is lost.
 static constexpr uint32_t SAVE_AFTER_MS = 1500;
 static Look savedLooks[3];
-static Target savedTarget = BOTH;
+static int savedTab = BOTH;
 static bool dirty = false;
 static uint32_t dirtyAt = 0;
 
@@ -1235,9 +1250,9 @@ static void flushSave() {
         }
         s = l;
     }
-    if (target != savedTarget) {
-        prefs.putUChar("target", static_cast<uint8_t>(target));
-        savedTarget = target;
+    if (currentTab() != savedTab) {
+        savedTab = currentTab();
+        prefs.putUChar("target", static_cast<uint8_t>(savedTab));
     }
 }
 
@@ -1259,7 +1274,11 @@ static void load() {
         l.lit = prefs.getBool(key, old.lit);
         savedLooks[i] = l;
     }
-    target = savedTarget = static_cast<Target>(prefs.getUChar("target", BOTH) % 3);
+    // builds before the PRESETS tab stored 0..2, which load as they were
+    const int tab = prefs.getUChar("target", BOTH) % deckmenu::N_TABS;
+    presetsTab = tab == deckmenu::TAB_PRESETS;
+    target = presetsTab ? BOTH : static_cast<Target>(tab);
+    savedTab = tab;
     // fav0..fav3 (the saved favourites of earlier builds) stay in NVS, unread.
 }
 
@@ -1341,7 +1360,7 @@ static void tripTick() {
     }
 }
 
-// Preset slot0 (0..3) onto the lights: each light gets the preset's look. The BOTH page copies them
+// Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
 // shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
 // the watch.
@@ -1394,23 +1413,50 @@ static void show(Screen s) {
     drawAll();
 }
 
-// One settled tap on a Lights button.
+// The Lights screen on the page it showed last: a look page, or PRESETS.
+static Screen lightsScreen() { return presetsTab ? Screen::Presets : Screen::Lights; }
+
+// Tab `tab` of the Lights screen. Between the look pages only what shows the look is redrawn; to or
+// from PRESETS the screen changes (Lights <-> Presets) and is redrawn whole, its message kept, and
+// a focus on < BACK or a tab stays (their ids are the same on both), else it goes to the new one's
+// first button.
+static void showTab(int tab) {
+    presetsTab = tab == deckmenu::TAB_PRESETS;
+    if (!presetsTab) target = static_cast<Target>(tab);
+    const Screen s = lightsScreen();
+    if (s == screen) {
+        drawTabs();
+        if (s == Screen::Lights) {
+            drawGrid();
+            drawLevel();
+        }
+        return;
+    }
+    screen = s;
+    tap.id = -1;  // its id means another button there
+    padFlash = -1;
+    if (focus >= L_TAB0 + deckmenu::N_TABS) focus = homeFocus();
+    drawAll();
+}
+
+// One settled tap on a Lights button (either screen: a look page or PRESETS).
 static void pressLights(int id) {
     Look& l = cur();
     if (id == L_BACK) {
         show(Screen::Menu);
         return;
     }
+    if (id < L_TAB0 + deckmenu::N_TABS) {  // another page
+        showTab(id - L_TAB0);
+        save();
+        return;
+    }
     if (deckmenu::isPreset(screen, id)) {
         applyPreset(deckmenu::presetSlot(screen, id));
         return;  // applyPreset saved and drew
     }
-    if (id < L_TILE0) {  // another page: show its look
-        target = static_cast<Target>(id - L_ZONE0);
-        drawZones();
-        drawGrid();
-        drawLevel();
-    } else if (id < L_PRE0) {
+    if (screen != Screen::Lights) return;
+    if (id < L_MINUS) {
         // A second tap on the lit colour within DOUBLE_MS turns the lights off; any other tap sets
         // the colour and turns them on.
         static constexpr uint32_t DOUBLE_MS = 450;
@@ -1440,7 +1486,7 @@ static void setMusic(bool on);
 
 // One settled tap on a button of the current screen.
 static void press(int id) {
-    if (screen == Screen::Lights) {
+    if (onLights()) {
         pressLights(id);
         return;
     }
@@ -1450,7 +1496,7 @@ static void press(int id) {
     }
     if (id < M_ITEM0 || id >= M_ITEM0 + deckmenu::N_ITEMS) return;
     switch (static_cast<deckmenu::Item>(id - M_ITEM0)) {
-    case deckmenu::LIGHTS: show(Screen::Lights); break;
+    case deckmenu::LIGHTS: show(lightsScreen()); break;
     case deckmenu::KARAOKE:
         // dimmed: no song to sing along, so only a message (on the prompt line) says why
         if (karaokeReady()) {
@@ -1479,7 +1525,8 @@ static void act() {
 //   D-pad: move the focus (held: repeats; the sticks are ignored; on the Menu left / right along
 //          its three items, no wrap)    A: press the focused button
 //   B: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
-//   Lights only: X next page    Y this page's lights on/off    LB / RB: - / +
+//   Lights only: X next page (BOTH, INSIDE, OUTSIDE, PRESETS, round)
+//   the look pages only: Y this page's lights on/off    LB / RB: - / +  (on PRESETS: nothing)
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
 // redrawn. On Lights, erasing the old ring can notch its button's edge, so that button is redrawn.
@@ -1566,8 +1613,9 @@ static void handlePad() {
         show(Screen::Menu);
         return;
     }
-    if (screen != Screen::Lights) return;  // the rest is the Lights page's
-    if (x) padPress(L_ZONE0 + (target + 1) % 3);
+    if (!onLights()) return;  // the rest is the Lights screen's
+    if (x) padPress(L_TAB0 + (currentTab() + 1) % deckmenu::N_TABS);
+    if (screen != Screen::Lights) return;  // PRESETS (X may just have shown it): no look for Y, LB or RB
     if (lb) padPress(L_MINUS);
     if (rb) padPress(L_PLUS);
     if (y) {  // on / off; on BOTH while the lights differ, off if either is on
@@ -2118,7 +2166,7 @@ static bool updateTick() {
 // ignored); &zone=inside|outside (the Garmin app) acts on that zone's page only.
 // GET /state?k=[&zone=] answers that zone's line (level included) without changing anything.
 // A preset ("rose", "preset 2") is applied to both lights and answered with its line; the rest of
-// that phrase (a colour, a level, the zone) is ignored. GET /presets?k= lists the four presets (one
+// that phrase (a colour, a level, the zone) is ignored. GET /presets?k= lists the six presets (one
 // ledpresets::wireLine each), GET /status?k= each light's state.
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
 // the state) and the handler waits for loop()'s reply. Each job carries a sequence number that the
@@ -2261,7 +2309,7 @@ static void handleState() {
     server->send(200, "text/plain", line);
 }
 
-// The four presets, one wireLine each ("1 ROSE pink 40 pink 100"), joined by \n. A fixed table: no
+// The six presets, one wireLine each ("1 ROSE pink 40 pink 100"), joined by \n. A fixed table: no
 // snapshot needed.
 static void handlePresets() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }

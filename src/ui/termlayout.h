@@ -21,14 +21,19 @@ constexpr const char* ON_TAG = "ON";
 constexpr const char* OFF_TAG = "OFF";
 constexpr int TAG_PAD = 3, TAG_RIGHT = 6, TAG_BOTTOM = 5;
 
-// A Lights colour button (75x44): the chip left, 16x28, so the name fits right of it in BODY, the
-// preset names' face ("ORANGE", "PURPLE", "YELLOW" are the widest).
-constexpr int TILE_CHIP_X = 4, TILE_CHIP_W = 16, TILE_CHIP_H = 28, TILE_TEXT_X = 24;
+// Lights' tabs (deckmenu::Tab order), in SMALL: four 56 px tabs fit beside < BACK, and BODY's
+// "PRESETS" (55 px) wouldn't fit one with the margins.
+constexpr const char* TAB_LABELS[] = {"BOTH", "INSIDE", "OUTSIDE", "PRESETS"};
+constexpr int N_TAB_LABELS = sizeof(TAB_LABELS) / sizeof(TAB_LABELS[0]);
 
-// A Lights preset (75x36): the name (BODY, caps top PRESET_NAME_Y) centred over two PRESET_CHIP px
-// square chips (inside, outside) PRESET_CHIP_GAP apart, their top PRESET_CHIP_Y; all from the rect's
-// top / centre.
-constexpr int PRESET_NAME_Y = 4, PRESET_CHIP = 12, PRESET_CHIP_GAP = 6, PRESET_CHIP_Y = 20;
+// A Lights colour button (75x64): the chip left, 16x48, so the name fits right of it in BODY
+// ("ORANGE", "PURPLE", "YELLOW" are the widest).
+constexpr int TILE_CHIP_X = 4, TILE_CHIP_W = 16, TILE_CHIP_H = 48, TILE_TEXT_X = 24;
+
+// A preset on the PRESETS tab (100x60): the name (TITLE, caps top PRESET_NAME_Y) centred over two
+// PRESET_CHIP px square chips (inside, outside) PRESET_CHIP_GAP apart, their top PRESET_CHIP_Y; all
+// from the rect's top / centre.
+constexpr int PRESET_NAME_Y = 9, PRESET_CHIP = 18, PRESET_CHIP_GAP = 10, PRESET_CHIP_Y = 33;
 
 // The Lights status line (SMALL, in deckmenu::STATUS).
 constexpr int STATUS_TEXT_X = 4;

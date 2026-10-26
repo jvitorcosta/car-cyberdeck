@@ -13,11 +13,15 @@ static void expectPreset(int i, const char* name, const char* word, int sw, int 
     TEST_ASSERT_TRUE(p.out == (ledlook::Look{sw, static_cast<uint8_t>(outPct), true}));
 }
 
+// Six, all 40 % inside and 100 % outside (the owner's picks, 2026-10-26).
 void test_table() {
+    TEST_ASSERT_EQUAL_INT(6, ledpresets::N);
     expectPreset(0, "ROSE", "rose", 2, 40, 100);
-    expectPreset(1, "FIRE", "fire", 0, 50, 100);
-    expectPreset(2, "CALM", "calm", 6, 40, 40);
+    expectPreset(1, "FIRE", "fire", 0, 40, 100);
+    expectPreset(2, "CALM", "calm", 6, 40, 100);
     expectPreset(3, "PURPURA", "purpura", 3, 40, 100);
+    expectPreset(4, "FOREST", "forest", 5, 40, 100);
+    expectPreset(5, "OCEAN", "ocean", 4, 40, 100);
 }
 void test_describe() {
     char buf[112];
@@ -25,6 +29,8 @@ void test_describe() {
     TEST_ASSERT_EQUAL_STRING("Rose: inside Pink 40 percent, outside Pink 100 percent", buf);
     ledpresets::describe(4, buf, sizeof buf);
     TEST_ASSERT_EQUAL_INT(0, strncmp(buf, "Purpura: ", 9));
+    ledpresets::describe(6, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("Ocean: inside Blue 40 percent, outside Blue 100 percent", buf);
 }
 void test_describe_fits() {
     char buf[112];
@@ -36,7 +42,9 @@ void test_describe_fits() {
 void test_wire_line() {
     char buf[64];
     ledpresets::wireLine(3, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("3 CALM white 40 white 40", buf);
+    TEST_ASSERT_EQUAL_STRING("3 CALM white 40 white 100", buf);
+    ledpresets::wireLine(5, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("5 FOREST green 40 green 100", buf);
     ledpresets::wireLine(1, buf, sizeof buf);
     TEST_ASSERT_EQUAL_STRING("1 ROSE pink 40 pink 100", buf);
 }
@@ -44,7 +52,7 @@ void test_wire_line() {
 void test_wire_line_clamps_slot() {
     char buf[64];
     ledpresets::wireLine(9, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("4 PURPURA purple 40 purple 100", buf);
+    TEST_ASSERT_EQUAL_STRING("6 OCEAN blue 40 blue 100", buf);
     ledpresets::wireLine(0, buf, sizeof buf);
     TEST_ASSERT_EQUAL_STRING("1 ROSE pink 40 pink 100", buf);
 }
