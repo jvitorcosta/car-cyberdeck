@@ -65,7 +65,7 @@ class ZonesView extends WatchUi.View {
     }
 
     // The Presets page: PRESETS on top, each preset's bar as the list will show it (PresetBar; up
-    // to four, narrower where the round face is), and the hint or status at the bottom. "No presets
+    // to six, narrower where the round face is), and the hint or status at the bottom. "No presets
     // yet" when /presets hasn't answered.
     private function presets(dc as Dc, cx as Number, h as Number) as Void {
         pill(dc, cx, 40, "PRESETS", Graphics.COLOR_WHITE);
@@ -75,20 +75,25 @@ class ZonesView extends WatchUi.View {
             dc.drawText(cx, cx, Graphics.FONT_SMALL, "No presets yet",
                         Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
-        // rows between the two pills, centred on the face: 32 px apart and 24 tall on the 255
-        var pitch = (h - 104) / 4;
+        // rows between the two pills, centred on the face, in slots for four: 32 px apart and 24
+        // tall on the 255; five or six fill the same span, 26 px apart and 19 tall there, the name
+        // a size smaller
+        var rows = list.size() > 6 ? 6 : list.size();
+        var slots = rows > 4 ? rows : 4;
+        var pitch = (h - 104) / slots;
         pitch = pitch > 32 ? 32 : pitch;
-        var bh = pitch - 8;
+        var bh = pitch * 3 / 4;
+        var font = slots > 4 ? Graphics.FONT_TINY : Graphics.FONT_SMALL;
         var cy = h / 2;
-        for (var i = 0; i < list.size() && i < 4; i++) {
-            var y = cy - pitch * 3 / 2 + i * pitch;
+        for (var i = 0; i < rows; i++) {
+            var y = cy - pitch * (slots - 1) / 2 + i * pitch;
             var d = (y > cy ? y - cy : cy - y) + bh / 2;  // the row's edge farthest from the centre
             var half = Math.sqrt(cx * cx - d * d).toNumber() - 10;
             if (half > PresetBar.LIST_W / 2) {
                 half = PresetBar.LIST_W / 2;  // as wide as the list's (and clear of the page dots)
             }
             var p = list[i] as Array;
-            PresetBar.draw(dc, cx - half, y - bh / 2, half * 2, bh, p, p[0] as String, false);
+            PresetBar.draw(dc, cx - half, y - bh / 2, half * 2, bh, p, p[0] as String, false, font);
         }
         var busy = _deck.status.length() > 0;
         if (busy || list.size() > 0) {

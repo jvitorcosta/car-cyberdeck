@@ -19,10 +19,11 @@ module PresetBar {
     const LIST_W = 202;
     var barW as Number = LIST_W;
 
-    // The bar in [x, x + w) by [y, y + h). p: a Deck preset; text: its name, or "APPLIED".
-    // levels: each light's level ("40%", or "OFF") near the half's outer end (the list's focused row).
+    // The bar in [x, x + w) by [y, y + h). p: a Deck preset; text: its name, or "APPLIED", in
+    // font (FONT_SMALL; the PRESETS page's shorter bars take FONT_TINY). levels: each light's level
+    // ("40%", or "OFF") near the half's outer end (the list's focused row).
     function draw(dc as Dc, x as Number, y as Number, w as Number, h as Number, p as Array,
-                  text as String, levels as Boolean) as Void {
+                  text as String, levels as Boolean, font as Graphics.FontType) as Void {
         var hw = (w - GAP) / 2;
         var xOut = x + w - hw;
         var fills = [half(dc, x, y, w, h, x, hw, p[1] as Number, p[2] as Number, p[3] as Boolean),
@@ -32,11 +33,11 @@ module PresetBar {
         var cy = y + h / 2;
         var cx = x + w / 2;
         var j = Graphics.TEXT_JUSTIFY_CENTER;
-        label(dc, x, y, w, h, halves, fills, rgbs, cx, cy, Graphics.FONT_SMALL, text, j, Graphics.COLOR_WHITE);
+        label(dc, x, y, w, h, halves, fills, rgbs, cx, cy, font, text, j, Graphics.COLOR_WHITE);
 
         // "OFF" in a light that's off: in the slot near its outer end on the focused row, else in
         // the middle of the grey left free by the name (the half's own middle would touch a long one)
-        var nameW = dc.getTextWidthInPixels(text, Graphics.FONT_SMALL);
+        var nameW = dc.getTextWidthInPixels(text, font);
         for (var i = 0; i < 2; i++) {
             var lit = p[i * 3 + 3] as Boolean;
             var tx;
@@ -122,7 +123,8 @@ class PresetItem extends WatchUi.CustomMenuItem {
             dc.drawRoundedRectangle(x - 1, m - 1, bw + 2, h - 2 * m + 2, PresetBar.RADIUS + 1);
             dc.drawRoundedRectangle(x - 2, m - 2, bw + 4, h - 2 * m + 4, PresetBar.RADIUS + 2);
         }
-        PresetBar.draw(dc, x, m, bw, h - 2 * m, _p, applied ? "APPLIED" : _p[0] as String, focused);
+        PresetBar.draw(dc, x, m, bw, h - 2 * m, _p, applied ? "APPLIED" : _p[0] as String, focused,
+                       Graphics.FONT_SMALL);
     }
 }
 
