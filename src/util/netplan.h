@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "lyricstatus.h"
+#include "idlewait.h"
 // What the network task does next. PURE, host-tested.
 // The task polls Spotify on a fixed cadence and, between polls, does ONE per-track
 // work step at a time so a slow download never delays the next poll by more than
@@ -63,6 +64,23 @@ public:
     bool active() const { return interval_ != BASE_MS; }   // backing off: skip other Spotify calls
 private:
     uint32_t interval_ = BASE_MS;
+};
+
+// Idle polling. While the deck shows "Nothing playing" (idlewait: no device or no song at once, a
+// pause after PAUSE_MS) every 4 s poll got the same answer (449 of them in an idle half hour), so
+// the poll waits IDLE_MS instead; a song started on the phone shows within that. Any other poll
+// (playing, a short pause, a failure: LinkGate and Health keep their pace) returns to the
+// backoff's interval, and a 429 wait longer than IDLE_MS still wins.
+class IdlePoll {
+public:
+    static constexpr uint32_t IDLE_MS = 10000;
+    // Feed each poll's resulting state: paused = a song there but not playing; stopped = nothing.
+    void onPoll(bool paused, bool stopped, uint32_t nowMs) { idle_ = clock_.update(paused, stopped, nowMs); }
+    bool idle() const { return idle_; }
+    uint32_t every(uint32_t backoffMs) const { return idle_ && backoffMs < IDLE_MS ? IDLE_MS : backoffMs; }
+private:
+    idlewait::Clock clock_;
+    bool idle_ = false;
 };
 
 // Retry-After header value in seconds (at most a week); -1 when missing or not plain digits

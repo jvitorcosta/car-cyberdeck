@@ -336,6 +336,58 @@ void test_retry_after_parses_seconds_only() {
     TEST_ASSERT_EQUAL_INT(7 * 24 * 3600, netplan::parseRetryAfter("99999999999"));        // clamped to a week
 }
 
+void test_idle_poll_keeps_the_base_pace_while_playing() {
+    netplan::IdlePoll p;
+    TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::BASE_MS, p.every(netplan::PollBackoff::BASE_MS));
+    p.onPoll(false, false, 1000);                       // playing
+    TEST_ASSERT_FALSE(p.idle());
+    TEST_ASSERT_EQUAL_UINT32(4000, p.every(4000));
+}
+
+void test_idle_poll_slows_at_once_when_nothing_plays() {
+    netplan::IdlePoll p;
+    p.onPoll(false, true, 1000);                        // 204 / no song: "Nothing playing" at once
+    TEST_ASSERT_TRUE(p.idle());
+    TEST_ASSERT_EQUAL_UINT32(netplan::IdlePoll::IDLE_MS, p.every(4000));
+    TEST_ASSERT_TRUE(netplan::IdlePoll::IDLE_MS >= 10000 && netplan::IdlePoll::IDLE_MS <= 12000);
+    p.onPoll(false, false, 11000);                      // a song started on the phone
+    TEST_ASSERT_FALSE(p.idle());
+    TEST_ASSERT_EQUAL_UINT32(4000, p.every(4000));
+}
+
+void test_idle_poll_slows_a_pause_only_after_the_idle_switch() {
+    netplan::IdlePoll p;
+    p.onPoll(true, false, 0);                           // paused: a short pause keeps the 4 s pace
+    TEST_ASSERT_EQUAL_UINT32(4000, p.every(4000));
+    p.onPoll(true, false, 29999);
+    TEST_ASSERT_EQUAL_UINT32(4000, p.every(4000));
+    p.onPoll(true, false, 30000);                       // the UI's "Nothing playing" switch
+    TEST_ASSERT_EQUAL_UINT32(netplan::IdlePoll::IDLE_MS, p.every(4000));
+    p.onPoll(false, false, 40000);                      // resumed
+    TEST_ASSERT_EQUAL_UINT32(4000, p.every(4000));
+}
+
+void test_idle_poll_never_shortens_a_backoff() {
+    netplan::IdlePoll p;
+    p.onPoll(false, true, 0);
+    TEST_ASSERT_EQUAL_UINT32(netplan::IdlePoll::IDLE_MS, p.every(8000));   // 429 doubling below idle
+    TEST_ASSERT_EQUAL_UINT32(32000, p.every(32000));                       // longer 429 wait wins
+}
+
+void test_idle_poll_picks_a_new_song_up_within_the_idle_interval() {
+    // Polls at the paced interval while nothing plays; the phone starts a song at any moment:
+    // the next poll (which sees it) is never more than IDLE_MS later.
+    for (uint32_t start = 0; start < 60000; start += 700) {
+        netplan::IdlePoll p;
+        uint32_t t = 0;
+        p.onPoll(false, true, t);
+        while (t <= start) t += p.every(netplan::PollBackoff::BASE_MS);
+        TEST_ASSERT_TRUE(t - start <= netplan::IdlePoll::IDLE_MS);
+        p.onPoll(false, false, t);                      // that poll sees it playing
+        TEST_ASSERT_EQUAL_UINT32(netplan::PollBackoff::BASE_MS, p.every(netplan::PollBackoff::BASE_MS));
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_track_changes_bump_generation);
@@ -373,5 +425,10 @@ int main(int, char**) {
     RUN_TEST(test_next_skips_art_while_waiting);
     RUN_TEST(test_art_ok_or_no_url_is_final);
     RUN_TEST(test_art_retry_reset_on_track_change);
+    RUN_TEST(test_idle_poll_keeps_the_base_pace_while_playing);
+    RUN_TEST(test_idle_poll_slows_at_once_when_nothing_plays);
+    RUN_TEST(test_idle_poll_slows_a_pause_only_after_the_idle_switch);
+    RUN_TEST(test_idle_poll_never_shortens_a_backoff);
+    RUN_TEST(test_idle_poll_picks_a_new_song_up_within_the_idle_interval);
     return UNITY_END();
 }
