@@ -6,7 +6,6 @@
 #include "typebadge.h"
 #include "../util/genrebadge.h"
 #include "../util/genre.h"
-#include "../util/idlewait.h"
 #include "statusscene.h"
 #include "qrcard.h"
 #include "sunset.h"
@@ -228,8 +227,8 @@ static void pushScene(TFT_eSPI& t, const statusscene::Rect& r, const statusscene
     }
 }
 
-void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow,
-                      bool whole, const qrcard::Qr* qr) {
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool whole,
+                      const qrcard::Qr* qr) {
     const statusscene::Pose pose = statusscene::poseAt(animMs, look);
     statusscene::Rect r{statusscene::X0, statusscene::Y0, statusscene::W, statusscene::H};
     if (!whole) {
@@ -240,7 +239,7 @@ void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animM
         }
     }
     if (r.w > 0 && r.h > 0) pushScene(t, r, look, pose);
-    if (arrow) drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
+    drawMoreArrow(t, (pose.step >> 1) & 1);   // blinks every 0.5 s
 }
 
 // The phone link's card (ui/qrcard): a battle box, the phone icon and "REMOTE", the code on its
@@ -275,85 +274,17 @@ static void drawMoreArrow(TFT_eSPI& t, bool on) {
     t.fillTriangle(x, y, x + 8, y, x + 4, y + 5, on ? theme::POKE_RED : theme::pal().dlgFill);
 }
 
-// Halfway between two colours: the muted line's softer ink, day and night.
-static uint16_t blend(uint16_t a, uint16_t b) { return ((a & 0xF7DE) >> 1) + ((b & 0xF7DE) >> 1); }
-
-static constexpr int TUNE_Y = statusscene::DLG_Y + 42;          // the second line
-static constexpr int TUNE_TEXT_X = 18 + icons::SIZE + 5;
-static constexpr int TUNE_LINE_W = statusscene::SOUND_ICON.x - 6 - 16;   // stops short of the key
-
-// The note before the tune's name, bobbing 1 px with frame (frame < 0: at rest).
-static void drawTuneNoteAt(TFT_eSPI& t, int frame) {
-    const int dy = frame < 0 ? 0 : (frame & 1) ? 1 : -1;
-    t.fillRect(18, TUNE_Y - 2, icons::SIZE, icons::SIZE + 4, theme::pal().dlgFill);
-    drawIcon(t, icons::Icon::Note, 18, TUNE_Y + dy, theme::pal().note, theme::pal().dlgFill);
-}
-
-void drawTuneNote(TFT_eSPI& t, int frame) { drawTuneNoteAt(t, frame); }
-
-// "Waiting for a song..."'s second line: ♪ and the tune; muted, the words in a softer ink; the
-// phone hint (util/idlewait) plain, from the left edge (it needs the whole line).
-static void drawTuneLine(TFT_eSPI& t, const char* detail, int sound) {
-    t.fillRect(16, TUNE_Y - 2, TUNE_LINE_W, 20, theme::pal().dlgFill);
-    if (!detail || !detail[0]) return;
-    if (strcmp(detail, idlewait::PHONE_HINT) == 0) {
-        shadowText(t, detail, 18, TUNE_Y + 1, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
-    } else if (sound == 1) {
-        drawTuneNoteAt(t, -1);
-        shadowText(t, detail, TUNE_TEXT_X, TUNE_Y + 1, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
-    } else {
-        t.setTextColor(blend(theme::pal().text, theme::pal().dlgFill));
-        t.setTextDatum(TL_DATUM);
-        t.drawString(detail, 18, TUNE_Y + 1, 2);
-    }
-}
-
-// A speaker: magnet and cone, then sound waves (on) or a red cross (muted), centred on cx, cy.
-static void drawSpeaker(TFT_eSPI& t, int cx, int cy, bool on, uint16_t ink) {
-    const int x = cx - 11;
-    t.fillRect(x, cy - 3, 4, 7, ink);
-    t.fillTriangle(x + 3, cy, x + 10, cy - 7, x + 10, cy + 7, ink);
-    if (on) {
-        t.drawCircleHelper(x + 11, cy, 4, 0x2 | 0x4, ink);
-        t.drawCircleHelper(x + 11, cy, 8, 0x2 | 0x4, ink);
-        t.drawCircleHelper(x + 12, cy, 8, 0x2 | 0x4, ink);
-    } else {
-        for (int d = 0; d < 2; ++d) {   // 2 px strokes
-            t.drawLine(x + 14 + d, cy - 4, x + 21 + d, cy + 4, theme::POKE_RED);
-            t.drawLine(x + 14 + d, cy + 4, x + 21 + d, cy - 4, theme::POKE_RED);
-        }
-    }
-}
-
-// The music box's key: a rounded Gen-3 battle-box button with a drop shadow, darker while a
-// finger is on it.
-void drawSoundButton(TFT_eSPI& t, int sound, bool pressed) {
-    if (sound < 0) return;
-    const statusscene::Rect r = statusscene::SOUND_ICON;
-    const auto& p = theme::pal();
-    t.fillRect(r.x, r.y, r.w + 2, r.h + 2, p.dlgFill);
-    const int o = pressed ? 1 : 0;   // pressed: sinks onto its shadow
-    if (!pressed) t.fillRoundRect(r.x + 2, r.y + 2, r.w, r.h, 6, p.boxShadow);
-    t.fillRoundRect(r.x + o, r.y + o, r.w, r.h, 6, p.boxBorder);
-    t.fillRoundRect(r.x + o + 2, r.y + o + 2, r.w - 4, r.h - 4, 5, pressed ? blend(p.boxFill, p.boxBorder) : p.boxFill);
-    drawSpeaker(t, r.x + o + r.w / 2, r.y + o + r.h / 2, sound == 1, p.text);
-}
-
-void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, int sound) {
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail) {
     const int y = statusscene::DLG_Y;
     dialogueBox(t, 4, y, 312, statusscene::DLG_H);
     const bool two = detail && detail[0];
     shadowText(t, msg, 18, two ? y + 12 : y + 22, 4, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
-    if (sound >= 0) {
-        drawTuneLine(t, detail, sound);
-        drawSoundButton(t, sound, false);
-    } else if (two) {
+    if (two) {
         shadowText(t, detail, 18, y + 42, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
     }
 }
 
-void drawOfflineDetail(TFT_eSPI& t, const char* detail, int sound) {
-    if (sound >= 0) { drawTuneLine(t, detail, sound); return; }
+void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
     const int y = statusscene::DLG_Y + 40;
     t.fillRect(16, y, 276, 20, theme::pal().dlgFill);   // the line only: the countdown doesn't flicker
     shadowText(t, detail, 18, y + 2, 2, theme::pal().text, theme::pal().dlgShadow, TL_DATUM);
@@ -370,12 +301,12 @@ static void sunsetBackdrop(TFT_eSPI& t, bool night) {
 }
 
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs, int sound, const qrcard::Qr* qr) {
+                 uint32_t animMs, const qrcard::Qr* qr) {
     if (look.idle) sunsetBackdrop(t, look.night);
     else background(t);
     topStrip(t);
-    drawOfflineText(t, msg, detail, sound);
-    drawOfflineScene(t, look, animMs, sound < 0, true);   // the music box's screen has no arrow
+    drawOfflineText(t, msg, detail);
+    drawOfflineScene(t, look, animMs, true);
     if (qr) drawQrCard(t, look, animMs, qr);
 }
 

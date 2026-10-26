@@ -24,20 +24,8 @@ uint32_t openerMs();                // 0 when there's no opener clip
 // may be empty), started by ui/intro with its first frame.
 void playIntro(intropick::Opening o);
 // Wolf howl for the phone remote (net/remote): a real recording (data/howl.pcm from
-// tools/gen_howl.py, git-ignored) when the build has one, else synthesised on the fly (util/howl).
+// tools/gen_howl.py, git-ignored) when the build has one, else synthesised on the fly (util/howl);
+// the synthesised one while music mode's mic holds the port (the recording is 48 kHz).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
-// The music box behind "Nothing playing" (util/musicbox): loops data/tunes.txt (tools/
-// tune_clip.py) until stopTunes(), which fades it out within musicbox::FADE_MS. Counts as playing(), so a
-// phone howl meanwhile gets "busy".
-void playTunes();
-void stopTunes();
-bool tunesPlaying();
-uint32_t tunesFailures();           // music-box starts whose audio didn't open, since boot
-// Muted by the deck's speaker button or the phone page: remembered across restarts (NVS). The
-// UI loop stops and starts the music box to match. Any task.
-void setTunesMuted(bool muted);
-bool tunesMuted();
-// The tune playing now into out ("" between runs of the music box). Any task.
-void tuneName(char* out, size_t n);
 }

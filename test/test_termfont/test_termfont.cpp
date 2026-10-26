@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <initializer_list>
 #include "../../src/ui/termfont.h"
@@ -43,8 +44,29 @@ void test_metrics() {
         TEST_ASSERT_TRUE(termfont::ascent(f) >= termfont::capHeight(f));
         TEST_ASSERT_TRUE(termfont::descent(f) > 0);
         TEST_ASSERT_EQUAL_UINT16(0x20, termfont::font(f).first);
-        TEST_ASSERT_EQUAL_UINT16(0x7E, termfont::font(f).last);
+        TEST_ASSERT_EQUAL_UINT16(0xFF, termfont::font(f).last);
         TEST_ASSERT_EQUAL_INT(termfont::cell(f) * 4, termfont::advance(f, "M i."));  // monospace
+    }
+}
+
+// Latin-1: every face draws the accented letters and the degree sign (bytes 0x80-0xFF count, never
+// as negative chars), monospace like ASCII; DEL and the C1 controls (0x7F-0x9F) are empty and don't
+// move the pen. The accented capitals rise above the ASCII ascent; nothing goes below its descent.
+void test_latin1() {
+    const int ascii[] = {12, 13, 16, 24}, descent[] = {3, 3, 4, 6};  // ASCII's, as before Latin-1
+    for (int i = 0; i < termfont::N_FACES; i++) {
+        const Face f = static_cast<Face>(i);
+        for (const char* s : {"\xE3", "\xC3", "\xB0", "\xE7", "\xC9"}) TEST_ASSERT_TRUE_MESSAGE(termfont::width(f, s) > 0, s);
+        TEST_ASSERT_EQUAL_INT(termfont::width(f, "SAO"), termfont::width(f, "S\xC3O"));
+        TEST_ASSERT_EQUAL_INT(termfont::cell(f) * 3, termfont::advance(f, "\xE3\xB0\xFF"));
+        TEST_ASSERT_EQUAL_INT(0, termfont::advance(f, "\x7F\x80\x9F"));
+        const termfont::Font& ft = termfont::font(f);
+        for (int c = 0x7F; c <= 0x9F; c++) TEST_ASSERT_EQUAL_INT(0, ft.glyph[c - ft.first].height);
+        TEST_ASSERT_EQUAL_INT(ascii[i], termfont::ascent(f));
+        TEST_ASSERT_EQUAL_INT(descent[i], termfont::descent(f));
+        const termfont::Glyph& a = ft.glyph[0xC3 - ft.first];  // Ã: its tilde over the caps, past ASCII
+        TEST_ASSERT_TRUE(-a.yOffset > termfont::ascent(f));
+        TEST_ASSERT_TRUE(termfont::accentAscent(f) >= -a.yOffset);
     }
 }
 
@@ -99,34 +121,45 @@ static void fitsRight(Face f, const char* s, int right, int left) {
 }
 
 void test_menu_items_fit() {
+    TEST_ASSERT_EQUAL_INT(deckmenu::N_ITEMS, N_MENU_ITEMS);
+    const int tagH = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
+    TEST_ASSERT_TRUE(TAG_PAD >= 2 && TAG_RIGHT >= MARGIN && TAG_BOTTOM >= MARGIN);
     for (int i = 0; i < deckmenu::N_ITEMS; i++) {
         const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + i);
-        TEST_ASSERT_EQUAL_INT(154, r.w);
-        for (const char* s : {"> [LIGHTS]", "> [KARAOKE]"}) fitsLeft(Face::BODY, s, ROW_TEXT_X, r.w);
-        TEST_ASSERT_TRUE(termfont::capHeight(Face::BODY) <= r.h - 2 * MARGIN);
+        TEST_ASSERT_EQUAL_INT(100, r.w);
         TEST_ASSERT_TRUE(r.h == 44 && r.y + r.h <= 240 - MARGIN);  // at the bottom, 4 px off the edge
+        // the label (BODY) top left, its ink inside the margins
+        const char* label = MENU_ITEMS[i];
+        fitsLeft(Face::BODY, label, ROW_TEXT_X, r.w);
+        const Rows ink = fromCapTop(Face::BODY, ROW_TEXT_Y);
+        TEST_ASSERT_TRUE_MESSAGE(ink.top >= MARGIN, label);
+        // a tag (LYRICS's LIVE, MUSIC MODE's ON / OFF: SMALL, an inverted mini-label, its caps TAG_PAD from its
+        // edges) bottom right, under the label's ink with a row to spare, inside the margins
+        for (const char* tag : {LIVE_TAG, ON_TAG, OFF_TAG}) {
+            const int tagW = termfont::width(Face::SMALL, tag) + 2 * TAG_PAD;
+            TEST_ASSERT_TRUE_MESSAGE(r.w - TAG_RIGHT - tagW >= MARGIN, tag);
+            TEST_ASSERT_TRUE_MESSAGE(ink.bottom + 1 < r.h - TAG_BOTTOM - tagH, label);
+        }
     }
-    // KARAOKE's LIVE tag: inside the item at its right edge, clear of the item's text, its caps
-    // LIVE_PAD from the label's edges
-    const deckmenu::Rect k = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + deckmenu::KARAOKE);
-    const int tagW = termfont::width(Face::SMALL, LIVE_TAG) + 2 * LIVE_PAD, tagH = termfont::capHeight(Face::SMALL) + 2 * LIVE_PAD;
-    TEST_ASSERT_TRUE(LIVE_RIGHT >= MARGIN);
-    TEST_ASSERT_TRUE(ROW_TEXT_X + termfont::width(Face::BODY, "> [KARAOKE]") + MARGIN <= k.w - LIVE_RIGHT - tagW);
-    TEST_ASSERT_TRUE(tagH <= k.h - 2 * MARGIN);
-    TEST_ASSERT_TRUE(LIVE_PAD >= 2);
+    TEST_ASSERT_EQUAL_STRING("[LYRICS]", MENU_ITEMS[deckmenu::KARAOKE]);
+    TEST_ASSERT_EQUAL_STRING("MUSIC MODE", MENU_ITEMS[deckmenu::MUSIC]);
 }
 
 void test_preset_names_fit() {
-    const deckmenu::Rect lights = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_PRE0);
-    TEST_ASSERT_TRUE(lights.w == 75 && lights.h == 36);
-    for (int i = 0; i < ledpresets::N; i++) fitsCentred(Face::BODY, ledpresets::PRESETS[i].name, lights.w);
-    // the name over the two chips (12-14 px squares), the chips' 1 px edge on a bar clear of the
+    TEST_ASSERT_EQUAL_INT(deckmenu::P_N - deckmenu::P_PRE0, ledpresets::N);
+    for (int i = 0; i < ledpresets::N; i++) {
+        const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Presets, deckmenu::P_PRE0 + i);
+        TEST_ASSERT_TRUE(r.w == 100 && r.h == 60);
+        fitsCentred(Face::TITLE, ledpresets::PRESETS[i].name, r.w);  // "PURPURA", the widest: 69 px
+    }
+    // the name over the two chips (16-20 px squares), the chips' 1 px edge on a bar clear of the
     // name's ink and the margin, the pair centred within the margins
-    TEST_ASSERT_TRUE(PRESET_CHIP >= 12 && PRESET_CHIP <= 14);
-    TEST_ASSERT_TRUE(fromCapTop(Face::BODY, PRESET_NAME_Y).bottom < PRESET_CHIP_Y - 1);
+    const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Presets, deckmenu::P_PRE0);
+    TEST_ASSERT_TRUE(PRESET_CHIP >= 16 && PRESET_CHIP <= 20);
+    TEST_ASSERT_TRUE(fromCapTop(Face::TITLE, PRESET_NAME_Y).bottom < PRESET_CHIP_Y - 1);
     TEST_ASSERT_TRUE(PRESET_NAME_Y >= MARGIN);  // the names are capitals: their ink starts at the caps
-    TEST_ASSERT_TRUE(PRESET_CHIP_Y + PRESET_CHIP <= lights.h - MARGIN);
-    TEST_ASSERT_TRUE(2 * PRESET_CHIP + PRESET_CHIP_GAP <= lights.w - 2 * MARGIN);
+    TEST_ASSERT_TRUE(PRESET_CHIP_Y + PRESET_CHIP <= r.h - MARGIN);
+    TEST_ASSERT_TRUE(2 * PRESET_CHIP + PRESET_CHIP_GAP <= r.w - 2 * MARGIN);
 }
 
 void test_colour_names_fit() {
@@ -134,8 +167,9 @@ void test_colour_names_fit() {
     TEST_ASSERT_EQUAL_INT(75, r.w);
     TEST_ASSERT_TRUE(TILE_CHIP_X + TILE_CHIP_W + MARGIN <= TILE_TEXT_X);
     TEST_ASSERT_TRUE(TILE_CHIP_H <= r.h - 2 * MARGIN);
-    TEST_ASSERT_TRUE(TILE_CHIP_X >= MARGIN && TILE_CHIP_W == 16 && TILE_CHIP_H == 28);
-    for (const ledlook::Swatch& s : ledlook::SWATCHES) {
+    TEST_ASSERT_TRUE(TILE_CHIP_X >= MARGIN && TILE_CHIP_W == 16 && TILE_CHIP_H == 48);
+    for (int k = 0; k < ledlook::N_GRID; k++) {  // the grid's colours (light blue is a preset's only)
+        const ledlook::Swatch& s = ledlook::SWATCHES[k];
         char name[16];
         size_t i = 0;
         for (; s.name[i]; i++) name[i] = static_cast<char>(toupper(static_cast<unsigned char>(s.name[i])));
@@ -146,9 +180,13 @@ void test_colour_names_fit() {
 
 void test_chrome_fits() {
     fitsCentred(Face::BODY, "< BACK", deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_BACK).w);
-    const int tab = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_ZONE0).w;
-    TEST_ASSERT_EQUAL_INT(76, tab);
-    for (const char* s : {"BOTH", "INSIDE", "OUTSIDE"}) fitsCentred(Face::BODY, s, tab);
+    // the four tabs are SMALL: at 56 px, BODY's "PRESETS" (55 px) would touch the edges
+    const int tab = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_TAB0).w;
+    TEST_ASSERT_EQUAL_INT(56, tab);
+    TEST_ASSERT_EQUAL_INT(deckmenu::N_TABS, N_TAB_LABELS);
+    TEST_ASSERT_EQUAL_STRING("PRESETS", TAB_LABELS[deckmenu::TAB_PRESETS]);
+    TEST_ASSERT_TRUE(termfont::width(Face::BODY, "PRESETS") > tab - 2 * MARGIN);
+    for (const char* s : TAB_LABELS) fitsCentred(Face::SMALL, s, tab);
     const int pm = deckmenu::rect(deckmenu::Screen::Lights, deckmenu::L_MINUS).w;
     for (const char* s : {"[-]", "[+]"}) fitsCentred(Face::TITLE, s, pm);
     for (const char* s : {"100%", "MIX", "OFF"}) fitsCentred(Face::TITLE, s, deckmenu::LEVEL.w);
@@ -175,99 +213,179 @@ void test_dash_clock_and_weather_fit() {
     for (const char* s : {"--:--", "00:00", "23:59", "18:47", "20:08", "11:11"}) fitsLeft(Face::BIG, s, DASH_X, DASH_SPLIT);
     for (const char* s : {"--- -- ---", "WED 23 SEP", "THU 30 NOV", "SAT 28 MAY"}) fitsLeft(Face::SMALL, s, DASH_X, DASH_SPLIT);
     // the temperature (BIG) and the sky (SMALL) right of it
-    for (const char* s : {"--C", "-10C", "32C", "40C"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
+    for (const char* s : {"--\xB0" "C", "-10\xB0" "C", "32\xB0" "C", "40\xB0" "C"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
     for (int code : {0, 1, 3, 45, 51, 61, 71, 80, 85, 95, 999}) fitsRight(Face::SMALL, weather::words(code), DASH_RIGHT, DASH_SPLIT);
     for (const char* s : {"PARTLY CLOUDY", "THUNDERSTORM", "SNOW SHOWERS"}) fitsRight(Face::SMALL, s, DASH_RIGHT, DASH_SPLIT);
-    // rows: the clock over the date, both over the band's last row (trip, HI / LO, messages), all
+    // rows: the clock over the date, both over the band's last row (HI / LO), all
     // between the header rule and the band's
     const Rows clock = fromCapTop(Face::BIG, CLOCK_Y), date = fromCapTop(Face::SMALL, DATE_Y);
-    const Rows words = fromCapTop(Face::SMALL, WORDS_Y), row = fromBase(Face::SMALL, TRIP_ROW_BASE);
+    const Rows words = fromCapTop(Face::SMALL, WORDS_Y), row = fromBase(Face::SMALL, HILO_BASE);
     between(HEADER_RULE_Y, clock, CLOCK_RULE_Y, "clock");
     above(clock, date, "clock over the date");
     above(clock, words, "temperature over the sky");
-    above(date, row, "date over the trip row");
-    above(words, row, "sky over the trip row");
-    between(HEADER_RULE_Y, row, CLOCK_RULE_Y, "trip row");
-    TEST_ASSERT_TRUE(CLOCK_RULE_Y >= deckmenu::CLOCK_BAND.y && CLOCK_RULE_Y < deckmenu::LIGHTS_BAND.y + 2);
+    above(date, row, "date over the HI / LO row");
+    above(words, row, "sky over the HI / LO row");
+    between(HEADER_RULE_Y, row, CLOCK_RULE_Y, "HI / LO row");
+    // the band's rule is the first row of the trip band under it (each band starts on the rule above)
+    TEST_ASSERT_EQUAL_INT(deckmenu::TRIP_BAND.y, CLOCK_RULE_Y);
     // the caps spaced evenly: rule, clock, date, row, rule (within a row of each other)
     const int gaps[] = {CLOCK_Y - (HEADER_RULE_Y + 1), DATE_Y - (CLOCK_Y + termfont::capHeight(Face::BIG)),
-                        (TRIP_ROW_BASE - termfont::capHeight(Face::SMALL)) - (DATE_Y + termfont::capHeight(Face::SMALL)),
-                        CLOCK_RULE_Y - TRIP_ROW_BASE};
+                        (HILO_BASE - termfont::capHeight(Face::SMALL)) - (DATE_Y + termfont::capHeight(Face::SMALL)),
+                        CLOCK_RULE_Y - HILO_BASE};
     for (int g : gaps) {
         for (int h : gaps) TEST_ASSERT_TRUE(g - h <= 1 && h - g <= 1);
     }
     // the split clears: the left column's clear ends before the right column's ink starts
-    TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "-10C"));
+    TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "-10\xB0" "C"));
+    // the HI / LO row's clear reaches up to an accented capital in the HI / LO city ("SÃO PAULO") and
+    // still starts under the date's and the sky's ink (capitals: nothing below their baseline)
+    TEST_ASSERT_TRUE(HILO_BASE - termfont::accentAscent(Face::SMALL) > DATE_Y + termfont::capHeight(Face::SMALL) - 1);
+    TEST_ASSERT_TRUE(HILO_BASE - termfont::accentAscent(Face::SMALL) > WORDS_Y + termfont::capHeight(Face::SMALL) - 1);
 }
 
-void test_dash_lights_fit() {
-    // INSIDE / OUTSIDE (BODY), the chip, the widest colour name (TITLE), its level right-aligned
-    for (const char* s : {"INSIDE", "OUTSIDE"}) fitsLeft(Face::BODY, s, DASH_X, LIGHT_CHIP_X);
-    TEST_ASSERT_TRUE(LIGHT_CHIP_X + LIGHT_CHIP_W + MARGIN <= LIGHT_NAME_X);
-    for (const char* name : {"ORANGE", "PURPLE", "YELLOW"}) {
-        TEST_ASSERT_TRUE_MESSAGE(LIGHT_NAME_X + termfont::width(Face::TITLE, name) + MARGIN <=
-                                     DASH_RIGHT - termfont::width(Face::TITLE, "100%"), name);
-    }
-    for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(Face::TITLE, s, LIGHT_NAME_X, DASH_RIGHT + MARGIN);
-    // rows: the two rows between the band's rules (no label: the rows say what they are)
-    const Rows row0 = fromBase(Face::TITLE, LIGHT_ROW_BASE), row1 = fromBase(Face::TITLE, LIGHT_ROW_BASE + LIGHT_ROW_DY);
-    TEST_ASSERT_TRUE(fromBase(Face::BODY, LIGHT_ROW_BASE).top >= row0.top);  // TITLE is the taller face
-    between(CLOCK_RULE_Y, row0, LIGHTS_RULE_Y, "INSIDE");
-    above(row0, row1, "INSIDE over OUTSIDE");
-    between(CLOCK_RULE_Y, row1, LIGHTS_RULE_Y, "OUTSIDE");
-    // spaced evenly: the gaps above, between and below the rows' caps (what the eye sees: names,
-    // digits, %) within a row of each other
-    const int cap = termfont::capHeight(Face::TITLE);
-    const int gapTop = (LIGHT_ROW_BASE - cap) - (CLOCK_RULE_Y + 1);
-    const int gapMid = (LIGHT_ROW_BASE + LIGHT_ROW_DY - cap) - LIGHT_ROW_BASE;
-    const int gapBottom = LIGHTS_RULE_Y - (LIGHT_ROW_BASE + LIGHT_ROW_DY);
-    for (int g : {gapTop, gapMid, gapBottom}) {
-        for (int h : {gapTop, gapMid, gapBottom}) TEST_ASSERT_TRUE(g - h <= 1 && h - g <= 1);
-    }
-    // the chip as tall as TITLE's caps, on them
-    TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::TITLE), LIGHT_CHIP_H);
-    // the band's rule inside the band, above the items
-    TEST_ASSERT_TRUE(LIGHTS_RULE_Y < deckmenu::LIGHTS_BAND.y + deckmenu::LIGHTS_BAND.h);
-    TEST_ASSERT_TRUE(LIGHTS_RULE_Y < deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0).y);
+// The HI / LO row (the clock band's last): right-aligned, alone on its row, so even the longest
+// city a reading holds (23 characters) fits with the coldest day's temperatures; hiLoFits still
+// guards it (ledpanel drops the city when it says no).
+void test_dash_hilo_row_fits() {
+    char s[48];
+    dashtext::hiLo(true, -10, -20, "ABCDEFGHIJKLMNOPQRSTUVW", s, sizeof(s));
+    TEST_ASSERT_EQUAL_STRING("HI -10 LO -20  ABCDEFGHIJKLMNOPQRSTUVW", s);
+    TEST_ASSERT_TRUE(hiLoFits(s));
+    fitsRight(Face::SMALL, s, DASH_RIGHT, DASH_X - MARGIN);
+    dashtext::hiLo(true, -10, -20, nullptr, s, sizeof(s));
+    TEST_ASSERT_TRUE(hiLoFits(s));
+    for (const char* w : {"HI -- LO --", ">OFFLINE"}) TEST_ASSERT_TRUE_MESSAGE(hiLoFits(w), w);
+    TEST_ASSERT_FALSE(hiLoFits("HI -10 LO -20  ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGH"));  // what it guards
 }
 
-// The clock band's last row: the trip line (block cursor after it) left, the HI / LO line right, or a
-// message (cursor after it) across both.
-void test_dash_trip_row_fits() {
-    // the longest trip line, the block cursor after it
+// The trip band: "TRIP" (SMALL), the time (BIG) after it, the distance (BODY) right-aligned, all on
+// TRIP_BASE, the caps centred between the clock band's rule and the band's own.
+void test_dash_trip_band_fits() {
     tripmeter::Trip t;
     t.seconds = 99 * 3600 + 59 * 60;
     t.meters = 999900;
     t.hasDistance = true;
-    char trip[40];
-    tripmeter::line(t, trip, sizeof(trip));
-    TEST_ASSERT_EQUAL_STRING("TRIP 999.9 KM  99:59", trip);
-    TEST_ASSERT_TRUE(DASH_X + termfont::advance(Face::SMALL, trip) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
-    // beside it, the HI / LO line with the longest temperatures: without the city it always fits ...
-    char s[48];
-    dashtext::hiLo(true, -10, -20, nullptr, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI -10 LO -20", s);
-    TEST_ASSERT_TRUE(besideTrip(trip, s));
-    for (const char* w : {"HI -- LO --", ">OFFLINE"}) TEST_ASSERT_TRUE_MESSAGE(besideTrip(trip, w), w);
-    // ... the usual city fits too ...
-    dashtext::hiLo(true, -10, -20, "Manaus", s, sizeof(s));
-    TEST_ASSERT_TRUE(besideTrip(trip, s));
-    dashtext::hiLo(true, 32, 26, "Manaus", s, sizeof(s));
-    TEST_ASSERT_TRUE(besideTrip("TRIP 12.4 KM  0:32", s));
-    // ... but the longest city a reading holds (23 characters) can't: ledpanel drops it
-    dashtext::hiLo(true, -10, -20, "ABCDEFGHIJKLMNOPQRSTUVW", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI -10 LO -20  ABCDEFGHIJKLMNOPQRSTUVW", s);
-    TEST_ASSERT_FALSE(besideTrip(trip, s));
-    // where besideTrip holds, the HI / LO line starts at least the usual margin after the cursor
-    TEST_ASSERT_TRUE(TRIP_GAP >= MARGIN);
-    // every message across the row, the block cursor after it
+    char hm[16], dist[16];
+    tripmeter::elapsed(t, hm, sizeof(hm));
+    tripmeter::distance(t, dist, sizeof(dist));
+    TEST_ASSERT_EQUAL_STRING("99:59", hm);
+    TEST_ASSERT_EQUAL_STRING("999.9 KM", dist);
+    TEST_ASSERT_TRUE(tripTimeX() >= DASH_X + termfont::width(Face::SMALL, TRIP_LABEL) + MARGIN);
+    // the longest time (hours aren't capped: 999:59 too) clears the longest distance and "-- KM"
+    for (const char* tm : {static_cast<const char*>(hm), "999:59"}) {
+        for (const char* d : {static_cast<const char*>(dist), "-- KM", "0.0 KM"}) {
+            fitsRight(Face::BODY, d, DASH_RIGHT, tripTimeX() + termfont::width(Face::BIG, tm));
+        }
+    }
+    // rows: BIG is the tallest face on the baseline; the band starts on the clock band's rule, its
+    // own rule starts the lights band
+    const Rows big = fromBase(Face::BIG, TRIP_BASE);
+    TEST_ASSERT_TRUE(fromBase(Face::BODY, TRIP_BASE).top >= big.top && fromBase(Face::SMALL, TRIP_BASE).top >= big.top);
+    between(CLOCK_RULE_Y, big, TRIP_RULE_Y, "trip");
+    TEST_ASSERT_EQUAL_INT(deckmenu::TRIP_BAND.y, CLOCK_RULE_Y);
+    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, TRIP_RULE_Y);
+    const int gapTop = (TRIP_BASE - termfont::capHeight(Face::BIG)) - (CLOCK_RULE_Y + 1);
+    const int gapBottom = TRIP_RULE_Y - TRIP_BASE;
+    TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
+}
+
+// The lights row: IN left, OUT right of the vertical rule at LIGHTS_SPLIT, each its label (BODY), a
+// chip of its colour on BODY's caps, then the colour and the level ("YELLOW 100%"), OFF or -- NO
+// LINK (BODY), all on one baseline.
+void test_dash_lights_fit() {
+    TEST_ASSERT_EQUAL_INT(2, N_LIGHT_LABELS);
+    TEST_ASSERT_EQUAL_STRING("IN", LIGHT_LABELS[0]);
+    TEST_ASSERT_EQUAL_STRING("OUT", LIGHT_LABELS[1]);
+    TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::BODY), LIGHT_CHIP_H);
+    TEST_ASSERT_TRUE(LIGHT_GAP >= MARGIN);
+    // each half starts the dashboard's margin in from its left (the screen's edge, the rule)
+    TEST_ASSERT_EQUAL_INT(DASH_X, lightX(0));
+    TEST_ASSERT_EQUAL_INT(LIGHTS_SPLIT + DASH_X, lightX(1));
+    for (int i = 0; i < N_LIGHT_LABELS; i++) {
+        TEST_ASSERT_TRUE(lightChipX(i) >= lightX(i) + termfont::width(Face::BODY, LIGHT_LABELS[i]) + MARGIN);
+        TEST_ASSERT_EQUAL_INT(lightChipX(i) + LIGHT_CHIP_W + LIGHT_GAP, lightTextX(i));
+        const int right = i == 0 ? LIGHTS_SPLIT : DASH_RIGHT + MARGIN;  // the rule; the rules' end
+        for (int n = 0; n < ledlook::N_SWATCH; n++) {
+            const ledlook::Swatch& sw = ledlook::SWATCHES[n];
+            char name[16], s[24];
+            int k = 0;
+            for (; sw.name[k]; k++) name[k] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[k])));
+            name[k] = 0;
+            if (n == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);  // CYAN
+            snprintf(s, sizeof(s), "%s 100%%", name);
+            fitsLeft(Face::BODY, s, lightTextX(i), right);
+        }
+        for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(Face::BODY, s, lightTextX(i), right);
+    }
+    TEST_ASSERT_EQUAL_STRING("CYAN", LIGHT_BLUE_SHORT);  // what voice takes for it too ("cyan")
+    // the longest case, pinned: "OUT [chip] YELLOW 100%" is about 136 px, in its half's 145
+    const int outRow = lightTextX(1) + termfont::width(Face::BODY, "YELLOW 100%") - lightX(1);
+    TEST_ASSERT_TRUE(outRow >= 130 && outRow <= 140);
+    TEST_ASSERT_TRUE(lightX(1) + outRow <= DASH_RIGHT);
+    // the row between the trip band's rule and its own, caps centred; the clear reaches an accented
+    // capital's top; the band's rule starts the prompt line's band
+    const Rows row = fromBase(Face::BODY, LIGHT_ROW_BASE);
+    between(TRIP_RULE_Y, row, LIGHTS_RULE_Y, "lights");
+    TEST_ASSERT_TRUE(LIGHT_ROW_BASE - termfont::accentAscent(Face::BODY) > TRIP_RULE_Y);
+    const int gapTop = (LIGHT_ROW_BASE - termfont::capHeight(Face::BODY)) - (TRIP_RULE_Y + 1);
+    const int gapBottom = LIGHTS_RULE_Y - LIGHT_ROW_BASE;
+    TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
+    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, TRIP_RULE_Y);
+    TEST_ASSERT_EQUAL_INT(deckmenu::PROMPT_BAND.y, LIGHTS_RULE_Y);
+}
+
+// The prompt line (SMALL): ">" idle, every message, the block cursor after it, inside its band
+// (accented capitals included: a message can carry a colour's name), the caps centred between the
+// lights band's rule and the items.
+void test_dash_prompt_fits() {
+    tripmeter::Trip t;
+    t.seconds = 99 * 3600 + 59 * 60;
+    t.meters = 999900;
+    t.hasDistance = true;
     char last[40];
     tripmeter::last(t, last, sizeof(last));
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", last);
-    for (const char* m : {static_cast<const char*>(last), ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED",
-                          ">LIGHTS: NO LINK", ">WRONG KEY", ">NO SIGNAL", ">STANDBY"}) {
+    for (const char* m : {static_cast<const char*>(last), PROMPT_IDLE, ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED",
+                          ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">WRONG KEY", ">LYRICS: NO SIGNAL", ">NOTHING PLAYING",
+                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
+    const deckmenu::Rect& band = deckmenu::PROMPT_BAND;
+    TEST_ASSERT_TRUE(PROMPT_BASE - termfont::accentAscent(Face::SMALL) > LIGHTS_RULE_Y);
+    TEST_ASSERT_TRUE(PROMPT_BASE + termfont::descent(Face::SMALL) <= band.y + band.h);
+    const int items = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0).y;
+    const int gapTop = (PROMPT_BASE - termfont::capHeight(Face::SMALL)) - (LIGHTS_RULE_Y + 1);
+    const int gapBottom = items - PROMPT_BASE;
+    TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
+}
+
+// Music mode's line on the prompt line: MUSIC_PROMPT, the swatch's chip (as tall as SMALL's caps, on
+// the line's baseline, inside the prompt band) and its name, the longest one's cursor still by
+// DASH_RIGHT; WAITING and NO SIGNAL alone. The texts are the owner's (pinned), NO SIGNAL apart from
+// LYRICS's.
+void test_song_colours_fit() {
+    TEST_ASSERT_EQUAL_STRING(">MUSIC", MUSIC_PROMPT);
+    TEST_ASSERT_EQUAL_STRING(">MUSIC: WAITING", MUSIC_WAITING);
+    TEST_ASSERT_EQUAL_STRING(">MUSIC: NO SIGNAL", MUSIC_NO_SIGNAL);
+    TEST_ASSERT_TRUE(songChipX() >= DASH_X + termfont::advance(Face::SMALL, MUSIC_PROMPT) + 2);
+    TEST_ASSERT_TRUE(songNameX() >= songChipX() + MUSIC_CHIP + 2);
+    for (int k = 0; k < ledlook::N_GRID; k++) {  // a song's colour is always one of the grid's
+        const ledlook::Swatch& sw = ledlook::SWATCHES[k];
+        char name[16];
+        size_t i = 0;
+        for (; sw.name[i] && i + 1 < sizeof name; i++) name[i] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[i])));
+        name[i] = 0;
+        TEST_ASSERT_TRUE_MESSAGE(songNameX() + termfont::advance(Face::SMALL, name) + termfont::cell(Face::SMALL) + MARGIN <= DASH_RIGHT,
+                                 name);
+    }
+    for (const char* m : {MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
+        TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
+    }
+    TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::SMALL), MUSIC_CHIP);
+    // the chip's rows (PROMPT_BASE - MUSIC_CHIP .. PROMPT_BASE - 1) inside the band, clear of its rule
+    const deckmenu::Rect& band = deckmenu::PROMPT_BAND;
+    TEST_ASSERT_TRUE(PROMPT_BASE - MUSIC_CHIP > band.y);
+    TEST_ASSERT_TRUE(PROMPT_BASE <= band.y + band.h);
 }
 
 void test_status_fits() {
@@ -275,7 +393,8 @@ void test_status_fits() {
     // its ink, '/' included, stays inside, and nothing goes below the baseline (the clear is the rect)
     const termfont::Font& f = termfont::font(Face::SMALL);
     for (const char* s : {"LINK 2/2", "OUTSIDE: NO LINK", "INSIDE: NO LINK", "NO LINK", ">PURPURA APPLIED", ">INSIDE: NO LINK",
-                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">NO SYNCED LYRICS", ">WRONG KEY", ">STANDBY", ">NO SIGNAL"}) {
+                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">NO SYNCED LYRICS", ">WRONG KEY", ">NOTHING PLAYING",
+                          ">LYRICS: NO SIGNAL"}) {
         for (const char* p = s; *p; p++) {
             const termfont::Glyph& g = f.glyph[static_cast<unsigned char>(*p) - f.first];
             if (g.height == 0) continue;
@@ -294,6 +413,19 @@ void test_karaoke_pitches() {
     TEST_ASSERT_TRUE(rows(Face::BODY) <= KARAOKE_NEXT_DY && 2 * KARAOKE_NEXT_DY <= KARAOKE_NEXT_H);
     fitsCentred(Face::BIG, ">NO SYNCED LYRICS", KARAOKE_W + 2 * MARGIN);
     fitsCentred(Face::BIG, ">WRONG KEY", KARAOKE_W + 2 * MARGIN);
+    fitsCentred(Face::BIG, ">NOTHING PLAYING", KARAOKE_W + 2 * MARGIN);  // the state words, on one line
+    fitsCentred(Face::BIG, ">LYRICS: NO SIGNAL", KARAOKE_W + 2 * MARGIN);
+    // ledpanel clears a lyric area from as high as its face's accented capitals rise over its first
+    // line: the big area (BIG or TITLE, from y 56) into the 12 rows under the body's top (y 44), the
+    // next line's (BODY, from y 156) into the 10 rows under the big area (to y 146)
+    auto rise = [](Face f) { return termfont::accentAscent(f) - termfont::ascent(f); };
+    TEST_ASSERT_TRUE(rise(Face::TITLE) <= rise(Face::BIG) && rise(Face::BIG) <= 12);
+    TEST_ASSERT_TRUE(rise(Face::BODY) <= 10);
+    // the song row (BODY, upper case: "SÃO JOÃO - ..."), its caps centred on y 20 (ML_DATUM, so the
+    // baseline at 20 + cap / 2), inside its clear (rows 2..37) with the accents and the descenders
+    const int songBase = 20 + termfont::capHeight(Face::BODY) / 2;
+    TEST_ASSERT_TRUE(songBase - termfont::accentAscent(Face::BODY) >= 2);
+    TEST_ASSERT_TRUE(songBase + termfont::descent(Face::BODY) - 1 <= 2 + 36 - 1);
 }
 
 // karaoke::wrap measures with the face it draws in.
@@ -324,6 +456,7 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_width_follows_tft_espi);
     RUN_TEST(test_metrics);
+    RUN_TEST(test_latin1);
     RUN_TEST(test_bitmap_packing);
     RUN_TEST(test_menu_items_fit);
     RUN_TEST(test_preset_names_fit);
@@ -332,8 +465,11 @@ int main() {
     RUN_TEST(test_boot_lines_fit);
     RUN_TEST(test_dash_header_fits);
     RUN_TEST(test_dash_clock_and_weather_fit);
+    RUN_TEST(test_dash_hilo_row_fits);
+    RUN_TEST(test_dash_trip_band_fits);
     RUN_TEST(test_dash_lights_fit);
-    RUN_TEST(test_dash_trip_row_fits);
+    RUN_TEST(test_dash_prompt_fits);
+    RUN_TEST(test_song_colours_fit);
     RUN_TEST(test_status_fits);
     RUN_TEST(test_karaoke_pitches);
     RUN_TEST(test_wrap_with_a_face);

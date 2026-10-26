@@ -3,8 +3,9 @@
  * ES8311 driver (as shipped in Freenove's FNK0104 examples, es8311.cpp):
  *   SPDX-FileCopyrightText: 2015-2022 Espressif Systems (Shanghai) CO LTD
  *   SPDX-License-Identifier: Apache-2.0
- * Changes: Arduino Wire instead of the IDF I2C driver; playback only (16-bit I2S slave, MCLK
- * from the MCLK pin); only the clock rows this project uses (16 kHz clips, the 48 kHz intro).
+ * Changes: Arduino Wire instead of the IDF I2C driver; 16-bit I2S slave, MCLK from the MCLK pin;
+ * playback plus the analog mic (values from the 2026-10-22 mic spike); only the clock rows this
+ * project uses (16 kHz clips and the mic, the 48 kHz intro).
  */
 #include "es8311.h"
 #include <Arduino.h>
@@ -65,5 +66,11 @@ bool begin(int rate, int mclkHz) {
 }
 
 bool setVolume(uint8_t reg32) { return wr(0x32, reg32); }
+
+bool enableMic(uint8_t gain, uint8_t adcVol) {
+    if (gain > 7) gain = 7;
+    return wr(0x14, 0x1A) && wr(0x15, 0x40) && wr(0x16, gain) &&   // analog mic + PGA on, ramp, gain
+           wr(0x17, adcVol) && wr(0x1B, 0x0A) && wr(0x1C, 0x6A);    // volume, HPF, DC cancel
+}
 
 }

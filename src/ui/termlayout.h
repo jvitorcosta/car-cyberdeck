@@ -7,21 +7,33 @@
 
 namespace termlayout {
 
-// The Menu's items ("> [LIGHTS]", BODY): text x from the rect's left.
-constexpr int ROW_TEXT_X = 8;
-// KARAOKE's LIVE tag while it opens (SMALL, an inverted mini-label): LIVE_PAD px of fill around the
-// caps, its right edge LIVE_RIGHT in from the item's.
+// The Menu's three items (100 px wide), in deckmenu::Item order: the label (BODY) top left, its caps'
+// top ROW_TEXT_Y and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
+// it has one (SMALL, an inverted mini-label: TAG_PAD px of fill around the caps, TAG_RIGHT in from
+// the item's right edge, TAG_BOTTOM up from its bottom): LYRICS's LIVE while it opens, MUSIC MODE's ON
+// or OFF (always one of them). "[LYRICS]" and LIVE side by side don't fit 100 px, so the tag goes under
+// the label, and the label always sits high (it doesn't jump when a tag comes).
+constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[LYRICS]", "MUSIC MODE"};
+constexpr int N_MENU_ITEMS = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
+constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 7;
 constexpr const char* LIVE_TAG = "LIVE";
-constexpr int LIVE_PAD = 3, LIVE_RIGHT = 6;
+constexpr const char* ON_TAG = "ON";
+constexpr const char* OFF_TAG = "OFF";
+constexpr int TAG_PAD = 3, TAG_RIGHT = 6, TAG_BOTTOM = 5;
 
-// A Lights colour button (75x44): the chip left, 16x28, so the name fits right of it in BODY, the
-// preset names' face ("ORANGE", "PURPLE", "YELLOW" are the widest).
-constexpr int TILE_CHIP_X = 4, TILE_CHIP_W = 16, TILE_CHIP_H = 28, TILE_TEXT_X = 24;
+// Lights' tabs (deckmenu::Tab order), in SMALL: four 56 px tabs fit beside < BACK, and BODY's
+// "PRESETS" (55 px) wouldn't fit one with the margins.
+constexpr const char* TAB_LABELS[] = {"BOTH", "INSIDE", "OUTSIDE", "PRESETS"};
+constexpr int N_TAB_LABELS = sizeof(TAB_LABELS) / sizeof(TAB_LABELS[0]);
 
-// A Lights preset (75x36): the name (BODY, caps top PRESET_NAME_Y) centred over two PRESET_CHIP px
-// square chips (inside, outside) PRESET_CHIP_GAP apart, their top PRESET_CHIP_Y; all from the rect's
-// top / centre.
-constexpr int PRESET_NAME_Y = 4, PRESET_CHIP = 12, PRESET_CHIP_GAP = 6, PRESET_CHIP_Y = 20;
+// A Lights colour button (75x64): the chip left, 16x48, so the name fits right of it in BODY
+// ("ORANGE", "PURPLE", "YELLOW" are the widest).
+constexpr int TILE_CHIP_X = 4, TILE_CHIP_W = 16, TILE_CHIP_H = 48, TILE_TEXT_X = 24;
+
+// A preset on the PRESETS tab (100x60): the name (TITLE, caps top PRESET_NAME_Y) centred over two
+// PRESET_CHIP px square chips (inside, outside) PRESET_CHIP_GAP apart, their top PRESET_CHIP_Y; all
+// from the rect's top / centre.
+constexpr int PRESET_NAME_Y = 9, PRESET_CHIP = 18, PRESET_CHIP_GAP = 10, PRESET_CHIP_Y = 33;
 
 // The Lights status line (SMALL, in deckmenu::STATUS).
 constexpr int STATUS_TEXT_X = 4;
@@ -33,37 +45,64 @@ constexpr const char* BOOT_LINES[] = {"WELCOME TO CYBERDECK", ">SET TERMINAL/INQ
 constexpr int N_BOOT = sizeof(BOOT_LINES) / sizeof(BOOT_LINES[0]);
 constexpr int BOOT_X = 8, BOOT_Y0 = 2, BOOT_DY = 13;
 
-// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, LIGHTS_BAND, then the
-// items at the bottom), each band under a MID rule from x 4 to 315. Text starts at DASH_X;
-// right-aligned text ends at DASH_RIGHT. A _Y is the caps' top row, a _BASE the baseline (the row
-// under the caps), as ledpanel's text() places them.
+// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, TRIP_BAND, LIGHTS_BAND,
+// PROMPT_BAND, then the items at the bottom), each band but the prompt line under a MID rule from x 4
+// to 315 (from the clock band down, the next band's first row). Text starts at DASH_X; right-aligned
+// text ends at DASH_RIGHT. A _Y is the caps' top row, a _BASE the baseline (the row under the caps),
+// as ledpanel's text() places them.
 constexpr int DASH_X = 8, DASH_RIGHT = 312;
 // the header: one line (SMALL) and its rule
-constexpr const char* DASH_TITLE = "CYBERDECK // HONDA CITY";
+constexpr const char* DASH_TITLE = "CYBERDECK // HONDA CITY TOURING 2022";
 constexpr int DASH_TITLE_Y = 5, HEADER_RULE_Y = 20;
 // the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the temperature (BIG) with the
-// sky in words (SMALL) under it right of it, right-aligned; then the band's last row across, on
-// TRIP_ROW_BASE: the trip line (SMALL) left, the HI / LO line (SMALL) right-aligned, or a message in
-// place of both while one shows. The caps sit 8 rows apart: rule, clock, date, row, rule.
+// sky in words (SMALL) under it right of it, right-aligned; then the band's last row, on HILO_BASE:
+// the HI / LO line (SMALL) right-aligned. The caps sit 8 rows apart: rule, clock, date, row, rule.
 constexpr int DASH_SPLIT = 160;
-constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, TRIP_ROW_BASE = 86, CLOCK_RULE_Y = 94;
-// the block cursor (a SMALL cell) ends the trip line, or the message while one shows, by DASH_RIGHT;
-// the HI / LO line keeps TRIP_GAP clear of it, and drops its city when it can't (besideTrip)
-constexpr int TRIP_GAP = 7;
-// the lights: no label (the rows name the lights), a row per light LIGHT_ROW_DY apart, spaced evenly
-// between the rules by their caps (21 rows each): its name (BODY), a chip of its colour as tall as
-// TITLE's caps, the colour name and the level right-aligned (TITLE), all on one baseline
-constexpr int LIGHT_ROW_BASE = 130, LIGHT_ROW_DY = 35, LIGHTS_RULE_Y = 186;
-constexpr int LIGHT_CHIP_X = 84, LIGHT_CHIP_W = 18, LIGHT_CHIP_H = 14, LIGHT_NAME_X = 108;
+constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, HILO_BASE = 86, CLOCK_RULE_Y = 94;
+// the trip: TRIP_LABEL (SMALL), the time (BIG) TRIP_TIME_GAP after it, the distance (BODY) right-
+// aligned, all on TRIP_BASE, the BIG caps centred between the rules
+constexpr const char* TRIP_LABEL = "TRIP";
+constexpr int TRIP_BASE = 126, TRIP_TIME_GAP = 6, TRIP_RULE_Y = 135;
+// the lights on one row (BODY, on LIGHT_ROW_BASE, the caps centred between the rules): INSIDE left of
+// a vertical MID rule at LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: its label, a chip
+// of its colour as tall as the caps (LIGHT_CHIP_W wide) LIGHT_GAP after it, and LIGHT_GAP after that
+// what the light shows ("YELLOW 100%", "OFF", "-- NO LINK" with no chip)
+constexpr const char* LIGHT_LABELS[] = {"IN", "OUT"};  // the controllers' order: inside, outside
+constexpr int N_LIGHT_LABELS = sizeof(LIGHT_LABELS) / sizeof(LIGHT_LABELS[0]);
+constexpr int LIGHT_ROW_BASE = 157, LIGHTS_RULE_Y = 166, LIGHTS_SPLIT = 159;
+constexpr int LIGHT_CHIP_W = 14, LIGHT_CHIP_H = 11, LIGHT_GAP = 6;
+// light blue's name on the row: "LIGHT BLUE 100%" doesn't fit OUT's half; CYAN (a word voice takes
+// for it too) does
+constexpr const char* LIGHT_BLUE_SHORT = "CYAN";
+// the prompt line (SMALL, on PROMPT_BASE, the caps centred between the lights' rule and the items): a
+// message while one shows, music mode's line, else PROMPT_IDLE; the block cursor (a SMALL cell)
+// after it, by DASH_RIGHT
+constexpr const char* PROMPT_IDLE = ">";
+constexpr int PROMPT_BASE = 185;
+// music mode's line: once the song's palette came, MUSIC_PROMPT and its swatch as a MUSIC_CHIP px
+// square (SMALL's caps, on the baseline) MUSIC_CHIP_GAP after it and the swatch's name MUSIC_CHIP_GAP
+// after that (">MUSIC [chip] PINK"); before, MUSIC_WAITING alone; with no palette for a while,
+// MUSIC_NO_SIGNAL alone (not LYRICS's ">LYRICS: NO SIGNAL")
+constexpr const char* MUSIC_PROMPT = ">MUSIC";
+constexpr const char* MUSIC_WAITING = ">MUSIC: WAITING";
+constexpr const char* MUSIC_NO_SIGNAL = ">MUSIC: NO SIGNAL";
+constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 5;
 
-// Whether `right` (the HI / LO line), right-aligned at DASH_RIGHT, clears the trip line `trip` from
-// DASH_X with its block cursor after it and TRIP_GAP between them. When not, ledpanel shows the HI /
-// LO line without its city.
-inline bool besideTrip(const char* trip, const char* right) {
-    using termfont::Face;
-    return DASH_X + termfont::advance(Face::SMALL, trip) + termfont::cell(Face::SMALL) + TRIP_GAP <=
-           DASH_RIGHT - termfont::width(Face::SMALL, right);
-}
+// Whether the HI / LO line `s`, right-aligned at DASH_RIGHT, fits the row from DASH_X. When not,
+// ledpanel shows it without its city.
+inline bool hiLoFits(const char* s) { return DASH_X <= DASH_RIGHT - termfont::width(termfont::Face::SMALL, s); }
+
+// Where the trip's time starts: after TRIP_LABEL.
+inline int tripTimeX() { return DASH_X + termfont::advance(termfont::Face::SMALL, TRIP_LABEL) + TRIP_TIME_GAP; }
+
+// Music mode's swatch chip and its name on the prompt line.
+inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, MUSIC_PROMPT) + MUSIC_CHIP_GAP; }
+inline int songNameX() { return songChipX() + MUSIC_CHIP + MUSIC_CHIP_GAP; }
+
+// A light's half of the lights row (0 inside, 1 outside): where it starts, its chip, its text.
+inline int lightX(int i) { return i == 0 ? DASH_X : LIGHTS_SPLIT + DASH_X; }
+inline int lightChipX(int i) { return lightX(i) + termfont::advance(termfont::Face::BODY, LIGHT_LABELS[i]) + LIGHT_GAP; }
+inline int lightTextX(int i) { return lightChipX(i) + LIGHT_CHIP_W + LIGHT_GAP; }
 
 // The KARAOKE body: the line due now in BIG over up to 3 lines KARAOKE_BIG_DY apart (or, when that
 // would cut it, TITLE over up to 4 lines KARAOKE_FIT_DY apart) in KARAOKE_BIG_H rows; the next line in

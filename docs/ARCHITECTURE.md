@@ -84,13 +84,9 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
-- **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Waiting for
-  a song..." shows when Spotify has nothing, or once the song has stayed paused 30 s. A
-  music box then loops `data/tunes.txt` (packed by `tools/tune_clip.py` from `data/tunes/*.txt`,
-  git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at 5 % of the clip volume (`TUNE_LEVEL`),
-  synthesised in a 4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
-  screen goes, starts only with the howl's TLS margin, stops when the largest block nears
-  `TLS_NEED`, and retries at most once a minute. `tools/gen_tune.py` makes tunes from MIDI.
+- **Waiting for a song** (`util/idlewait`) — "Waiting for a song..." shows when Spotify has
+  nothing, or once the song has stayed paused 30 s; now and then its second line says how to
+  wake a phone that plays on unseen (`PHONE_HINT`). The screen is silent.
 - **Firmware updates** (`net/ota`, `util/otaview`, `util/backdrop`, `ui/otascreen`, `util/bootguard`)
   — ArduinoOTA on port 3232 (password REMOTE_TOKEN), its own task. `otaview::Tracker` keeps the
   update's state (Receiving, Done, Failed held 3 s); ArduinoOTA's own reboot is off, so the deck
@@ -115,6 +111,18 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   phone icon and "REMOTE", 3 px modules on a cream panel, 2-module quiet zone, x 4-127,
   y 22-149), painted once with the screen and again only when the address changes; without a
   link the scene is painted back over it.
+- **Music mode, black deck** (`audio/musicsvc`, `util/songpalette`, `util/musicwire`) —
+  `GET /music?k=<token>&on=1` (the yellow deck, every 10 s) starts or keeps a small task (core 1,
+  4 KB stack) that sends the song's palette (`songpalette::forLights`: cover colours from the
+  decoded art and the genre badge as by day, only the cap follows the time of day; a new song's
+  once its cover is in, or 8 s after the track change without one), on change and every 10 s,
+  over UDP to the requester's port 4210. The yellow deck snaps its main colour to one of the
+  lights' 8 swatches (`util/musiclights`). `on=0` or 30 s without a keep-alive stops it and closes
+  the socket. No mic: the howl plays as usual (`board/s3/mic_es8311` stays in the tree, unused,
+  for the voice agent). It starts only with
+  TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
+  is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
+  `[music]` serial line tells each palette sent for a new song or a change.
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with

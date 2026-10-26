@@ -157,10 +157,6 @@ uint16_t pixel(int x, int y, const Look& look, const Pose& pose, const Colors& c
     return c.grass;
 }
 
-bool onSoundButton(int x, int y) {
-    return x >= 256 && x < 316 && y >= DLG_Y && y < DLG_Y + DLG_H;
-}
-
 Rect frameRect(const Look& look) {
     if (look.ball || look.bubble != Bubble::None) return {X0, Y0, W, H};
     const int w = spriteW(look), h = spriteH(look);

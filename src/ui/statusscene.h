@@ -42,9 +42,4 @@ Rect bubbleRect(const Look& look, const Pose& pose);   // the box, without tail 
 // the waiting figure's box (Sonic, or Pikachu with room for his bob), so the phone link's QR
 // card beside him (ui/qrcard) is painted once.
 Rect frameRect(const Look& look);
-
-// The music box's speaker key on "Waiting for a song..." (S3): centred on the dialogue box's right
-// end, clear of the title; a tap anywhere on that end toggles it.
-constexpr Rect SOUND_ICON = {262, DLG_Y + 16, 44, 36};
-bool onSoundButton(int x, int y);
 }

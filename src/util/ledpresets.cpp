@@ -3,15 +3,18 @@
 #include <cstdio>
 
 namespace ledpresets {
+static constexpr char GOJIRA_SHOWN[] = {GOJIRA_MARK, 0};
 const Preset PRESETS[N] = {
     {"ROSE", "rose", {2, 40, true}, {2, 100, true}},
-    {"FIRE", "fire", {0, 50, true}, {0, 100, true}},
-    {"CALM", "calm", {6, 40, true}, {6, 40, true}},
+    {"FIRE", "fire", {0, 40, true}, {0, 100, true}},
+    {"GOJIRA", "gojira", {ledlook::LIGHT_BLUE, 40, true}, {ledlook::LIGHT_BLUE, 100, true}, GOJIRA_SHOWN},
     {"PURPURA", "purpura", {3, 40, true}, {3, 100, true}},
+    {"CIVIC", "civic", {5, 40, true}, {5, 100, true}},
+    {"OCEAN", "ocean", {4, 40, true}, {4, 100, true}},
 };
 
 namespace {
-// An out-of-range slot clamps to 1..4, and callers print the clamped number so a line never pairs one
+// An out-of-range slot clamps to 1..N, and callers print the clamped number so a line never pairs one
 // slot's number with another's data.
 int clampSlot(int slot) { return slot < 1 ? 1 : slot > N ? N : slot; }
 const Preset& at(int slot) { return PRESETS[clampSlot(slot) - 1]; }

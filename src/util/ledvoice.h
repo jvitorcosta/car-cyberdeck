@@ -6,7 +6,8 @@
 #include <cstring>
 
 namespace ledvoice {
-// Colour indices follow the panel's swatches: red, orange, pink, purple, blue, green, white, yellow.
+// Colour indices follow the panel's swatches: red, orange, pink, purple, blue, green, white, yellow,
+// then light blue (8, a preset's colour, off the grid): "light blue", "azul claro", "cyan".
 enum Zone { ZONE_NONE = -1, ZONE_BOTH = 0, ZONE_INSIDE = 1, ZONE_OUTSIDE = 2 };
 
 struct Command {
@@ -15,7 +16,7 @@ struct Command {
     int level = -1;      // absolute 10..100 %, or -1
     int levelStep = 0;   // +1 brighter, -1 dimmer (one 10 % step each)
     int zone = ZONE_NONE;
-    int preset = -1;     // preset 1..4 ("rose", "favourite two"), or -1
+    int preset = -1;     // preset 1..6 ("rose", "favourite two"), or -1
 };
 
 namespace detail {
@@ -39,7 +40,20 @@ static const Word COLORS[] = {
     {"green", 5},  {"verde", 5},
     {"white", 6},  {"branco", 6},   {"branca", 6},
     {"yellow", 7}, {"amarelo", 7},  {"amarela", 7},
+    {"cyan", 8},   {"ciano", 8},
 };
+static constexpr int BLUE = 4, LIGHT_BLUE = 8;
+// Light blue in two words: "light" right before a blue word, or "claro" / "clara" right after one
+// ("azul claro"). Only next to each other, so "lights blue" and "light, then blue" stay blue, and
+// either word alone is nothing.
+static const char* const LIGHTER_BEFORE[] = {"light"};
+static const char* const LIGHTER_AFTER[] = {"claro", "clara"};
+inline bool among(const char* w, const char* const* words, int n) {
+    for (int i = 0; i < n; i++) {
+        if (std::strcmp(w, words[i]) == 0) return true;
+    }
+    return false;
+}
 static const Word POWER[] = {
     {"off", 0}, {"desliga", 0}, {"desligar", 0}, {"desligue", 0}, {"apaga", 0}, {"apagar", 0}, {"apague", 0},
     {"on", 1},  {"liga", 1},    {"ligar", 1},    {"ligue", 1},    {"acende", 1}, {"acender", 1}, {"acenda", 1},
@@ -70,11 +84,14 @@ static const Word SLOTS[] = {
     {"two", 2},   {"to", 2},  {"too", 2}, {"2", 2},
     {"three", 3}, {"tree", 3}, {"3", 3},
     {"four", 4},  {"for", 4}, {"fore", 4}, {"4", 4},
+    {"five", 5},  {"5", 5},
+    {"six", 6},   {"6", 6},
 };
-// The four presets by name: ROSE, FIRE, CALM, PURPURA ("purpura" is the owner's spelling). They set the
-// preset directly, no arming. "rose" is not a colour word here (pink is "rosa"), so there is no clash.
+// The six presets by name: ROSE, FIRE, GOJIRA (or "godzilla"), PURPURA ("purpura" is the owner's
+// spelling), CIVIC, OCEAN. They set the preset directly, no arming. "rose" is not a colour word here
+// (pink is "rosa"), so there is no clash.
 static const Word PRESET_NAMES[] = {
-    {"rose", 1}, {"fire", 2}, {"calm", 3}, {"purpura", 4},
+    {"rose", 1}, {"fire", 2}, {"gojira", 3}, {"godzilla", 3}, {"purpura", 4}, {"civic", 5}, {"ocean", 6},
 };
 #define LEDVOICE_N(t) static_cast<int>(sizeof(t) / sizeof(t[0]))
 }  // namespace detail
@@ -85,6 +102,8 @@ inline bool parse(const char* text, Command* out) {
     *out = Command{};
     bool any = false;
     bool armed = false;  // a favourite word was heard and its slot number hasn't come yet
+    bool light = false;  // the word before was "light"
+    bool blue = false;   // the word before was a blue colour word
     char w[24];
     for (const char* p = text; *p;) {
         // a word: letters, digits and UTF-8 bytes (accents); everything else separates
@@ -98,12 +117,18 @@ inline bool parse(const char* text, Command* out) {
             p++;
             continue;
         }
+        const bool afterLight = light, afterBlue = blue;
+        light = blue = false;
+        if (afterBlue && among(w, LIGHTER_AFTER, LEDVOICE_N(LIGHTER_AFTER))) {  // "azul claro"
+            out->color = LIGHT_BLUE;
+            continue;
+        }
         if (std::isdigit(static_cast<unsigned char>(w[0]))) {  // "50", "50%": a level, or a slot right after "favourite"
             int v = 0;
             for (int i = 0; i < n && std::isdigit(static_cast<unsigned char>(w[i])); i++) v = v * 10 + (w[i] - '0');
-            if (armed) {  // outside 1..4 there is no such favourite: preset stays -1 and nothing is parsed
+            if (armed) {  // outside 1..6 there is no such favourite: preset stays -1 and nothing is parsed
                 armed = false;
-                if (v >= 1 && v <= 4) {
+                if (v >= 1 && v <= 6) {
                     out->preset = v;
                     any = true;
                 }
@@ -131,7 +156,14 @@ inline bool parse(const char* text, Command* out) {
             armed = true;  // not a command by itself: "favourite" alone parses to nothing
             continue;
         }
-        if ((v = lookup(w, COLORS, LEDVOICE_N(COLORS))) >= 0) out->color = v;
+        if (among(w, LIGHTER_BEFORE, LEDVOICE_N(LIGHTER_BEFORE))) {
+            light = true;  // not a command by itself ("light off" is just off); a blue word next makes it light blue
+            continue;
+        }
+        if ((v = lookup(w, COLORS, LEDVOICE_N(COLORS))) >= 0) {
+            blue = v == BLUE;
+            out->color = afterLight && blue ? LIGHT_BLUE : v;
+        }
         else if ((v = lookup(w, POWER, LEDVOICE_N(POWER))) >= 0) out->power = v;
         else if ((v = lookup(w, LEVELS, LEDVOICE_N(LEVELS))) >= 0) out->level = v;
         else if ((v = lookup(w, ZONES, LEDVOICE_N(ZONES))) >= 0) out->zone = v;

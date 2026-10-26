@@ -59,7 +59,6 @@ size_t write(const State& s, char* out, size_t n) {
         o.str(s.clips[i]);
     }
     o.put(']');
-    o.key("tunes");       o.str(s.tunes);
     o.key("trackGen");    o.num((long)s.trackGen);
     o.key("progressMs");  o.num((long)s.progressMs);
     o.key("durationMs");  o.num((long)s.durationMs);

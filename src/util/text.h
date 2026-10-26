@@ -13,6 +13,16 @@ enum class Mark : uint8_t { None, Acute, Grave, Circumflex, Tilde, Diaeresis, Ce
 // may be nullptr. Letters that fold to two characters (Æ, ß) carry no mark. Returns the
 // folded length.
 size_t foldMarks(const char* src, char* dst, Mark* marks, size_t n);
+// UTF-8 -> Latin-1 bytes, the yellow deck's lettering (its fonts cover 0x20-0xFF): ASCII and
+// U+00A1..00FF (accented letters, the degree sign) become one byte each, the no-break space and the
+// other Unicode spaces a plain ' ' (lines wrap at it); above that, curly quotes and ʼ fold to ' and ",
+// ‹ › to < >, • to *, dashes to -, the ellipsis to ..., Œ œ to OE oe, Ÿ to Y; anything else (CJK, emoji),
+// the C1 controls and the soft hyphen are dropped. A character goes in whole or not at all, and text
+// cut mid-character stops at its NUL. Writes at most n bytes incl. NUL; returns the length. Pure.
+size_t latin1Fold(const char* utf8, char* dst, size_t n);
+// Upper-cases Latin-1 text in place: a-z, à..þ -> À..Þ (not ÷), ÿ -> Y (Latin-1 has no capital
+// Ÿ); ß and the rest stay as they are.
+void latin1Upper(char* s);
 // Copy an identifier (e.g. a Spotify URI) into n bytes. If it does not fit, keep the start
 // and end with "#" + 8 hex digits of a hash of the whole id, so two long ids sharing a
 // prefix (local files from one album) stay distinct. nullptr -> "".

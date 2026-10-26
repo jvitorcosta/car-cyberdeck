@@ -19,19 +19,37 @@ Trip Meter::trip() const {
     return t;
 }
 
-// "12.4 KM 0:32" body shared by line() and last(); only the prefix and the gap differ.
-static void body(const Trip& t, const char* head, const char* gap, char* buf, size_t n) {
+void elapsed(const Trip& t, char* buf, size_t n) {
     const unsigned mins = t.seconds / 60;
-    if (t.hasDistance) {
-        const unsigned tenths = t.meters / 100;  // rounded down: a trip never reads further than it went
-        snprintf(buf, n, "%s%u.%u KM%s%u:%02u", head, tenths / 10, tenths % 10, gap, mins / 60, mins % 60);
-    } else {
-        snprintf(buf, n, "%s-- KM%s%u:%02u", head, gap, mins / 60, mins % 60);
-    }
+    snprintf(buf, n, "%u:%02u", mins / 60, mins % 60);
 }
 
-void line(const Trip& t, char* buf, size_t n) { body(t, "TRIP ", "  ", buf, n); }
-void last(const Trip& t, char* buf, size_t n) { body(t, ">LAST TRIP ", " ", buf, n); }
+// "12.4", rounded down: a trip never reads further than it went.
+static void km(const Trip& t, char* buf, size_t n) {
+    const unsigned tenths = t.meters / 100;
+    snprintf(buf, n, "%u.%u", tenths / 10, tenths % 10);
+}
+
+void distance(const Trip& t, char* buf, size_t n) {
+    if (!t.hasDistance) {
+        snprintf(buf, n, "-- KM");
+        return;
+    }
+    char k[16];
+    km(t, k, sizeof(k));
+    snprintf(buf, n, "%s KM", k);
+}
+
+void last(const Trip& t, char* buf, size_t n) {
+    char k[16], hm[16];
+    elapsed(t, hm, sizeof(hm));
+    if (!t.hasDistance) {
+        snprintf(buf, n, ">LAST TRIP %s", hm);
+        return;
+    }
+    km(t, k, sizeof(k));
+    snprintf(buf, n, ">LAST TRIP %s KM %s", k, hm);
+}
 
 void encode(const Trip& t, uint8_t out[RECORD_BYTES]) {
     for (int i = 0; i < 4; i++) {

@@ -24,9 +24,12 @@ private:
     bool hasDistance_ = false;
 };
 
-// "TRIP 12.4 KM  0:32"; no distance: "TRIP -- KM  0:32". Tenths round down; hours aren't capped.
-void line(const Trip& t, char* buf, size_t n);
-// ">LAST TRIP 12.4 KM 0:47": the boot message for the trip before, fits the deck's 32-byte buffer.
+// The dashboard's trip band, its two parts: the time ("0:32", hours aren't capped) and the distance
+// ("12.4 KM", tenths round down; no speed source yet: "-- KM").
+void elapsed(const Trip& t, char* buf, size_t n);
+void distance(const Trip& t, char* buf, size_t n);
+// ">LAST TRIP 12.4 KM 0:47" (">LAST TRIP 0:47" when it had no distance): the boot message for the
+// trip before, fits the deck's 32-byte buffer.
 void last(const Trip& t, char* buf, size_t n);
 
 // The NVS record: seconds u32 LE, meters u32 LE, hasDistance u8. decode() is false (and *t = Trip{})

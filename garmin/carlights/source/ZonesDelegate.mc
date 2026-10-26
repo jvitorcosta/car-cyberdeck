@@ -1,10 +1,13 @@
+import Toybox.Attention;
+import Toybox.Graphics;
 import Toybox.Lang;
+import Toybox.Timer;
 import Toybox.WatchUi;
 
 // The zone pages' buttons:
 //   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE -> PRESETS
-//   START:     that zone's list (colours, Brightness >, Off); on PRESETS the list of the deck's
-//              presets to apply                                  BACK: leave
+//   START:     that zone's list (colours, Brightness >, Off); on PRESETS the deck's presets as
+//              bars, START on one applies it                     BACK: leave
 class ZonesDelegate extends WatchUi.BehaviorDelegate {
     private var _deck as Deck;
     private var _view as ZonesView;
@@ -33,45 +36,42 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
             return presets();
         }
         var menu = new WatchUi.Menu2({:title => ["Both", "Inside", "Outside"][zone] as String});
-        for (var i = 0; i < COLORS.size(); i++) {
+        for (var i = 0; i < N_PICK; i++) {
             var c = COLORS[i] as Array;
             menu.addItem(new WatchUi.IconMenuItem(c[0] as String, null, c[1] as String, new ColorDot(c[2] as Number), {}));
         }
         menu.addItem(new WatchUi.MenuItem("Brightness", null, :level, {}));
         menu.addItem(new WatchUi.MenuItem("Off", null, "off", {}));
-        // start on the zone's current colour (inside's for BOTH)
-        menu.setFocus(_deck.look(zone == BOTH ? INSIDE : zone).color);
+        // start on the zone's current colour (inside's for BOTH; blue for light blue, not in the list)
+        var color = _deck.look(zone == BOTH ? INSIDE : zone).color;
+        menu.setFocus(color < N_PICK ? color : BLUE_INDEX);
         WatchUi.pushView(menu, new ZoneMenuDelegate(_deck, zone), WatchUi.SLIDE_LEFT);
         return true;
     }
 
-    // The Presets list: an item per preset (its name, "Pink 40 / Pink 100", the two dots). Nothing
+    // The Presets list: each preset's bar (PresetItem), START applies the focused one. Nothing
     // opens while the deck hasn't sent any.
     private function presets() as Boolean {
         if (_deck.presets.size() == 0) {
             return true;
         }
-        var menu = new WatchUi.Menu2({:title => "Presets"});
+        var menu = new WatchUi.CustomMenu(30, Graphics.COLOR_BLACK,
+            {:focusItemHeight => 44, :title => new PresetTitle()});
         for (var i = 0; i < _deck.presets.size(); i++) {
-            var p = _deck.presets[i] as Array;
-            menu.addItem(new WatchUi.IconMenuItem(p[0] as String,
-                say(p[1] as Number, p[2] as Number, p[3] as Boolean) + " / "
-                + say(p[4] as Number, p[5] as Number, p[6] as Boolean),
-                p[7] as Number, new FavDots(p.slice(1, 7)), {}));
+            menu.addItem(new PresetItem(_deck.presets[i] as Array));
         }
         WatchUi.pushView(menu, new PresetMenuDelegate(_deck), WatchUi.SLIDE_LEFT);
         return true;
     }
-
-    // "Pink 40" or "Off" for one light of a preset.
-    private function say(color as Number, pct as Number, lit as Boolean) as String {
-        return lit ? ((COLORS[color] as Array)[0] as String) + " " + pct : "Off";
-    }
 }
 
-// The Presets list: a preset is applied on the deck and the list returns to the pages.
+// The Presets list: START applies the preset on the deck, buzzes, and the bar says "APPLIED" for
+// APPLIED_MS before the list returns to the pages. BACK leaves without applying.
 class PresetMenuDelegate extends WatchUi.Menu2InputDelegate {
+    private const APPLIED_MS = 1000;
     private var _deck as Deck;
+    private var _timer as Timer.Timer = new Timer.Timer();
+    private var _applying as Boolean = false;
 
     function initialize(deck as Deck) {
         Menu2InputDelegate.initialize();
@@ -79,11 +79,26 @@ class PresetMenuDelegate extends WatchUi.Menu2InputDelegate {
     }
 
     function onSelect(item as WatchUi.MenuItem) as Void {
-        var id = item.getId();
-        if (id instanceof Number) {  // the preset's number on the deck
-            _deck.applyPreset(id);
-            WatchUi.popView(WatchUi.SLIDE_RIGHT);
+        if (_applying || !(item instanceof PresetItem)) {
+            return;  // one preset per visit: the list is on its way out
         }
+        _applying = true;
+        _deck.applyPreset(item.getId() as Number);  // the preset's number on the deck
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(50, 120)]);
+        }
+        item.applied = true;
+        WatchUi.requestUpdate();
+        _timer.start(method(:leave), APPLIED_MS, false);
+    }
+
+    function onBack() as Void {
+        _timer.stop();  // or it would pop the pages too
+        leave();
+    }
+
+    function leave() as Void {
+        WatchUi.popView(WatchUi.SLIDE_RIGHT);
     }
 }
 

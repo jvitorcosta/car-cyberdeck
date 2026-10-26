@@ -12,9 +12,11 @@ bool inside(const Rect& r, int x, int y) { return x >= r.x && x < r.x + r.w && y
 
 bool displayOnly(Screen s, int x, int y) {
     if (s == Screen::Menu) {
-        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(LIGHTS_BAND, x, y);
+        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(TRIP_BAND, x, y) || inside(LIGHTS_BAND, x, y) ||
+               inside(PROMPT_BAND, x, y);
     }
     if (s == Screen::Karaoke) return inside(KARAOKE_BODY, x, y);
+    if (s == Screen::Presets) return inside(STATUS, x, y);
     return inside(STATUS, x, y) || inside(LEVEL, x, y);
 }
 
@@ -27,20 +29,25 @@ Rect mk(int x, int y, int w, int h) {
 int count(Screen s) {
     if (s == Screen::Menu) return M_N;
     if (s == Screen::Karaoke) return K_N;
+    if (s == Screen::Presets) return P_N;
     return L_N;
 }
 
 Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
-    if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 158, 192, 154, 44);  // LIGHTS, KARAOKE
+    if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 106, 192, 100, 44);  // LIGHTS, KARAOKE, MUSIC
     if (s == Screen::Karaoke) return mk(4, 2, 70, 36);                        // K_BACK, where Lights has its Back
+    // Lights and Presets: < BACK, then the four tabs in x 80..316 (56 px: five 70 px buttons don't fit)
     if (id == L_BACK) return mk(4, 2, 70, 36);
-    if (id < L_TILE0) return mk(80 + (id - L_ZONE0) * 80, 2, 76, 36);
-    if (id < L_PRE0) {
-        const int i = id - L_TILE0;
-        return mk(4 + (i % 4) * 79, 54 + (i / 4) * 48, 75, 44);
+    if (id < L_TAB0 + N_TABS) return mk(80 + (id - L_TAB0) * 60, 2, 56, 36);
+    if (s == Screen::Presets) {  // two rows of three, centred under STATUS
+        const int i = id - P_PRE0;
+        return mk(4 + (i % 3) * 106, 80 + (i / 3) * 70, 100, 60);
     }
-    if (id < L_MINUS) return mk(4 + (id - L_PRE0) * 79, 150, 75, 36);
+    if (id < L_MINUS) {  // the 2x4 colours, down to the level row
+        const int i = id - L_TILE0;
+        return mk(4 + (i % 4) * 79, 54 + (i / 4) * 68, 75, 64);
+    }
     if (id == L_MINUS) return mk(4, 190, 96, 46);
     return mk(220, 190, 96, 46);  // L_PLUS
 }
@@ -77,6 +84,7 @@ int neighbour(Screen s, int from, int dx, int dy) {
         const int along = dx ? vx * dx : vy * dy;
         if (along <= 0) continue;
         const int across = dx ? (vy < 0 ? -vy : vy) : (vx < 0 ? -vx : vx);
+        if (dx && across > along) continue;  // left / right: more up or down than that way is not a neighbour
         if (along + 2 * across < bestScore) {
             bestScore = along + 2 * across;
             best = id;
@@ -86,8 +94,8 @@ int neighbour(Screen s, int from, int dx, int dy) {
 }
 
 int presetSlot(Screen s, int id) {
-    if (s != Screen::Lights) return -1;
-    return id >= L_PRE0 && id < L_PRE0 + 4 ? id - L_PRE0 : -1;
+    if (s != Screen::Presets) return -1;
+    return id >= P_PRE0 && id < P_N ? id - P_PRE0 : -1;
 }
 
 bool isPreset(Screen s, int id) { return presetSlot(s, id) >= 0; }

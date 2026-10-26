@@ -18,15 +18,16 @@ struct Glyph {                  // = GFXglyph
 struct Font {                   // = GFXfont
     const uint8_t* bitmap;
     const Glyph* glyph;
-    uint16_t first, last;       // the characters covered (0x20..0x7E)
+    uint16_t first, last;       // the characters covered (0x20..0xFF, Latin-1; 0x7F..0x9F empty)
     uint8_t yAdvance;           // line height
 };
 
-// SMALL 17 px: the boot lines, the dashboard's header, date, weather words, HI / LO and
-// strip (trip, messages), the KARAOKE item's LIVE tag, the Lights status line;
-// BODY 19 px: buttons and the Menu items, tabs, < BACK, INSIDE / OUTSIDE, the Lights colour and
-// preset names, the KARAOKE song row, the next lyric; TITLE 24 px: the lights band's colour names
-// and levels, the Lights level %, [-] / [+]; BIG 36 px: the clock, the temperature, the lyric line.
+// SMALL 17 px: the boot lines, the dashboard's header, date, weather words, HI / LO, TRIP and
+// prompt line (messages, music mode's line), the LYRICS item's LIVE tag, the Lights status line;
+// BODY 19 px: buttons and the Menu items, tabs, < BACK, the dashboard's lights row and trip
+// distance, the Lights colour and preset names, the Lyrics screen's song row, the next lyric;
+// TITLE 24 px: the Lights level %, [-] / [+]; BIG 36 px: the clock, the temperature, the trip's
+// time, the lyric line.
 // VT323 is drawn on a pixel grid and breaks up below 17 px. At 24 and 36 px every stroke is an even
 // 2 / 3 px; 17 and 19 px are off its grid and keep some uneven stems (a 1 px stem next to a 2 px
 // one), the smallest sizes that still read cleanly: judged on the device.
@@ -37,9 +38,12 @@ const Font& font(Face f);
 
 // Rows of 'H' above the baseline: what centring and "caps top at y" go by (the text is upper case).
 int capHeight(Face f);
-// The deepest rows any glyph reaches above / below the baseline ('(' '/' '[' 'Q' 'g' go past the
-// caps): what a clear must cover.
+// The deepest rows ASCII glyphs reach above / below the baseline ('(' '/' '[' 'Q' 'g' go past the
+// caps): what the layout spaces lines by. descent() holds for every glyph; above, the accented
+// capitals (À É Ã, Å the highest) rise past ascent(), to accentAscent(): what a clear under text
+// that can hold them must reach up to.
 int ascent(Face f);
+int accentAscent(Face f);
 int descent(Face f);
 // One step of the (monospace) pen: the width of a cell, e.g. the block cursor.
 int cell(Face f);

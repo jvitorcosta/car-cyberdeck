@@ -1,7 +1,7 @@
 # PlatformIO script: the S3's `uploadmedia` target. Packs data/ (tools/pack_media.py) and writes
 # the pack to the media partition over USB; the firmware is not rebuilt or flashed.
 #   pio run -e s3 -t uploadmedia [--upload-port COM12]
-# Only needed when a clip, the montage, a tune or the font changes.
+# Only needed when a clip, the montage or the font changes.
 Import("env")  # noqa: F821 (provided by PlatformIO/SCons)
 import os
 import sys

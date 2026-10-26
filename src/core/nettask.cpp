@@ -8,6 +8,7 @@
 #include "../net/ota.h"
 #include "../spotify/client.h"
 #include "../images/art.h"
+#include "../audio/musicsvc.h"
 #include "../images/walksprite.h"
 #include "../lyrics/lrclib.h"
 #include "../pokemon/pick.h"
@@ -59,6 +60,7 @@ static void onTrackChange() {
     s_work = netplan::freshWork(prefetched);
     s_lyricsRetry.reset();               // UI shows "searching" until the first result
     s_artRetry.reset();
+    musicsvc::onTrack(s_st.trackGen);    // music mode's palette: genre and time only, until the cover
     uint8_t badge;
     if (s_genres.find(s_st.artist, &badge)) {   // known artist (or none): no request
         netplan::done(s_work, netplan::Step::Genre);
@@ -91,7 +93,10 @@ static bool doStep(netplan::Step step) {
             tick();
             shared::artInvalidate();          // UI stops pushing the bitmap before we overwrite it
             bool ok = art::fetch(s_st.albumArtUrl);
-            if (ok) shared::postArt(gen);
+            if (ok) {
+                musicsvc::onCover(gen);       // the cover's colours, before anything can rewrite the bitmap
+                shared::postArt(gen);
+            }
             tock(ok ? "art" : "art failed");
             mem::log("art");
             if (!s_artRetry.onResult(ok, s_st.albumArtUrl[0] != '\0', millis())) return false;   // once more, later

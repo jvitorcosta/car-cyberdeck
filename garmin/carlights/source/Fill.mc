@@ -18,9 +18,11 @@ module Fill {
         return top;
     }
 
-    // The ink that reads on a colour: black on the light ones, white on the rest.
+    // The ink that reads on a colour: black on the light ones (white, yellow, green, light blue),
+    // white on the rest.
     function ink(rgb as Number) as Graphics.ColorType {
-        return rgb == 0xFFFFFF || rgb == 0xFFD400 || rgb == 0x00FF30 ? Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
+        return rgb == 0xFFFFFF || rgb == 0xFFD400 || rgb == 0x00FF30 || rgb == 0x00AAFF
+            ? Graphics.COLOR_BLACK : Graphics.COLOR_WHITE;
     }
 
     // A whole-face page: title (small, top), main (big, centre), sub (under it), foot (bottom).
