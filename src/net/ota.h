@@ -14,8 +14,9 @@ namespace ota {
 void checkBoot();
 // Starts the listener task; it listens once `hold` is false (the S3's boot scene; nullptr: never
 // held) and WiFi is up. `name`: ArduinoOTA's hostname (its mDNS stays off: each app already answers
-// to its own .local name). `onStart` runs on the listener task as an upload begins (the S3 stops
-// its music box; nullptr: nothing); everything else pauses by polling active().
+// to its own .local name). `onStart` runs on the listener task as an upload begins (nullptr:
+// nothing; neither deck needs one, their clips end on their own); everything else pauses by
+// polling active().
 void begin(const char* name, bool (*hold)() = nullptr, void (*onStart)() = nullptr);
 // The update screen's state (util/otaview): Receiving with its percent, Done (the deck reboots
 // otaview::DONE_MS later, after the screen's flash), Failed (held otaview::FAILED_HOLD_MS), Idle.

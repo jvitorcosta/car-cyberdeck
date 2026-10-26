@@ -7,7 +7,7 @@
 // forLights: cover colours and genre badge as by day, the time of day's cap) over UDP to the requester's musicwire::PORT (util/musicwire):
 // once a new song's cover is in (or COVER_WAIT_MS after the track change without one), on any later
 // change and every 10 s. The socket exists only while it runs. No keep-alive for 30 s stops it. No
-// mic: the music box and the real wolf howl play as usual.
+// mic: the real wolf howl plays as usual.
 namespace musicsvc {
 constexpr uint32_t TIMEOUT_MS = 30000;
 constexpr uint32_t COVER_WAIT_MS = 8000;

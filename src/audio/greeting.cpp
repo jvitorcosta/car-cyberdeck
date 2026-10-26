@@ -2,12 +2,10 @@
 #include <Arduino.h>
 #include <atomic>
 #include <cstring>
-#include <Preferences.h>
 #include "sink.h"
 #include "../util/loudness.h"
 #include "../util/howl.h"
 #include "../util/intropick.h"
-#include "../util/musicbox.h"
 #include "../core/media.h"
 
 MEDIA_DECL(data_greeting_pcm);
@@ -17,17 +15,14 @@ MEDIA_DECL(data_intro_pcm);
 MEDIA_DECL(data_max_pcm);
 MEDIA_DECL(data_howl_pcm);
 MEDIA_DECL(data_greeting_alt_pcm);
-MEDIA_DECL(data_tunes_txt);
 // In the app, so a deck with an empty media partition still boots with sound.
 EMBED(data_greeting_default_pcm);
-EMBED(data_tunes_default_txt);
 
 namespace greeting {
 
 constexpr int CLIP_RATE = 16000;         // tools/gen_greeting.py output rate (16-bit signed LE)
 constexpr int INTRO_RATE = 48000;        // tools/gen_intro.py and tools/gen_howl.py output rate
 constexpr int CHUNK = 128;               // samples per audiosink::write
-constexpr int TUNE_LEVEL = 25;           // the music box, per mille of the clip volume: barely there
 
 // data == nullptr: synthesised while it plays (util/howl) instead of read from flash.
 struct Clip { const uint8_t* data; size_t samples; const char* name; const int* volume; int rate; };
@@ -63,13 +58,6 @@ static const Clips& clips() {
         return k;
     }();
     return c;
-}
-
-// The music box's tune set: yours, else the public-domain fallback.
-static media::Blob tunesText() {
-    media::Blob t = MEDIA(data_tunes_txt, "tunes.txt");
-    if (!t.size) t = {EMBED_DATA(data_tunes_default_txt), EMBED_SIZE(data_tunes_default_txt)};
-    return t;
 }
 
 // An optional clip the build may lack: the pre-build scripts write one silent sample instead.
@@ -145,109 +133,6 @@ static void start(const Clip* c, const char* name) {
 void play() {
     if (s_choice == intropick::NONE) return;   // the videos have their own sound
     start(&greetingClip(), "greeting");
-}
-
-static std::atomic<bool> s_tunes{false};      // the music box's task is alive
-static std::atomic<bool> s_tunesStop{false};
-static std::atomic<uint32_t> s_tuneFailures{0};  // starts whose audio didn't open, since boot
-static portMUX_TYPE s_nameMux = portMUX_INITIALIZER_UNLOCKED;
-static char s_tuneName[32] = "";                // the tune playing (tuneTask writes, any task reads)
-
-static void setTuneName(const char* s) {
-    portENTER_CRITICAL(&s_nameMux);
-    strlcpy(s_tuneName, s, sizeof s_tuneName);
-    portEXIT_CRITICAL(&s_nameMux);
-}
-
-static_assert(musicbox::RATE == CLIP_RATE, "the music box plays at the clip rate");
-
-// Like task(), but the music box never ends by itself: it plays until stopTunes() and its fade.
-static void tuneTask(void*) {
-    xSemaphoreTake(s_output, portMAX_DELAY);
-    bool opened = false;
-    if (!s_tunesStop.load()) {
-        opened = audiosink::open(CLIP_RATE);
-        if (!opened) s_tuneFailures.fetch_add(1);   // the UI rests a minute (util/tunegate)
-    }
-    if (opened) {
-        const media::Blob text = tunesText();
-        musicbox::Player box((const char*)text.data, text.size, esp_random());
-        char name[32] = "";
-        int shown = -1;
-        int16_t buf[CHUNK];
-        const int volume = audiosink::GREETING_VOLUME * TUNE_LEVEL / 100;   // per mille
-        for (;;) {
-            if (s_tunesStop.load()) box.stop();
-            if (box.tune() != shown) {
-                shown = box.tune();
-                tunes::name((const char*)text.data, text.size, shown, name, sizeof name);
-                Serial.printf("[tunes] %s\n", name);
-                setTuneName(name);
-            }
-            const size_t n = box.fill(buf, CHUNK);
-            if (n == 0) break;
-            for (size_t k = 0; k < n; ++k) buf[k] = (int16_t)((int32_t)buf[k] * volume / 1000);
-            audiosink::write(buf, n);
-        }
-        audiosink::close();
-    }
-    xSemaphoreGive(s_output);
-    setTuneName("");
-    Serial.println("[tunes] stopped");
-    s_tunes.store(false);
-    s_playing.fetch_sub(1);
-    vTaskDelete(nullptr);
-}
-
-void playTunes() {
-    if (s_tunes.load()) return;
-    if (!s_output) s_output = xSemaphoreCreateMutex();
-    s_tunesStop.store(false);
-    s_tunes.store(true);
-    s_playing.fetch_add(1);
-    if (xTaskCreate(tuneTask, "tunes", 4096, nullptr, 1, nullptr) != pdPASS) {
-        s_tunes.store(false);
-        s_playing.fetch_sub(1);
-        Serial.println("[tunes] no memory for its task");
-    }
-}
-
-void stopTunes() { s_tunesStop.store(true); }
-
-bool tunesPlaying() { return s_tunes.load(); }
-
-uint32_t tunesFailures() { return s_tuneFailures.load(); }
-
-void tuneName(char* out, size_t n) {
-    if (n == 0) return;
-    portENTER_CRITICAL(&s_nameMux);
-    strlcpy(out, s_tuneName, n);
-    portEXIT_CRITICAL(&s_nameMux);
-}
-
-// Loaded once, on first use (a function-local static: thread-safe), then kept in RAM.
-static std::atomic<bool>& muted() {
-    static std::atomic<bool> m{[] {
-        Preferences p;
-        p.begin("tunes", true);
-        const bool v = p.getBool("muted", false);
-        p.end();
-        return v;
-    }()};
-    return m;
-}
-
-void setTunesMuted(bool m) {
-    if (muted().exchange(m) == m) return;
-    Preferences p;
-    p.begin("tunes", false);
-    p.putBool("muted", m);
-    p.end();
-    Serial.printf("[tunes] %s\n", m ? "muted" : "unmuted");
-}
-
-bool tunesMuted() {
-    return muted().load();
 }
 
 void playHowl() {

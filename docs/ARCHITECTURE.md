@@ -84,13 +84,9 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
   countdown; the network task stays quiet that long (`netplan::PollBackoff`).
-- **Music box** (`util/idlewait`, `util/musicbox`, `util/tunes`, `audio/greeting`) — "Waiting for
-  a song..." shows when Spotify has nothing, or once the song has stayed paused 30 s. A
-  music box then loops `data/tunes.txt` (packed by `tools/tune_clip.py` from `data/tunes/*.txt`,
-  git-ignored, else `data/tunes_default.txt`): plucked sine notes on 4 voices at 5 % of the clip volume (`TUNE_LEVEL`),
-  synthesised in a 4 KB clip task; one tune, 3 s rest, another at random. It stops with a 300 ms fade when the
-  screen goes, starts only with the howl's TLS margin, stops when the largest block nears
-  `TLS_NEED`, and retries at most once a minute. `tools/gen_tune.py` makes tunes from MIDI.
+- **Waiting for a song** (`util/idlewait`) — "Waiting for a song..." shows when Spotify has
+  nothing, or once the song has stayed paused 30 s; now and then its second line says how to
+  wake a phone that plays on unseen (`PHONE_HINT`). The screen is silent.
 - **Firmware updates** (`net/ota`, `util/otaview`, `util/backdrop`, `ui/otascreen`, `util/bootguard`)
   — ArduinoOTA on port 3232 (password REMOTE_TOKEN), its own task. `otaview::Tracker` keeps the
   update's state (Receiving, Done, Failed held 3 s); ArduinoOTA's own reboot is off, so the deck
@@ -122,7 +118,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   once its cover is in, or 8 s after the track change without one), on change and every 10 s,
   over UDP to the requester's port 4210. The yellow deck snaps its main colour to one of the
   lights' 8 swatches (`util/musiclights`). `on=0` or 30 s without a keep-alive stops it and closes
-  the socket. No mic: the music box and the howl play as usual (`board/s3/mic_es8311`
+  the socket. No mic: the howl plays as usual (`board/s3/mic_es8311`
   and `util/musicfeat` stay in the tree, unused, for the voice agent). It starts only with
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a

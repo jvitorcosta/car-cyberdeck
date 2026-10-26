@@ -34,25 +34,20 @@ void drawNoteFrame(TFT_eSPI& t, int frame);
 void resetLyricArea();
 // Full status screen ("No WiFi...", "Spotify busy...", "Waiting for a song..."): the cause's
 // Pokemon on its platform (ui/statusscene) and a dialogue box with `msg` and an optional smaller
-// `detail` line. sound: the music box's speaker button in the box (statusscene::SOUND_ICON):
-// -1 none, 0 muted, 1 on. qr: the phone-remote link's card at the top left (ui/qrcard;
-// "Waiting for a song..." on the S3), or nullptr.
+// `detail` line. qr: the phone-remote link's card at the top left (ui/qrcard; "Waiting for a
+// song..." on the S3), or nullptr.
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
-                 uint32_t animMs, int sound = -1, const qrcard::Qr* qr = nullptr);
+                 uint32_t animMs, const qrcard::Qr* qr = nullptr);
 // The phone link's card when its code changes: the battle box with the code, or (qr nullptr)
 // the scene painted back over it.
 void drawQrCard(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, const qrcard::Qr* qr);
 // Repaints only the dialogue box (the text changed, e.g. the retry countdown).
-void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail, int sound = -1);
-// Repaints only the detail line (same title, new detail: the countdown ticking, the next tune).
-void drawOfflineDetail(TFT_eSPI& t, const char* detail, int sound = -1);
-// The music box's key (statusscene::SOUND_ICON), e.g. darker while a finger is on it.
-void drawSoundButton(TFT_eSPI& t, int sound, bool pressed);
-// The note before the tune's name, bobbing 1 px with frame.
-void drawTuneNote(TFT_eSPI& t, int frame);
+void drawOfflineText(TFT_eSPI& t, const char* msg, const char* detail);
+// Repaints only the detail line (same title, new detail: the countdown ticking, the phone hint).
+void drawOfflineDetail(TFT_eSPI& t, const char* detail);
 // Next animation frame of the scene (and the dialogue box's blinking arrow), pushed in small
 // strips: no flicker, ~1.9 KB buffer. whole: the full region (a new screen); otherwise only what
 // moves (statusscene::frameRect), kept off the QR card while qr (on screen) isn't nullptr.
-void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool arrow = true,
-                      bool whole = false, const qrcard::Qr* qr = nullptr);
+void drawOfflineScene(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, bool whole = false,
+                      const qrcard::Qr* qr = nullptr);
 }

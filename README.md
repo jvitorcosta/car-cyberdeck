@@ -38,8 +38,8 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 - **Status screens that say why:** no WiFi, no internet or Spotify trouble, each with its own
   animated Pokémon; when Spotify asks the deck to slow down it shows how long to wait. On the
   S3, "Waiting for a song..." shows Sonic waiting, tapping his foot as in the 1991 game, on a city
-  sidewalk at sunset (at night: stars, a crescent moon, more windows lit), and a music box
-  plays softly until the song comes back. A paused song keeps the deck for 30 s first.
+  sidewalk at sunset (at night: stars, a crescent moon, more windows lit). A paused song keeps
+  the deck for 30 s first.
 - **Phone remote:** set `REMOTE_TOKEN` in `src/config.h` and open
   `http://cardeck.local/?k=<token>` (see [Two decks](#two-decks))
   on a phone on the same network: what's playing, the deck's status and a Howl button. Add it
@@ -87,7 +87,7 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
 4. **Flash:** `pio run -e s3 -t upload`. Add `--upload-port <port>` if needed;
    `pio device list` shows the ports. The S3 keeps its media (see Make it yours) in a flash
    partition of their own: flash them once with `pio run -e s3 -t uploadmedia`, and again only
-   when a clip, the montage, a tune or the font changes. A code change then flashes ~1.3 MB.
+   when a clip, the montage or the font changes. A code change then flashes ~1.3 MB.
 
    **An S3 flashed before the media partition** (one 12 MB app) needs both, once, from a PC
    with your media in `data/`: `pio run -e s3 -t upload` (the new partition table; settings
@@ -154,7 +154,6 @@ Without it the deck uses built-in defaults.
 | Update screen backdrop (S3) | `python tools/gen_backdrop.py` → `data/backdrop.bin` (Green Hill Zone, rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/ghz/`) | the battle box on firmware updates |
 | Shadow on the update rail (S3) | `python tools/gen_shadow_rider.py` → `data/shadow.bin` (his Sonic Battle running loop, cut from the sprite sheet it fetches into `sonic-sprites/shadow/`) | two jet glows ride the rail |
 | Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Waiting for a song..." |
-| Music-box tunes (S3) | `python tools/gen_tune.py song.mid --name "National Park"` → `data/tunes/national_park.txt`, one per song (the melody line; `--track N` if it picks the accompaniment); all of `data/tunes/` loop in random order | two public-domain tunes (`data/tunes_default.txt`) |
 | Wolf howl (S3) | `python tools/gen_howl.py wolf.ogg` → `data/howl.pcm` (cut 13-19.5 s by default, `--start`/`--end`; needs ffmpeg), for example the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) | a synthesised howl |
 | Avatar (companion) | images + `avatar-photos/avatar.json`, then `python tools/gen_avatar.py` (needs ffmpeg; see the script's header) | lyrics only |
 | Car sprite | edit and run `python tools/gen_car_sprite.py` (`--png out.png` previews it) | a silver sedan |

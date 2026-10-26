@@ -50,7 +50,7 @@ sonic-sprites/
 data/idle.bin
 data/backdrop.bin
 data/shadow.bin
-# Music-box tunes: your own (tools/gen_tune.py song.mid), never committed; the packed set is built
+# Leftovers of the old music box (your own MIDI songs and their tunes): never committed
 data/tunes/
 data/tunes.txt
 *.mid

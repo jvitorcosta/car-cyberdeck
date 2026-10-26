@@ -8,8 +8,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ### Added
 - Firmware updates over WiFi on the S3: `pio run -e s3_ota -t upload` from a PC on the deck's
   network (password `REMOTE_TOKEN`; off without it). The deck shows the progress in a battle
-  box, pauses Spotify polls and the music box meanwhile, and goes back to the previous firmware
-  when the new one crashes 3 boots in a row before proving itself (60 s and a good poll).
+  box, pauses Spotify polls meanwhile, and goes back to the previous firmware when the new one
+  crashes 3 boots in a row before proving itself (60 s and a good poll).
 - A random boot opening on the S3, never the same as last boot: your intro video with the boot
   log typed over it, the Honda's night drive with "bem vindo moreno", or a pixel Lightning
   McQueen's drive with "eu sou a velocidade" (`tools/gen_mcqueen_sprite.py`, git-ignored; red
@@ -18,9 +18,6 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - A fourth boot opening on the S3: Max Verstappen's F1 intro (~8 s), letterboxed under the boot
   log. `tools/gen_intro.py` gained `--out`, `--letterbox` and `--q` to build it as
   `data/max.bin` + `max.pcm` (git-ignored, in the media partition).
-- A music box on the S3's "Nothing playing" screen: soft plucked tunes (2.5 % of the clips'
-  volume) loop in random order until the song comes back. Make your own from MIDI with
-  `tools/gen_tune.py` (`data/tunes/`, git-ignored); without them it plays Brahms' Lullaby and Greensleeves.
 - Avatar on the companion (old deck): your character is the home screen, drawn 2x and centred.
   She sings along with synced lyrics, greets you, remarks on new songs (at most every 5 min) and
   reacts to Howl and trip reset. The Lyrics, Sounds and Trip screens open from the companion's
@@ -49,7 +46,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   trip clock; `POST /trip/reset` restarts the trip clock.
 
 ### Changed
-- The S3's media (intro video and sounds, montage, howl, Sonic, McQueen, tunes, CJK font) move
+- The S3's media (intro video and sounds, montage, howl, Sonic, McQueen, CJK font) move
   out of the app into their own 9.9 MB flash partition: `pio run -e s3 -t uploadmedia` packs
   `data/` (`tools/pack_media.py`) and flashes it. The app shrinks from 8.1 MB to ~1.3 MB, so a
   code change flashes that much. The new partition table has two 3 MB app slots for OTA; an S3

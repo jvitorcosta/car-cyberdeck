@@ -38,9 +38,6 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "util/interp.h"
 #include "util/netplan.h"
 #include "util/idlewait.h"
-#include "util/tunegate.h"
-#include "util/press.h"
-#include "board/s3/touch_ft6336.h"
 #include <Preferences.h>
 #include "util/intropick.h"
 #include "ui/carlook.h"
@@ -154,7 +151,6 @@ void setup() {
     }
     s_tft.init(); s_tft.invertDisplay(true); s_tft.setRotation(1); s_tft.fillScreen(TFT_BLACK);
     backlight::begin();
-    touchft::begin();   // the music box's speaker button
     if (!spclient::hasToken()) {
         // The token comes from a PC (Spotify only redirects to loopback addresses), so the
         // deck can't do anything without one.
@@ -215,7 +211,7 @@ void setup() {
     if (wifi) bootscene::setCaption("Connecting to Spotify...");
     bootscene::waitDone();                // the display is ours again
     remote::begin(bootscene::active);
-    ota::begin(REMOTE_NAME, bootscene::active, greeting::stopTunes);
+    ota::begin(REMOTE_NAME, bootscene::active);
 }
 
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
@@ -296,39 +292,6 @@ static ota::View otaDemo(uint32_t ms) {
 }
 #endif
 
-// The music box loops while "Waiting for a song..." is up, and stops (a short fade) as it
-// goes: util/tunegate decides (the same margin as a phone howl to start, stopping when memory
-// runs low, a minute's rest after that or after audio that didn't start).
-static void musicBox(bool want) {
-    static tunegate::Gate gate;
-    const unsigned largest = (unsigned)mem::byteLargest();
-    const bool playing = greeting::tunesPlaying();
-    switch (gate.update({want, playing, !playing && greeting::playing(), greeting::tunesFailures(), largest,
-                         netplan::TLS_NEED + 12000, netplan::TLS_NEED + 4000},
-                        millis())) {
-    case tunegate::Act::Play: greeting::playTunes(); break;
-    case tunegate::Act::Stop:
-        if (want) Serial.printf("[tunes] low memory (largest %u): stopping\n", largest);
-        greeting::stopTunes();
-        break;
-    case tunegate::Act::AudioFailed: Serial.println("[tunes] audio didn't start: retry in 1 min"); break;
-    case tunegate::Act::None: break;
-    }
-}
-
-// A tap on the music box's speaker button (statusscene::onSoundButton): fires on release, as on
-// the companion. Touch is read every 20 ms, only while "Waiting for a song..." is up.
-static press::Press s_soundPress;
-static bool soundTapped() {
-    press::Press& p = s_soundPress;
-    static uint32_t at = 0;
-    if (millis() - at < 20) return false;
-    at = millis();
-    int x = 0, y = 0;
-    const bool down = touchft::read(&x, &y);
-    return p.update(down, down && statusscene::onSoundButton(x, y) ? 1 : 0, false, millis()) == 1;
-}
-
 // Night mode: every MODE_CHECK_MS, picks the palette and backlight for the local time. True
 // when the mode changed (the caller redraws the current screen). No clock yet -> day.
 static bool updateDayNight() {
@@ -400,7 +363,6 @@ void loop() {
         return;
     }
     if (lastMode == -2) lastMode = -1;
-    musicBox(mode == 2 && !greeting::tunesMuted());
 
     static uint32_t shownGen = 0;
     static bool walkerOn = false;
@@ -411,14 +373,8 @@ void loop() {
         static char title[24], detail[48];
         static uint32_t textAt = 0, shownAt = 0, shownKey = 0;   // shownAt: the screen appeared
         static linkstatus::Kind kind = linkstatus::Kind::Ok, shownKind = linkstatus::Kind::Ok;
-        static int shownSound = -2;
         static uint32_t shownQrGen = 0;   // the phone link's QR on screen (s_qrGen)
         char text[80];   // title|detail: 24 + 1 + 48
-        if (mode == 2 && soundTapped()) {   // the speaker button: mute or unmute, shown at once
-            greeting::setTunesMuted(!greeting::tunesMuted());
-            textAt = 0;
-        }
-        const int sound = mode == 2 ? (greeting::tunesMuted() ? 0 : 1) : -1;   // the button
         // Re-read the cause at most once a second: net::ssid() allocates a String.
         if (lastMode != mode || millis() - textAt >= 1000) {
             textAt = millis();
@@ -426,10 +382,6 @@ void loop() {
             detail[0] = '\0';
             kind = mode == 1 ? offlineText(st, title, sizeof title, detail, sizeof detail)
                              : linkstatus::Kind::Ok;
-            if (sound == 0) strlcpy(detail, "Tunes muted", sizeof detail);
-            else if (sound == 1) {                       // the tune playing, once it has started
-                greeting::tuneName(detail, sizeof detail);
-            }
             // A phone that dropped off Spotify plays on unseen (the account has no active device
             // until the app is touched): now and then, how to wake it (util/idlewait).
             if (mode == 2 && lastMode == mode && idlewait::hintNow(millis() - shownAt))
@@ -443,13 +395,12 @@ void loop() {
             shownAt = millis();
             shownKey = statusscene::frameKey(0, look);
             shownQrGen = s_qrGen;
-            ui::drawOffline(s_tft, title, detail, look, 0, sound, qr);
-        } else if (strcmp(text, shownText) != 0 || sound != shownSound) {   // new text (countdown, tune)
+            ui::drawOffline(s_tft, title, detail, look, 0, qr);
+        } else if (strcmp(text, shownText) != 0) {   // new text (countdown, phone hint)
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
-            if (sound == shownSound && strcmp(title, shownTitle) == 0 && detail[0] && shownDetail &&
-                shownDetail[1])
-                ui::drawOfflineDetail(s_tft, detail, sound);
-            else ui::drawOfflineText(s_tft, title, detail, sound);   // the button changed too
+            if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
+                ui::drawOfflineDetail(s_tft, detail);
+            else ui::drawOfflineText(s_tft, title, detail);
         } else if (statusscene::frameKey(millis() - shownAt, look) != shownKey ||
                    s_qrGen != shownQrGen) {   // next frame, or the link's QR changed
             const uint32_t t = millis() - shownAt;   // Pokemon bob, bubble, ball; Sonic waiting
@@ -459,22 +410,12 @@ void loop() {
             }
             if (statusscene::frameKey(t, look) != shownKey) {   // only what moves (frameRect)
                 shownKey = statusscene::frameKey(t, look);
-                ui::drawOfflineScene(s_tft, look, t, sound < 0, false, qr);   // music box: no arrow
-                if (sound == 1 && detail[0] && strcmp(detail, idlewait::PHONE_HINT) != 0)
-                    ui::drawTuneNote(s_tft, (int)(t / 500));   // bobs with the tune
+                ui::drawOfflineScene(s_tft, look, t, false, qr);
             }
         }
         if (lastMode != mode || strcmp(title, shownTitle) != 0)   // log the screen, not each tick
             Serial.printf("[screen] %s / %s\n", title, detail);
-        if (lastMode != mode || strcmp(text, shownText) != 0 || sound != shownSound) {
-            remote::setStatus(title, detail);
-            remote::setTunes(sound < 0 ? "" : sound ? "on" : "muted");
-        }
-        static bool shownPressed = false;   // the key darkens while a finger is on it
-        const bool pressed = sound >= 0 && s_soundPress.pressed() == 1;
-        if (pressed != shownPressed && sound == shownSound) ui::drawSoundButton(s_tft, sound, pressed);
-        shownPressed = pressed;
-        shownSound = sound;
+        if (lastMode != mode || strcmp(text, shownText) != 0) remote::setStatus(title, detail);
         strlcpy(shownText, text, sizeof shownText);
         strlcpy(shownTitle, title, sizeof shownTitle);
         shownKind = kind;
@@ -483,10 +424,7 @@ void loop() {
         // Full deck redraw: immediately on track change (text + Pokemon name; art, lyric
         // and walker fill in as the network task delivers them), or back from a status screen.
         bool newTrack = st.trackGen != shownGen;
-        if (lastMode != 0) {   // the phone page: no status, the song
-            remote::setStatus("", "");
-            remote::setTunes("");
-        }
+        if (lastMode != 0) remote::setStatus("", "");   // the phone page: no status, the song
         lastMode = 0;
         if (newTrack) {
             shownGenre = genre::NONE;

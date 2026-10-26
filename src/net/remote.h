@@ -11,9 +11,6 @@ namespace remote {
 void begin(bool (*hold)());
 // The status screen's text for GET /state ("" while the deck shows the song). Any task.
 void setStatus(const char* title, const char* detail);
-// The music box's mute button for the page: "" (not on screen), "on" or "muted". Any task.
-// POST /tunes?mute=1|0&k=... mutes or unmutes it (204).
-void setTunes(const char* state);
 // The page's full link from the deck's current address ("http://<ip>/?k=<token>", util/qrfit)
 // for the QR code; false when the remote is off or WiFi is down.
 bool link(char* out, size_t n);
