@@ -19,6 +19,7 @@
 #include "../util/lrcstream.h"
 #include "../images/walksprite.h"
 #include "../core/shared.h"
+#include "../core/mem.h"
 #include "lyricmsg.h"
 
 namespace ui {
@@ -104,7 +105,10 @@ void drawProgressRegion(TFT_eSPI& t, const AppState& st) {
 void drawWalker(TFT_eSPI& t, const AppState& st, uint32_t animMs, int step) {
     static constexpr int SLACK = 8;
     static walkrect::Rect prev{0, 0, 0, 0};
-    static uint16_t buf[(walk::MAX_W + 2 * SLACK) * (walk::BAND_H + 1 + 2 * SLACK)];
+    // ~7.8 KB in PSRAM: filled by the CPU, sent by pushImage (no DMA on this deck)
+    static uint16_t* buf = (uint16_t*)mem::bigAlloc((walk::MAX_W + 2 * SLACK) *
+                                                    (walk::BAND_H + 1 + 2 * SLACK) * sizeof(uint16_t));
+    if (!buf) return;
     // The network task may promote() a new walker at any time; read frames under the lock.
     shared::Guard lockWalker;
     const walk::Info& wi = walk::info();
@@ -176,9 +180,11 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
 
     const int ix = DLG_X + 6, iy = DLG_Y + 5, iw = DLG_W - 12, ih = DLG_H - 10;
     t.fillRect(ix, iy, iw, ih, theme::pal().dlgFill);
-    // static: keep the UI loop stack small; +3 slots so line b's "..." can be written in place
+    // Off the UI loop stack, in PSRAM (~2 KB, CPU only); +3 slots so line b's "..." can be
+    // written in place
     constexpr size_t MAX_ITEMS = lyricmsg::TEXT_CAP;   // one item per byte at most
-    static glyphrun::Item items[MAX_ITEMS + 3];
+    static glyphrun::Item* items = (glyphrun::Item*)mem::bigAlloc((MAX_ITEMS + 3) * sizeof(glyphrun::Item));
+    if (!items) return;
     size_t n = glyphrun::decode(line, items, MAX_ITEMS, asciiWidth2, wideWidth, &t, false, emojiWidth,
                                 emojiSeq);
     if (!n) return;
@@ -202,10 +208,15 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
 
 static void drawMoreArrow(TFT_eSPI& t, bool on);
 
-// The scene's strips, also the sunset's rows. 1.9 KB, static: the CYD has no heap to spare.
+// The scene's strips, also the sunset's rows and the QR card's module rows. 1.9 KB in PSRAM
+// (CPU-filled, sent by pushImage), allocated on first use.
 constexpr int SCENE_ROWS = 4;
-static uint16_t s_sceneBuf[statusscene::W * SCENE_ROWS];
-static_assert(statusscene::W * SCENE_ROWS >= 320, "a full row fits");
+constexpr size_t SCENE_PX = statusscene::W * SCENE_ROWS;
+static_assert(SCENE_PX >= 320, "a full row fits");
+static uint16_t* sceneBuf() {
+    static uint16_t* buf = (uint16_t*)mem::bigAlloc(SCENE_PX * sizeof(uint16_t));
+    return buf;
+}
 
 static statusscene::Colors sceneColors() {
     return {theme::pal().sky, theme::pal().horizon, theme::pal().grass, theme::pal().horizon,
@@ -217,7 +228,8 @@ static statusscene::Colors sceneColors() {
 static void pushScene(TFT_eSPI& t, const statusscene::Rect& r, const statusscene::Look& look,
                       const statusscene::Pose& pose) {
     const statusscene::Colors c = sceneColors();
-    uint16_t* buf = s_sceneBuf;
+    uint16_t* buf = sceneBuf();
+    if (!buf) return;
     for (int y0 = r.y; y0 < r.y + r.h; y0 += SCENE_ROWS) {
         const int rows = r.y + r.h - y0 < SCENE_ROWS ? r.y + r.h - y0 : SCENE_ROWS;
         for (int i = 0; i < rows; ++i)
@@ -259,12 +271,14 @@ void drawQrCard(TFT_eSPI& t, const statusscene::Look& look, uint32_t animMs, con
     constexpr int M = qrfit::MODULE_PX;
     const int w = qr->size * M;
     static_assert(qrfit::modules(qrfit::MAX_VERSION) * qrfit::MODULE_PX * qrfit::MODULE_PX <=
-                  statusscene::W * SCENE_ROWS, "a module row fits the scene buffer");
+                  SCENE_PX, "a module row fits the scene buffer");
     const uint16_t paper = theme::be(theme::QR_LIGHT), ink = theme::be(theme::QR_DARK);
+    uint16_t* buf = sceneBuf();
+    if (!buf) return;
     for (int my = 0; my < qr->size; ++my) {
-        for (int x = 0; x < w; ++x) s_sceneBuf[x] = qrcard::dark(*qr, x / M, my) ? ink : paper;
-        for (int i = 1; i < M; ++i) memcpy(s_sceneBuf + i * w, s_sceneBuf, w * sizeof s_sceneBuf[0]);
-        t.pushImage(PANEL_AT.x + o, PANEL_AT.y + o + my * M, w, M, s_sceneBuf);
+        for (int x = 0; x < w; ++x) buf[x] = qrcard::dark(*qr, x / M, my) ? ink : paper;
+        for (int i = 1; i < M; ++i) memcpy(buf + i * w, buf, w * sizeof buf[0]);
+        t.pushImage(PANEL_AT.x + o, PANEL_AT.y + o + my * M, w, M, buf);
     }
 }
 
@@ -293,7 +307,8 @@ void drawOfflineDetail(TFT_eSPI& t, const char* detail) {
 // Sonic's Sunset drive, edge to edge under the top strip: once per screen (it doesn't move), so
 // one row at a time is quick enough and reuses the scene's buffer.
 static void sunsetBackdrop(TFT_eSPI& t, bool night) {
-    uint16_t* row = s_sceneBuf;
+    uint16_t* row = sceneBuf();
+    if (!row) return;
     for (int y = sunset::SKY_Y; y < 240; ++y) {
         for (int x = 0; x < 320; ++x) row[x] = theme::be(sunset::pixel(x, y, night));
         t.pushImage(0, y, 320, 1, row);

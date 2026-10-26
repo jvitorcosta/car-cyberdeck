@@ -3,7 +3,7 @@
 #include "../util/lyricbuf.h"
 #include "../util/lyricstatus.h"
 namespace lyricsvc {
-// The one lyrics arena (~5.6 KB, static). Written by the network task, read by the UI through
+// The one lyrics arena (~5.6 KB, in PSRAM). Written by the network task, read by the UI through
 // shared::lyricView() — never directly.
 lyricbuf::Lyrics& arena();
 // Fetches lyrics for the current track from LRCLIB into `out`: /api/get (exact match), then
