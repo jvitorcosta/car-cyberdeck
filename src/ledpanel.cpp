@@ -97,7 +97,10 @@
 #include <lwip/sockets.h>
 #include "pins.h"
 #include "ui/backlight.h"
+#include "core/embed.h"
 #include "ui/gojiraname.h"
+#include "ui/jpfont.h"
+#include "ui/lyricrun.h"
 #include "ui/presslook.h"
 #include "ui/termfont.h"
 #include "ui/termlayout.h"
@@ -130,7 +133,6 @@
 #include "util/stateparse.h"
 #include "util/tapguard.h"
 #include "util/termpal.h"
-#include "util/text.h"
 #include "util/touchcal.h"
 #include "util/tripclock.h"
 #include "util/tripmeter.h"
@@ -1116,54 +1118,150 @@ static void drawFocus(int id, bool on) {
 // (deckmenu::KARAOKE_BODY): the lyric line due now big (BIG, TEXT, centred, word-wrapped over up
 // to 3 lines, ".." on the 3rd; a line too long for that in TITLE over up to 4), the next line under
 // it (BODY, DIM, up to 2 lines), and a thin progress line at the foot (TEXT while playing). The
-// lyrics keep their case (they read better than caps); all texts are accent-folded (the font is
-// ASCII only). Without a song to sing along the big text is the state word in DIM (>NO SYNCED
-// LYRICS, >NOTHING PLAYING, >LYRICS: NO SIGNAL; >WRONG KEY, a problem, in ALERT) and the screen
-// stays. The line switches at its start time: karaoke interpolates the position between polls and lyricsTick looks
-// every KARAOKE_TICK_MS. Each part is redrawn only when what it shows changed.
+// lyrics keep their case (they read better than caps). The texts are VT323's Latin-1 (other accents
+// and punctuation folded, txt::latin1Fold) and Japanese from the Unifont subset in flash
+// (data/jp16.bin, ui/jpfont): kana, CJK punctuation, half/fullwidth forms and the JIS level 1 kanji,
+// 32 px in BIG, 16 px elsewhere, centred on the caps, in the text's colour; a BIG block holding them
+// goes KARAOKE_WIDE_DY apart. Any other CJK or Hangul character is an outlined box the size of a
+// glyph; emoji are dropped (ui/lyricrun). Without a song to sing along the big text is the state
+// word in DIM (>NO SYNCED LYRICS, >NOTHING PLAYING, >LYRICS: NO SIGNAL; >WRONG KEY, a problem, in
+// ALERT) and the screen stays. The line switches at its start time: karaoke interpolates the
+// position between polls and lyricsTick looks every KARAOKE_TICK_MS. Each part is redrawn only when
+// what it shows changed.
 static constexpr uint32_t KARAOKE_TICK_MS = 50;
 // The areas' sizes and pitches are termlayout's (test_termfont checks each face's lines fit them).
 static constexpr int KARAOKE_X = 4, KARAOKE_CX = 160;
 static constexpr int KARAOKE_SONG_X = 80, KARAOKE_SONG_W = 236;  // right of < BACK (x 4..74), on the top row
-static constexpr int KARAOKE_BIG_Y = 56;                         // the line due now
-static constexpr int KARAOKE_NEXT_Y = 156;                       // the next line
 static constexpr int KARAOKE_BAR_Y = 224, KARAOKE_BAR_H = 3;
 
-// The texts are folded to Latin-1 into karaokeFolded and wrapped into karaokeLines (only loop draws).
-static char karaokeFolded[sizeof(stateparse::Deck::line)];
-static karaoke::Line karaokeLines[4];
+// The Japanese subset font (tools/gen_jp_font.py), read from flash as it draws. Empty (every CJK
+// character a box) if the blob is invalid.
+EMBED(data_jp16_bin);
+static const jpfont::Font& jpFont() {
+    static jpfont::Font jp;
+    static bool opened = false;
+    if (!opened) {
+        opened = true;
+        if (!jp.open(EMBED_DATA(data_jp16_bin), EMBED_SIZE(data_jp16_bin)))
+            Serial.printf("[jp] font blob invalid (%u bytes)\n", static_cast<unsigned>(EMBED_SIZE(data_jp16_bin)));
+    }
+    return jp;
+}
+static int jpWidth(uint32_t cp, const void*) { return jpFont().width(cp); }
+
+// A Wide item's glyph (or a Box: an outline over the cell's rows and columns 2..13) with its top left
+// at (x, top), each font pixel s x s, in ink. Each row's runs of ink go as one rect.
+static void drawWide(const lyricrun::Item& it, int x, int top, int s, uint16_t ink) {
+    if (it.kind == lyricrun::Kind::Box) {
+        for (int k = 0; k < s; k++) tft.drawRect(x + 2 * s + k, top + 2 * s + k, 12 * s - 2 * k, 12 * s - 2 * k, ink);
+        return;
+    }
+    int w = 0;
+    const uint8_t* g = jpFont().glyph(it.cp, &w);
+    if (!g) return;
+    for (int r = 0; r < lyricrun::GLYPH_H; r++) {
+        const uint32_t bits = w == 16 ? (static_cast<uint32_t>(g[2 * r]) << 8 | g[2 * r + 1]) : g[r];
+        auto on = [&](int c) { return ((bits >> (w - 1 - c)) & 1u) != 0; };
+        for (int c = 0; c < w;) {
+            if (!on(c)) {
+                c++;
+                continue;
+            }
+            int e = c;
+            while (e < w && on(e)) e++;
+            tft.fillRect(x + c * s, top + r * s, (e - c) * s, s, ink);
+            c = e;
+        }
+    }
+}
+
+// The decoded texts (ui/lyricrun), wrapped into karaokeLines (only loop draws). Room for the song
+// row, the longest text.
+static constexpr size_t KARAOKE_ITEMS = sizeof(stateparse::Deck::track) + sizeof(stateparse::Deck::artist) + 4;
+static lyricrun::Item karaokeItems[KARAOKE_ITEMS];
+static lyricrun::Span karaokeLines[4];
+static size_t karaokeDecode(const char* s, bool upper = false) {
+    return lyricrun::decode(s, karaokeItems, KARAOKE_ITEMS, jpWidth, nullptr, upper);
+}
+
+// One wrapped line of karaokeItems at (x, y) by datum, as text() places text, in the text colour set.
+// Latin-1 only: text() as before. With Japanese: the whole placed by lyricrun's width, the Latin-1
+// runs drawn by text() on the baseline, the glyphs centred on the caps (lyricrun::glyphTop).
+static void drawSpan(const lyricrun::Span& sp, int x, int y, Face f, uint8_t datum) {
+    static char run[KARAOKE_ITEMS + 3];
+    size_t n = 0;
+    if (!lyricrun::hasWide(karaokeItems, sp)) {
+        for (size_t i = sp.start; i < sp.end; i++) run[n++] = static_cast<char>(karaokeItems[i].cp);
+        if (sp.dots) {
+            run[n++] = '.';
+            run[n++] = '.';
+        }
+        run[n] = 0;
+        text(run, x, y, f, datum);
+        return;
+    }
+    const int w = lyricrun::width(f, karaokeItems + sp.start, sp.end - sp.start, sp.dots), h = datum % 3;
+    int pen = h == 0 ? x : h == 1 ? x - w / 2 : x - w;
+    const int cap = termfont::capHeight(f), v = datum / 3;
+    const int base = v == 0 ? y + cap : v == 1 ? y + cap / 2 : y;
+    const int top = lyricrun::glyphTop(f, base), s = lyricrun::scale(f);
+    const uint16_t ink = static_cast<uint16_t>(tft.textcolor);
+    for (size_t i = sp.start;; i++) {
+        const bool end = i == sp.end;
+        if (!end && karaokeItems[i].kind == lyricrun::Kind::Latin1) {
+            run[n++] = static_cast<char>(karaokeItems[i].cp);
+            continue;
+        }
+        if (end && sp.dots) {
+            run[n++] = '.';
+            run[n++] = '.';
+        }
+        if (n > 0) {
+            run[n] = 0;
+            pen += text(run, pen, base, f, BL_DATUM);
+            n = 0;
+        }
+        if (end) break;
+        drawWide(karaokeItems[i], pen, top, s, ink);
+        pen += lyricrun::advance(f, karaokeItems[i]);
+    }
+}
 
 // karaokeLines[0..n) centred, the first line's tallest glyph at row y, a line every dy px (each
 // face's lines fit their pitch whole: no line's descender reaches the next's capitals).
 static void drawLines(int n, Face f, int y, int dy, uint16_t ink) {
     tft.setTextColor(ink);
-    for (int i = 0; i < n; i++) text(karaokeLines[i].s, KARAOKE_CX, y + i * dy + termfont::ascent(f), f, BC_DATUM);
+    for (int i = 0; i < n; i++) drawSpan(karaokeLines[i], KARAOKE_CX, y + i * dy + termfont::ascent(f), f, BC_DATUM);
 }
 
 // How far an accented capital (À, Ã, Å) rises above the row drawLines puts a face's tallest ASCII
 // glyph at: a lyric area's clear starts that much higher.
 static int accentRise(Face f) { return termfont::accentAscent(f) - termfont::ascent(f); }
 
-// The big text: BIG over up to 3 lines, or TITLE over up to 4 when BIG would cut it; the block
-// centred in its area. Each is measured in the face it is drawn in.
+// The big text: BIG over up to 3 lines (KARAOKE_WIDE_DY apart when one holds Japanese), or TITLE
+// over up to 4 when BIG would cut it; the block centred in its area. Each is measured in the face it
+// is drawn in.
 static void drawBig(const char* s, uint16_t ink) {
-    txt::latin1Fold(s, karaokeFolded, sizeof(karaokeFolded));
+    const size_t items = karaokeDecode(s);
     bool cut = false;
     Face f = Face::BIG;
-    int n = karaoke::wrap(karaokeFolded, static_cast<int>(f), termfont::widthOf, KARAOKE_W, 3, karaokeLines, &cut);
+    int n = lyricrun::wrap(karaokeItems, items, f, KARAOKE_W, 3, karaokeLines, &cut);
     int dy = KARAOKE_BIG_DY;
     if (cut) {
         f = Face::TITLE;
-        n = karaoke::wrap(karaokeFolded, static_cast<int>(f), termfont::widthOf, KARAOKE_W, 4, karaokeLines);
+        n = lyricrun::wrap(karaokeItems, items, f, KARAOKE_W, 4, karaokeLines);
         dy = KARAOKE_FIT_DY;
+    } else {
+        for (int i = 0; i < n; i++)
+            if (lyricrun::hasWide(karaokeItems, karaokeLines[i])) dy = KARAOKE_WIDE_DY;
     }
-    drawLines(n, f, KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2, dy, ink);
+    drawLines(n, f, karaokeBlockY(n, dy), dy, ink);
 }
 
 // The next line: BODY over up to 2 lines, DIM.
 static void drawNext(const char* s) {
-    txt::latin1Fold(s, karaokeFolded, sizeof(karaokeFolded));
-    const int n = karaoke::wrap(karaokeFolded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_W, 2, karaokeLines);
+    const size_t items = karaokeDecode(s);
+    const int n = lyricrun::wrap(karaokeItems, items, Face::BODY, KARAOKE_W, 2, karaokeLines);
     drawLines(n, Face::BODY, KARAOKE_NEXT_Y, KARAOKE_NEXT_DY, pal(termpal::DIM));
 }
 
@@ -1193,14 +1291,12 @@ static void drawKaraokeBody(bool all) {
     else snprintf(songText, sizeof(songText), "%s", d.track);
     if (all || strcmp(songText, karaokeShownSong) != 0) {
         snprintf(karaokeShownSong, sizeof(karaokeShownSong), "%s", songText);
-        static char folded[sizeof(songText)];
-        static karaoke::Line fit[1];
-        txt::latin1Fold(songText, folded, sizeof(folded));
-        txt::latin1Upper(folded);
-        const int n = karaoke::wrap(folded, static_cast<int>(Face::BODY), termfont::widthOf, KARAOKE_SONG_W, 1, fit);
+        static_assert(sizeof(songText) <= KARAOKE_ITEMS, "the song row's items fit");
+        const size_t items = karaokeDecode(songText, true);
+        const int n = lyricrun::wrap(karaokeItems, items, Face::BODY, KARAOKE_SONG_W, 1, karaokeLines);
         clearBg(KARAOKE_SONG_X, 2, KARAOKE_SONG_W, 36);
         tft.setTextColor(pal(termpal::MID));
-        if (n > 0) text(fit[0].s, KARAOKE_SONG_X, 20, Face::BODY, ML_DATUM);
+        if (n > 0) drawSpan(karaokeLines[0], KARAOKE_SONG_X, 20, Face::BODY, ML_DATUM);
     }
 
     const uint32_t pos = hasTrack ? static_cast<uint32_t>(karaoke::progressMs(d, now - song.at)) : 0;
@@ -1211,8 +1307,8 @@ static void drawKaraokeBody(bool all) {
     if (bigChanged) {
         snprintf(karaokeShownBig, sizeof(karaokeShownBig), "%s", big);
         karaokeShownWord = isWord;
-        const int rise = accentRise(Face::BIG);  // BIG's accents rise further than TITLE's
-        clearBg(KARAOKE_X, KARAOKE_BIG_Y - rise, KARAOKE_W, KARAOKE_BIG_H + rise);
+        // from as high as any block's accents or Japanese glyphs reach to as low (test_termfont checks)
+        clearBg(KARAOKE_X, KARAOKE_BIG_CLEAR_Y, KARAOKE_W, KARAOKE_BIG_CLEAR_END - KARAOKE_BIG_CLEAR_Y);
         drawBig(big, pal(karaoke::isAlert(big) ? termpal::ALERT : isWord ? termpal::DIM : termpal::TEXT));
     }
     const char* next = isWord ? "" : karaoke::nextLine(d, pos);

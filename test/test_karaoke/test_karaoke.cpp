@@ -146,93 +146,6 @@ void test_next_line() {
     TEST_ASSERT_EQUAL_STRING("", karaoke::nextLine(d, 60000));
 }
 
-// A monospace stand-in for the TFT fonts: 10 px a character in font 2, 14 in font 4.
-static int mono(const char* s, int font) { return static_cast<int>(strlen(s)) * (font == 4 ? 14 : 10); }
-
-void test_wrap_empty_and_one_line() {
-    karaoke::Line out[3];
-    bool cut = true;
-    TEST_ASSERT_EQUAL_INT(0, karaoke::wrap("", 2, mono, 100, 3, out, &cut));
-    TEST_ASSERT_FALSE(cut);
-    TEST_ASSERT_EQUAL_INT(0, karaoke::wrap("   ", 2, mono, 100, 3, out, &cut));
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap("hello you", 2, mono, 100, 3, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("hello you", out[0].s);
-    TEST_ASSERT_FALSE(cut);
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap("exactly10!", 2, mono, 100, 3, out, &cut));  // 100 px: fits
-    TEST_ASSERT_EQUAL_STRING("exactly10!", out[0].s);
-}
-
-void test_wrap_breaks_at_spaces() {
-    karaoke::Line out[3];
-    bool cut = true;
-    // 10 characters a line
-    TEST_ASSERT_EQUAL_INT(3, karaoke::wrap("we sing  along the highway", 2, mono, 100, 3, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("we sing", out[0].s);
-    TEST_ASSERT_EQUAL_STRING("along the", out[1].s);
-    TEST_ASSERT_EQUAL_STRING("highway", out[2].s);
-    TEST_ASSERT_FALSE(cut);
-    // the font is passed through: 14 px a character fits 7
-    TEST_ASSERT_EQUAL_INT(2, karaoke::wrap("we sing along", 4, mono, 100, 3, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("we sing", out[0].s);
-    TEST_ASSERT_EQUAL_STRING("along", out[1].s);
-}
-
-void test_wrap_breaks_a_long_word() {
-    karaoke::Line out[3];
-    bool cut = true;
-    TEST_ASSERT_EQUAL_INT(2, karaoke::wrap("abcdefghijklmno", 2, mono, 100, 3, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("abcdefghij", out[0].s);
-    TEST_ASSERT_EQUAL_STRING("klmno", out[1].s);
-    TEST_ASSERT_FALSE(cut);
-    TEST_ASSERT_EQUAL_INT(3, karaoke::wrap("ab abcdefghijklmno", 2, mono, 100, 3, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("ab", out[0].s);  // the word moves down whole first
-    TEST_ASSERT_EQUAL_STRING("abcdefghij", out[1].s);
-    TEST_ASSERT_EQUAL_STRING("klmno", out[2].s);
-    TEST_ASSERT_FALSE(cut);
-    TEST_ASSERT_EQUAL_INT(2, karaoke::wrap("ab abcdefghijklmno", 2, mono, 100, 2, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("ab", out[0].s);
-    TEST_ASSERT_EQUAL_STRING("abcdefgh..", out[1].s);  // the last line: cut, not broken
-    TEST_ASSERT_TRUE(cut);
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap("abc", 2, mono, 5, 1, out, &cut));  // nothing fits: ".."
-    TEST_ASSERT_EQUAL_STRING("..", out[0].s);
-    TEST_ASSERT_TRUE(cut);
-}
-
-void test_wrap_cuts_the_last_line() {
-    karaoke::Line out[3];
-    bool cut = false;
-    TEST_ASSERT_EQUAL_INT(3, karaoke::wrap("we sing along the highway all night long", 2, mono, 100, 3, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("we sing", out[0].s);
-    TEST_ASSERT_EQUAL_STRING("along the", out[1].s);
-    TEST_ASSERT_EQUAL_STRING("highway..", out[2].s);  // the trailing space before ".." goes
-    TEST_ASSERT_TRUE(cut);
-    // one line: fitText's job
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap("Highway Song", 2, mono, 60, 1, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("High..", out[0].s);
-    TEST_ASSERT_TRUE(cut);
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap("Highway Song", 2, mono, 120, 1, out, &cut));
-    TEST_ASSERT_EQUAL_STRING("Highway Song", out[0].s);
-    TEST_ASSERT_FALSE(cut);
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap("Highway Song", 2, mono, 120, 1, out));  // cut is optional
-}
-
-void test_wrap_text_longer_than_a_line_buffer() {
-    char big[400];
-    memset(big, 'a', sizeof(big) - 1);
-    big[sizeof(big) - 1] = 0;
-    karaoke::Line out[1];
-    bool cut = false;
-    TEST_ASSERT_EQUAL_INT(1, karaoke::wrap(big, 2, mono, 100000, 1, out, &cut));  // wide enough, but no room
-    TEST_ASSERT_TRUE(cut);
-    const size_t n = strlen(out[0].s);
-    TEST_ASSERT_EQUAL_UINT(sizeof(out[0].s) - 1, n);
-    TEST_ASSERT_EQUAL_STRING("..", out[0].s + n - 2);
-    karaoke::Line two[2];
-    TEST_ASSERT_EQUAL_INT(2, karaoke::wrap(big, 2, mono, 100000, 2, two, &cut));
-    TEST_ASSERT_TRUE(cut);
-    TEST_ASSERT_EQUAL_UINT(sizeof(two[0].s) - 1, strlen(two[0].s));
-}
-
 void test_is_alert() {
     TEST_ASSERT_TRUE(karaoke::isAlert(">WRONG KEY"));
     TEST_ASSERT_FALSE(karaoke::isAlert(">NO SIGNAL"));
@@ -256,10 +169,5 @@ int main(int, char**) {
     RUN_TEST(test_lyric_next_unknown);
     RUN_TEST(test_lyric_not_synced);
     RUN_TEST(test_next_line);
-    RUN_TEST(test_wrap_empty_and_one_line);
-    RUN_TEST(test_wrap_breaks_at_spaces);
-    RUN_TEST(test_wrap_breaks_a_long_word);
-    RUN_TEST(test_wrap_cuts_the_last_line);
-    RUN_TEST(test_wrap_text_longer_than_a_line_buffer);
     return UNITY_END();
 }

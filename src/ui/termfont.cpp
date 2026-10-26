@@ -84,6 +84,4 @@ int width(const Font& f, const char* s) {
 
 int width(Face f, const char* s) { return width(font(f), s); }
 
-int widthOf(const char* s, int face) { return width(static_cast<Face>(face), s); }
-
 }  // namespace termfont

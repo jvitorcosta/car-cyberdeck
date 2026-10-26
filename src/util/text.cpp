@@ -187,7 +187,7 @@ size_t latin1Fold(const char* utf8, char* dst, size_t n) {
         i += k;
         if (more == 0 || k <= more) continue;   // malformed: dropped
         if (cp <= 0xFF) {
-            // the no-break space a plain one (karaoke::wrap breaks lines at ' '); the C1 controls and
+            // the no-break space a plain one (lyricrun::wrap breaks lines at ' '); the C1 controls and
             // the soft hyphen dropped
             if (cp == 0xA0) dst[o++] = ' ';
             else if (cp > 0xA0 && cp != 0xAD) dst[o++] = (char)cp;

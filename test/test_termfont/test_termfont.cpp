@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
+#include "../../src/ui/lyricrun.h"
 #include "../../src/ui/termfont.h"
 #include "../../src/ui/termlayout.h"
 #include "../../src/util/dashtext.h"
@@ -32,7 +33,6 @@ void test_width_follows_tft_espi() {
     TEST_ASSERT_EQUAL_INT(0, termfont::width(Face::SMALL, ""));
     TEST_ASSERT_EQUAL_INT(0, termfont::width(Face::SMALL, " "));         // a space has no ink
     TEST_ASSERT_EQUAL_INT(7, termfont::width(Face::SMALL, "H\x7F"));     // H not last: its advance; 0x7F: nothing
-    TEST_ASSERT_EQUAL_INT(termfont::width(Face::BIG, "AB"), termfont::widthOf("AB", static_cast<int>(Face::BIG)));
 }
 
 void test_metrics() {
@@ -428,15 +428,59 @@ void test_karaoke_pitches() {
     TEST_ASSERT_TRUE(songBase + termfont::descent(Face::BODY) - 1 <= 2 + 36 - 1);
 }
 
-// karaoke::wrap measures with the face it draws in.
+// Japanese in the lyric areas (ui/lyricrun's glyphs, 32 rows in BIG, 16 elsewhere, centred on the
+// caps): every block the big area draws (BIG, BIG holding Japanese, TITLE; 1 line up to the most)
+// stays inside its clear with its accents and its glyphs, and that clear inside the body (y 44) and
+// above the next line's; the next line's and the song row's glyphs stay inside their clears.
+void test_karaoke_japanese_fits() {
+    struct Block { Face f; int dy, most; };
+    for (const Block b : {Block{Face::BIG, KARAOKE_BIG_DY, 3}, Block{Face::BIG, KARAOKE_WIDE_DY, 3},
+                          Block{Face::TITLE, KARAOKE_FIT_DY, 4}}) {
+        const int glyph = lyricrun::GLYPH_H * lyricrun::scale(b.f);
+        for (int n = 1; n <= b.most; n++) {
+            const int y = karaokeBlockY(n, b.dy);
+            const int base0 = y + termfont::ascent(b.f), baseN = base0 + (n - 1) * b.dy;
+            TEST_ASSERT_TRUE(y - (termfont::accentAscent(b.f) - termfont::ascent(b.f)) >= KARAOKE_BIG_CLEAR_Y);
+            TEST_ASSERT_TRUE(lyricrun::glyphTop(b.f, base0) >= KARAOKE_BIG_CLEAR_Y);
+            TEST_ASSERT_TRUE(baseN + termfont::descent(b.f) <= KARAOKE_BIG_CLEAR_END);
+            TEST_ASSERT_TRUE(lyricrun::glyphTop(b.f, baseN) + glyph <= KARAOKE_BIG_CLEAR_END);
+        }
+    }
+    // a line of 2x glyphs (32 rows) fits the wide pitch, a 1x one TITLE's line box
+    TEST_ASSERT_EQUAL_INT(KARAOKE_WIDE_DY, 2 * lyricrun::GLYPH_H);
+    TEST_ASSERT_TRUE(lyricrun::glyphTop(Face::TITLE, 100) >= 100 - termfont::ascent(Face::TITLE));
+    TEST_ASSERT_TRUE(lyricrun::glyphTop(Face::TITLE, 100) + lyricrun::GLYPH_H <= 100 + termfont::descent(Face::TITLE));
+    TEST_ASSERT_TRUE(KARAOKE_BIG_CLEAR_Y >= deckmenu::KARAOKE_BODY.y);
+    TEST_ASSERT_TRUE(KARAOKE_BIG_CLEAR_END <= KARAOKE_NEXT_Y - (termfont::accentAscent(Face::BODY) - termfont::ascent(Face::BODY)));
+    // the next line (BODY, 1x): inside its area
+    for (int i = 0; i < 2; i++) {
+        const int base = KARAOKE_NEXT_Y + i * KARAOKE_NEXT_DY + termfont::ascent(Face::BODY);
+        TEST_ASSERT_TRUE(lyricrun::glyphTop(Face::BODY, base) >= KARAOKE_NEXT_Y);
+        TEST_ASSERT_TRUE(lyricrun::glyphTop(Face::BODY, base) + lyricrun::GLYPH_H <= KARAOKE_NEXT_Y + KARAOKE_NEXT_H);
+    }
+    // the song row (BODY, 1x, caps centred on y 20) inside its clear, rows 2..37
+    const int songBase = 20 + termfont::capHeight(Face::BODY) / 2;
+    TEST_ASSERT_TRUE(lyricrun::glyphTop(Face::BODY, songBase) >= 2);
+    TEST_ASSERT_TRUE(lyricrun::glyphTop(Face::BODY, songBase) + lyricrun::GLYPH_H <= 2 + 36);
+}
+
+// lyricrun::wrap measures with the face it draws in.
 void test_wrap_with_a_face() {
-    karaoke::Line lines[3];
+    lyricrun::Item items[64];
+    const size_t n = lyricrun::decode("I walked along the empty road under a sky of stars", items, 64, nullptr, nullptr);
+    lyricrun::Span lines[3];
     bool cut = true;
-    const int n = karaoke::wrap("I walked along the empty road under a sky of stars", static_cast<int>(Face::BIG),
-                                termfont::widthOf, KARAOKE_W, 3, lines, &cut);
-    TEST_ASSERT_TRUE(n >= 2 && n <= 3);
+    const int k = lyricrun::wrap(items, n, Face::BIG, KARAOKE_W, 3, lines, &cut);
+    TEST_ASSERT_TRUE(k >= 2 && k <= 3);
     TEST_ASSERT_FALSE(cut);
-    for (int i = 0; i < n; i++) TEST_ASSERT_TRUE(termfont::width(Face::BIG, lines[i].s) <= KARAOKE_W);
+    for (int i = 0; i < k; i++) {
+        char s[64];
+        size_t m = 0;
+        for (size_t j = lines[i].start; j < lines[i].end; j++) s[m++] = static_cast<char>(items[j].cp);
+        s[m] = 0;
+        TEST_ASSERT_EQUAL_INT(termfont::width(Face::BIG, s), lyricrun::width(Face::BIG, items + lines[i].start, m));
+        TEST_ASSERT_TRUE(termfont::width(Face::BIG, s) <= KARAOKE_W);
+    }
 }
 
 // The update page (an update over WiFi): under the dashboard's header, the title (BIG, centred) over
@@ -472,6 +516,7 @@ int main() {
     RUN_TEST(test_song_colours_fit);
     RUN_TEST(test_status_fits);
     RUN_TEST(test_karaoke_pitches);
+    RUN_TEST(test_karaoke_japanese_fits);
     RUN_TEST(test_wrap_with_a_face);
     RUN_TEST(test_update_page_fits);
     return UNITY_END();
