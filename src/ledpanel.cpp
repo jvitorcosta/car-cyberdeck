@@ -53,6 +53,10 @@
 // mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
 // (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
 // the inside light does, to see it without the car's lights. Neither is set in platformio.ini.
+// -D PURPLE_TEST lets the owner pick, by eye in the car, the LED mix that looks like the deck's purple:
+// tapping the Purple tile while purple is already the page's colour cycles A 140,0,255 / B 170,0,230 /
+// C 200,0,210 (instead of the double-tap off), every purple sent to the lights (tile, PURPURA) uses the
+// current one, and the status line says ">PURPLE A 140,0,255". The tile stays 0x820AD1. Off by default.
 // Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
 //   pio run -e ledpanel_ota -t upload
 // A page in the theme holds the screen meanwhile (see "Update over WiFi" below); three crash resets
@@ -254,13 +258,28 @@ static void write(Controller& c, const elkcmd::Frame& f) {
     }
 }
 
+// What the strip gets for swatch `sw`: the SWATCHES values, but under PURPLE_TEST the purple's
+// candidate mix.
+struct Rgb { uint8_t r, g, b; };
+#ifdef PURPLE_TEST
+static constexpr int PURPLE = 3;  // ledlook's order
+static constexpr Rgb PURPLE_MIX[] = {{140, 0, 255}, {170, 0, 230}, {200, 0, 210}};
+static int purpleMix = 0;  // index into PURPLE_MIX; loop-owned
+#endif
+static Rgb ledRgb(int sw) {
+#ifdef PURPLE_TEST
+    if (sw == PURPLE) return PURPLE_MIX[purpleMix];
+#endif
+    return {SWATCHES[sw].r, SWATCHES[sw].g, SWATCHES[sw].b};
+}
+
 // Controller i's look (power + dimmed colour), both header variants.
 static void push(int i) {
     Controller& c = controllers[i];
     const Look& l = looks[i + 1];
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(c, elkcmd::power(v, l.lit));
     if (!l.lit) return;
-    const Swatch& s = SWATCHES[l.swatch];
+    const Rgb s = ledRgb(l.swatch);
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) {
         write(c, elkcmd::color(v, elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)));
     }
@@ -1360,6 +1379,17 @@ static void tripTick() {
     }
 }
 
+#ifdef PURPLE_TEST
+// ">PURPLE A 140,0,255" on the status line / prompt line.
+static void purpleSay() {
+    const Rgb m = PURPLE_MIX[purpleMix];
+    char s[sizeof(message)];
+    snprintf(s, sizeof(s), ">PURPLE %c %u,%u,%u", 'A' + purpleMix, m.r, m.g, m.b);
+    setMessage(s);
+    drawMessage();
+}
+#endif
+
 // Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
 // shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
@@ -1377,6 +1407,9 @@ static void applyPreset(int slot0) {
     updateTheme();
     drawLooks();
     drawMessage();  // Lights' STATUS line, the Menu's prompt line
+#ifdef PURPLE_TEST
+    if ((p.in.lit && p.in.swatch == PURPLE) || (p.out.lit && p.out.swatch == PURPLE)) purpleSay();
+#endif
 }
 
 // A press is averaged over its first SETTLE_MS (a fingertip's first readings jump around) and acts
@@ -1463,7 +1496,12 @@ static void pressLights(int id) {
         static int lastTile = -1;
         static uint32_t lastTileMs = 0;
         const int tile = id - L_TILE0;
+#ifdef PURPLE_TEST
+        if (tile == PURPLE && l.lit && l.swatch == PURPLE) purpleMix = (purpleMix + 1) % 3;  // cycle, never off
+        const bool doubleTap = tile != PURPLE && l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
+#else
         const bool doubleTap = l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
+#endif
         lastTile = doubleTap ? -1 : tile;  // a third tap starts over
         lastTileMs = millis();
         bothlook::Change c;
@@ -1471,6 +1509,9 @@ static void pressLights(int id) {
         else c.swatch = tile;
         change(target, c);
         drawLooks();
+#ifdef PURPLE_TEST
+        if (tile == PURPLE) purpleSay();
+#endif
     } else {  // L_MINUS / L_PLUS
         bothlook::Change c;
         c.step = id == L_PLUS ? 1 : -1;
