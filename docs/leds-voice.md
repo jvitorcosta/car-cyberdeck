@@ -46,7 +46,7 @@ the panel would turn teal.
     level (`ROSE 40%`) on the left, `OUT` the same on the right; `OFF` (dim) for a light that is off,
     `-- NO LINK` (red) when the deck has no link to it (never its last colour);
   - the prompt line: `>` and a blinking block cursor; a message while one shows (see Messages), and
-    music mode's readout while it is on;
+    music mode's line while it is on (see "Music mode: song colours" below);
   - at the bottom, three big buttons (44 px tall): `[LIGHTS]` opens the Lights page, `[LYRICS]`
     the black deck's lyrics, `MUSIC MODE` turns music mode on or off, with an inverted `ON` or
     `OFF` tag under its label. LYRICS is bright with a small inverted `LIVE` tag at its right edge
@@ -117,6 +117,39 @@ inside and 100 % outside:
   answer.
 - Presets with different looks inside and outside make the BOTH page show `MIX` (see "BOTH while
   the lights differ" above); the main screen shows each light's colour and level.
+
+## Music mode: song colours
+
+`MUSIC MODE` on the main screen (a tap, or Xbox A on it) turns it on or off; the tag under it says
+`ON` or `OFF`, and `>MUSIC ON` / `>MUSIC OFF` shows on the prompt line. It is never kept over a
+reboot. There is no mic: the black deck sends the current song's palette (album cover colours,
+nudged toward the genre's family, warmer at night) over WiFi, and the deck does the rest.
+
+- **Colour**: both lights take the song's main colour, snapped to the nearest of the 8 colours
+  (by hue; washed-out colours are white), with that colour's tuned LED mix, the same as tapping
+  its tile. It stays steady through the song. On a new song it fades to the next colour over about
+  3 s (inside in 6 steps, outside in 3: the outside controller takes about one command a second).
+  The black deck waits for the new song's cover (up to 8 s) before it sends, so a song changes the
+  lights once.
+- **Brightness**: each light at its own level as you left it, times the time-of-day cap of the
+  palette (day 100 %, evening 70 %, late night 45 %), but never under 40 %; a light you had at 40 %
+  or less keeps its level.
+- **Off lights**: an outside light you left off stays off; the inside light is switched on (that is
+  the point of the mode).
+- **Screen**: the terminal theme follows the song's colour, as it follows the inside light. The
+  lights row shows what the lights show (`IN [chip] PINK 45%`). The prompt line shows
+  `>SONG COLOURS` and a chip of the colour with its name (`>SONG COLOURS [chip] PINK`); just
+  `>SONG COLOURS` until the first palette comes, and `>NO SIGNAL` (normal colour, not red) when
+  no palette came for 15 s (the lights keep the last song's colour).
+- **Ending it**: any manual change from anywhere (a colour, preset, level, on/off on the touch
+  screen, the Xbox controller, Siri, the watch) ends the mode, then that change applies to your own
+  looks. Turning the mode off brings back the looks from before it started. Your looks are never
+  saved over while it runs, so a reboot also brings them back.
+- **Watch and `/state`**: while the mode drives the lights they report what the lights show.
+- **Black deck**: the yellow deck asks `GET /music?k=<token>&on=1` every 10 s while the mode is on,
+  `on=0` when it ends; the black deck stops by itself 30 s after the last ask.
+  `GET /music/debug?k=<token>` on the black deck shows the palette it last sent, its cap and the
+  socket (`&on=1` also keeps it alive).
 
 ## Night mode
 

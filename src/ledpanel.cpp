@@ -8,7 +8,7 @@
 //           below), "HI 32 LO 26  MANAUS" right-aligned under them; the trip: TRIP, its time big and
 //           the distance right ("12.4 KM", "-- NO LINK" while no speed source feeds it); both lights
 //           on one row, "IN [chip] ROSE 40%" | "OUT [chip] YELLOW 100%" (OFF, or -- NO LINK when the
-//           deck has no link to it); the prompt line: a message, music mode's readout, or just ">",
+//           deck has no link to it); the prompt line: a message, music mode's line, or just ">",
 //           with a blinking block cursor; and at the bottom the three items "[LIGHTS]",
 //           "[LYRICS]" (with a LIVE tag while the black deck plays a song with synced lyrics,
 //           dimmed otherwise: a tap then only says why) and "MUSIC MODE" (a tap turns music mode on or
@@ -29,7 +29,7 @@
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button. The iPhone's Bluetooth must be off (Settings): each controller takes one connection.
 // The STATUS line on Lights and the prompt line on the Menu show a terminal message for 2.5 s
-// (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again (on the Menu: ">" or the readout).
+// (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again (on the Menu: ">" or music mode's line).
 // Each page's colour, intensity and power and the page last shown survive a reboot (NVS); the deck
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
@@ -45,10 +45,14 @@
 // typing or the calibration) takes that light's colour, termpal's three levels of it, day and night
 // (white turns to the amber at night; problems show in white on the red, orange and pink themes).
 // The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
-// Music mode: the MUSIC item has the black deck (the S3) listen with its mic and stream what it hears
-// over UDP (util/musicwire); the prompt line then shows ">MUSIC 120 BPM  LVL 70%", ">LISTENING" (packets,
-// no music in them) or ">NO SIGNAL" (no packets for 3 s), and the song's three colours right of it.
-// Not kept over a reboot. The lights don't follow the music yet (see "Music mode" below).
+// Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
+// UDP (util/musicwire); both lights then take its main colour snapped to one of the 8 swatches
+// (util/musiclights), steady, fading to the next song's over ~3 s, each at the owner's level under the
+// palette's time-of-day cap (never under 40 %). An outside light left off stays off; an inside one
+// off is switched on. The theme follows the swatch. The prompt line shows ">SONG COLOURS", a chip and
+// the swatch's name, or ">NO SIGNAL" when no palette came for 15 s. Any manual change (touch, the
+// Xbox controller, voice, the watch) ends the mode, then applies; turning it off brings back the
+// looks from before. Not kept over a reboot (see "Music mode" below).
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
 // mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
 // (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
@@ -100,7 +104,7 @@
 #include "util/ledlook.h"
 #include "util/ledpresets.h"
 #include "util/ledvoice.h"
-#include "util/musicreadout.h"
+#include "util/musiclights.h"
 #include "util/musicwire.h"
 #include "util/otapage.h"
 #include "util/lightstatus.h"
@@ -221,13 +225,15 @@ static bool karaokeShownReady = false;  // as the Menu item was last drawn (lit 
 
 // Music mode (see "Music mode" below): on and off from the Menu's MUSIC item, never saved (boots
 // off). musicOn is loop()'s; musicWant is the same for the lyrics task (the keep-alive) and the music
-// task (the UDP socket). musicLine and musicPal are the readout and the song's colours as the prompt
-// line draws them; musicTick() keeps them.
+// task (the UDP socket). musicState and musicSwatch are what the prompt line draws (musicSwatch -1
+// before a palette); musicTick() keeps them.
 static bool musicOn = false;
 static volatile bool musicWant = false;
-static char musicLine[32] = "";
-static songpalette::Palette musicPal{};
-static bool musicPalOk = false;
+static uint32_t musicOnAt = 0;  // millis() it went on
+static musiclights::State musicState = musiclights::State::Waiting;
+static int musicSwatch = -1;
+// A manual change while music mode is on ends it first (see "Music mode" below).
+static bool musicYield();
 
 // ---- BLE ----
 
@@ -273,10 +279,18 @@ static Rgb ledRgb(int sw) {
     return {SWATCHES[sw].r, SWATCHES[sw].g, SWATCHES[sw].b};
 }
 
+// Music mode's looks (see "Music mode" below): from the first song palette after the mode goes on
+// until it goes off, light i shows musicLook[i] (the song's swatch at its music level) instead of
+// its page's look. The pages' looks stay as the owner left them and are never saved over, so the
+// mode's end (or a reboot) brings them back. Loop-owned.
+static bool musicDriving = false;
+static Look musicLook[N_CTRL];
+static Look shownLook(int i) { return musicDriving ? musicLook[i] : looks[i + 1]; }
+
 // Controller i's look (power + dimmed colour), both header variants.
 static void push(int i) {
     Controller& c = controllers[i];
-    const Look& l = looks[i + 1];
+    const Look l = shownLook(i);
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(c, elkcmd::power(v, l.lit));
     if (!l.lit) return;
     const Rgb s = ledRgb(l.swatch);
@@ -286,12 +300,14 @@ static void push(int i) {
 }
 
 // One change on `page` (a tap, Y, voice): on BOTH it goes to both lights (bothlook), on INSIDE or
-// OUTSIDE to that light's look only; then the lights it covers get their looks.
+// OUTSIDE to that light's look only; then the lights it covers get their looks (both, when it ended
+// music mode: the other one goes back to its page's look too).
 static void change(Target page, const bothlook::Change& c) {
+    const bool restore = musicYield();
     if (page == BOTH) bothlook::apply(c, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
     else bothlook::edit(&looks[page], c);
     for (int i = 0; i < N_CTRL; i++) {
-        if (page == BOTH || page == static_cast<Target>(i + 1)) push(i);
+        if (restore || page == BOTH || page == static_cast<Target>(i + 1)) push(i);
     }
 }
 
@@ -665,7 +681,7 @@ static void drawLevel() {
 }
 
 // A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS
-// line, or on the Menu's prompt line (in place of ">" or the music readout), for MESSAGE_MS since
+// line, or on the Menu's prompt line (in place of ">" or music mode's line), for MESSAGE_MS since
 // messageAt; loop() then puts the usual line back. A newer message replaces it, and so does a screen change (show() drops it), so none
 // outlives its screen. Only loop() touches it (and setup(), before loop() starts).
 static constexpr uint32_t MESSAGE_MS = 2500;
@@ -700,12 +716,12 @@ static void drawStatus() {
 // ---- The Menu: a dashboard of stacked bands ----
 // Top to bottom (termlayout places them, test_termfont checks they fit): the header line; the clock
 // and the date left, the weather right, today's HI / LO under them; the trip (its time big, the
-// distance right); both lights on one row; the prompt line (a message, music mode's readout, or just
+// distance right); both lights on one row; the prompt line (a message, music mode's line, or just
 // ">") with its block cursor; the three items at the bottom. A MID rule under each band but the
 // prompt line. Each part clears and draws its own rows, so it is redrawn alone when what it shows
 // changes: the clock each minute, the weather on a new reading, the trip when its minute or its
 // tenth of a km moves, the lights on a look or link change, the prompt line when a message comes or
-// goes or the readout changes, the cursor's cell on a blink.
+// goes or music mode's line changes, the cursor's cell on a blink.
 
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
@@ -825,7 +841,7 @@ static void drawLightsBand() {
     clearBg(RULE_X0, top, RULE_X1 - RULE_X0, LIGHTS_RULE_Y - top);
     tft.drawFastVLine(LIGHTS_SPLIT, top, LIGHTS_RULE_Y - top, pal(termpal::MID));
     for (int i = 0; i < N_CTRL; i++) {
-        const Look& l = looks[i + 1];
+        const Look l = shownLook(i);  // music mode's while it drives the lights
         tft.setTextColor(pal(termpal::MID));
         text(LIGHT_LABELS[i], lightX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
         const lightstatus::State st = lightstatus::of(linkUp(controllers[i]), l.lit);
@@ -850,7 +866,7 @@ static void drawLightsBand() {
 
 // The block cursor: one SMALL cell (as wide as a character, as tall as the caps) at the end of the
 // prompt line's text, blinking at ~1 Hz. Only its cell is redrawn. -1 when it would pass DASH_RIGHT;
-// the longest message and readout still leave it room (test_termfont).
+// the longest message and music line still leave it room (test_termfont).
 static constexpr uint32_t BLINK_MS = 500;
 static int cursorX = -1;
 static bool cursorOn = false;
@@ -878,9 +894,10 @@ static void blinkCursor() {
 
 // The prompt line, cleared whole (under the lights' rule, rule to rule across, down to the band's
 // end: an accented capital and a descender stay inside) and drawn again, the cursor after its text:
-// while a message shows, the message (SMALL, TEXT, ALERT for a problem); in music mode the readout
-// (TEXT, ">NO SIGNAL" too: it's no fault of the deck's) and the song's three colours right-aligned;
-// else just ">". Redrawn on a message coming or going and on a readout change.
+// while a message shows, the message (SMALL, TEXT, ALERT for a problem); in music mode SONG_PROMPT,
+// then once a palette came a chip of the song's swatch and its name ("PINK"), or ">NO SIGNAL" (TEXT
+// too: it's no fault of the deck's); else just ">". Redrawn on a message coming or going and on a
+// change of music mode's state or swatch.
 static void drawPrompt() {
     const int top = LIGHTS_RULE_Y + 1;
     clearBg(RULE_X0, top, RULE_X1 - RULE_X0, deckmenu::PROMPT_BAND.y + deckmenu::PROMPT_BAND.h - top);
@@ -894,14 +911,19 @@ static void drawPrompt() {
         placeCursor(DASH_X + text(PROMPT_IDLE, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
         return;
     }
-    const int endX = DASH_X + text(musicLine, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM);
-    for (int k = 0; musicPalOk && k < 3; k++) {
-        const songpalette::Rgb& c = musicPal.c[k];
-        const int x = DASH_RIGHT - (3 - k) * MUSIC_CHIP - (2 - k) * MUSIC_CHIP_GAP;
-        const uint32_t rgb = (static_cast<uint32_t>(c.r) << 16) | (static_cast<uint32_t>(c.g) << 8) | c.b;
-        tft.fillRect(x, PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, tint(rgb));
+    if (musicState == musiclights::State::NoSignal) {
+        placeCursor(DASH_X + text(MUSIC_NO_SIGNAL, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
+        return;
     }
-    placeCursor(endX);
+    const int endX = DASH_X + text(SONG_PROMPT, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM);
+    if (musicState != musiclights::State::Colour || musicSwatch < 0) {
+        placeCursor(endX);
+        return;
+    }
+    tft.fillRect(songChipX(), PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, tint(SWATCHES[musicSwatch].screen));
+    char name[12];
+    upper(SWATCHES[musicSwatch].name, name, sizeof(name));
+    placeCursor(songNameX() + text(name, songNameX(), PROMPT_BASE, Face::SMALL, BL_DATUM));
 }
 
 // The whole dashboard but its three items (drawAll draws those as buttons).
@@ -960,7 +982,7 @@ static void drawLightState() {
 }
 
 // What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's prompt
-// line (then the music readout or ">" again).
+// line (then music mode's line or ">" again).
 static void drawMessage() {
     if (onLights()) drawStatus();
     else if (screen == Screen::Menu) drawPrompt();
@@ -1395,6 +1417,7 @@ static void purpleSay() {
 // shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
 // the watch.
 static void applyPreset(int slot0) {
+    musicYield();  // both lights get the preset anyway
     const ledpresets::Preset& p = ledpresets::PRESETS[slot0];
     looks[INSIDE] = p.in;
     looks[OUTSIDE] = p.out;
@@ -1523,7 +1546,7 @@ static void pressLights(int id) {
     save();
 }
 
-static void setMusic(bool on);
+static void setMusic(bool on, bool restore = true);
 
 // One settled tap on a button of the current screen.
 static void press(int id) {
@@ -1877,7 +1900,7 @@ static int lyricsGet() {
     return rc;
 }
 
-// ---- Music mode: the black deck listens ----
+// ---- Music mode: the black deck sends the song's palette ----
 // From the lyrics task: while musicWant, GET /music?on=1 at once and every MUSIC_KEEP_MS (the black
 // deck stops after 30 s without one), MUSIC_RETRY_MS after a miss (no answer, "stopping, ask again"),
 // but MUSIC_KEEP_MS after a 503 (its low memory: Spotify's TLS needs that heap, so no hurry); on=0 once
@@ -2009,20 +2032,18 @@ static void lyricsTick() {
     drawKaraokeBody(false);
 }
 
-// ---- Music mode: what the black deck's mic hears ----
+// ---- Music mode: the song's colour on both lights ----
 // Its own task (core 1, idle priority, 4 KB), started the first time music mode goes on. While
 // musicWant and online it holds a UDP socket on musicwire::PORT (raw lwip, 200 ms receive timeout),
 // closed again when music mode goes off or an update has the WiFi. It takes packets only from the
-// black deck's address (musicPeer), counts the beats itself (musicreadout::Beats, every FeatPkt) and
-// publishes the latest FeatPkt, its time and the beat rate, and the latest PalPkt, under musicMux.
-// musicTick() (loop) reads them at most MUSIC_TICK_MS apart and redraws the prompt line when its text
-// or the colours changed. The lights don't follow the music yet.
+// black deck's address (musicPeer) and publishes the latest PalPkt and its time under musicMux.
+// musicTick() (loop) reads them at most MUSIC_TICK_MS apart: the palette's main colour snapped to a
+// swatch (musiclights::nearestSwatch) and each light's level (musiclights::level: the owner's under
+// the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (musicFadeTick).
+// The prompt line is redrawn when its state or swatch changed.
 struct MusicHeard {
-    bool heard = false;  // a FeatPkt came since the socket opened
-    uint32_t at = 0;     // millis() it came
-    musicwire::FeatPkt feat{};
-    int bpm = -1;        // musicreadout::Beats::bpm at that packet
     bool palOk = false;  // a PalPkt came since the socket opened
+    uint32_t at = 0;     // millis() it came
     musicwire::PalPkt pal{};
 };
 static TaskHandle_t musicHandle = nullptr;
@@ -2047,7 +2068,6 @@ static int musicOpen() {
 }
 
 static void musicTask(void*) {
-    static musicreadout::Beats beats;  // static: ~280 B, off the task stack
     int sock = -1;
     uint8_t buf[32];
     for (;;) {
@@ -2068,7 +2088,6 @@ static void musicTask(void*) {
                 continue;
             }
             Serial.printf("[music] listening on udp %u\n", static_cast<unsigned>(musicwire::PORT));
-            beats.reset();
             portENTER_CRITICAL(&musicMux);
             musicPub = MusicHeard();
             portEXIT_CRITICAL(&musicMux);
@@ -2079,31 +2098,100 @@ static void musicTask(void*) {
         if (n <= 0) continue;  // the timeout: look at musicWant again
         const uint32_t peer = musicPeer;
         if (peer == 0 || from.sin_addr.s_addr != peer) continue;  // not the black deck
-        const uint32_t now = millis();
-        musicwire::FeatPkt f;
         musicwire::PalPkt p;
-        if (musicwire::decode(buf, static_cast<size_t>(n), &f)) {
-            beats.onPacket(now, f.seq, f.f.beat);
-            const int bpm = beats.bpm(now);
-            portENTER_CRITICAL(&musicMux);
-            musicPub.heard = true;
-            musicPub.at = now;
-            musicPub.feat = f;
-            musicPub.bpm = bpm;
-            portEXIT_CRITICAL(&musicMux);
-        } else if (musicwire::decode(buf, static_cast<size_t>(n), &p)) {
-            portENTER_CRITICAL(&musicMux);
-            musicPub.palOk = true;
-            musicPub.pal = p;
-            portEXIT_CRITICAL(&musicMux);
-        }
+        if (!musicwire::decode(buf, static_cast<size_t>(n), &p)) continue;
+        const uint32_t now = millis();
+        portENTER_CRITICAL(&musicMux);
+        musicPub.palOk = true;
+        musicPub.at = now;
+        musicPub.pal = p;
+        portEXIT_CRITICAL(&musicMux);
     }
 }
 
-// Music mode on or off (the MUSIC item): the tasks follow musicWant (the music task is started the
-// first time), and ">MUSIC ON" / ">MUSIC OFF" shows on the prompt line like any message; the readout
-// (or the idle ">") comes back after it. The caller redraws the item.
-static void setMusic(bool on) {
+// A new music look fades in over ~3 s: each light from the colour frame it showed to the new look's,
+// one colour write (both header variants) per step: the inside light MUSIC_FADE_IN steps 500 ms
+// apart (its controller takes ~7 writes a second), the outside one MUSIC_FADE_OUT steps 1 s apart
+// (its takes ~1). The first step goes as soon as that gap since the light's last step allows (a new
+// song right after a change still keeps the rate). A light switched on for it fades up from black;
+// an outside light left off gets nothing. Loop-owned.
+struct MusicFade {
+    songpalette::Rgb from{}, to{};
+    int steps = 0, done = 0;  // done == steps: no fade
+    uint32_t every = 0, at = 0;  // at: millis() of the last step written
+};
+static constexpr int MUSIC_FADE_IN = 6, MUSIC_FADE_OUT = 3;
+static constexpr uint32_t MUSIC_FADE_MS = 3000;
+static MusicFade musicFade[N_CTRL];
+
+// The colour frame push() sends for `l` (black when off).
+static songpalette::Rgb frameOf(const Look& l) {
+    if (!l.lit) return {0, 0, 0};
+    const Rgb s = ledRgb(l.swatch);
+    return {elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)};
+}
+
+// The colour frame light i shows now: a fade's current step, else its look's.
+static songpalette::Rgb frameNow(int i) {
+    const MusicFade& f = musicFade[i];
+    if (f.done < f.steps) return musiclights::blend(f.from, f.to, f.done, f.steps);
+    return frameOf(shownLook(i));
+}
+
+static void writeFrame(int i, const songpalette::Rgb& c) {
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::color(v, c.r, c.g, c.b));
+}
+
+// Each loop pass: the fades' due steps. A light out of reach skips its writes (it gets its look
+// when it comes back: loop()'s fresh push).
+static void musicFadeTick() {
+    const uint32_t now = millis();
+    for (int i = 0; i < N_CTRL; i++) {
+        MusicFade& f = musicFade[i];
+        if (f.done >= f.steps || now - f.at < f.every) continue;
+        f.done++;
+        f.at = now;
+        if (linkUp(controllers[i])) writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+    }
+}
+
+// The song's swatch at `cap` onto the lights: each light's music look (the inside one always on,
+// the outside one as the owner left it), fading in where it changed. False when nothing changed.
+static bool musicTarget(int swatch, int cap) {
+    bool any = false;
+    for (int i = 0; i < N_CTRL; i++) {
+        const Look& own = looks[i + 1];
+        Look t;
+        t.swatch = swatch;
+        t.lit = i == 0 || own.lit;
+        t.pct = static_cast<uint8_t>(musiclights::level(own.pct, cap));
+        if (musicDriving && t == musicLook[i]) continue;
+        any = true;
+        const Look was = shownLook(i);
+        const songpalette::Rgb from = frameNow(i);
+        musicLook[i] = t;
+        MusicFade& f = musicFade[i];
+        const uint32_t lastStep = f.at;
+        f = MusicFade();
+        f.at = lastStep;
+        if (!t.lit) continue;  // the outside light left off: stays off, nothing sent
+        if (!was.lit && linkUp(controllers[i])) {
+            for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+        }
+        f.from = was.lit ? from : songpalette::Rgb{0, 0, 0};
+        f.to = frameOf(t);
+        f.steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
+        f.every = MUSIC_FADE_MS / static_cast<uint32_t>(f.steps);
+    }
+    musicDriving = true;
+    return any;
+}
+
+// Music mode on or off (the MUSIC item, or musicYield): the tasks follow musicWant (the music task is
+// started the first time), and ">MUSIC ON" / ">MUSIC OFF" shows like any message; the prompt line's
+// music state (or the idle ">") comes back after it. Off, the lights go back to their pages' looks
+// (restore false: the caller pushes them itself). The caller redraws the item.
+static void setMusic(bool on, bool restore) {
     musicOn = on;
     musicWant = on;
     if (on) {
@@ -2111,23 +2199,42 @@ static void setMusic(bool on) {
             musicHandle = nullptr;  // the next tap tries again
             Serial.println("[music] no memory for its task");
         }
-        snprintf(musicLine, sizeof(musicLine), ">NO SIGNAL");
-        musicPalOk = false;
+        musicOnAt = millis();
+        musicState = musiclights::State::Waiting;
+        musicSwatch = -1;
+    } else {
+        const bool drove = musicDriving;
+        musicDriving = false;
+        musicSwatch = -1;
+        for (MusicFade& f : musicFade) f = MusicFade();
+        if (drove && restore) {
+            for (int i = 0; i < N_CTRL; i++) push(i);
+            drawLooks();  // the lights band and the theme
+        }
     }
     setMessage(on ? ">MUSIC ON" : ">MUSIC OFF");
     drawMessage();
 }
 
-static bool samePalette(const songpalette::Palette& a, const songpalette::Palette& b) {
-    for (int k = 0; k < 3; k++) {
-        if (a.c[k].r != b.c[k].r || a.c[k].g != b.c[k].g || a.c[k].b != b.c[k].b) return false;
+// A manual change (a tap, the Xbox controller, voice, the watch) while music mode is on: the mode
+// ends first (the MUSIC item shows OFF), then the change applies to the pages' looks. True when the
+// lights showed the song: the caller pushes both lights (the one it doesn't change goes back too).
+static bool musicYield() {
+    if (!musicOn) return false;
+    const bool drove = musicDriving;
+    Serial.println("[music] a manual change ends it");
+    setMusic(false, false);
+    if (screen == Screen::Menu) {
+        const int item = M_ITEM0 + deckmenu::MUSIC;
+        drawButton(item, pressedNow(item));
     }
-    return true;
+    return drove;
 }
 
-// In loop(), while music mode is on: the readout from the latest packets, at most every
-// MUSIC_TICK_MS; the prompt line is redrawn only when its text or the colours changed (and not while
-// a message holds the line: it brings the readout back as it goes).
+// In loop(), while music mode is on, at most every MUSIC_TICK_MS: the latest palette onto the lights
+// (musicTarget: nothing while it is the same) and the prompt line's state; the line is redrawn only
+// when its state or swatch changed (and not while a message holds it: it brings the line back as it
+// goes).
 static void musicTick() {
     static uint32_t tickAt = 0;
     if (!musicOn || millis() - tickAt < MUSIC_TICK_MS) return;
@@ -2137,14 +2244,20 @@ static void musicTick() {
     h = musicPub;
     portEXIT_CRITICAL(&musicMux);
     const uint32_t now = millis();  // after the copy: never before the packet's time
-    char line[sizeof(musicLine)];
-    musicreadout::format(musicreadout::state(h.heard, h.at, h.feat.f.present, now), h.bpm, h.feat.f.energy, line,
-                         sizeof(line));
-    const bool palChanged = h.palOk != musicPalOk || (h.palOk && !samePalette(h.pal.p, musicPal));
-    if (!palChanged && strcmp(line, musicLine) == 0) return;
-    snprintf(musicLine, sizeof(musicLine), "%s", line);
-    musicPalOk = h.palOk;
-    musicPal = h.pal.p;
+    const int was = musicSwatch;
+    const musiclights::State wasState = musicState;
+    musicState = musiclights::state(h.palOk, h.palOk ? h.at : musicOnAt, now);
+    if (h.palOk) {
+        const int sw = musiclights::nearestSwatch(h.pal.p.c[0]);
+        musicSwatch = sw;  // before drawLooks: a new theme repaints the prompt line too
+        if (musicTarget(sw, h.pal.p.cap)) {
+            Serial.printf("[music] song %u: %s, inside %u%%, outside %u%%%s\n", static_cast<unsigned>(h.pal.songId),
+                          SWATCHES[sw].word, static_cast<unsigned>(musicLook[0].pct),
+                          static_cast<unsigned>(musicLook[1].pct), musicLook[1].lit ? "" : " (off)");
+            drawLooks();  // the lights band and the theme
+        }
+    }
+    if (musicState == wasState && musicSwatch == was) return;
     if (screen == Screen::Menu && !message[0]) drawPrompt();
 }
 
@@ -2243,6 +2356,11 @@ static portMUX_TYPE stateMux = portMUX_INITIALIZER_UNLOCKED;
 static void publish() {
     Published p;
     for (int i = 0; i < 3; i++) p.looks[i] = looks[i];
+    if (musicDriving) {  // what the lights show: the watch syncs its screen from it
+        p.looks[INSIDE] = shownLook(0);
+        p.looks[OUTSIDE] = shownLook(1);
+        p.looks[BOTH] = bothlook::seed(p.looks[INSIDE], p.looks[OUTSIDE]);
+    }
     for (int i = 0; i < N_CTRL; i++) p.up[i] = linkUp(controllers[i]);
     portENTER_CRITICAL(&stateMux);
     published = p;
@@ -2466,7 +2584,7 @@ static int wantTheme() {
 #ifdef THEME_TEST
     return THEME_TEST;
 #else
-    const Look& l = looks[INSIDE];
+    const Look l = shownLook(0);  // in music mode the song's swatch
     return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? l.swatch : -1;
 #endif
 }
@@ -2583,6 +2701,7 @@ void loop() {
     takeWeather();
     lyricsTick();
     musicTick();
+    musicFadeTick();
     updateDayNight();
     tripTick();
     blinkCursor();

@@ -10,7 +10,6 @@
 #include "../../src/util/karaoke.h"
 #include "../../src/util/ledlook.h"
 #include "../../src/util/ledpresets.h"
-#include "../../src/util/musicreadout.h"
 #include "../../src/util/otapage.h"
 #include "../../src/util/tripmeter.h"
 #include "../../src/util/weather.h"
@@ -355,19 +354,21 @@ void test_dash_prompt_fits() {
     TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
 }
 
-// Music mode's readout on the prompt line: the longest line, its cursor and the song's three
-// colour chips right-aligned at DASH_RIGHT (as tall as SMALL's caps, on the line's baseline).
-void test_music_readout_fits() {
-    char s[40];
-    musicreadout::format(musicreadout::State::Music, 999, 255, s, sizeof s);
-    TEST_ASSERT_EQUAL_STRING(">MUSIC 999 BPM  LVL 100%", s);
-    const int chipsW = 3 * MUSIC_CHIP + 2 * MUSIC_CHIP_GAP;
-    for (const char* m : {static_cast<const char*>(s), ">LISTENING", ">NO SIGNAL", ">MUSIC -- BPM  LVL 100%"}) {
-        TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) + MARGIN <=
-                                     DASH_RIGHT - chipsW, m);
+// Music mode's line on the prompt line: SONG_PROMPT, the swatch's chip (as tall as SMALL's caps, on
+// the line's baseline) and its name, the longest one's cursor still by DASH_RIGHT; NO SIGNAL alone.
+void test_song_colours_fit() {
+    TEST_ASSERT_TRUE(songChipX() >= DASH_X + termfont::advance(Face::SMALL, SONG_PROMPT) + 2);
+    TEST_ASSERT_TRUE(songNameX() >= songChipX() + MUSIC_CHIP + 2);
+    for (const ledlook::Swatch& sw : ledlook::SWATCHES) {
+        char name[16];
+        size_t i = 0;
+        for (; sw.name[i] && i + 1 < sizeof name; i++) name[i] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[i])));
+        name[i] = 0;
+        TEST_ASSERT_TRUE_MESSAGE(songNameX() + termfont::advance(Face::SMALL, name) + termfont::cell(Face::SMALL) + MARGIN <= DASH_RIGHT,
+                                 name);
     }
+    TEST_ASSERT_TRUE(DASH_X + termfont::advance(Face::SMALL, MUSIC_NO_SIGNAL) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
     TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::SMALL), MUSIC_CHIP);
-    TEST_ASSERT_TRUE(MUSIC_CHIP_GAP >= 2);
 }
 
 void test_status_fits() {
@@ -448,7 +449,7 @@ int main() {
     RUN_TEST(test_dash_trip_band_fits);
     RUN_TEST(test_dash_lights_fit);
     RUN_TEST(test_dash_prompt_fits);
-    RUN_TEST(test_music_readout_fits);
+    RUN_TEST(test_song_colours_fit);
     RUN_TEST(test_status_fits);
     RUN_TEST(test_karaoke_pitches);
     RUN_TEST(test_wrap_with_a_face);

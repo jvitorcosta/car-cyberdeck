@@ -72,13 +72,16 @@ constexpr int N_LIGHT_LABELS = sizeof(LIGHT_LABELS) / sizeof(LIGHT_LABELS[0]);
 constexpr int LIGHT_ROW_BASE = 157, LIGHTS_RULE_Y = 166, LIGHTS_SPLIT = 159;
 constexpr int LIGHT_CHIP_W = 14, LIGHT_CHIP_H = 11, LIGHT_GAP = 6;
 // the prompt line (SMALL, on PROMPT_BASE, the caps centred between the lights' rule and the items): a
-// message while one shows, music mode's readout, else PROMPT_IDLE; the block cursor (a SMALL cell)
+// message while one shows, music mode's line, else PROMPT_IDLE; the block cursor (a SMALL cell)
 // after it, by DASH_RIGHT
 constexpr const char* PROMPT_IDLE = ">";
 constexpr int PROMPT_BASE = 185;
-// music mode's readout with the song's three colours right-aligned at DASH_RIGHT as MUSIC_CHIP px
-// squares (SMALL's caps) MUSIC_CHIP_GAP apart, on its baseline
-constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 3;
+// music mode's line: SONG_PROMPT, then (once the song's palette came) its swatch as a MUSIC_CHIP px
+// square (SMALL's caps, on the baseline) MUSIC_CHIP_GAP after it and the swatch's name MUSIC_CHIP_GAP
+// after that; or MUSIC_NO_SIGNAL alone
+constexpr const char* SONG_PROMPT = ">SONG COLOURS";
+constexpr const char* MUSIC_NO_SIGNAL = ">NO SIGNAL";
+constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 5;
 
 // Whether the HI / LO line `s`, right-aligned at DASH_RIGHT, fits the row from DASH_X. When not,
 // ledpanel shows it without its city.
@@ -86,6 +89,10 @@ inline bool hiLoFits(const char* s) { return DASH_X <= DASH_RIGHT - termfont::wi
 
 // Where the trip's time starts: after TRIP_LABEL.
 inline int tripTimeX() { return DASH_X + termfont::advance(termfont::Face::SMALL, TRIP_LABEL) + TRIP_TIME_GAP; }
+
+// Music mode's swatch chip and its name on the prompt line.
+inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, SONG_PROMPT) + MUSIC_CHIP_GAP; }
+inline int songNameX() { return songChipX() + MUSIC_CHIP + MUSIC_CHIP_GAP; }
 
 // A light's half of the lights row (0 inside, 1 outside): where it starts, its chip, its text.
 inline int lightX(int i) { return i == 0 ? DASH_X : LIGHTS_SPLIT + DASH_X; }
