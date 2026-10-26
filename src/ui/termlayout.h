@@ -105,11 +105,18 @@ inline int lightChipX(int i) { return lightX(i) + termfont::advance(termfont::Fa
 inline int lightTextX(int i) { return lightChipX(i) + LIGHT_CHIP_W + LIGHT_GAP; }
 
 // The KARAOKE body: the line due now in BIG over up to 3 lines KARAOKE_BIG_DY apart (or, when that
-// would cut it, TITLE over up to 4 lines KARAOKE_FIT_DY apart) in KARAOKE_BIG_H rows; the next line in
-// BODY over up to 2 lines KARAOKE_NEXT_DY apart in KARAOKE_NEXT_H rows; KARAOKE_W px wide.
+// would cut it, TITLE over up to 4 lines KARAOKE_FIT_DY apart) in KARAOKE_BIG_H rows from KARAOKE_BIG_Y;
+// the next line in BODY over up to 2 lines KARAOKE_NEXT_DY apart in KARAOKE_NEXT_H rows from
+// KARAOKE_NEXT_Y; KARAOKE_W px wide. A BIG block holding Japanese (ui/lyricrun: 2x Unifont glyphs, 32
+// rows centred on the caps) goes KARAOKE_WIDE_DY apart, 3 lines of it a little taller than the area;
+// the big area's clear, rows KARAOKE_BIG_CLEAR_Y up to KARAOKE_BIG_CLEAR_END, covers every block with
+// its accents.
 constexpr int KARAOKE_W = 312;
-constexpr int KARAOKE_BIG_H = 90, KARAOKE_BIG_DY = 30, KARAOKE_FIT_DY = 22;
-constexpr int KARAOKE_NEXT_H = 40, KARAOKE_NEXT_DY = 20;
+constexpr int KARAOKE_BIG_Y = 56, KARAOKE_BIG_H = 90, KARAOKE_BIG_DY = 30, KARAOKE_FIT_DY = 22, KARAOKE_WIDE_DY = 32;
+constexpr int KARAOKE_BIG_CLEAR_Y = 44, KARAOKE_BIG_CLEAR_END = 147;
+constexpr int KARAOKE_NEXT_Y = 156, KARAOKE_NEXT_H = 40, KARAOKE_NEXT_DY = 20;
+// The row of a big-area block's first line's tallest ASCII glyph: n lines dy apart, centred.
+constexpr int karaokeBlockY(int n, int dy) { return KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2; }
 
 // The update page (an update over WiFi, util/otapage), the whole screen: the dashboard's header and
 // its rule, the title (BIG, centred, caps top UPDATE_TITLE_Y), the 10-cell block bar (UPDATE_CELL px

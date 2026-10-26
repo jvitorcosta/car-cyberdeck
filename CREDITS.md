@@ -38,7 +38,7 @@ generated files contain third-party material and keep their own terms:
 |---|---|---|
 | `src/ui/status_sprite.inc` | Pikachu, Zubat, Psyduck, Slowpoke and Porygon sprites from PokeAPI/sprites (`tools/gen_status_sprite.py`) | © Nintendo / Creatures Inc. / GAME FREAK inc.; fan use |
 | `data/cjk16.bin` | [GNU Unifont](https://unifoundry.com/unifont/) 16.0.04 glyphs (`tools/gen_cjk_font.py`) | GPLv2+ with the GNU font embedding exception, or SIL OFL 1.1 |
-| `src/fonts/gojira16.h`, `garmin/carlights/resources/drawables/gojira_*.png` | The three Unifont glyphs ゴジラ, taken from `data/cjk16.bin` (`tools/gen_gojira_glyphs.py`): GOJIRA's name on the yellow deck and the watch | GPLv2+ with the GNU font embedding exception, or SIL OFL 1.1 |
+| `src/fonts/gojira16.h`, `garmin/carlights/resources/drawables/gojira_*.png`, `data/jp16.bin` | Unifont glyphs taken from `data/cjk16.bin`: the three of ゴジラ (`tools/gen_gojira_glyphs.py`), GOJIRA's name on the yellow deck and the watch; and the Japanese subset for the yellow deck's lyrics: kana, CJK punctuation, half/fullwidth forms and the JIS X 0208 level 1 kanji (`tools/gen_jp_font.py`) | GPLv2+ with the GNU font embedding exception, or SIL OFL 1.1 |
 | `data/emoji16.bin` | [Twemoji](https://github.com/jdecked/twemoji) 15.1.0 graphics, © Twitter, Inc and other contributors, shrunk to 16 px (`tools/gen_emoji.py`) | CC-BY 4.0 |
 | `tools/fonts/VT323-Regular.ttf` | [VT323](https://fonts.google.com/specimen/VT323), © 2011 The VT323 Project Authors; licence text in `tools/fonts/VT323-OFL.txt` | SIL OFL 1.1 |
 | `src/fonts/vt323_*.h` | VT323 glyph bitmaps at 17, 19, 24 and 36 px, derived from the font above (`tools/gfxfont.py`) | SIL OFL 1.1 (see `tools/fonts/VT323-OFL.txt`) |

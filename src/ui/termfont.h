@@ -55,7 +55,5 @@ int advance(Face f, const char* s);
 // character, then that one's ink (xOffset + width). Characters outside the font count nothing.
 int width(const Font& f, const char* s);
 int width(Face f, const char* s);
-// width() as karaoke::wrap wants it: `face` is a Face as int.
-int widthOf(const char* s, int face);
 
 }  // namespace termfont

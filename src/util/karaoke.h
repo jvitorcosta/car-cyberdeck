@@ -4,7 +4,7 @@
 #include "stateparse.h"
 // What the yellow deck's KARAOKE screen shows of the black deck's GET /state: whether the song can
 // be sung along (synced lyrics), the song position moved on between polls, the progress bar, the
-// state word, the lyric line due now and the one after it, and a word-wrapper for the big text.
+// state word, and the lyric line due now and the one after it (ui/lyricrun wraps them).
 // PURE, host-tested.
 namespace karaoke {
 // The song position sincePollMs after the poll that brought `d`: while playing it moves on,
@@ -31,13 +31,4 @@ const char* lyric(const stateparse::Deck& d, uint32_t posMs);
 // The line after the one lyric() returns: `line` before it starts, `next` while `line` shows (when
 // known), "" once `next` shows (the line after it comes with the next poll) and when not synced.
 const char* nextLine(const stateparse::Deck& d, uint32_t posMs);
-
-// Word-wrapping for the screen's text: `s` over up to maxLines lines of maxPx, each as many words
-// as fit (a word wider than a line is broken), the last one cut with ".." when the rest doesn't fit
-// (the fonts have no ellipsis). width(text, font) is the text's width in px in that font. Returns
-// the lines used (0 for an empty or blank text); *cut (optional) tells whether text was dropped.
-// With maxLines 1 it fits a single line.
-struct Line { char s[sizeof(stateparse::Deck::line)]; };
-using Width = int (*)(const char* text, int font);
-int wrap(const char* s, int font, Width width, int maxPx, int maxLines, Line out[], bool* cut = nullptr);
 }
