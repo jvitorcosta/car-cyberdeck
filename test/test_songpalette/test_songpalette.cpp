@@ -75,6 +75,32 @@ void test_no_genre_no_cover_neutral() {
         TEST_ASSERT_TRUE(same(neutral[i], q[i]));
     }
 }
+// An unknown genre (NONE, out of range, or the "others" badges 28-30: the neutral family) nudges
+// nothing: the cover's colours as they are. Its family still stands in for a colourless cover.
+void test_unknown_genre_keeps_cover_hues() {
+    const Rgb cover[2] = {{0, 0, 255}, {255, 0, 0}};   // 240 and 0 deg
+    for (uint8_t badge : {genre::NONE, static_cast<uint8_t>(28), static_cast<uint8_t>(29), static_cast<uint8_t>(30),
+                          static_cast<uint8_t>(99)}) {
+        const songpalette::Palette p = songpalette::build(cover, 2, badge, 720);
+        TEST_ASSERT_EQUAL_INT(240, hueOf(p.c[0]));
+        TEST_ASSERT_EQUAL_INT(0, hueOf(p.c[1]));
+        Rgb neutral[3];
+        songpalette::family(badge, neutral);
+        TEST_ASSERT_TRUE(same(p.c[2], neutral[1]) || same(p.c[2], neutral[0]) || same(p.c[2], neutral[2]));
+    }
+    // a known genre still nudges (electro: 240 toward its blue, ~221)
+    TEST_ASSERT_TRUE(hueOf(songpalette::build(cover, 2, 9, 720).c[0]) < 240);
+}
+void test_grey_cover_unknown_genre_is_neutral() {
+    fill(px(128, 128, 128), px(200, 200, 200));
+    Rgb out[3];
+    const int n = songpalette::fromCover(bmp, W, H, out);
+    TEST_ASSERT_EQUAL_INT(0, n);
+    const songpalette::Palette p = songpalette::build(out, n, genre::NONE, 720);
+    Rgb neutral[3];
+    songpalette::family(genre::NONE, neutral);
+    for (int i = 0; i < 3; ++i) TEST_ASSERT_TRUE(same(neutral[i], p.c[i]));
+}
 void test_families_differ() {
     Rgb a[3], b[3];
     songpalette::family(6, a);    // rock
@@ -170,6 +196,8 @@ int main(int, char**) {
     RUN_TEST(test_cover_skips_dark_and_washed_out);
     RUN_TEST(test_grey_cover_uses_genre);
     RUN_TEST(test_no_genre_no_cover_neutral);
+    RUN_TEST(test_unknown_genre_keeps_cover_hues);
+    RUN_TEST(test_grey_cover_unknown_genre_is_neutral);
     RUN_TEST(test_families_differ);
     RUN_TEST(test_nudge_toward_genre);
     RUN_TEST(test_one_cover_colour_uses_genre);

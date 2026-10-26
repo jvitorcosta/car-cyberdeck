@@ -13,7 +13,9 @@ int fromCover(const uint16_t* bmpBe, int w, int h, Rgb out[3]);
 // The genre family's 3 colours for a genrebadge index (0..30; genre::NONE = 0xFF or anything else = neutral).
 void family(uint8_t badge, Rgb out[3]);
 // Cover + genre + time: < 2 cover colours = the family; otherwise each cover hue nudged <= 15 deg toward the
-// family's nearest hue (never past it), and the third slot filled from the family when the cover gave two.
+// family's nearest hue (never past it; no nudge for an unknown genre, badges 28-30, NONE or out of range,
+// whose neutral family would only pull covers its way), and the third slot filled from the family when the
+// cover gave two.
 // minuteOfDay < 0 (clock not synced) = day. Day (06:00-18:00): cap 100, depth 60. Evening (18:00-22:00,
 // 05:00-06:00): warmer (hues 180-270 deg shifted 15 deg toward 300, washed-out colours = amber), cap 70,
 // depth 45. Late (22:00-05:00): same warm shift, cap 45, depth 30.

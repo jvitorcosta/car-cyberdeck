@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <initializer_list>
+#include "../../src/util/genre.h"
 #include "../../src/util/ledlook.h"
 #include "../../src/util/musiclights.h"
 
@@ -61,6 +62,11 @@ void test_night_keeps_a_blue_cover_blue() {
         // electro: blue's family; calm: teal's (the cover pulled 15 deg off it, to 225)
         TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch(songpalette::forLights(cover, 2, 9, minute).c[0]));
         TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch(songpalette::forLights(cover, 2, 21, minute).c[0]));
+    }
+    // no genre (or "others"): no nudge, so the neutral family's purple doesn't pull it
+    for (uint8_t badge : {genre::NONE, static_cast<uint8_t>(30)}) {
+        TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch(songpalette::forLights(cover, 2, badge, 720).c[0]));
+        TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch(songpalette::forLights(cover, 2, badge, 1380).c[0]));
     }
     // a 255 deg cover under calm is 240 by day; the evening shift (+15) made it 255, purple
     const songpalette::Rgb indigo[2] = {hue(255), hue(200)};

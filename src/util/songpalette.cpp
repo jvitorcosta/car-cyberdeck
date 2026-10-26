@@ -59,6 +59,7 @@ int hueDelta(int a, int b) {
 constexpr int BUCKETS = 24;           // 15 deg each
 constexpr int MIN_SHARE_PCT = 3;      // a hue must cover this much of the picture to count
 constexpr Rgb AMBER = {255, 176, 0};  // what a white turns into after dark
+constexpr uint8_t LAST_KNOWN = 27;    // badges past this (28 chinese, 29 world, 30 ???, NONE) are "others"
 
 constexpr Rgb RED = {255, 24, 24}, ORANGE = {255, 110, 0}, DEEP_ORANGE = {255, 60, 0};
 constexpr Rgb BLUE = {0, 80, 255}, PURPLE = {160, 32, 255}, CYAN = {0, 220, 255};
@@ -119,7 +120,7 @@ void family(uint8_t badge, Rgb out[3]) {
     else if (badge <= 10) f = ELECTRO;
     else if (badge <= 20) f = BRASIL;
     else if (badge <= 26) f = CALM;   // 21..26: jazz, classic, OST, folk, country, gospel
-    else f = NEUTRAL;                 // 28 chinese, 29 world, 30 ???, NONE and anything unknown
+    else f = NEUTRAL;                 // past LAST_KNOWN: 28 chinese, 29 world, 30 ???, NONE and anything unknown
     for (int i = 0; i < 3; ++i) out[i] = f[i];
 }
 
@@ -132,9 +133,10 @@ Palette build(const Rgb* cover, int coverCount, uint8_t badge, int minuteOfDay) 
     } else {
         int hues[3] = {};
         int n = coverCount > 3 ? 3 : coverCount;
+        const bool known = badge <= LAST_KNOWN;   // an unknown genre nudges nothing: the cover as it is
         for (int i = 0; i < n; ++i) {
             int hue = toHsv(cover[i]).h, bestD = 361, target = hue;
-            for (int k = 0; k < 3; ++k) {
+            for (int k = 0; known && k < 3; ++k) {
                 int fh = toHsv(fam[k]).h, d = hueDist(hue, fh);
                 if (d < bestD) { bestD = d; target = fh; }
             }
