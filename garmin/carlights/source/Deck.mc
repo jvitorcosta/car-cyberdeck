@@ -8,7 +8,7 @@ const DECK_URL = "http://172.20.10.11";
 
 // [label, word sent to the deck, screen colour]: the deck's own screen colours, but purple, which
 // is #8C00FF on the deck and the lights; the watch's 64 colours show it as AA00FF, so that is set here.
-// Light blue (GOJIRA's, #3CD2FF on the deck) is last and is 00AAFF here: of the watch's colours the
+// Light blue (GOJIRA's, #0082FF on the deck) is last and is 00AAFF here: of the watch's colours the
 // nearest that stays apart from OCEAN's blue (0040FF, shown as 0055FF) and from green. The deck's
 // grid has only the first N_PICK; light blue comes from a preset, so the zone lists don't offer it.
 const COLORS = [

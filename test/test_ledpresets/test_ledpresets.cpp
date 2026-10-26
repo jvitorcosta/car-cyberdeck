@@ -79,7 +79,7 @@ void test_swatch_words() {
     for (int i = 0; i < ledlook::N_SWATCH; i++) TEST_ASSERT_EQUAL_STRING(order[i], ledlook::SWATCHES[i].word);
     const ledlook::Swatch& lb = ledlook::SWATCHES[ledlook::LIGHT_BLUE];
     TEST_ASSERT_EQUAL_STRING("Light blue", lb.name);
-    TEST_ASSERT_EQUAL_HEX32(0x3CD2FF, lb.screen);
+    TEST_ASSERT_EQUAL_HEX32(0x0082FF, lb.screen);
     TEST_ASSERT_TRUE(lb.r == 0 && lb.g == 130 && lb.b == 255);  // candidate B until the car test (CYAN_TEST)
 }
 // The default look is yellow (the grid's last), not the preset-only light blue.

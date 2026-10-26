@@ -65,10 +65,10 @@
 // C 200,0,210 (instead of the double-tap off), every purple sent to the lights (tile, PURPURA) uses the
 // current one, and the status line says ">PURPLE A 140,0,255". The tile stays 0x8C00FF (A, the owner's
 // pick on 2026-10-26). Off by default.
-// -D CYAN_TEST does the same for light blue (GOJIRA's colour; its screen colour is #3CD2FF): tapping
+// -D CYAN_TEST does the same for light blue (GOJIRA's colour; its screen colour is #0082FF): tapping
 // the ゴジラ preset while it is applied cycles A 0,90,255 / B 0,130,255 / C 40,160,255 (from B),
 // every light blue sent to the lights uses the current one, the status line says ">CYAN A 0,90,255",
-// and the screen's light blue chips show the candidate's own RGB. Without it the lights get B. Off
+// and the screen's light blue chips show the candidate's own RGB. Without it the lights get B, the owner's pick. Off
 // by default.
 // Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
 //   pio run -e ledpanel_ota -t upload

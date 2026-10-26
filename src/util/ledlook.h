@@ -27,7 +27,7 @@ inline constexpr Swatch SWATCHES[N_SWATCH] = {
     {"Pink", "pink", 255, 0, 70, 0xFF0090},       {"Purple", "purple", 140, 0, 255, 0x8C00FF},
     {"Blue", "blue", 0, 0, 255, 0x0040FF},        {"Green", "green", 0, 255, 0, 0x00FF30},
     {"White", "white", 255, 215, 170, 0xFFFFFF},  {"Yellow", "yellow", 255, 110, 0, 0xFFD400},  // LED yellow: full green goes lime
-    {"Light blue", "light blue", 0, 130, 255, 0x3CD2FF},
+    {"Light blue", "light blue", 0, 130, 255, 0x0082FF},
 };
 
 // The grid colour that stands for swatch sw where only the grid's eight can (the Lights page's

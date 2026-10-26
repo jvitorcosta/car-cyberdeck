@@ -111,8 +111,8 @@ made by `tools/gen_gojira_glyphs.py` into `src/fonts/gojira16.h` and drawn by `s
 On the wire (`/presets`), in the logs and in Siri's replies it is `GOJIRA`; the watch shows the
 same glyphs as a bitmap.
 
-**Light blue** is GOJIRA's colour and a preset's only: an icy electric cyan-blue, `#3CD2FF` on the
-deck's screen, LED mix `0,130,255` for now. It is not on the Lights page's 2x4 grid, and song
+**Light blue** is GOJIRA's colour and a preset's only: an icy electric cyan-blue, `#0082FF` on the
+deck's screen, LED mix `0,130,255` (B, the owner's pick on 2026-10-26). It is not on the Lights page's 2x4 grid, and song
 colours never snap to it (music mode keeps to the grid's eight). Voice can set it ("light blue",
 "azul claro", "cyan"), `/state` and `/say` reply `Light blue, 40 percent`, and the watch shows it.
 With light blue on the inside light the terminal takes the blue theme. The main screen's lights
