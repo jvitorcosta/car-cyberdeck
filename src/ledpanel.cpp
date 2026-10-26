@@ -132,7 +132,7 @@ using ledlook::Look;
 // one's own colour and level unless the change sets a colour). INSIDE and OUTSIDE each keep their
 // own look and change only their light. Voice works like the BOTH page.
 enum Target { BOTH, INSIDE, OUTSIDE };
-static Target target = BOTH;  // the look page on screen, or the last one shown while PRESETS is
+static Target target = BOTH;  // the look page on screen (while PRESETS shows: the last one shown)
 // The PRESETS tab is a page of no look: while it shows, the screen is deckmenu's Presets (the same
 // < BACK and tabs, then the presets) and `target` keeps the look page it came from. LIGHTS on the
 // Menu opens the page last shown, this one too.

@@ -202,6 +202,12 @@ void test_neighbour() {
     TEST_ASSERT_EQUAL_INT(L_TILE0 + 3, neighbour(Screen::Lights, L_TILE0 + 3, 1, 0));
     TEST_ASSERT_EQUAL_INT(L_TILE0 + 7, neighbour(Screen::Lights, L_TILE0 + 7, 1, 0));
     TEST_ASSERT_EQUAL_INT(L_PLUS, neighbour(Screen::Lights, L_TILE0 + 7, 0, 1));
+    // down from every bottom tile reaches - or +, and up from them lands back on the tiles
+    TEST_ASSERT_EQUAL_INT(L_MINUS, neighbour(Screen::Lights, L_TILE0 + 4, 0, 1));
+    TEST_ASSERT_EQUAL_INT(L_MINUS, neighbour(Screen::Lights, L_TILE0 + 5, 0, 1));
+    TEST_ASSERT_EQUAL_INT(L_PLUS, neighbour(Screen::Lights, L_TILE0 + 6, 0, 1));
+    TEST_ASSERT_EQUAL_INT(L_TILE0 + 4, neighbour(Screen::Lights, L_MINUS, 0, -1));
+    TEST_ASSERT_EQUAL_INT(L_TILE0 + 7, neighbour(Screen::Lights, L_PLUS, 0, -1));
     TEST_ASSERT_EQUAL_INT(L_TILE0, neighbour(Screen::Lights, L_BACK, 0, 1));
     TEST_ASSERT_EQUAL_INT(L_TILE0, neighbour(Screen::Lights, L_TILE0 + 1, -1, 0));
     // The Menu: left / right along the three items, one step at a time; up, down and past the ends

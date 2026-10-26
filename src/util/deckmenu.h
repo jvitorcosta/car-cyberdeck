@@ -50,8 +50,9 @@ int count(Screen s);
 // or on a display-only rect.
 int hit(Screen s, int x, int y);
 // The nearest button from `from` in direction (dx, dy), by centres; straying sideways costs
-// double, and a button more sideways than ahead doesn't count (right from the last column stays,
-// rather than jump up to a tab). Returns `from` when nothing lies that way.
+// double; left / right, a button more up or down than ahead doesn't count (right from the last
+// column stays, rather than jump up to a tab). Up / down keep no such cone: the middle tiles reach
+// - and + below them. Returns `from` when nothing lies that way.
 int neighbour(Screen s, int from, int dx, int dy);
 
 bool isPreset(Screen s, int id);

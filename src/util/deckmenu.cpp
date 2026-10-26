@@ -84,7 +84,7 @@ int neighbour(Screen s, int from, int dx, int dy) {
         const int along = dx ? vx * dx : vy * dy;
         if (along <= 0) continue;
         const int across = dx ? (vy < 0 ? -vy : vy) : (vx < 0 ? -vx : vx);
-        if (across > along) continue;  // more sideways than that way: not a neighbour
+        if (dx && across > along) continue;  // left / right: more up or down than that way is not a neighbour
         if (along + 2 * across < bestScore) {
             bestScore = along + 2 * across;
             best = id;
