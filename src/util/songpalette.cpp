@@ -174,4 +174,12 @@ Palette build(const Rgb* cover, int coverCount, uint8_t badge, int minuteOfDay) 
     return p;
 }
 
+Palette forLights(const Rgb* cover, int coverCount, uint8_t badge, int minuteOfDay) {
+    Palette p = build(cover, coverCount, badge, -1);   // -1: day, the colours unshifted
+    const Palette timed = build(cover, coverCount, badge, minuteOfDay);
+    p.cap = timed.cap;
+    p.depth = timed.depth;
+    return p;
+}
+
 }  // namespace songpalette

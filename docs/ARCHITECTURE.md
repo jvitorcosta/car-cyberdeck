@@ -117,11 +117,12 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   link the scene is painted back over it.
 - **Music mode, black deck** (`audio/musicsvc`, `util/songpalette`, `util/musicwire`) —
   `GET /music?k=<token>&on=1` (the yellow deck, every 10 s) starts or keeps a small task (core 1,
-  4 KB stack) that sends the song's palette (cover colours from the decoded art, genre badge, time
-  of day; a new song's once its cover is in, or 8 s after the track change without one), on change
-  and every 10 s, over UDP to the requester's port 4210. The yellow deck snaps its main colour to
-  one of the lights' 8 swatches (`util/musiclights`). `on=0` or 30 s without a keep-alive stops it
-  and closes the socket. No mic: the music box and the howl play as usual (`board/s3/mic_es8311`
+  4 KB stack) that sends the song's palette (`songpalette::forLights`: cover colours from the
+  decoded art and the genre badge as by day, only the cap follows the time of day; a new song's
+  once its cover is in, or 8 s after the track change without one), on change and every 10 s,
+  over UDP to the requester's port 4210. The yellow deck snaps its main colour to one of the
+  lights' 8 swatches (`util/musiclights`). `on=0` or 30 s without a keep-alive stops it and closes
+  the socket. No mic: the music box and the howl play as usual (`board/s3/mic_es8311`
   and `util/musicfeat` stay in the tree, unused, for the voice agent). It starts only with
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a

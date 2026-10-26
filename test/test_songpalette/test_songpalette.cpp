@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <initializer_list>
 #include "../../src/util/genre.h"
 #include "../../src/util/rgb565.h"
 #include "../../src/util/songpalette.h"
@@ -149,6 +150,19 @@ void test_whites_turn_amber_at_night() {
     TEST_ASSERT_TRUE(same(day.c[1], (Rgb{255, 214, 160})));
     TEST_ASSERT_TRUE(same(night.c[1], (Rgb{255, 176, 0})));
 }
+// The lights' palette: the day's colours at any hour, the hour's cap and depth.
+void test_for_lights_day_colours_timed_cap() {
+    const Rgb cover[2] = {{0, 0, 255}, {255, 0, 0}};
+    const songpalette::Palette day = songpalette::build(cover, 2, genre::NONE, 720);
+    for (int minute : {-1, 720, 1200, 1380, 300}) {
+        const songpalette::Palette timed = songpalette::build(cover, 2, genre::NONE, minute);
+        const songpalette::Palette l = songpalette::forLights(cover, 2, genre::NONE, minute);
+        for (int i = 0; i < 3; ++i) TEST_ASSERT_TRUE(same(l.c[i], day.c[i]));
+        TEST_ASSERT_EQUAL_UINT8(timed.cap, l.cap);
+        TEST_ASSERT_EQUAL_UINT8(timed.depth, l.depth);
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_cover_red_blue);
@@ -162,5 +176,6 @@ int main(int, char**) {
     RUN_TEST(test_two_cover_colours_fill_third_from_genre);
     RUN_TEST(test_time_of_day);
     RUN_TEST(test_whites_turn_amber_at_night);
+    RUN_TEST(test_for_lights_day_colours_timed_cap);
     return UNITY_END();
 }

@@ -18,4 +18,8 @@ void family(uint8_t badge, Rgb out[3]);
 // 05:00-06:00): warmer (hues 180-270 deg shifted 15 deg toward 300, washed-out colours = amber), cap 70,
 // depth 45. Late (22:00-05:00): same warm shift, cap 45, depth 30.
 Palette build(const Rgb* cover, int coverCount, uint8_t badge, int minuteOfDay);
+// Music mode's palette for the car's lights: build()'s colours as by day (no evening warm shift, no
+// whites turned amber: the yellow deck snaps c[0] to one swatch, which must not change with the
+// clock mid-song) with the time of day's cap and depth.
+Palette forLights(const Rgb* cover, int coverCount, uint8_t badge, int minuteOfDay);
 }

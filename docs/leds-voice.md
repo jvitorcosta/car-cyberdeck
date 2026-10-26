@@ -123,7 +123,8 @@ inside and 100 % outside:
 `MUSIC MODE` on the main screen (a tap, or Xbox A on it) turns it on or off; the tag under it says
 `ON` or `OFF`, and `>MUSIC ON` / `>MUSIC OFF` shows on the prompt line. It is never kept over a
 reboot. There is no mic: the black deck sends the current song's palette (album cover colours,
-nudged toward the genre's family, warmer at night) over WiFi, and the deck does the rest.
+nudged toward the genre's family; the same colours day and night, only the brightness cap follows
+the clock) over WiFi, and the deck does the rest.
 
 - **Colour**: both lights take the song's main colour, snapped to the nearest of the 8 colours
   (by hue; washed-out colours are white), with that colour's tuned LED mix, the same as tapping
@@ -133,7 +134,8 @@ nudged toward the genre's family, warmer at night) over WiFi, and the deck does 
   lights once.
 - **Brightness**: each light at its own level as you left it, times the time-of-day cap of the
   palette (day 100 %, evening 70 %, late night 45 %), but never under 40 %; a light you had at 40 %
-  or less keeps its level.
+  or less keeps its level. At 18:00 and 22:00 a playing song's lights fade to the new level once; the colour
+  stays.
 - **Off lights**: an outside light you left off stays off; the inside light is switched on (that is
   the point of the mode).
 - **Screen**: the terminal theme follows the song's colour, as it follows the inside light. The

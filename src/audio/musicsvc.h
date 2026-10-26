@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <IPAddress.h>
 // Music mode on the black deck ("song colours"): while the yellow deck keeps it alive (net/remote's
-// GET /music), a small task (core 1, 4 KB stack) sends the song's PalPkt (util/songpalette: cover
-// colours, genre badge, time of day) over UDP to the requester's musicwire::PORT (util/musicwire):
+// GET /music), a small task (core 1, 4 KB stack) sends the song's PalPkt (util/songpalette's
+// forLights: cover colours and genre badge as by day, the time of day's cap) over UDP to the requester's musicwire::PORT (util/musicwire):
 // once a new song's cover is in (or COVER_WAIT_MS after the track change without one), on any later
 // change and every 10 s. The socket exists only while it runs. No keep-alive for 30 s stops it. No
 // mic: the music box and the real wolf howl play as usual.

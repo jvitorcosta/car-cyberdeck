@@ -70,7 +70,7 @@ songpalette::Palette buildPalette(uint32_t now, uint32_t* gen, bool* settled) {
     portEXIT_CRITICAL(&s_mux);
     int minute = -1;
     if (!netclock::minuteOfDay(&minute)) minute = -1;
-    return songpalette::build(cover, count, shared::genreNow(*gen), minute);
+    return songpalette::forLights(cover, count, shared::genreNow(*gen), minute);   // colours as by day, the hour's cap
 }
 
 bool samePalette(const songpalette::Palette& a, const songpalette::Palette& b) {

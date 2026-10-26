@@ -2113,8 +2113,8 @@ static void musicTask(void*) {
 // one colour write (both header variants) per step: the inside light MUSIC_FADE_IN steps 500 ms
 // apart (its controller takes ~7 writes a second), the outside one MUSIC_FADE_OUT steps 1 s apart
 // (its takes ~1). The first step goes as soon as that gap since the light's last step allows (a new
-// song right after a change still keeps the rate). A light switched on for it fades up from black;
-// an outside light left off gets nothing. Loop-owned.
+// song right after a change still keeps the rate). A light switched on for it fades up from black,
+// its power-on sent with the first step; an outside light left off gets nothing. Loop-owned.
 struct MusicFade {
     songpalette::Rgb from{}, to{};
     int steps = 0, done = 0;  // done == steps: no fade
@@ -2175,13 +2175,16 @@ static bool musicTarget(int swatch, int cap) {
         f = MusicFade();
         f.at = lastStep;
         if (!t.lit) continue;  // the outside light left off: stays off, nothing sent
-        if (!was.lit && linkUp(controllers[i])) {
-            for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
-        }
         f.from = was.lit ? from : songpalette::Rgb{0, 0, 0};
         f.to = frameOf(t);
         f.steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
         f.every = MUSIC_FADE_MS / static_cast<uint32_t>(f.steps);
+        if (!was.lit && linkUp(controllers[i])) {  // switched on with its first step, never its old colour
+            for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+            f.done = 1;
+            f.at = millis();
+            writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+        }
     }
     musicDriving = true;
     return any;
@@ -2729,6 +2732,7 @@ void loop() {
         if (up && c.fresh) {
             c.fresh = false;
             push(i);
+            musicFade[i].done = musicFade[i].steps;  // it has the target: no step back to a mid-fade colour
         }
         if (up != shown[i]) {
             shown[i] = up;
