@@ -115,17 +115,17 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   phone icon and "REMOTE", 3 px modules on a cream panel, 2-module quiet zone, x 4-127,
   y 22-149), painted once with the screen and again only when the address changes; without a
   link the scene is painted back over it.
-- **Music mode, black deck** (`audio/musicsvc`, `board/s3/mic_es8311`, `util/musicfeat`,
-  `util/songpalette`, `util/musicwire`) — `GET /music?k=<token>&on=1` (the yellow deck, every 10 s)
-  starts or keeps a capture task (core 1, 4 KB stack, static buffers) that reads the mic, sends
-  the features (beat, energy, brightness, present) ~30 times a second and the song's palette (cover
-  colours from the decoded art, genre badge, time of day) on change and every 10 s, over UDP to the
-  requester's port 4210. `on=0` or 30 s without a keep-alive stops it and closes the socket. The
-  music box stays off while it runs, and a phone howl is the synthesised 16 kHz one. Below
-  TLS_NEED + 4 KB in the largest block the mic gives the I2S port back until TLS_NEED + 12 KB is
-  free. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive) and a `[music]` serial line every
-  2 s are the readout (band floors as RMS, energy, beats/min over 15 s, present, palette, mic/udp
-  up, the features' age, the largest free block).
+- **Music mode, black deck** (`audio/musicsvc`, `util/songpalette`, `util/musicwire`) —
+  `GET /music?k=<token>&on=1` (the yellow deck, every 10 s) starts or keeps a small task (core 1,
+  4 KB stack) that sends the song's palette (cover colours from the decoded art, genre badge, time
+  of day; a new song's once its cover is in, or 8 s after the track change without one), on change
+  and every 10 s, over UDP to the requester's port 4210. The yellow deck snaps its main colour to
+  one of the lights' 8 swatches (`util/musiclights`). `on=0` or 30 s without a keep-alive stops it
+  and closes the socket. No mic: the music box and the howl play as usual (`board/s3/mic_es8311`
+  and `util/musicfeat` stay in the tree, unused, for the voice agent). It starts only with
+  TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
+  is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
+  `[music]` serial line tells each palette sent for a new song or a change.
 - **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
   build without Spotify, Pokémon or audio code. A network task polls the S3's
   `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with

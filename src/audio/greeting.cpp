@@ -9,7 +9,6 @@
 #include "../util/intropick.h"
 #include "../util/musicbox.h"
 #include "../core/media.h"
-#include "musicsvc.h"
 
 MEDIA_DECL(data_greeting_pcm);
 MEDIA_DECL(data_finale_pcm);
@@ -252,9 +251,7 @@ bool tunesMuted() {
 }
 
 void playHowl() {
-    // The real wolf is 48 kHz: refused while music mode's mic holds the port at 16 kHz, so the
-    // synthesised one (the clip rate) plays then.
-    if (present(clips().wolf) && !musicsvc::on()) { start(&clips().wolf, "howl"); return; }
+    if (present(clips().wolf)) { start(&clips().wolf, "howl"); return; }
     start(&HOWL, "howl");
 }
 

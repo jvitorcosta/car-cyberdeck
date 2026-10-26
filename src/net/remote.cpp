@@ -148,8 +148,8 @@ static void handlePlay() {
     }
 }
 
-// Music mode (audio/musicsvc): the yellow deck sends on=1 every 10 s while it wants the mic's
-// features over UDP, on=0 to stop at once.
+// Music mode (audio/musicsvc): the yellow deck sends on=1 every 10 s while it wants the song's
+// palette over UDP, on=0 to stop at once.
 static void handleMusic() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
     const String on = s_server->arg("on");
