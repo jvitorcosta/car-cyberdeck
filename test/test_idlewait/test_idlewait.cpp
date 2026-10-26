@@ -5,7 +5,7 @@ void setUp() {}
 void tearDown() {}
 
 // The phone hint: not in the first HINT_AFTER_MS, then HINT_SHOW_MS out of every HINT_EVERY_MS
-// (the tune name shows the rest of the time).
+// (the detail line is empty the rest of the time).
 void test_phone_hint_comes_and_goes() {
     using namespace idlewait;
     TEST_ASSERT_FALSE(hintNow(0));
