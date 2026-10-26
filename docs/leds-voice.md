@@ -275,6 +275,10 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
   shows both levels. START on it applies it, buzzes, says APPLIED for a second and returns to the
   pages; BACK leaves without applying.
 - **Purple** is `AA00FF` on the watch: the deck's `#8C00FF` as the watch's 64 colours show it.
+- **Light blue** (GOJIRA's) is `00AAFF` on the watch, apart from OCEAN's blue and from green, with
+  black text on it. The zone lists keep the deck's eight grid colours (a list opened on a light-blue
+  light starts on Blue); light blue comes from the preset. GOJIRA's bar shows its name as **ゴジラ**,
+  a small bitmap of the deck's Unifont glyphs (the watch's fonts have no kana).
 - **Not connected**: when a light has no link, its page's bottom line says "Not connected" (on
   BOTH: "Inside not connected", "Outside not connected", or "Not connected" for both) in orange in
   place of the "START: change" hint. The page still shows that light's last known colour. The app

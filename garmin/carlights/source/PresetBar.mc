@@ -6,8 +6,9 @@ import Toybox.WatchUi;
 // each filled from its left edge to that light's brightness in its colour (ROSE's inside at 40 %
 // fills 40 % of the left half), the rest dark grey; a light that's off stays grey with "OFF" in
 // it. The name sits centred over the bar and, like Fill.line, every part of it is drawn in the
-// ink that reads on what's under it. The PRESETS page draws a column of these; the Presets list
-// is made of them (PresetItem).
+// ink that reads on what's under it. GOJIRA's name is ゴジラ, a bitmap (the watch's fonts have no
+// kana): white, and black where Fill.ink says so. The PRESETS page draws a column of these; the
+// Presets list is made of them (PresetItem).
 module PresetBar {
     const GREY = 0x555555;  // the unfilled part
     const GAP = 3;          // black between the halves
@@ -18,6 +19,8 @@ module PresetBar {
     // last used, so the title's IN / OUT sit over the halves.
     const LIST_W = 202;
     var barW as Number = LIST_W;
+    const GOJIRA = "GOJIRA";  // the deck's name for the preset shown as ゴジラ
+    var kana as Array<WatchUi.BitmapResource> or Null = null;  // [white, black], loaded on first use
 
     // The bar in [x, x + w) by [y, y + h). p: a Deck preset; text: its name, or "APPLIED", in
     // font (FONT_SMALL; the PRESETS page's shorter bars take FONT_TINY). levels: each light's level
@@ -33,11 +36,16 @@ module PresetBar {
         var cy = y + h / 2;
         var cx = x + w / 2;
         var j = Graphics.TEXT_JUSTIFY_CENTER;
-        label(dc, x, y, w, h, halves, fills, rgbs, cx, cy, font, text, j, Graphics.COLOR_WHITE);
+        var nameW;
+        if (text.equals(GOJIRA)) {
+            nameW = kanaName(dc, x, y, w, h, halves, fills, rgbs, cx, cy);
+        } else {
+            label(dc, x, y, w, h, halves, fills, rgbs, cx, cy, font, text, j, Graphics.COLOR_WHITE);
+            nameW = dc.getTextWidthInPixels(text, font);
+        }
 
         // "OFF" in a light that's off: in the slot near its outer end on the focused row, else in
         // the middle of the grey left free by the name (the half's own middle would touch a long one)
-        var nameW = dc.getTextWidthInPixels(text, font);
         for (var i = 0; i < 2; i++) {
             var lit = p[i * 3 + 3] as Boolean;
             var tx;
@@ -92,6 +100,31 @@ module PresetBar {
             }
         }
         dc.clearClip();
+    }
+
+    // ゴジラ centred on (cx, cy), like label: white over the grey, then over each filled part in
+    // Fill.ink's colour. Returns its width.
+    function kanaName(dc as Dc, x as Number, y as Number, w as Number, h as Number, halves as Array,
+                      fills as Array, rgbs as Array, cx as Number, cy as Number) as Number {
+        if (kana == null) {
+            kana = [WatchUi.loadResource(Rez.Drawables.GojiraWhite) as WatchUi.BitmapResource,
+                    WatchUi.loadResource(Rez.Drawables.GojiraBlack) as WatchUi.BitmapResource];
+        }
+        var bitmaps = kana as Array<WatchUi.BitmapResource>;
+        var bw = bitmaps[0].getWidth();
+        var bx = cx - bw / 2;
+        var by = cy - bitmaps[0].getHeight() / 2;
+        dc.setClip(x, y, w, h);
+        dc.drawBitmap(bx, by, bitmaps[0]);
+        for (var i = 0; i < 2; i++) {
+            var fw = fills[i] as Number;
+            if (fw > 0) {
+                dc.setClip(halves[i] as Number, y, fw, h);
+                dc.drawBitmap(bx, by, bitmaps[Fill.ink(rgbs[i] as Number) == Graphics.COLOR_BLACK ? 1 : 0]);
+            }
+        }
+        dc.clearClip();
+        return bw;
     }
 
     function rgbOf(color as Number) as Number {

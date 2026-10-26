@@ -36,14 +36,15 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
             return presets();
         }
         var menu = new WatchUi.Menu2({:title => ["Both", "Inside", "Outside"][zone] as String});
-        for (var i = 0; i < COLORS.size(); i++) {
+        for (var i = 0; i < N_PICK; i++) {
             var c = COLORS[i] as Array;
             menu.addItem(new WatchUi.IconMenuItem(c[0] as String, null, c[1] as String, new ColorDot(c[2] as Number), {}));
         }
         menu.addItem(new WatchUi.MenuItem("Brightness", null, :level, {}));
         menu.addItem(new WatchUi.MenuItem("Off", null, "off", {}));
-        // start on the zone's current colour (inside's for BOTH)
-        menu.setFocus(_deck.look(zone == BOTH ? INSIDE : zone).color);
+        // start on the zone's current colour (inside's for BOTH; blue for light blue, not in the list)
+        var color = _deck.look(zone == BOTH ? INSIDE : zone).color;
+        menu.setFocus(color < N_PICK ? color : BLUE_INDEX);
         WatchUi.pushView(menu, new ZoneMenuDelegate(_deck, zone), WatchUi.SLIDE_LEFT);
         return true;
     }

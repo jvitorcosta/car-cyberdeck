@@ -8,11 +8,17 @@ const DECK_URL = "http://172.20.10.11";
 
 // [label, word sent to the deck, screen colour]: the deck's own screen colours, but purple, which
 // is #8C00FF on the deck and the lights; the watch's 64 colours show it as AA00FF, so that is set here.
+// Light blue (GOJIRA's, #3CD2FF on the deck) is last and is 00AAFF here: of the watch's colours the
+// nearest that stays apart from OCEAN's blue (0040FF, shown as 0055FF) and from green. The deck's
+// grid has only the first N_PICK; light blue comes from a preset, so the zone lists don't offer it.
 const COLORS = [
     ["Purple", "purple", 0xAA00FF], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
     ["Pink", "pink", 0xFF0090], ["Green", "green", 0x00FF30], ["White", "white", 0xFFFFFF],
     ["Orange", "orange", 0xFF6A00], ["Yellow", "yellow", 0xFFD400],
+    ["Light blue", "light blue", 0x00AAFF],
 ];
+const N_PICK = 8;       // the colours a zone's list offers
+const BLUE_INDEX = 2;   // where a zone's list starts when its light is light blue
 
 // Zones, as the deck names them. BOTH changes both lights; its reply describes both.
 enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
@@ -152,24 +158,42 @@ class Deck {
     }
 
     // "1 ROSE pink 40 pink 100" / "4 PURPURA off 0 purple 100" per line, to presets in the deck's
-    // order, with the deck's number last (what /say needs). An answer with no valid line keeps the old list.
+    // order, with the deck's number last (what /say needs). A colour can be two words ("3 GOJIRA
+    // light blue 40 light blue 100"): each colour is the words up to its level. An answer with no
+    // valid line keeps the old list.
     private function readPresets(text as String) as Void {
         var out = [] as Array;
         var lines = split(text, "\n");
         for (var i = 0; i < lines.size(); i++) {
             var t = split(lines[i], " ");
             var n = t.size() > 0 ? t[0].toNumber() : null;
-            var inPct = t.size() >= 6 ? t[3].toNumber() : null;
-            var outPct = t.size() >= 6 ? t[5].toNumber() : null;
-            if (n == null || inPct == null || outPct == null) {
+            var inSide = t.size() >= 6 ? colourAndLevel(t, 2) : null;
+            var outSide = inSide != null ? colourAndLevel(t, inSide[2] as Number) : null;
+            if (n == null || outSide == null || outSide[2] != t.size()) {
                 continue;  // noise or a trailing blank line
             }
-            out.add([t[1], colorOf(t[2]), inPct, !t[2].equals("off"),
-                     colorOf(t[4]), outPct, !t[4].equals("off"), n]);
+            var inWord = inSide[0] as String;
+            var outWord = outSide[0] as String;
+            out.add([t[1], colorOf(inWord), inSide[1], !inWord.equals("off"),
+                     colorOf(outWord), outSide[1], !outWord.equals("off"), n]);
         }
         if (out.size() > 0) {
             presets = out;
         }
+    }
+
+    // From words t[from..]: [the colour (its words joined by spaces), its level, the index after the
+    // level], or null when no level ends a colour.
+    private function colourAndLevel(t as Array<String>, from as Number) as Array or Null {
+        var word = "";
+        for (var i = from; i < t.size(); i++) {
+            var pct = t[i].toNumber();
+            if (pct != null) {
+                return word.length() > 0 ? [word, pct, i + 1] : null;
+            }
+            word = word.length() > 0 ? word + " " + t[i] : t[i];
+        }
+        return null;
     }
 
     // The COLORS index for a colour word (0 for "off" or anything unknown: the light isn't lit then).

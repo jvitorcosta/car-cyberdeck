@@ -7,11 +7,12 @@ import Toybox.WatchUi;
 // the last state the app saw, saved in Application.Storage on every deck reply: a glance can't make
 // its own web requests, so this is "as of the last time the app ran". START opens the app.
 // Everything here is (:glance): the glance runs with only this code loaded.
-// Purple is AA00FF: the deck's #8C00FF as the watch's 64 colours show it.
+// Purple is AA00FF: the deck's #8C00FF as the watch's 64 colours show it. COLORS' order (Deck.mc).
 (:glance)
 const GLANCE_COLORS = [
     ["Purple", 0xAA00FF], ["Red", 0xFF0000], ["Blue", 0x0040FF], ["Pink", 0xFF0090],
     ["Green", 0x00FF30], ["White", 0xFFFFFF], ["Orange", 0xFF6A00], ["Yellow", 0xFFD400],
+    ["Light blue", 0x00AAFF],
 ];
 
 (:glance)

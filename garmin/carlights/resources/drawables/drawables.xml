@@ -1,3 +1,6 @@
 <drawables>
     <bitmap id="LauncherIcon" filename="launcher_icon.png"/>
+    <!-- ゴジラ, GOJIRA's name on its preset bar (tools/gen_gojira_glyphs.py, from Unifont) -->
+    <bitmap id="GojiraWhite" filename="gojira_white.png" dithering="none"/>
+    <bitmap id="GojiraBlack" filename="gojira_black.png" dithering="none"/>
 </drawables>
