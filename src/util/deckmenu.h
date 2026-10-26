@@ -36,7 +36,7 @@ Rect rect(Screen s, int id);
 // Display only: never a hit, never a neighbour.
 // The Menu's bands, top to bottom, each from the rule above it: the header line, the clock and the
 // weather (its last row HI / LO), the trip, the two lights on one row, the prompt line (the
-// messages, the music readout), then (the items). A tap in a band doesn't snap to an item; the 4
+// messages, music mode's line), then (the items). A tap in a band doesn't snap to an item; the 4
 // rows between the prompt line and the items, and those under them, do.
 constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 72}, TRIP_BAND{0, 94, 320, 41};      // menu
 constexpr Rect LIGHTS_BAND{0, 135, 320, 31}, PROMPT_BAND{0, 166, 320, 22};                        // menu

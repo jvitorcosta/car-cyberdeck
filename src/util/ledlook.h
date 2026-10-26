@@ -19,7 +19,7 @@ struct Swatch {
 // purple, blue, green, white, yellow. Light blue, the last, is a preset's only (GOJIRA, Godzilla's
 // atomic breath): never on the grid, never a song colour (musiclights snaps to the grid's eight);
 // voice ("light blue") and the lights' replies know it. Its LED mix is candidate B of the car test
-// (ledpanel's CYAN_TEST) until the owner picks one.
+// (ledpanel's CYAN_TEST), the owner's pick.
 constexpr int N_SWATCH = 9, N_GRID = 8;
 constexpr int BLUE = 4, YELLOW = 7, LIGHT_BLUE = 8;
 inline constexpr Swatch SWATCHES[N_SWATCH] = {

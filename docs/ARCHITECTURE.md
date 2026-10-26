@@ -118,8 +118,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   once its cover is in, or 8 s after the track change without one), on change and every 10 s,
   over UDP to the requester's port 4210. The yellow deck snaps its main colour to one of the
   lights' 8 swatches (`util/musiclights`). `on=0` or 30 s without a keep-alive stops it and closes
-  the socket. No mic: the howl plays as usual (`board/s3/mic_es8311`
-  and `util/musicfeat` stay in the tree, unused, for the voice agent). It starts only with
+  the socket. No mic: the howl plays as usual (`board/s3/mic_es8311` stays in the tree, unused,
+  for the voice agent). It starts only with
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
   `[music]` serial line tells each palette sent for a new song or a change.

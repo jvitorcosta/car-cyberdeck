@@ -5,7 +5,6 @@
 // Music mode's UDP packet, black deck -> yellow deck (one packet per datagram, latest wins). PURE,
 // host-tested. Byte by byte, little-endian, never a memcpy of a struct:
 //   PalPkt, 18 bytes:  'M' 'P' 1 | songId u32 | c[0] r g b | c[1] r g b | c[2] r g b | cap | depth
-// ('M' 'F' was the mic's feature packet, no longer sent.)
 namespace musicwire {
 constexpr uint16_t PORT = 4210;
 constexpr uint8_t VERSION = 1;
