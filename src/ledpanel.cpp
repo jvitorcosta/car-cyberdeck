@@ -60,7 +60,8 @@
 // -D PURPLE_TEST lets the owner pick, by eye in the car, the LED mix that looks like the deck's purple:
 // tapping the Purple tile while purple is already the page's colour cycles A 140,0,255 / B 170,0,230 /
 // C 200,0,210 (instead of the double-tap off), every purple sent to the lights (tile, PURPURA) uses the
-// current one, and the status line says ">PURPLE A 140,0,255". The tile stays 0x820AD1. Off by default.
+// current one, and the status line says ">PURPLE A 140,0,255". The tile stays 0x8C00FF (A, the owner's
+// pick on 2026-10-26). Off by default.
 // Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
 //   pio run -e ledpanel_ota -t upload
 // A page in the theme holds the screen meanwhile (see "Update over WiFi" below); three crash resets

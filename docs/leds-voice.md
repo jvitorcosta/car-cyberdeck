@@ -248,8 +248,7 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
   ("No presets yet" if the deck didn't answer): the focused bar is taller, outlined in white and
   shows both levels. START on it applies it, buzzes, says APPLIED for a second and returns to the
   pages; BACK leaves without applying.
-- **Purple** is `AA00FF` on the watch, not the deck's `#820AD1`: the watch's 64 colours turn that
-  into a pink next to Pink.
+- **Purple** is `AA00FF` on the watch: the deck's `#8C00FF` as the watch's 64 colours show it.
 - **Not connected**: when a light has no link, its page's bottom line says "Not connected" (on
   BOTH: "Inside not connected", "Outside not connected", or "Not connected" for both) in orange in
   place of the "START: change" hint. The page still shows that light's last known colour. The app

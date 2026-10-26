@@ -7,7 +7,7 @@ import Toybox.WatchUi;
 const DECK_URL = "http://172.20.10.11";
 
 // [label, word sent to the deck, screen colour]: the deck's own screen colours, but purple, which
-// is #820AD1 on the deck and the lights: on the watch's 64 colours that turns pink, so AA00FF here.
+// is #8C00FF on the deck and the lights; the watch's 64 colours show it as AA00FF, so that is set here.
 const COLORS = [
     ["Purple", "purple", 0xAA00FF], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
     ["Pink", "pink", 0xFF0090], ["Green", "green", 0x00FF30], ["White", "white", 0xFFFFFF],
