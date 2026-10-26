@@ -57,13 +57,44 @@ void test_nothing_to_do() {
 }
 
 void test_preset_names() {
-    const char* in[] = {"Rose.", "FIRE!", "calm", "Purpura", "Forest", "ocean."};
+    const char* in[] = {"Rose.", "FIRE!", "Gojira", "Purpura", "Civic", "ocean."};
     for (int i = 0; i < 6; i++) {
         const ledvoice::Command c = parsed(in[i]);
         TEST_ASSERT_EQUAL_INT_MESSAGE(i + 1, c.preset, in[i]);
         TEST_ASSERT_EQUAL_INT(-1, c.level);
         TEST_ASSERT_EQUAL_INT(-1, c.color);
     }
+    TEST_ASSERT_EQUAL_INT(3, parsed("Godzilla!").preset);
+    TEST_ASSERT_EQUAL_INT(3, parsed("set the lights to godzilla").preset);
+}
+// CALM and FOREST are gone (2026-10-26): their words do nothing now.
+void test_old_preset_names_are_gone() {
+    ledvoice::Command c;
+    TEST_ASSERT_FALSE(ledvoice::parse("calm", &c));
+    TEST_ASSERT_FALSE(ledvoice::parse("Forest.", &c));
+}
+// Light blue (GOJIRA's colour, not on the grid): "light blue" (the two words next to each other),
+// "azul claro" / "azul clara", "cyan" / "ciano". "light" or "claro" alone does nothing, "lights
+// blue" and "light, then blue" are plain blue, and only blue turns light.
+void test_light_blue() {
+    TEST_ASSERT_EQUAL_INT(8, parsed("light blue").color);
+    TEST_ASSERT_EQUAL_INT(8, parsed("Light Blue inside").color);
+    TEST_ASSERT_EQUAL_INT(ledvoice::ZONE_INSIDE, parsed("Light Blue inside").zone);
+    TEST_ASSERT_EQUAL_INT(8, parsed("light blew").color);
+    TEST_ASSERT_EQUAL_INT(8, parsed("azul claro").color);
+    TEST_ASSERT_EQUAL_INT(8, parsed("Azul-clara 50%").color);
+    TEST_ASSERT_EQUAL_INT(50, parsed("Azul-clara 50%").level);
+    TEST_ASSERT_EQUAL_INT(8, parsed("cyan").color);
+    TEST_ASSERT_EQUAL_INT(8, parsed("ciano").color);
+    TEST_ASSERT_EQUAL_INT(4, parsed("blue").color);
+    TEST_ASSERT_EQUAL_INT(4, parsed("lights blue").color);
+    TEST_ASSERT_EQUAL_INT(4, parsed("light, then blue").color);
+    TEST_ASSERT_EQUAL_INT(0, parsed("light off").power);
+    TEST_ASSERT_EQUAL_INT(-1, parsed("light off").color);
+    TEST_ASSERT_EQUAL_INT(0, parsed("red claro").color);
+    ledvoice::Command c;
+    TEST_ASSERT_FALSE(ledvoice::parse("light", &c));
+    TEST_ASSERT_FALSE(ledvoice::parse("claro", &c));
 }
 // The plain rule: the parser keeps what else it heard; applying the preset ignores it (Task 3).
 void test_preset_name_with_other_words() {
@@ -86,7 +117,7 @@ void test_preset_number_words() {
 void test_name_disarms_a_favourite_word() {
     // "two" would be slot 2 if the name had not disarmed; the name's own number must win
     TEST_ASSERT_EQUAL_INT(1, parsed("favourite rose two").preset);
-    TEST_ASSERT_EQUAL_INT(3, parsed("favourite calm four").preset);
+    TEST_ASSERT_EQUAL_INT(3, parsed("favourite gojira four").preset);
 }
 
 void test_favourite_digit() {
@@ -158,6 +189,8 @@ int main(int, char**) {
     RUN_TEST(test_siri_homophones);
     RUN_TEST(test_nothing_to_do);
     RUN_TEST(test_preset_names);
+    RUN_TEST(test_old_preset_names_are_gone);
+    RUN_TEST(test_light_blue);
     RUN_TEST(test_preset_name_with_other_words);
     RUN_TEST(test_purple_is_still_the_colour);
     RUN_TEST(test_preset_number_words);

@@ -168,7 +168,8 @@ void test_colour_names_fit() {
     TEST_ASSERT_TRUE(TILE_CHIP_X + TILE_CHIP_W + MARGIN <= TILE_TEXT_X);
     TEST_ASSERT_TRUE(TILE_CHIP_H <= r.h - 2 * MARGIN);
     TEST_ASSERT_TRUE(TILE_CHIP_X >= MARGIN && TILE_CHIP_W == 16 && TILE_CHIP_H == 48);
-    for (const ledlook::Swatch& s : ledlook::SWATCHES) {
+    for (int k = 0; k < ledlook::N_GRID; k++) {  // the grid's colours (light blue is a preset's only)
+        const ledlook::Swatch& s = ledlook::SWATCHES[k];
         char name[16];
         size_t i = 0;
         for (; s.name[i]; i++) name[i] = static_cast<char>(toupper(static_cast<unsigned char>(s.name[i])));
@@ -304,11 +305,13 @@ void test_dash_lights_fit() {
         TEST_ASSERT_TRUE(lightChipX(i) >= lightX(i) + termfont::width(Face::BODY, LIGHT_LABELS[i]) + MARGIN);
         TEST_ASSERT_EQUAL_INT(lightChipX(i) + LIGHT_CHIP_W + LIGHT_GAP, lightTextX(i));
         const int right = i == 0 ? LIGHTS_SPLIT : DASH_RIGHT + MARGIN;  // the rule; the rules' end
-        for (const ledlook::Swatch& sw : ledlook::SWATCHES) {
+        for (int n = 0; n < ledlook::N_SWATCH; n++) {
+            const ledlook::Swatch& sw = ledlook::SWATCHES[n];
             char name[16], s[24];
             int k = 0;
             for (; sw.name[k]; k++) name[k] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[k])));
             name[k] = 0;
+            if (n == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);
             snprintf(s, sizeof(s), "%s 100%%", name);
             fitsLeft(Face::BODY, s, lightTextX(i), right);
         }
@@ -359,7 +362,8 @@ void test_dash_prompt_fits() {
 void test_song_colours_fit() {
     TEST_ASSERT_TRUE(songChipX() >= DASH_X + termfont::advance(Face::SMALL, SONG_PROMPT) + 2);
     TEST_ASSERT_TRUE(songNameX() >= songChipX() + MUSIC_CHIP + 2);
-    for (const ledlook::Swatch& sw : ledlook::SWATCHES) {
+    for (int k = 0; k < ledlook::N_GRID; k++) {  // a song's colour is always one of the grid's
+        const ledlook::Swatch& sw = ledlook::SWATCHES[k];
         char name[16];
         size_t i = 0;
         for (; sw.name[i] && i + 1 < sizeof name; i++) name[i] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[i])));

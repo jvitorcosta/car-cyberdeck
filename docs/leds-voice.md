@@ -10,8 +10,9 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 - Both take an optional `&zone=inside|outside`: then only that light's page changes (or is read),
   and the reply is prefixed: `Inside: Purple, 70 percent`. Without it, both lights (the BOTH page).
 - `GET /presets?k=<REMOTE_TOKEN>` lists the six presets, one line each, joined by newlines:
-  `1 ROSE pink 40 pink 100` (slot, name, inside colour and level, outside colour and level). The
-  list is fixed, so it never changes between calls.
+  `1 ROSE pink 40 pink 100` (slot, name, inside colour and level, outside colour and level). A
+  colour can be two words: `3 GOJIRA light blue 40 light blue 100`. The list is fixed, so it never
+  changes between calls.
 - `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on:
   `inside=on outside=nolink`. Each word is `on`, `off` or `nolink`; a light the deck has no link
   to is always `nolink`, whatever it last showed.
@@ -98,18 +99,32 @@ inside and 100 % outside:
 |---|---|---|---|
 | 1 | ROSE | pink 40 % | pink 100 % |
 | 2 | FIRE | red 40 % | red 100 % |
-| 3 | CALM | white 40 % | white 100 % |
+| 3 | GOJIRA (ゴジラ on screen) | light blue 40 % | light blue 100 % |
 | 4 | PURPURA | purple 40 % | purple 100 % |
-| 5 | FOREST | green 40 % | green 100 % |
+| 5 | CIVIC | green 40 % | green 100 % |
 | 6 | OCEAN | blue 40 % | blue 100 % |
 
+GOJIRA (2026-10-26, in CALM's place; FOREST became CIVIC the same day) is Godzilla's atomic
+breath. Its name shows as **ゴジラ** on the deck's PRESETS tab and in `>ゴジラ APPLIED`: VT323 has no
+kana, so the three glyphs are 16 px bitmaps from GNU Unifont (the black deck's `data/cjk16.bin`),
+made by `tools/gen_gojira_glyphs.py` into `src/fonts/gojira16.h` and drawn by `src/ui/gojiraname`.
+On the wire (`/presets`), in the logs and in Siri's replies it is `GOJIRA`; the watch shows the
+same glyphs as a bitmap.
+
+**Light blue** is GOJIRA's colour and a preset's only: an icy electric cyan-blue, `#3CD2FF` on the
+deck's screen, LED mix `0,130,255` for now. It is not on the Lights page's 2x4 grid, and song
+colours never snap to it (music mode keeps to the grid's eight). Voice can set it ("light blue",
+"azul claro", "cyan"), `/state` and `/say` reply `Light blue, 40 percent`, and the watch shows it.
+With light blue on the inside light the terminal takes the blue theme. The main screen's lights
+row calls it `LT BLUE` (`LIGHT BLUE 100%` doesn't fit a half).
+
 - **Apply**: tap a preset on the Lights page's PRESETS tab, or Xbox A on it. That is all: no hold.
-- **Voice**: "rose", "fire", "calm", "purpura", "forest" or "ocean", or "preset one" ... "preset
-  six" (also
+- **Voice**: "rose", "fire", "gojira" (or "godzilla"), "purpura", "civic" or "ocean", or "preset
+  one" ... "preset six" (also
   `favourite`/`favorite`, and digits: "preset 2"). It applies to both lights, whatever zone was
   asked, and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
   `Rose: inside Pink 40 percent, outside Pink 100 percent`. Siri may hear "purpura" as "purple",
-  which is the colour; say "preset four" for that one.
+  which is the colour; say "preset four" for that one. "calm" and "forest" do nothing any more.
 - **Watch**: the Honda City app has a fourth page, **PRESETS**: each preset as a bar, inside on the
   left and outside on the right, each half filled with its colour to its level (all six, in shorter
   bars than four would get). START there opens
@@ -166,6 +181,15 @@ $env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
 Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ```
 
+### Picking light blue's LED mix in the car (CYAN_TEST)
+
+Light blue's LED mix isn't picked yet. Build with `-D CYAN_TEST` the same way (then clear the
+variable), apply ゴジラ on the PRESETS tab, and tap it again while it's on: each tap moves to the
+next candidate, A `0,90,255`, B `0,130,255`, C `40,160,255` (it starts on B), and sends it to both
+lights. The status line says which (`>CYAN B 0,130,255`), and the light blue chips on screen show
+that candidate's own RGB. Without the flag the lights get B. `-D PURPLE_TEST` did the same for
+purple (the owner picked A, `140,0,255`).
+
 ## Theme: the inside light's colour
 
 While the **INSIDE** light is on and linked, the whole terminal (main screen, Lights, Karaoke; not the
@@ -175,7 +199,8 @@ hue, by day and darker at night (`termpal::rgb(role, night, theme)`, every colou
 green; white is a pale grey-white by day and the usual **amber at night** (no white glare). Problems
 stay red, except on the red, orange and pink themes, where they show in **white** (a dimmer white at
 night) so they stand apart from the text. The colour tiles, chips and preset chips keep their real
-colours. With the inside light off or out of reach the screen goes back to the green / amber. To
+colours. Light blue, which has no theme of its own, takes blue's. With the inside light off or out
+of reach the screen goes back to the green / amber. To
 see a theme without the car's lights, build with `-D THEME_TEST=<0..7>` (red, orange, pink, purple,
 blue, green, white, yellow) the same way as `NIGHT_TEST` above, then clear it.
 
@@ -185,13 +210,14 @@ English or Portuguese, any order, other words ignored (`src/util/ledvoice.h`):
 
 | Kind | Words |
 |---|---|
-| Colours | red/vermelho, orange/laranja, pink/rosa, purple/roxo/lilás, blue/azul, green/verde, white/branco, yellow/amarelo (also Siri's "read" = red, "blew" = blue) |
+| Colours | red/vermelho, orange/laranja, pink/rosa, purple/roxo/lilás, blue/azul, green/verde, white/branco, yellow/amarelo (also Siri's "read" = red, "blew" = blue); light blue: "light blue" (the two words together), azul claro/clara, cyan/ciano |
 | Power | on, off / liga, desliga, acende, apaga |
 | Brighter / dimmer (10 % steps) | brighter, up, more / mais, aumenta, forte; dimmer, down, less / menos, diminui, fraco |
 | Level | a number (`50`, `50%`, rounded to 10), max/máximo, min/mínimo |
-| Preset | rose, fire, calm, purpura, forest, ocean; or preset/favourite/favorite + 1-6, as a word or digit ("preset two", "preset 2") |
+| Preset | rose, fire, gojira/godzilla, purpura, civic, ocean; or preset/favourite/favorite + 1-6, as a word or digit ("preset two", "preset 2") |
 
-A colour also turns the lights on.
+A colour also turns the lights on. "light" only counts right before "blue" ("light off" is just
+off), so "turn the light blue" means light blue, and "lights blue" means blue.
 
 ## Shortcut 1: "Lights" (say anything)
 

@@ -71,6 +71,8 @@ constexpr const char* LIGHT_LABELS[] = {"IN", "OUT"};  // the controllers' order
 constexpr int N_LIGHT_LABELS = sizeof(LIGHT_LABELS) / sizeof(LIGHT_LABELS[0]);
 constexpr int LIGHT_ROW_BASE = 157, LIGHTS_RULE_Y = 166, LIGHTS_SPLIT = 159;
 constexpr int LIGHT_CHIP_W = 14, LIGHT_CHIP_H = 11, LIGHT_GAP = 6;
+// light blue's name on the row: "LIGHT BLUE 100%" doesn't fit OUT's half, "LT BLUE 100%" just does
+constexpr const char* LIGHT_BLUE_SHORT = "LT BLUE";
 // the prompt line (SMALL, on PROMPT_BASE, the caps centred between the lights' rule and the items): a
 // message while one shows, music mode's line, else PROMPT_IDLE; the block cursor (a SMALL cell)
 // after it, by DASH_RIGHT

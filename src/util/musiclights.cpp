@@ -40,7 +40,7 @@ int nearestSwatch(songpalette::Rgb c) {
     hueSat(c.r, c.g, c.b, &hue, &sat);
     const bool white = sat < WHITE_SAT_PCT;
     int best = -1, bestD = 0;
-    for (int i = 0; i < ledlook::N_SWATCH; i++) {
+    for (int i = 0; i < ledlook::N_GRID; i++) {
         const uint32_t s = ledlook::SWATCHES[i].screen;
         int h, st;
         hueSat(static_cast<int>(s >> 16), static_cast<int>((s >> 8) & 0xFF), static_cast<int>(s & 0xFF), &h, &st);

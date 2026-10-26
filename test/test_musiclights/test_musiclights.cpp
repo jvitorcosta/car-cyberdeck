@@ -56,6 +56,21 @@ static songpalette::Rgb hue(int h) {  // 180..299 deg at full S and V, as songpa
     }
 }
 
+// Song colours snap to the Lights grid's eight only, never the preset-only light blue: not its own
+// screen colour, not a sky blue, not any colour at all (a sweep of the RGB cube).
+void test_never_light_blue() {
+    TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch({0x3C, 0xD2, 0xFF}));
+    TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch({0, 130, 255}));
+    for (int r = 0; r < 256; r += 15) {
+        for (int g = 0; g < 256; g += 15) {
+            for (int b = 0; b < 256; b += 15) {
+                const int sw = nearestSwatch({static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b)});
+                TEST_ASSERT_TRUE(sw >= 0 && sw < ledlook::N_GRID);
+            }
+        }
+    }
+}
+
 void test_night_keeps_a_blue_cover_blue() {
     const songpalette::Rgb cover[2] = {hue(240), hue(200)};
     for (int minute : {720, 1200, 1380}) {  // day, evening, late
@@ -133,6 +148,7 @@ int main(int, char**) {
     RUN_TEST(test_pure_colours_snap_to_their_swatch);
     RUN_TEST(test_whites_and_washed_out_colours_are_white);
     RUN_TEST(test_cover_colours_snap_by_hue);
+    RUN_TEST(test_never_light_blue);
     RUN_TEST(test_night_keeps_a_blue_cover_blue);
     RUN_TEST(test_night_keeps_white_white);
     RUN_TEST(test_level_is_the_owners_under_the_cap_with_a_floor);

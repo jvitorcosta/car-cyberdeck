@@ -3,12 +3,13 @@
 #include <cstdio>
 
 namespace ledpresets {
+static constexpr char GOJIRA_SHOWN[] = {GOJIRA_MARK, 0};
 const Preset PRESETS[N] = {
     {"ROSE", "rose", {2, 40, true}, {2, 100, true}},
     {"FIRE", "fire", {0, 40, true}, {0, 100, true}},
-    {"CALM", "calm", {6, 40, true}, {6, 100, true}},
+    {"GOJIRA", "gojira", {ledlook::LIGHT_BLUE, 40, true}, {ledlook::LIGHT_BLUE, 100, true}, GOJIRA_SHOWN},
     {"PURPURA", "purpura", {3, 40, true}, {3, 100, true}},
-    {"FOREST", "forest", {5, 40, true}, {5, 100, true}},
+    {"CIVIC", "civic", {5, 40, true}, {5, 100, true}},
     {"OCEAN", "ocean", {4, 40, true}, {4, 100, true}},
 };
 

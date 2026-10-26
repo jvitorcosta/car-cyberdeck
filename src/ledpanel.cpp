@@ -20,7 +20,10 @@
 //           (tap one to set it and turn on, double-tap the lit one to turn the lights off) and
 //           [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two lights
 //           differ]  [+]; on PRESETS the six presets, two rows of three, each its name over its
-//           inside and outside chips (tap: apply, ">ROSE APPLIED"; the tab stays)
+//           inside and outside chips (tap: apply, ">ROSE APPLIED"; the tab stays). GOJIRA's name is
+//           ゴジラ on screen (">ゴジラ APPLIED"): three Unifont glyphs (ui/gojiraname), as VT323 has
+//           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, light blue,
+//           is a preset's only: not on the grid, never a song colour; the theme takes blue's for it
 //   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
 //           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
 //           >STANDBY / >NO SIGNAL / >WRONG KEY big in place of the lyrics). Read from the black
@@ -46,7 +49,7 @@
 // (white turns to the amber at night; problems show in white on the red, orange and pink themes).
 // The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
-// UDP (util/musicwire); both lights then take its main colour snapped to one of the 8 swatches
+// UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
 // (util/musiclights), steady, fading to the next song's over ~3 s, each at the owner's level under the
 // palette's time-of-day cap (never under 40 %). An outside light left off stays off; an inside one
 // off is switched on. The theme follows the swatch. The prompt line shows ">SONG COLOURS", a chip and
@@ -62,6 +65,11 @@
 // C 200,0,210 (instead of the double-tap off), every purple sent to the lights (tile, PURPURA) uses the
 // current one, and the status line says ">PURPLE A 140,0,255". The tile stays 0x8C00FF (A, the owner's
 // pick on 2026-10-26). Off by default.
+// -D CYAN_TEST does the same for light blue (GOJIRA's colour; its screen colour is #3CD2FF): tapping
+// the ゴジラ preset while it is applied cycles A 0,90,255 / B 0,130,255 / C 40,160,255 (from B),
+// every light blue sent to the lights uses the current one, the status line says ">CYAN A 0,90,255",
+// and the screen's light blue chips show the candidate's own RGB. Without it the lights get B. Off
+// by default.
 // Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
 //   pio run -e ledpanel_ota -t upload
 // A page in the theme holds the screen meanwhile (see "Update over WiFi" below); three crash resets
@@ -86,6 +94,7 @@
 #include <lwip/sockets.h>
 #include "pins.h"
 #include "ui/backlight.h"
+#include "ui/gojiraname.h"
 #include "ui/termfont.h"
 #include "ui/termlayout.h"
 #include "companion/touch.h"
@@ -266,18 +275,37 @@ static void write(Controller& c, const elkcmd::Frame& f) {
 }
 
 // What the strip gets for swatch `sw`: the SWATCHES values, but under PURPLE_TEST the purple's
-// candidate mix.
+// candidate mix, under CYAN_TEST light blue's.
 struct Rgb { uint8_t r, g, b; };
 #ifdef PURPLE_TEST
 static constexpr int PURPLE = 3;  // ledlook's order
 static constexpr Rgb PURPLE_MIX[] = {{140, 0, 255}, {170, 0, 230}, {200, 0, 210}};
 static int purpleMix = 0;  // index into PURPLE_MIX; loop-owned
 #endif
+#ifdef CYAN_TEST
+static constexpr Rgb CYAN_MIX[] = {{0, 90, 255}, {0, 130, 255}, {40, 160, 255}};
+static int cyanMix = 1;  // index into CYAN_MIX, B first; loop-owned
+#endif
 static Rgb ledRgb(int sw) {
 #ifdef PURPLE_TEST
     if (sw == PURPLE) return PURPLE_MIX[purpleMix];
 #endif
+#ifdef CYAN_TEST
+    if (sw == ledlook::LIGHT_BLUE) return CYAN_MIX[cyanMix];
+#endif
     return {SWATCHES[sw].r, SWATCHES[sw].g, SWATCHES[sw].b};
+}
+
+// What a chip of swatch `sw` shows on screen: its screen colour, but under CYAN_TEST light blue's
+// candidate as the lights get it, so the owner sees which one is on.
+static uint32_t screenOf(int sw) {
+#ifdef CYAN_TEST
+    if (sw == ledlook::LIGHT_BLUE) {
+        const Rgb m = CYAN_MIX[cyanMix];
+        return (static_cast<uint32_t>(m.r) << 16) | (static_cast<uint32_t>(m.g) << 8) | m.b;
+    }
+#endif
+    return SWATCHES[sw].screen;
 }
 
 // Music mode's looks (see "Music mode" below): from the first song palette after the mode goes on
@@ -400,9 +428,9 @@ static void linkTask(void*) {
 
 // ---- Buttons (320x240 landscape, laid out by util/deckmenu) ----
 
-// The grid is all colours; there is no power tile: double-tapping the lit colour turns the lights
-// off, and tapping any colour turns them back on.
-static_assert(N_SWATCH == 8 && L_MINUS - L_TILE0 == N_SWATCH, "the grid is 2x4 colours");
+// The grid is all colours (ledlook's first N_GRID; light blue is a preset's only); there is no power
+// tile: double-tapping the lit colour turns the lights off, and tapping any colour turns them back on.
+static_assert(ledlook::N_GRID == 8 && L_MINUS - L_TILE0 == ledlook::N_GRID, "the grid is 2x4 colours");
 static_assert(deckmenu::P_N - P_PRE0 == ledpresets::N, "a button per preset");
 static_assert(static_cast<int>(deckmenu::TAB_BOTH) == BOTH && static_cast<int>(deckmenu::TAB_INSIDE) == INSIDE &&
                   static_cast<int>(deckmenu::TAB_OUTSIDE) == OUTSIDE,
@@ -417,12 +445,12 @@ static bool padUp = false;  // an Xbox controller is connected and reporting
 static void drawFocus(int id, bool on);
 
 // Where the focus starts on each screen: the first item, the first preset, or the colour the page
-// shows.
+// shows (blue for light blue, which has no tile).
 static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Karaoke) return K_BACK;
     if (screen == Screen::Presets) return P_PRE0;
-    return L_TILE0 + cur().swatch;
+    return L_TILE0 + ledlook::gridSwatch(cur().swatch);
 }
 
 // ---- Drawing ----
@@ -467,8 +495,11 @@ static_assert(std::is_same<std::remove_const<std::remove_pointer<decltype(termfo
 // right part places x as usual, but its top / middle / bottom part goes by the capitals, not by the
 // font's tallest glyph as TFT_eSPI's free-font datums do (that set '(' and '[' high and every label
 // low): T puts the caps' top row at y, M centres the caps on y, B puts the baseline (the row under
-// the caps) at y. setFreeFont scans the font, so it runs only when the face changes.
+// the caps) at y. setFreeFont scans the font, so it runs only when the face changes. GOJIRA's mark
+// in s is drawn as ゴジラ (textMarked).
+static int textMarked(const char* s, int x, int y, Face f, uint8_t datum);
 static int text(const char* s, int x, int y, Face f, uint8_t datum) {
+    if (strchr(s, gojiraname::MARK)) return textMarked(s, x, y, f, datum);
     static int shown = -1;
     if (static_cast<int>(f) != shown) {
         shown = static_cast<int>(f);
@@ -478,6 +509,40 @@ static int text(const char* s, int x, int y, Face f, uint8_t datum) {
     const int base = v == 0 ? y + cap : v == 1 ? y + cap / 2 : y;
     tft.setTextDatum(L_BASELINE + datum % 3);
     return tft.drawString(s, x, base);
+}
+
+// text() for s holding GOJIRA's mark: the whole placed by gojiraname's width, the text around the
+// mark drawn as usual (on the baseline, left datum), the mark as the three glyphs in the text colour
+// sitting on the baseline (gojiraname::rows / top). Returns the pen's travel.
+static int textMarked(const char* s, int x, int y, Face f, uint8_t datum) {
+    const int w = gojiraname::width(f, s), h = datum % 3;
+    const int x0 = h == 0 ? x : h == 1 ? x - w / 2 : x - w;
+    const int cap = termfont::capHeight(f), v = datum / 3;
+    const int base = v == 0 ? y + cap : v == 1 ? y + cap / 2 : y;
+    const gojiraname::Rows rows = gojiraname::rows(f);
+    const int top = gojiraname::top(f, base);
+    const uint16_t ink = static_cast<uint16_t>(tft.textcolor);
+    int pen = x0;
+    char run[64];
+    size_t n = 0;
+    for (const char* p = s;; p++) {
+        if (*p && *p != gojiraname::MARK) {
+            if (n + 1 < sizeof(run)) run[n++] = *p;
+            continue;
+        }
+        if (n > 0) {
+            run[n] = 0;
+            pen += text(run, pen, base, f, BL_DATUM);
+            n = 0;
+        }
+        if (!*p) break;
+        for (int i = 0; i < gojiraname::N_GLYPHS; i++) {
+            tft.drawBitmap(pen + i * gojiraname::GLYPH_W, top, gojiraname::glyph(i) + 2 * rows.first, gojiraname::GLYPH_W,
+                           rows.last - rows.first + 1, ink);
+        }
+        pen += gojiraname::WIDTH;
+    }
+    return pen - x0;
 }
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
@@ -561,7 +626,7 @@ static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, b
 // A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
 // off. On a bar, a 1 px BG edge keeps it apart from the fill (pink on yellow, white on green).
 static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
-    if (l.lit) tft.fillRect(x, y, w, h, tint(SWATCHES[l.swatch].screen));
+    if (l.lit) tft.fillRect(x, y, w, h, tint(screenOf(l.swatch)));
     else tft.drawRect(x, y, w, h, pal(termpal::DIM));
     if (onBar) tft.drawRect(x - 1, y - 1, w + 2, h + 2, pal(termpal::BG));
 }
@@ -574,7 +639,7 @@ static void drawPresetSlot(const Rect& r, int slot, bool pressed) {
     const Look* sides[] = {&p.in, &p.out};
     tft.setTextColor(ink);
     const int cx = r.x + r.w / 2, x0 = cx - (2 * PRESET_CHIP + PRESET_CHIP_GAP) / 2;
-    text(p.name, cx, r.y + PRESET_NAME_Y, Face::TITLE, TC_DATUM);
+    text(ledpresets::shown(p), cx, r.y + PRESET_NAME_Y, Face::TITLE, TC_DATUM);  // ゴジラ for GOJIRA
     for (int k = 0; k < 2; k++) {
         drawChip(x0 + k * (PRESET_CHIP + PRESET_CHIP_GAP), r.y + PRESET_CHIP_Y, PRESET_CHIP, PRESET_CHIP, *sides[k], pressed);
     }
@@ -858,7 +923,8 @@ static void drawLightsBand() {
             continue;
         }
         char name[12], s[32];
-        upper(SWATCHES[l.swatch].name, name, sizeof(name));
+        if (l.swatch == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);  // the full name won't fit
+        else upper(SWATCHES[l.swatch].name, name, sizeof(name));
         snprintf(s, sizeof(s), "%s %u%%", name, static_cast<unsigned>(l.pct));
         tft.setTextColor(pal(termpal::TEXT));
         text(s, lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
@@ -1413,6 +1479,21 @@ static void purpleSay() {
 }
 #endif
 
+#ifdef CYAN_TEST
+// ">CYAN B 0,130,255" on the status line / prompt line.
+static void cyanSay() {
+    const Rgb m = CYAN_MIX[cyanMix];
+    char s[sizeof(message)];
+    snprintf(s, sizeof(s), ">CYAN %c %u,%u,%u", 'A' + cyanMix, m.r, m.g, m.b);
+    setMessage(s);
+    drawMessage();
+}
+
+static bool usesLightBlue(const ledpresets::Preset& p) {
+    return (p.in.lit && p.in.swatch == ledlook::LIGHT_BLUE) || (p.out.lit && p.out.swatch == ledlook::LIGHT_BLUE);
+}
+#endif
+
 // Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
 // shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
@@ -1426,13 +1507,16 @@ static void applyPreset(int slot0) {
     for (int i = 0; i < N_CTRL; i++) push(i);
     save();
     char m[sizeof(message)];
-    lightstatus::applied(p.name, m, sizeof(m));
+    lightstatus::applied(ledpresets::shown(p), m, sizeof(m));  // ">ゴジラ APPLIED" on screen
     setMessage(m);
     updateTheme();
     drawLooks();
     drawMessage();  // Lights' STATUS line, the Menu's prompt line
 #ifdef PURPLE_TEST
     if ((p.in.lit && p.in.swatch == PURPLE) || (p.out.lit && p.out.swatch == PURPLE)) purpleSay();
+#endif
+#ifdef CYAN_TEST
+    if (usesLightBlue(p)) cyanSay();
 #endif
 }
 
@@ -1509,8 +1593,14 @@ static void pressLights(int id) {
         return;
     }
     if (deckmenu::isPreset(screen, id)) {
-        applyPreset(deckmenu::presetSlot(screen, id));
-        return;  // applyPreset saved and drew
+        const int slot = deckmenu::presetSlot(screen, id);
+#ifdef CYAN_TEST
+        // the ゴジラ preset again while it is on the lights: the next candidate, never a no-op
+        const ledpresets::Preset& p = ledpresets::PRESETS[slot];
+        if (usesLightBlue(p) && !musicDriving && looks[INSIDE] == p.in && looks[OUTSIDE] == p.out) cyanMix = (cyanMix + 1) % 3;
+#endif
+        applyPreset(slot);
+        return;  // applyPreset saved and drew; the release redraws the button (CYAN_TEST: its new chips)
     }
     if (screen != Screen::Lights) return;
     if (id < L_MINUS) {
@@ -2476,10 +2566,10 @@ static void handleState() {
 // snapshot needed.
 static void handlePresets() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
-    char body[ledpresets::N * 32] = "";
+    char body[ledpresets::N * 48] = "";
     size_t len = 0;
     for (int i = 0; i < ledpresets::N && len < sizeof(body); i++) {
-        char l[32];
+        char l[48];  // "3 GOJIRA light blue 40 light blue 100" is 37
         ledpresets::wireLine(i + 1, l, sizeof(l));
         const int k = snprintf(body + len, sizeof(body) - len, "%s%s", i ? "\n" : "", l);
         if (k > 0) len += static_cast<size_t>(k);
@@ -2589,7 +2679,7 @@ static int wantTheme() {
     return THEME_TEST;
 #else
     const Look l = shownLook(0);  // in music mode the song's swatch
-    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? l.swatch : -1;
+    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? ledlook::gridSwatch(l.swatch) : -1;  // light blue: blue's
 #endif
 }
 
