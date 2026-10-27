@@ -34,8 +34,8 @@ void drawNoteFrame(TFT_eSPI& t, int frame);
 void resetLyricArea();
 // Full status screen ("No WiFi...", "Spotify busy...", "Waiting for a song..."): the cause's
 // Pokemon on its platform (ui/statusscene) and a dialogue box with `msg` and an optional smaller
-// `detail` line. qr: the phone-remote link's card at the top left (ui/qrcard; "Waiting for a
-// song..." on the S3), or nullptr.
+// `detail` line, the build's FW_LABEL small at the top right (util/version). qr: the phone-remote
+// link's card at the top left (ui/qrcard; "Waiting for a song..." on the S3), or nullptr.
 void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statusscene::Look& look,
                  uint32_t animMs, const qrcard::Qr* qr = nullptr);
 // The phone link's card when its code changes: the battle box with the code, or (qr nullptr)

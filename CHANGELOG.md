@@ -6,6 +6,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
+- Both decks show which firmware runs: the yellow deck types `FW <version>` under its boot lines,
+  logs `[boot] ledpanel v<version>` and adds ` fw=<version>` to `/status`; the black deck shows it
+  at the top right of its status screens and as `"fw"` in `/state`.
 - Firmware updates over WiFi on the S3: `pio run -e s3_ota -t upload` from a PC on the deck's
   network (password `OTA_PASSWORD`; off without it). The deck shows the progress in a battle
   box, pauses Spotify polls meanwhile, and goes back to the previous firmware when the new one

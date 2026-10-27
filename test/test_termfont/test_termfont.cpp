@@ -13,6 +13,7 @@
 #include "../../src/util/ledpresets.h"
 #include "../../src/util/otapage.h"
 #include "../../src/util/tripmeter.h"
+#include "../../src/util/version.h"
 #include "../../src/util/weather.h"
 
 using termfont::Face;
@@ -195,6 +196,9 @@ void test_chrome_fits() {
 // The boot's typed lines: on screen, none over the next.
 void test_boot_lines_fit() {
     for (const char* s : BOOT_LINES) fitsLeft(Face::SMALL, s, BOOT_X, 320);
+    // the build's line under them: this one, and a long dev build's
+    fitsLeft(Face::SMALL, FW_LABEL, BOOT_X, 320);
+    fitsLeft(Face::SMALL, "FW 10.10.10+1234.gabcdef0.dirty", BOOT_X, 320);
     const int cap = termfont::capHeight(Face::SMALL), up = termfont::ascent(Face::SMALL);
     TEST_ASSERT_TRUE(BOOT_Y0 - (up - cap) >= 0);
     TEST_ASSERT_TRUE(BOOT_DY >= cap + termfont::descent(Face::SMALL));  // descenders clear of the next caps

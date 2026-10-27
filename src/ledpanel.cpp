@@ -123,6 +123,7 @@
 #include "util/stateparse.h"
 #include "util/tapguard.h"
 #include "util/termpal.h"
+#include "util/version.h"
 #include "util/touchcal.h"
 #include "util/tripclock.h"
 #include "util/tripmeter.h"
@@ -997,28 +998,31 @@ static void drawDash() {
 }
 
 // The terminal's boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
-// type out one character every TYPE_MS behind a block cursor (a SMALL cell; 85 characters, ~0.5 s),
-// stay BOOT_HOLD_MS to be read, then drawAll() puts up the dashboard. It runs in setup(), so nothing
-// else draws meanwhile: every other drawing path runs from loop(), and the link and voice tasks start
-// after it (a voice job or a link change that comes later waits in the queue / the link flags for
-// loop() as always).
+// and the build's FW_LABEL (in DIM: "FW 1.1.0+226.g41b2b7a") type out one character every TYPE_MS
+// behind a block cursor (a SMALL cell; ~110 characters, ~0.7 s), stay BOOT_HOLD_MS to be read, then
+// drawAll() puts up the dashboard. It runs in setup(), so nothing else draws meanwhile: every other
+// drawing path runs from loop(), and the link and voice tasks start after it (a voice job or a link
+// change that comes later waits in the queue / the link flags for loop() as always).
 static constexpr uint32_t TYPE_MS = 6, BOOT_HOLD_MS = 400;
+static void typeLine(const char* s, int row, termpal::Role ink) {
+    const int w = termfont::cell(Face::SMALL), h = termfont::capHeight(Face::SMALL);
+    tft.setTextColor(pal(ink));
+    const int y = BOOT_Y0 + row * BOOT_DY;  // the caps' top row
+    int x = BOOT_X;
+    for (const char* p = s; *p; p++) {
+        const char ch[2] = {*p, 0};
+        clearBg(x, y, w, h);  // the cursor
+        x += text(ch, x, y, Face::SMALL, TL_DATUM);
+        tft.fillRect(x, y, w, h, pal(termpal::TEXT));
+        delay(TYPE_MS);
+    }
+    clearBg(x, y, w, h);
+}
+
 static void typeBoot() {
     clearBg(0, 0, tft.width(), tft.height());
-    const int w = termfont::cell(Face::SMALL), h = termfont::capHeight(Face::SMALL);
-    for (int i = 0; i < N_BOOT; i++) {
-        tft.setTextColor(pal(i == N_BOOT - 1 ? termpal::MID : termpal::TEXT));
-        const int y = BOOT_Y0 + i * BOOT_DY;  // the caps' top row
-        int x = BOOT_X;
-        for (const char* p = BOOT_LINES[i]; *p; p++) {
-            const char ch[2] = {*p, 0};
-            clearBg(x, y, w, h);  // the cursor
-            x += text(ch, x, y, Face::SMALL, TL_DATUM);
-            tft.fillRect(x, y, w, h, pal(termpal::TEXT));
-            delay(TYPE_MS);
-        }
-        clearBg(x, y, w, h);
-    }
+    for (int i = 0; i < N_BOOT; i++) typeLine(BOOT_LINES[i], i, i == N_BOOT - 1 ? termpal::MID : termpal::TEXT);
+    typeLine(FW_LABEL, N_BOOT, termpal::DIM);
     delay(BOOT_HOLD_MS);
 }
 
@@ -2596,9 +2600,9 @@ static void handlePresets() {
 static void handleStatus() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
     const Published p = snapshot();
-    char line[48];
+    char line[96];
     lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
-                       line, sizeof(line));
+                       FW_VERSION, line, sizeof(line));
     server->send(200, "text/plain", line);
 }
 
@@ -2717,6 +2721,7 @@ static bool updateTheme() {
 
 void setup() {
     Serial.begin(115200);
+    Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
     ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
     tft.init();
     backlight::begin();  // PWM, at the day level

@@ -69,6 +69,7 @@ size_t write(const State& s, char* out, size_t n) {
     o.key("next");        o.str(s.next);
     o.key("lineStartMs"); o.num((long)s.lineStartMs);
     o.key("nextStartMs"); o.num((long)s.nextStartMs);
+    if (s.fw && s.fw[0]) { o.key("fw"); o.str(s.fw); }
     o.put('}');
     if (o.full) { out[0] = '\0'; return 0; }
     out[o.len] = '\0';

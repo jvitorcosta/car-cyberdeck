@@ -49,8 +49,11 @@ void notConnected(bool inMissed, bool outMissed, char* line, size_t n) {
     snprintf(line + len, n - len, ", %s not connected", which);
 }
 
-void reply(State in, State out, char* buf, size_t n) {
-    snprintf(buf, n, "inside=%s outside=%s", word(in), word(out));
+void reply(State in, State out, char* buf, size_t n) { reply(in, out, nullptr, buf, n); }
+
+void reply(State in, State out, const char* fw, char* buf, size_t n) {
+    if (fw && fw[0]) snprintf(buf, n, "inside=%s outside=%s fw=%s", word(in), word(out), fw);
+    else snprintf(buf, n, "inside=%s outside=%s", word(in), word(out));
 }
 
 }  // namespace lightstatus

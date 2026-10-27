@@ -16,9 +16,10 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
   `1 ROSE pink 40 pink 100` (slot, name, inside colour and level, outside colour and level). A
   colour can be two words: `3 GOJIRA light blue 40 light blue 100`. The list is fixed, so it never
   changes between calls.
-- `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on:
-  `inside=on outside=nolink`. Each word is `on`, `off` or `nolink`; a light the deck has no link
-  to is always `nolink`, whatever it last showed.
+- `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on, then the firmware's
+  version: `inside=on outside=nolink fw=1.1.0+226.g41b2b7a`. Each light's word is `on`, `off` or
+  `nolink`; a light the deck has no link to is always `nolink`, whatever it last showed. The same
+  `FW` version types out under the boot's welcome lines.
 - All of them reply in plain text (`text/plain`). A wrong key gets 403 "Wrong key" (on all of them); a phrase with
   nothing to do gets "Sorry, I didn't get a colour or a command".
 - Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page

@@ -46,6 +46,18 @@ void test_reply() {
     TEST_ASSERT_EQUAL_STRING("inside=on outside=nolink", buf);
 }
 
+// The build's version after the lights' words; the watch reads "inside=" and "outside=" up to the
+// next space, so it still gets "nolink".
+void test_reply_with_the_firmware_version() {
+    char buf[96];
+    lightstatus::reply(State::Off, State::NoLink, "1.1.0+226.g41b2b7a", buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("inside=off outside=nolink fw=1.1.0+226.g41b2b7a", buf);
+    lightstatus::reply(State::On, State::On, "", buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("inside=on outside=on", buf);
+    lightstatus::reply(State::On, State::On, nullptr, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("inside=on outside=on", buf);
+}
+
 void test_messages() {
     char buf[32];
     lightstatus::applied("ROSE", buf, sizeof buf);
@@ -98,6 +110,7 @@ int main(int, char**) {
     RUN_TEST(test_link);
     RUN_TEST(test_link_cut_to_buffer);
     RUN_TEST(test_reply);
+    RUN_TEST(test_reply_with_the_firmware_version);
     RUN_TEST(test_messages);
     RUN_TEST(test_not_connected_note);
     RUN_TEST(test_is_alert);

@@ -12,6 +12,7 @@
 #include "../core/mem.h"
 #include "../core/shared.h"
 #include "../util/statejson.h"
+#include "../util/version.h"
 #include "../util/tripclock.h"
 #include "../util/interp.h"
 #include <WiFi.h>
@@ -111,6 +112,7 @@ static void handleState() {
     s.playing = st.isPlaying; s.tripS = s_trip.seconds(now);
     s.lyricKind = statejson::lyricKindName(lp.status);
     s.line = lp.line; s.next = lp.next; s.lineStartMs = lp.lineStartMs; s.nextStartMs = lp.nextStartMs;
+    s.fw = FW_VERSION;
     if (!statejson::write(s, out, statejson::MAX_JSON)) { s_server->send(500, "text/plain", "state too big"); return; }
     s_server->sendHeader("Cache-Control", "no-store");
     s_server->send(200, "application/json", out);

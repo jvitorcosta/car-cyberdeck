@@ -104,7 +104,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. The
   howl is the real recording in `data/howl.pcm` (`tools/gen_howl.py`, 48 kHz) when the build has
   one; otherwise it is synthesised while it plays (`audio/greeting`).
-  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). The "Waiting for a
+  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`) and ends with the firmware's
+  version (`"fw"`, util/version), which the status screens also show at the top right. The "Waiting for a
   song..." screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` builds
   `http://<ip>/?k=<token>` from the current address and picks a version ≤ 3), checked when the
   screen appears and every 5 s. It sits on a Gen-3 battle box at the top left (`ui/qrcard`:
