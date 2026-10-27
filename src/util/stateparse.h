@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-// The new deck's GET /state, as the companion screen needs it. PURE, host-tested.
+// The new deck's GET /state, as the yellow deck needs it. PURE, host-tested.
 namespace stateparse {
 struct Deck {
     uint32_t trackGen, progressMs, durationMs, tripS, lineStartMs, nextStartMs;

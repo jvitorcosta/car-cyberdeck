@@ -1,11 +1,11 @@
 #pragma once
 #include <cstdint>
-// How often the companion asks the new deck for /state. On the KARAOKE screen: every second, every
+// How often the yellow deck asks the black deck for /state. On the KARAOKE screen: every second, every
 // 5 s after ten failures in a row (the deck is off or out of range), back to every second on the
 // first answer. On the Menu: every 5 s, every 30 s after those ten failures. Off the hotspot each
 // failed poll would also look the deck's name up (mDNS, up to 1.5 s), so while it keeps missing the
 // lookups are 30 s apart; the first one after an answer, or after the KARAOKE screen opens (a fresh
-// Pace), is at once. PURE, host-tested (test_lyricclock).
+// Pace), is at once. PURE, host-tested (test_pollpace).
 namespace pollpace {
 constexpr uint32_t FAST_MS = 1000, SLOW_MS = 5000;
 constexpr uint32_t MENU_MS = 5000, MENU_SLOW_MS = 30000;

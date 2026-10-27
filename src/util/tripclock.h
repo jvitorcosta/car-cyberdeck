@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
-// Trip time: seconds since power-on (the car started) or the last reset from the companion's
-// Trip button. millis() wrap-safe. PURE, host-tested.
+// Trip time: seconds since power-on (the car started) or the last reset (POST /trip/reset,
+// once the companion's Trip button). millis() wrap-safe. PURE, host-tested.
 namespace tripclock {
 class Clock {
 public:

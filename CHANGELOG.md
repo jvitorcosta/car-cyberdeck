@@ -5,6 +5,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Removed
+- The companion screen build (`cyd_companion`: the CYD's lyrics and avatar home screen, parked
+  since the CYD became the yellow deck) with its avatar tools; it is in git history. The config
+  option `COMPANION_DECK` is now `BLACK_DECK_ADDR` (the old name still works).
+
 ### Added
 - Both decks show which firmware runs: the yellow deck types `FW <version>` under its boot lines,
   logs `[boot] ledpanel v<version>` and adds ` fw=<version>` to `/status`; the black deck shows it

@@ -23,16 +23,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # each board's firmware and its hardware check; part = app partition size (platformio.ini)
-          - board: cyd_companion
-            envs: -e cyd_companion -e hwcheck
-            part: "0x300000"   # huge_app.csv
+          # each deck's firmware and its board's hardware check; part = app partition size
+          # (platformio.ini). The flash check reads .pio/build/<board>/firmware.bin.
           - board: s3
             envs: -e s3 -e hwcheck_s3
             part: "0x300000"   # partitions_s3.csv (one OTA slot)
-          # the yellow deck's firmware (the LED panel); it took the CYD from cyd_companion
+          # the yellow deck (the LED panel on the CYD) and the CYD's hardware check
           - board: ledpanel
-            envs: -e ledpanel
+            envs: -e ledpanel -e hwcheck
             part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
     steps:
       - uses: actions/checkout@v4

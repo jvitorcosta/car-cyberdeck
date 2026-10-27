@@ -1,6 +1,6 @@
 #pragma once
 #include <cstddef>
-// Outside weather from Open-Meteo (free, no key): the companion's top strip and the yellow deck's
+// Outside weather from Open-Meteo (free, no key): the yellow deck's
 // main screen. url() asks for the current reading and today's max/min. PURE, host-tested.
 namespace weather {
 enum class Icon { Sun, Moon, Cloud, Rain, Storm };

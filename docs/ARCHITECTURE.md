@@ -127,43 +127,30 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
   `[music]` serial line tells each palette sent for a new song or a change.
-- **Companion screen** (`companion/{app,link,dashboard}`, env `cyd_companion`) — a second CYD
-  build without Spotify, Pokémon or audio code. A network task polls the S3's
-  `GET /state?k=<token>` about once a second (`util/pollpace`), parses it with
-  `util/{jsonflat,stateparse}` and hands the UI loop a snapshot; the UI loop picks the line to
-  show from the song position plus the time since the poll (`util/lyricclock`) and draws it at
-  2x (`drawRunScaled`). The S3 side builds `/state` in `util/statejson` and keeps the trip in
-  `util/tripclock`. It started as lyrics only (v1); the avatar home below added the screens and
-  buttons. `util/weather` is in place but not wired in.
-- **Avatar home** (`companion/{avatarview,screens,touch,phone,app}`, `util/{avatarbin,
-  avatarlines,avatarscene,avatarsing,menunav,press,touchmap,touchguard,phonepress}`) — companion
-  only. `data/avatar.bin` (from `tools/gen_avatar.py`; `tools/avatar_clip.py` writes an empty one
-  that turns it off) holds 92×92 RGB565 frames per mood, drawn 1× or pixel-doubled from flash
-  through a row buffer. Input: the companion's own page (`POST /press?b=..&k=..`, its own
-  WebServer task) and the XPT2046 touchscreen on VSPI (`press`: tap on release, 1 s hold;
-  `touchguard` ignores a press stuck in one spot). Both feed one `fire(button)`; `menunav` holds
-  the screens and buttons. Actions go to the S3 through `companion/link` (POST `/play`,
-  `/trip/reset`). Her lines come from `avatarlines` and type out in the message bar
-  (`avatarscene`); she sings along by `avatarsing`.
-- **Network choice** (`net/wifi`, `util/{roam,follow,deckaddr,netup,hotspotip}`) — config.h
+- **Yellow deck** (`ledpanel.cpp`, env `ledpanel`) — the CYD that drives the car's LED lights
+  ([leds-voice.md](leds-voice.md)). Its Menu and karaoke screens poll the S3's `GET /state?k=<token>`
+  (`util/pollpace`) and parses it with `util/{jsonflat,stateparse}`; the S3 builds `/state` in
+  `util/statejson` and keeps the trip in `util/tripclock`. The companion screen that read the same
+  `/state` (env `cyd_companion`, lyrics and the avatar home) was retired on 2026-10-28; it is in
+  git history before that date.
+- **Network choice** (`net/wifi`, `util/{roam,deckaddr,netup,hotspotip}`) — config.h
   order (the hotspot first; two tries after a drop from it, `roam`), then a deck stays put. The
-  companion reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`), keeps that
-  address through blips (`deckaddr`), and after 30 s without the S3 (`follow`) moves to the
-  other network if a quick scan finds it. Online means connected with an address; "connected
+  yellow deck reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`) and keeps that
+  address through blips (`deckaddr`). Online means connected with an address; "connected
   without an address" reconnects on the second check in a row (`netup`).
 - **Pure, host-tested modules** (suites under `test/`, one per module except `lyricstatus` in
-  `netplan`'s, `pollpace` in `lyricclock`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
+  `netplan`'s and `version` in `bios`'s) — `ui/{theme,icon_map,
   accents,cjkfont,status_sprite,statusscene,qrcard,typebadge,lyricmsg,pokeball,car_sprite,carlook,montage}`,
-  `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,avatarbin,avatarlines,
-  avatarscene,avatarsing,bios,bootanim,carbin,ctxcache,daynight,deckaddr,dexset,follow,genre,
+  `pokemon/dex`, every module in `src/util/`: `{animdata,artmap,
+  bios,bootanim,carbin,ctxcache,daynight,deckaddr,dexset,genre,
   genrebadge,glyphrun,hotspotip,howl,idlesprite,interp,intropick,introclock,jsonflat,linkstatus,loudness,
-  lrcstream,lyricbuf,lyricclock,lyricstatus,menunav,netdiag,netplan,netup,phonepress,playerjson,jsonpath,
-  pollpace,press,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
+  lrcstream,lyricbuf,lyricstatus,netdiag,netplan,netup,playerjson,jsonpath,
+  pollpace,qrfit,readguard,remotegate,rgb565,roam,statejson,stateparse,termblend,text,touchguard,
   touchmap,tripclock,version,walkanim,walkrect,weather}`.
 
 ## Layers
 
-- `src/board/s3/` (the deck), `src/board/cyd/` (the companion) — everything board-specific
+- `src/board/s3/` (the black deck) — everything board-specific
   (display bus, audio path, backlight); pins in `include/pins.h`. The CYD's standalone deck build
   was retired on 2026-10-21 (git history up to `d4d0a67`).
 - `src/util/`, `src/core/`, `src/images/` never include `src/ui/`; `src/util/` has no Arduino

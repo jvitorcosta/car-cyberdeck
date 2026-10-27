@@ -2,7 +2,7 @@
 // Copy to src/config.h and fill in. src/config.h is git-ignored.
 
 // Up to 3 WiFi networks tried in order. The phone hotspot (the car) goes FIRST: it gets two tries
-// after a drop (util/roam) and the deck and the companion pin fixed addresses on it (172.20.10.10 /
+// after a drop (util/roam) and the two decks pin fixed addresses on it (172.20.10.10 /
 // .11, iPhone only). Enable "Maximize Compatibility" on the iPhone: the ESP32 only speaks 2.4 GHz.
 struct WifiCred { const char* ssid; const char* pass; };
 static const WifiCred WIFI_NETWORKS[] = {
@@ -37,6 +37,7 @@ static const int WIFI_NETWORK_COUNT = 2;
 // used by `pio run -e *_ota -t upload` (tools/ota_auth.py reads it from here). Empty turns them off.
 #define OTA_PASSWORD          ""
 
-// Companion screen (env cyd_companion): the new deck it reads. 172.20.10.10 is the S3's fixed
-// address on the iPhone hotspot. Both need the same REMOTE_TOKEN.
-#define COMPANION_DECK        "172.20.10.10"
+// The yellow deck (env ledpanel) reads the black deck here on the iPhone hotspot (lyrics, music
+// mode); 172.20.10.10 is the S3's fixed address there. Both need the same REMOTE_TOKEN.
+// (Called COMPANION_DECK before 2026-10-28; that name still works.)
+#define BLACK_DECK_ADDR       "172.20.10.10"

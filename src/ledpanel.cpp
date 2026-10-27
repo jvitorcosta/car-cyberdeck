@@ -94,7 +94,7 @@
 #include "ui/presslook.h"
 #include "ui/termfont.h"
 #include "ui/termlayout.h"
-#include "companion/touch.h"
+#include "yellow/touch.h"
 #include "net/clock.h"
 #include "net/httpget.h"
 #include "net/ipaddr.h"
@@ -1955,7 +1955,7 @@ static void takeWeather() {
 // dim its KARAOKE item); at once when either opens. Otherwise it sleeps. On KARAOKE loop() also
 // nudges an extra poll (lyricsNudge, at most one per LYRICS_NUDGE_MS) when the line shown changes
 // and the next one isn't known, so the dim line under it needn't wait for the next second's poll.
-// The black deck is at its fixed hotspot address (COMPANION_DECK) on the iPhone hotspot, else
+// The black deck is at its fixed hotspot address (BLACK_DECK_ADDR) on the iPhone hotspot, else
 // looked up by its mDNS name (DECK_MDNS_NAME) and kept through blips (util/deckaddr). HTTP/1.0,
 // 1.5 s timeouts, the body into a fixed statejson::MAX_JSON buffer, util/stateparse. Each poll is
 // published under lyricsMux; loop() polls lyricsFresh to redraw. The log tells when the deck is
@@ -1977,7 +1977,7 @@ static bool lyricsMdns = false;
 // both are on. False when it can't be found.
 static bool lyricsHost(char* out, size_t n) {
     if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()))) {
-        snprintf(out, n, "%s", COMPANION_DECK);
+        snprintf(out, n, "%s", BLACK_DECK_ADDR);
         return true;
     }
     if (!lyricsMdns) lyricsMdns = MDNS.begin(LEDS_MDNS_NAME);

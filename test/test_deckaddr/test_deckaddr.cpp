@@ -4,7 +4,7 @@
 void setUp() {}
 void tearDown() {}
 
-// The companion keeps the new deck's looked-up address through short blips (the new deck's
+// The yellow deck keeps the black deck's looked-up address through short blips (the new deck's
 // background scan drops one poll a minute): it only looks the name up again after 3 misses.
 void test_keeps_the_address_through_two_misses() {
     deckaddr::Keep k;

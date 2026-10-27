@@ -15,7 +15,7 @@ int drawText(TFT_eSPI& t, const char* utf8, int x, int y, uint16_t fg,
 // Draws an already-decoded run (e.g. one wrapped lyric line). Returns its width.
 int drawRun(TFT_eSPI& t, const glyphrun::Item* it, size_t n, int x, int y, uint16_t fg,
             uint16_t shadow, uint8_t datum);
-// drawRun at an integer scale (2 = the companion's big lyric line): font 2 via setTextSize,
+// drawRun at an integer scale (2 = a double-size line): font 2 via setTextSize,
 // accent marks, CJK glyphs and emoji pixel-doubled. Items keep their scale-1 widths.
 int drawRunScaled(TFT_eSPI& t, const glyphrun::Item* it, size_t n, int x, int y, uint16_t fg,
                   uint16_t shadow, uint8_t datum, int scale);

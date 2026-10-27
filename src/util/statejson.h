@@ -7,7 +7,7 @@
 namespace statejson {
 // Room for the largest state the deck can produce: every string at the size the deck stores it,
 // all of it escaped quotes, every number at its widest (~1.6 KB; test_statejson checks it). The
-// deck writes into and the companion reads into a buffer this size.
+// deck writes into and the yellow deck reads into a buffer this size.
 constexpr size_t MAX_JSON = 2048;
 
 struct State {

@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-// The companion's looked-up address of the new deck (mDNS, off the hotspot), kept through short
+// The yellow deck's looked-up address of the black deck (mDNS, off the hotspot), kept through short
 // blips: the new deck's background scan drops about one poll a minute, so the name is looked up
 // again only after MISSES failed polls in a row (or after a network switch). PURE, host-tested.
 namespace deckaddr {
