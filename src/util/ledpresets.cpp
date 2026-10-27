@@ -5,12 +5,12 @@
 namespace ledpresets {
 static constexpr char GOJIRA_SHOWN[] = {GOJIRA_MARK, 0};
 const Preset PRESETS[N] = {
-    {"ROSE", "rose", {2, 40, true}, {2, 100, true}},
-    {"FIRE", "fire", {0, 40, true}, {0, 100, true}},
+    {"ROSE", "rose", {ledlook::PINK, 40, true}, {ledlook::PINK, 100, true}},
+    {"FIRE", "fire", {ledlook::RED, 40, true}, {ledlook::RED, 100, true}},
     {"GOJIRA", "gojira", {ledlook::LIGHT_BLUE, 40, true}, {ledlook::LIGHT_BLUE, 100, true}, GOJIRA_SHOWN},
-    {"PURPURA", "purpura", {3, 40, true}, {3, 100, true}},
-    {"CIVIC", "civic", {5, 40, true}, {5, 100, true}},
-    {"OCEAN", "ocean", {4, 40, true}, {4, 100, true}},
+    {"PURPURA", "purpura", {ledlook::PURPLE, 40, true}, {ledlook::PURPLE, 100, true}},
+    {"CIVIC", "civic", {ledlook::GREEN, 40, true}, {ledlook::GREEN, 100, true}},
+    {"OCEAN", "ocean", {ledlook::BLUE, 40, true}, {ledlook::BLUE, 100, true}},
 };
 
 namespace {

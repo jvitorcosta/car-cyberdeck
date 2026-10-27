@@ -1,4 +1,5 @@
 #include "songpalette.h"
+#include "hue.h"
 #include "rgb565.h"
 
 namespace songpalette {
@@ -7,19 +8,11 @@ namespace {
 struct Hsv { int h, s, v; };   // h 0..359, s and v 0..255
 
 Hsv toHsv(Rgb c) {
-    int mx = c.r, mn = c.r;
+    int mx = c.r;
     if (c.g > mx) mx = c.g;
     if (c.b > mx) mx = c.b;
-    if (c.g < mn) mn = c.g;
-    if (c.b < mn) mn = c.b;
-    int d = mx - mn;
-    Hsv o{0, mx ? d * 255 / mx : 0, mx};
-    if (!d) return o;
-    int h;
-    if (mx == c.r) h = 60 * (c.g - c.b) / d;
-    else if (mx == c.g) h = 120 + 60 * (c.b - c.r) / d;
-    else h = 240 + 60 * (c.r - c.g) / d;
-    o.h = (h + 360) % 360;
+    Hsv o{0, 0, mx};
+    hue::hueSat(c.r, c.g, c.b, 360, 255, &o.h, &o.s);
     return o;
 }
 
@@ -34,11 +27,6 @@ Rgb fromHue(int h) {   // full saturation and value
         case 4: return {(uint8_t)up, 0, 255};
         default: return {255, 0, (uint8_t)down};
     }
-}
-
-int hueDist(int a, int b) {   // circular distance 0..180
-    int d = ((a - b) % 360 + 360) % 360;
-    return d > 180 ? 360 - d : d;
 }
 
 constexpr int BUCKETS = 24;           // 15 deg each
@@ -73,7 +61,7 @@ int fromCover(const uint16_t* bmpBe, int w, int h, Rgb out[3]) {
         int hue = (int)(hueSum[best] / count[best]);
         bool apart = true;
         for (int k = 0; k < picked; ++k)
-            if (hueDist(hue, hues[k]) < 30) apart = false;
+            if (hue::dist(hue, hues[k], 360) < 30) apart = false;
         if (!apart) continue;
         hues[picked] = hue;
         out[picked] = fromHue(hue);

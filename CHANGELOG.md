@@ -103,6 +103,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - The config template (`include/config.example.h`) lists the hotspot first.
 - CI also builds the companion, checks its flash budget, counts the S3's real intro, howl and
   greeting sizes in its flash check, and runs the media tool tests.
+- One colour vocabulary for voice commands and music mode (`ledlook::COLOUR_WORDS`): song titles,
+  albums and playlist names now also know "roxa", "branca", "amarela", "violet", "magenta", "lilac"
+  and "lilas"; playlist #tags also "ouro", "violet", "magenta", "lilac" and "lilas"; voice also
+  "violeta", "gold", "dourado" and "ouro". The swatches are named once (`ledlook::Colour`) and the
+  hue maths lives in one place (`util/hue`).
 
 ### Fixed
 - Pokémon whose walk sheet is 320 px wide (Doublade) walk again instead of showing the still
