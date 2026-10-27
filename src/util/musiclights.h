@@ -1,7 +1,7 @@
 #pragma once
 // Music mode on the yellow deck: both car lights take the current song's main colour. The black deck
-// sends the song's palette (util/songpalette, over util/musicwire); its main colour c[0] is snapped
-// to one of the Lights grid's 8 swatches (so the lights get that swatch's tuned LED mix), each
+// sends the song's palette (util/songmood, over util/musicwire); its main colour c[0], the chosen
+// swatch's screen colour, is snapped back to that swatch (so the lights get its tuned LED mix), each
 // light's level is the owner's under the palette's time-of-day cap with a floor, a new song fades
 // in, and the prompt line says what is going on. PURE, host-tested.
 #include <cstdint>

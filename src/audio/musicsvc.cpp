@@ -3,12 +3,10 @@
 #include <cstring>
 #include <lwip/sockets.h>
 #include "../core/mem.h"
-#include "../core/shared.h"
-#include "../images/art.h"
 #include "../net/clock.h"
 #include "../util/musicwire.h"
 #include "../util/netplan.h"
-#include "../util/songpalette.h"
+#include "../util/songmood.h"
 
 namespace musicsvc {
 
@@ -29,12 +27,11 @@ bool s_closing = false;                     // the task decided to stop: no more
 uint32_t s_keepMs = 0;
 uint32_t s_peer = 0;                        // IPv4, network order (IPAddress's dword); 0 between runs
 
-// The song's cover colours, from the network task.
+// The song's colour, decided by the network task (util/songmood).
 uint32_t s_gen = 0;
 uint32_t s_trackMs = 0;                     // millis() of the track change
-bool s_coverIn = false;                     // its art was decoded (whatever colours it gave)
-songpalette::Rgb s_cover[3];
-int s_coverCount = 0;
+bool s_coverIn = false;                     // the choice saw its cover (whatever colours it gave)
+songmood::Choice s_choice{};
 
 // The readout, written by the task.
 struct Debug {
@@ -60,17 +57,15 @@ void sendTo(int sock, uint32_t peer, const uint8_t* p, size_t n) {
 
 // The song's palette now; *settled false while a new song still waits for its cover.
 songpalette::Palette buildPalette(uint32_t now, uint32_t* gen, bool* settled) {
-    songpalette::Rgb cover[3];
-    int count;
+    songmood::Choice choice;
     portENTER_CRITICAL(&s_mux);
     *gen = s_gen;
     *settled = s_coverIn || now - s_trackMs >= COVER_WAIT_MS;
-    count = s_coverCount;
-    memcpy(cover, s_cover, sizeof cover);
+    choice = s_choice;
     portEXIT_CRITICAL(&s_mux);
     int minute = -1;
     if (!netclock::minuteOfDay(&minute)) minute = -1;
-    return songpalette::forLights(cover, count, shared::genreNow(*gen), minute);   // colours as by day, the hour's cap
+    return songmood::lights(choice, minute);   // the song's swatch, the hour's cap
 }
 
 bool samePalette(const songpalette::Palette& a, const songpalette::Palette& b) {
@@ -200,18 +195,14 @@ void onTrack(uint32_t gen) {
     s_gen = gen;
     s_trackMs = now;
     s_coverIn = false;
-    s_coverCount = 0;
     portEXIT_CRITICAL(&s_mux);
 }
 
-void onCover(uint32_t gen) {
-    songpalette::Rgb c[3];
-    const int count = songpalette::fromCover(art::bitmap(), art::W, art::H, c);   // ~8.5k pixels, this task
+void onChoice(uint32_t gen, const songmood::Choice& c, bool coverIn) {
     portENTER_CRITICAL(&s_mux);
     if (gen == s_gen) {
-        memcpy(s_cover, c, sizeof c);
-        s_coverCount = count;
-        s_coverIn = true;
+        s_choice = c;
+        s_coverIn = s_coverIn || coverIn;
     }
     portEXIT_CRITICAL(&s_mux);
 }

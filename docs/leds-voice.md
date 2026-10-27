@@ -149,13 +149,12 @@ row calls it `CYAN` (`LIGHT BLUE 100%` doesn't fit a half); Siri's replies and t
 
 `MUSIC MODE` on the main screen (a tap, or Xbox A on it) turns it on or off; the tag under it says
 `ON` or `OFF`, and `>MUSIC ON` / `>MUSIC OFF` shows on the prompt line. It is never kept over a
-reboot. There is no mic: the black deck sends the current song's palette (album cover colours,
-nudged toward the genre's family; the same colours day and night, only the brightness cap follows
-the clock) over WiFi, and the deck does the rest.
+reboot. There is no mic: the black deck picks the current song's colour (one of the 8, see "Which
+colour" below; the same day and night, only the brightness cap follows the clock) and sends it over
+WiFi, and the deck does the rest.
 
-- **Colour**: both lights take the song's main colour, snapped to the nearest of the 8 colours
-  (by hue; washed-out colours are white), with that colour's tuned LED mix, the same as tapping
-  its tile. It stays steady through the song. On a new song it fades to the next colour over about
+- **Colour**: both lights take the song's colour, with that colour's tuned LED mix, the same as
+  tapping its tile. It stays steady through the song. On a new song it fades to the next colour over about
   3 s (inside in 6 steps, outside in 3: the outside controller takes about one command a second).
   The black deck waits for the new song's cover (up to 8 s) before it sends, so a song changes the
   lights once.
@@ -179,6 +178,49 @@ the clock) over WiFi, and the deck does the rest.
   `on=0` when it ends; the black deck stops by itself 30 s after the last ask.
   `GET /music/debug?k=<token>` on the black deck shows the palette it last sent, its cap and the
   socket (`&on=1` also keeps it alive).
+
+### Which colour
+
+The black deck decides (`util/songmood`), strongest signal first; text matches ignore case and
+accents, and titles and albums also match without a suffix such as ` - Remastered`,
+` - Single Version`, ` (feat. ...)` or ` (with ...)`:
+
+1. **Your picks** always win: a song (title and artist), an album or an artist, each to a colour.
+   They live in `src/util/songpicks.inc`. To add one, add a line there and rebuild the black deck:
+   `{"Artist", "Song title", nullptr, RED},` for a song, `{"Artist", nullptr, "Album", PINK},` for a
+   whole album, `{"Artist", nullptr, nullptr, BLUE},` for every song of an artist. Colours: `RED`,
+   `ORANGE`, `PINK`, `PURPLE`, `BLUE`, `GREEN`, `WHITE`, `YELLOW`.
+2. **A colour word** in the song's title, then the album, then the playlist's name (whole words):
+   purple/púrpura/roxo/violeta, red/vermelho/vermelha, blue/azul, pink/rosa, green/verde,
+   yellow/amarelo/gold/dourado/ouro, orange/laranja, white/branco. "Púrpura" is purple, Djavan's
+   "Azul" blue; "Goldfrapp" is no gold (whole words only), and artists' names don't count.
+3. **A mood** allows a few colours, and the **cover** chooses among them. The mood comes from the
+   playlist (its name, then its description: words and emoji), else from the genre, else all 8:
+
+   | Mood | Playlist words / emoji | Colours |
+   |---|---|---|
+   | neon | night noite neon lights city midnight madrugada dark 🌃 🌆 🌙 🌌 | red, purple, blue, pink |
+   | intimate | love amor cuddle(s) moon lua romance romantic kiss slow sexy ❤️ 💕 💜 🌹 🌙 | red, pink, purple |
+   | drive | drive racing race speed hamilton f1 formula fast furious carro estrada road 🏎️ 🏁 🚗 | red, orange, blue, yellow |
+   | energy | workout treino gym academia run corrida hype party festa baile 🔥 💪 🎉 | red, orange, pink, yellow |
+   | calm | chill relax calm calma sleep sono study estudo lofi lo-fi acoustic rain chuva 🌧️ ☕ 🌊 | blue, white, purple |
+   | sunny | verão summer praia beach sol sun tropical ☀️ 🏖️ 🌴 | yellow, orange, green |
+
+   Genres: R&B red, pink, purple; pop pink, purple, red; K-pop and J-pop pink, purple, blue; rap,
+   funk and afro red, purple, pink; rock and metal red, orange; alt blue, purple, red; electro and
+   dance blue, purple, pink; Brazilian genres yellow, orange, green, pink (funk BR pink, purple,
+   red); latin orange, yellow, red; jazz, classical, soundtracks, folk, country and gospel blue,
+   white, orange; anything else all 8. The first mood in the table that matches wins (so 🌙 is
+   neon); a song from an album, an artist or Liked Songs has no playlist, so its genre decides.
+
+   The cover's colours, strongest first: the first whose nearest colour is allowed wins. If none
+   is, the allowed colour nearest the cover's main colour if within 45° of hue, else the mood's
+   first colour (a black-and-white cover too). A white-ish cover colour counts as white only where
+   white is allowed.
+
+The time of day changes only the brightness, never the colour. The black deck's serial log has one
+line per song with what it knew and which rule decided:
+`[colour] "Popular" | The Weeknd | Popular | "blinded by the lights 🌃" | genre R&B | cover FF0800 FF9000 | playlist mood neon | -> Red cap 100`.
 
 ## Night mode
 

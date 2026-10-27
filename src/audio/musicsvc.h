@@ -2,11 +2,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <IPAddress.h>
+#include "../util/songmood.h"
 // Music mode on the black deck ("song colours"): while the yellow deck keeps it alive (net/remote's
-// GET /music), a small task (core 1, 4 KB stack) sends the song's PalPkt (util/songpalette's
-// forLights: cover colours and genre badge as by day, the time of day's cap) over UDP to the requester's musicwire::PORT (util/musicwire):
-// once a new song's cover is in (or COVER_WAIT_MS after the track change without one), on any later
-// change and every 10 s. The socket exists only while it runs. No keep-alive for 30 s stops it. No
+// GET /music), a small task (core 1, 4 KB stack) sends the song's PalPkt (util/songmood's
+// lights(): the swatch the network task chose, the time of day's cap) over UDP to the requester's
+// musicwire::PORT (util/musicwire): once a new song's cover is in (or COVER_WAIT_MS after the track
+// change without one), on any later change and every 10 s. The socket exists only while it runs. No keep-alive for 30 s stops it. No
 // mic: the real wolf howl plays as usual.
 namespace musicsvc {
 constexpr uint32_t TIMEOUT_MS = 30000;
@@ -20,9 +21,11 @@ enum class Start : uint8_t { On, LowMemory, Stopping, NoTask };
 Start keepAlive(const IPAddress& peer, bool takePeer = true);
 void stop();         // GET /music?on=0: the task closes within ~100 ms. Any task.
 bool on();           // the task runs (or is closing). Any task.
-// The network task: a new song (no cover colours yet), then its art decoded into art::bitmap().
-void onTrack(uint32_t gen);
-void onCover(uint32_t gen);
+// The network task: a new song (no colour yet), then its colour each time the network task decides
+// it (util/songmood: at the track change, once the cover is in, once the genre is known); coverIn:
+// that choice saw the song's cover, so the song's colour can go out without waiting COVER_WAIT_MS.
+void onTrack(uint32_t gen);   // the last song's colour stays until the new song's first onChoice
+void onChoice(uint32_t gen, const songmood::Choice& c, bool coverIn);
 // GET /music/debug's JSON into out (on, the palette last sent, its cap, the socket, the largest free
 // block now); false if it didn't fit. Any task.
 bool debugJson(char* out, size_t n);
