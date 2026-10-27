@@ -185,16 +185,26 @@ The black deck decides (`util/songmood`), strongest signal first; text matches i
 accents, and titles and albums also match without a suffix such as ` - Remastered`,
 ` - Single Version`, ` (feat. ...)` or ` (with ...)`:
 
-1. **Your picks** always win: a song (title and artist), an album or an artist, each to a colour.
-   They live in `src/util/songpicks.inc`. To add one, add a line there and rebuild the black deck:
+1. **Your picks** always win: a song (title and artist), an album or an artist, each to a colour
+   (a song's pick beats its album's, which beats its artist's). They live in
+   `src/util/songpicks.inc`. To add one, add a line there and rebuild the black deck:
    `{"Artist", "Song title", nullptr, RED},` for a song, `{"Artist", nullptr, "Album", PINK},` for a
-   whole album, `{"Artist", nullptr, nullptr, BLUE},` for every song of an artist. Colours: `RED`,
-   `ORANGE`, `PINK`, `PURPLE`, `BLUE`, `GREEN`, `WHITE`, `YELLOW`.
-2. **A colour word** in the song's title, then the album, then the playlist's name (whole words):
-   purple/púrpura/roxo/violeta, red/vermelho/vermelha, blue/azul, pink/rosa, green/verde,
-   yellow/amarelo/gold/dourado/ouro, orange/laranja, white/branco. "Púrpura" is purple, Djavan's
-   "Azul" blue; "Goldfrapp" is no gold (whole words only), and artists' names don't count.
-3. **A mood** allows a few colours, and the **cover** chooses among them. The mood comes from the
+   whole album, `{"Artist", nullptr, nullptr, BLUE},` for every song of an artist (Budah is purple).
+   Colours: `RED`, `ORANGE`, `PINK`, `PURPLE`, `BLUE`, `GREEN`, `WHITE`, `YELLOW`.
+2. **A colour word in the song's title** (whole words): purple/púrpura/roxo/violeta,
+   red/vermelho/vermelha, blue/azul, pink/rosa, green/verde, yellow/amarelo/gold/dourado/ouro,
+   orange/laranja, white/branco. "Púrpura" is purple, Djavan's "Azul" blue; "Goldfrapp" is no gold
+   (whole words only), and artists' names don't count.
+3. **Your playlist's colour tags**: write them anywhere in a playlist's description on Spotify.
+   `#white` makes every song in it white; `#red #pink #purple` makes those its colours (the cover
+   chooses among them, as for a mood below; a grey cover takes the song's genre colour inside them,
+   else the first tag). Tags: #red/#vermelho/#vermelha, #orange/#laranja, #pink/#rosa,
+   #purple/#roxo/#roxa/#púrpura/#violeta, #blue/#azul, #green/#verde, #white/#branco/#branca,
+   #yellow/#amarelo/#amarela/#gold/#dourado (any case, accents or not; `#redemption` is no tag).
+   The deck reads the description when it looks the playlist up, so new tags apply after you play
+   the playlist from another context first, or after a restart. Liked Songs has no description.
+4. **A colour word in the album, then the playlist's name** (not for a playlist with tags).
+5. **A mood** allows a few colours, and the **cover** chooses among them. The mood comes from the
    playlist (its name, then its description: words and emoji), else from the genre, else all 8:
 
    | Mood | Playlist words / emoji | Colours |
@@ -206,18 +216,33 @@ accents, and titles and albums also match without a suffix such as ` - Remastere
    | calm | chill relax calm calma sleep sono study estudo lofi lo-fi acoustic rain chuva 🌧️ ☕ 🌊 | blue, white, purple |
    | sunny | verão summer praia beach sol sun tropical ☀️ 🏖️ 🌴 | yellow, orange, green |
 
-   Genres: R&B red, pink, purple; pop pink, purple, red; K-pop and J-pop pink, purple, blue; rap,
-   funk and afro red, purple, pink; rock and metal red, orange; alt blue, purple, red; electro and
-   dance blue, purple, pink; Brazilian genres yellow, orange, green, pink (funk BR pink, purple,
-   red); latin orange, yellow, red; jazz, classical, soundtracks, folk, country and gospel blue,
-   white, orange; anything else all 8. The first mood in the table that matches wins (so 🌙 is
-   neon); a song from an album, an artist or Liked Songs has no playlist, so its genre decides.
+   Genres (the first colour is a grey cover's):
+
+   | Genre | Colours |
+   |---|---|
+   | R&B | purple, red, pink |
+   | pop, K-pop, J-pop | pink, purple, blue |
+   | rap | red, purple, blue |
+   | funk, afro | red, purple, pink |
+   | funk BR | pink, purple, red |
+   | rock, metal | red, orange |
+   | alt | blue, purple, red |
+   | electro, dance | blue, purple, pink |
+   | Brazilian (brasil, sertanejo, MPB, samba, pagode, forró, axé) | yellow, orange, green, blue |
+   | reggae | green, yellow, red |
+   | latin | orange, yellow, red |
+   | jazz, gospel, classical, country, folk | blue, white, orange |
+   | soundtracks | blue, purple, white |
+   | anything else | all 8 |
+
+   The first mood in the table that matches wins (so 🌙 is neon); a song from an album, an artist
+   or Liked Songs has no playlist, so its genre decides.
 
    The cover's colours, strongest first: the first whose nearest colour is allowed wins. If none
-   is, the allowed colour nearest the cover's main colour if within 45° of hue. Failing that (a
-   black-and-white cover too): under a playlist's mood, the first colour of the song's genre list
+   is, the allowed colour nearest the cover's main colour if within 60° of hue. Failing that (a
+   black-and-white cover too): under a playlist's tags or mood, the first colour of the song's genre list
    that the playlist allows (a grey pop song in a neon playlist is pink; the log says
-   `playlist mood neon, genre pop`); with no overlap or no genre, or when the genre gave the mood,
+   `playlist mood neon, genre pop`, or `tags, genre intimate`); with no overlap or no genre, or when the genre gave the mood,
    the mood's first colour. A white-ish cover colour counts as white only where white is allowed.
 
 The time of day changes only the brightness, never the colour. The black deck's serial log has one

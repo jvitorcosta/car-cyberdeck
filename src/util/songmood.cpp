@@ -55,20 +55,36 @@ const Mood PLAYLIST_MOODS[] = {
     {"sunny", "verao summer praia beach sol sun tropical", "☀ 🏖 🌴", {YELLOW, ORANGE, GREEN}, 3},
 };
 
-// The genre badge's mood (util/genre_data.inc's indices).
-enum : uint8_t { M_INTIMATE, M_POP, M_IDOL, M_RAP, M_ROCK, M_ALT, M_ELECTRO, M_BRASIL, M_FUNK_BR, M_LATIN, M_SOFT };
+// A playlist's colour tags: "#" + one of these + a non-letter (or the end), in its description
+// (folded). The tags, in the owner's order, are the playlist's allowed set.
+const Word TAGS[] = {
+    {"red", RED},         {"vermelho", RED},     {"vermelha", RED},   {"orange", ORANGE},  {"laranja", ORANGE},
+    {"pink", PINK},       {"rosa", PINK},        {"purple", PURPLE},  {"roxo", PURPLE},    {"roxa", PURPLE},
+    {"purpura", PURPLE},  {"violeta", PURPLE},   {"blue", BLUE},      {"azul", BLUE},      {"green", GREEN},
+    {"verde", GREEN},     {"white", WHITE},      {"branco", WHITE},   {"branca", WHITE},   {"yellow", YELLOW},
+    {"amarelo", YELLOW},  {"amarela", YELLOW},   {"gold", YELLOW},    {"dourado", YELLOW},
+};
+
+// The genre badge's mood (util/genre_data.inc's indices). The first colour is a grey cover's.
+enum : uint8_t {
+    M_INTIMATE, M_POP, M_IDOL, M_RAP, M_FUNK, M_ROCK, M_ALT, M_ELECTRO, M_BRASIL, M_FUNK_BR, M_REGGAE, M_LATIN,
+    M_SOFT, M_OST
+};
 const Mood GENRE_MOODS[] = {
-    {"intimate", nullptr, nullptr, {RED, PINK, PURPLE}, 3},
-    {"pop", nullptr, nullptr, {PINK, PURPLE, RED}, 3},
+    {"intimate", nullptr, nullptr, {PURPLE, RED, PINK}, 3},
+    {"pop", nullptr, nullptr, {PINK, PURPLE, BLUE}, 3},
     {"idol", nullptr, nullptr, {PINK, PURPLE, BLUE}, 3},
-    {"rap", nullptr, nullptr, {RED, PURPLE, PINK}, 3},
+    {"rap", nullptr, nullptr, {RED, PURPLE, BLUE}, 3},
+    {"funk", nullptr, nullptr, {RED, PURPLE, PINK}, 3},
     {"rock", nullptr, nullptr, {RED, ORANGE}, 2},
     {"alt", nullptr, nullptr, {BLUE, PURPLE, RED}, 3},
     {"electro", nullptr, nullptr, {BLUE, PURPLE, PINK}, 3},
-    {"brasil", nullptr, nullptr, {YELLOW, ORANGE, GREEN, PINK}, 4},
+    {"brasil", nullptr, nullptr, {YELLOW, ORANGE, GREEN, BLUE}, 4},
     {"funk br", nullptr, nullptr, {PINK, PURPLE, RED}, 3},
+    {"reggae", nullptr, nullptr, {GREEN, YELLOW, RED}, 3},
     {"latin", nullptr, nullptr, {ORANGE, YELLOW, RED}, 3},
     {"soft", nullptr, nullptr, {BLUE, WHITE, ORANGE}, 3},
+    {"ost", nullptr, nullptr, {BLUE, PURPLE, WHITE}, 3},
 };
 const uint8_t BADGE_MOOD[] = {
     M_POP,        // 0 POP
@@ -76,7 +92,7 @@ const uint8_t BADGE_MOOD[] = {
     M_IDOL,       // 2 J-POP
     M_RAP,        // 3 RAP
     M_INTIMATE,   // 4 R&B
-    M_RAP,        // 5 FUNK
+    M_FUNK,       // 5 FUNK
     M_ROCK,       // 6 ROCK
     M_ROCK,       // 7 METAL
     M_ALT,        // 8 ALT
@@ -91,18 +107,18 @@ const uint8_t BADGE_MOOD[] = {
     M_BRASIL,     // 17 FORRO
     M_BRASIL,     // 18 AXE
     M_LATIN,      // 19 LATIN
-    M_BRASIL,     // 20 REGGAE
+    M_REGGAE,     // 20 REGGAE
     M_SOFT,       // 21 JAZZ
     M_SOFT,       // 22 GOSPEL
     M_SOFT,       // 23 CLASSIC
-    M_SOFT,       // 24 OST
+    M_OST,        // 24 OST
     M_SOFT,       // 25 COUNTRY
     M_SOFT,       // 26 FOLK
-    M_RAP,        // 27 AFRO
+    M_FUNK,       // 27 AFRO
 };                // past these (28 CHINESE, 29 WORLD, 30 ???, NONE): any
 const Mood ANY = {"any", nullptr, nullptr, {RED, ORANGE, PINK, PURPLE, BLUE, GREEN, WHITE, YELLOW}, 8};
 
-constexpr int NEAR_DEG = 45;   // a cover colour outside the set still picks the allowed swatch this near
+constexpr int NEAR_DEG = 60;   // a cover colour outside the set still picks the allowed swatch this near
 
 constexpr size_t TEXT = 164;   // a folded title, album, playlist name or description (the longest: 160 B)
 constexpr size_t NAME = 100;   // a folded artist or pick
@@ -169,13 +185,16 @@ bool pick(const Song& s, int* swatch) {
     fold(s.artist, artist, sizeof artist);
     fold(s.title, title, sizeof title);
     fold(s.album, album, sizeof album);
-    for (const Pick& p : PICKS) {
-        fold(p.artist, e, sizeof e);
-        if (!e[0] || strcmp(artist, e) != 0) continue;
-        const bool match = p.title ? sameName(title, p.title) : p.album ? sameName(album, p.album) : true;
-        if (match) {
-            *swatch = p.swatch;
-            return true;
+    for (int pass = 0; pass < 3; ++pass) {   // a song's pick, then its album's, then its artist's
+        for (const Pick& p : PICKS) {
+            const int kind = p.title ? 0 : p.album ? 1 : 2;
+            if (kind != pass) continue;
+            fold(p.artist, e, sizeof e);
+            if (!e[0] || strcmp(artist, e) != 0) continue;
+            if (kind == 2 || sameName(kind == 0 ? title : album, kind == 0 ? p.title : p.album)) {
+                *swatch = p.swatch;
+                return true;
+            }
         }
     }
     return false;
@@ -193,6 +212,26 @@ bool colourWord(const char* text, int* swatch) {
         }
     }
     return best >= 0;
+}
+
+// The playlist description's colour tags as a set ("tags"); false when it has none.
+bool tagsOf(const char* description, Mood* out) {
+    *out = Mood{"tags", nullptr, nullptr, {}, 0};
+    if (!description || !description[0]) return false;
+    char t[TEXT];
+    fold(description, t, sizeof t);
+    for (const char* p = strchr(t, '#'); p; p = strchr(p + 1, '#')) {
+        size_t n = 0;
+        while (p[1 + n] >= 'a' && p[1 + n] <= 'z') ++n;
+        for (const Word& w : TAGS) {
+            if (strlen(w.word) != n || strncmp(p + 1, w.word, n) != 0) continue;
+            bool seen = false;
+            for (int i = 0; i < out->n; ++i) seen = seen || out->set[i] == w.swatch;
+            if (!seen) out->set[out->n++] = w.swatch;
+            break;
+        }
+    }
+    return out->n > 0;
 }
 
 const Mood* playlistMood(const Song& s) {
@@ -277,33 +316,40 @@ bool hasWord(const char* folded, const char* word) { return folded && word && fi
 
 Choice choose(const Song& song, const songpalette::Rgb* cover, int coverCount, uint8_t badge) {
     Choice c{};
-    const Mood* m = playlistMood(song);
-    c.rule = Rule::PlaylistMood;
-    if (!m && badge < sizeof BADGE_MOOD) {
+    const bool inPlaylist = song.playlist && song.playlist[0];
+    Mood tags;
+    const Mood* m = nullptr;
+    Rule setRule = Rule::Any;
+    if (inPlaylist && tagsOf(song.description, &tags)) {
+        m = &tags;
+        setRule = Rule::Tags;
+    } else if ((m = playlistMood(song)) != nullptr) {
+        setRule = Rule::PlaylistMood;
+    } else if (badge < sizeof BADGE_MOOD) {
         m = &GENRE_MOODS[BADGE_MOOD[badge]];
-        c.rule = Rule::GenreMood;
-    }
-    if (!m) {
+        setRule = Rule::GenreMood;
+    } else {
         m = &ANY;
-        c.rule = Rule::Any;
     }
-    c.mood = m->name;
+    c.mood = m->name;   // a string literal: outlives the local tags set
     memcpy(c.set, m->set, sizeof c.set);
     c.setN = m->n;
     if (pick(song, &c.swatch)) {
         c.rule = Rule::Pick;
-    } else if (colourWord(song.title, &c.swatch) || colourWord(song.album, &c.swatch) ||
-               (song.playlist && colourWord(song.playlist, &c.swatch))) {
+    } else if (colourWord(song.title, &c.swatch) ||
+               (setRule != Rule::Tags &&   // tags beat the album's and the playlist name's words
+                (colourWord(song.album, &c.swatch) || (inPlaylist && colourWord(song.playlist, &c.swatch))))) {
         c.rule = Rule::Word;
     } else {
+        c.rule = setRule;
         c.swatch = fromCover(*m, cover, coverCount);
     }
-    if (c.swatch < 0) {   // the cover gave none: the set's first, or under a playlist's mood the genre's
+    if (c.swatch < 0) {   // the cover gave none: the set's first, or under a playlist's set the genre's
         c.swatch = m->set[0];
-        const Mood* g = c.rule == Rule::PlaylistMood && badge < sizeof BADGE_MOOD ? &GENRE_MOODS[BADGE_MOOD[badge]]
-                                                                                   : nullptr;
+        const bool playlistSet = setRule == Rule::Tags || setRule == Rule::PlaylistMood;
+        const Mood* g = playlistSet && badge < sizeof BADGE_MOOD ? &GENRE_MOODS[BADGE_MOOD[badge]] : nullptr;
         for (int i = 0; g && i < g->n; ++i) {
-            if (allowed(*m, g->set[i])) {   // the genre's first colour that the playlist's mood allows
+            if (allowed(*m, g->set[i])) {   // the genre's first colour that the playlist allows
                 c.swatch = g->set[i];
                 c.genre = g->name;
                 break;
@@ -331,6 +377,7 @@ const char* ruleName(Rule r) {
     switch (r) {
         case Rule::Pick: return "pick";
         case Rule::Word: return "word";
+        case Rule::Tags: return "tags";
         case Rule::PlaylistMood: return "playlist mood";
         case Rule::GenreMood: return "genre mood";
         default: return "any";

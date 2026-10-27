@@ -111,7 +111,8 @@ void test_logged_songs_in_the_neon_playlist() {
 void test_logged_songs_in_the_drive_playlist() {
     const Case cases[] = {
         {"Danza Kuduro", "Don Omar", "Meet The Orphans", HAMILTON, LATIN, {0xFF9000}, 1, ORANGE, Rule::PlaylistMood},
-        {"I'm Still Standing", "Elton John", "Too Low For Zero", HAMILTON, POP, {}, 0, RED, Rule::PlaylistMood},
+        // grey: pop's first that drive allows (SC2's pop set: pink, purple, blue)
+        {"I'm Still Standing", "Elton John", "Too Low For Zero", HAMILTON, POP, {}, 0, BLUE, Rule::PlaylistMood},
         {"Lapdance", "N.E.R.D", "In Search Of...", HAMILTON, RAP, {0xFF5D00}, 1, ORANGE, Rule::PlaylistMood},
         {"Act A Fool", "Ludacris", "2 Fast 2 Furious", HAMILTON, RAP, {0x00AAFF, 0xFF1100, 0xFF9900}, 3, BLUE,
          Rule::PlaylistMood},
@@ -190,7 +191,7 @@ void test_playlist_moods_by_word_and_emoji() {
         {"Song", "A", "X", "Noite na cidade", POP, {0x0040FF}, 1, BLUE, Rule::PlaylistMood},          // neon
         {"Song", "A", "X", "\xF0\x9F\x8C\x86", POP, {0x0040FF}, 1, BLUE, Rule::PlaylistMood},         // 🌆 neon
         {"Song", "A", "X", "amor \xE2\x9D\xA4\xEF\xB8\x8F", POP, {0x8C00FF}, 1, PURPLE, Rule::PlaylistMood},   // intimate
-        {"Song", "A", "X", "estrada", POP, {0x00FF30}, 1, RED, Rule::PlaylistMood},   // drive: green is far: first
+        {"Song", "A", "X", "estrada", POP, {0x00FF30}, 1, BLUE, Rule::PlaylistMood},   // drive: green is far: pop's blue
         {"Song", "A", "X", "TREINO \xF0\x9F\x94\xA5", POP, {0xEA00FF}, 1, PINK, Rule::PlaylistMood},   // energy: violet, pink near
         {"Song", "A", "X", "lo-fi to study", POP, {0xFF0000, 0x8C00FF}, 2, PURPLE, Rule::PlaylistMood},   // calm
         {"Song", "A", "X", "Ver\xC3\xA3o", POP, {0x00FF30}, 1, GREEN, Rule::PlaylistMood},             // sunny
@@ -220,11 +221,12 @@ void test_the_description_counts_after_the_name() {
 void test_genre_moods() {
     struct G { uint8_t badge; int first; const char* mood; };
     const G gs[] = {
-        {RNB, RED, "intimate"}, {POP, PINK, "pop"}, {1, PINK, "idol"}, {2, PINK, "idol"}, {RAP, RED, "rap"},
-        {5, RED, "rap"}, {27, RED, "rap"}, {ROCK, RED, "rock"}, {7, RED, "rock"}, {ALT, BLUE, "alt"},
+        {RNB, PURPLE, "intimate"}, {POP, PINK, "pop"}, {1, PINK, "idol"}, {2, PINK, "idol"}, {RAP, RED, "rap"},
+        {5, RED, "funk"}, {27, RED, "funk"}, {ROCK, RED, "rock"}, {7, RED, "rock"}, {ALT, BLUE, "alt"},
         {9, BLUE, "electro"}, {DANCE, BLUE, "electro"}, {11, YELLOW, "brasil"}, {12, PINK, "funk br"},
-        {14, YELLOW, "brasil"}, {18, YELLOW, "brasil"}, {LATIN, ORANGE, "latin"}, {20, YELLOW, "brasil"},
-        {JAZZ, BLUE, "soft"}, {26, BLUE, "soft"}, {28, RED, "any"}, {30, RED, "any"}, {genre::NONE, RED, "any"},
+        {13, YELLOW, "brasil"}, {14, YELLOW, "brasil"}, {18, YELLOW, "brasil"}, {LATIN, ORANGE, "latin"},
+        {20, GREEN, "reggae"}, {JAZZ, BLUE, "soft"}, {22, BLUE, "soft"}, {23, BLUE, "soft"}, {24, BLUE, "ost"},
+        {25, BLUE, "soft"}, {26, BLUE, "soft"}, {28, RED, "any"}, {30, RED, "any"}, {genre::NONE, RED, "any"},
     };
     for (const G& g : gs) {
         const Song s{"Song", "A", "X", nullptr, nullptr};
@@ -347,9 +349,105 @@ void test_lights_send_the_swatchs_screen_colour_and_the_hours_cap() {
 void test_rule_names() {
     TEST_ASSERT_EQUAL_STRING("pick", songmood::ruleName(Rule::Pick));
     TEST_ASSERT_EQUAL_STRING("word", songmood::ruleName(Rule::Word));
+    TEST_ASSERT_EQUAL_STRING("tags", songmood::ruleName(Rule::Tags));
     TEST_ASSERT_EQUAL_STRING("playlist mood", songmood::ruleName(Rule::PlaylistMood));
     TEST_ASSERT_EQUAL_STRING("genre mood", songmood::ruleName(Rule::GenreMood));
     TEST_ASSERT_EQUAL_STRING("any", songmood::ruleName(Rule::Any));
+}
+
+// ---- Task SC2: playlist colour tags, the agreed genre table, 60 deg, Budah ----
+
+namespace {
+Choice inPlaylist(const char* title, const char* name, const char* description, uint8_t badge, const Rgb* cover,
+                  int count) {
+    const Song s{title, "Someone", "Some Album", name, description};
+    return songmood::choose(s, cover, count, badge);
+}
+}  // namespace
+
+void test_tags_in_the_description() {
+    Rgb blue[1] = {hex(0x0040FF)}, red[1] = {hex(0xFF0000)}, green[1] = {hex(0x00FF30)};
+    // one tag: every song in it, any cover
+    for (const Rgb* c : {blue, red, green}) {
+        const Choice w = inPlaylist("Song", "my mix", "late drives #white", POP, c, 1);
+        TEST_ASSERT_EQUAL_INT(WHITE, w.swatch);
+        TEST_ASSERT_EQUAL(Rule::Tags, w.rule);
+        TEST_ASSERT_EQUAL_STRING("tags", w.mood);
+    }
+    TEST_ASSERT_EQUAL_INT(WHITE, inPlaylist("Song", "my mix", "#white", RNB, nullptr, 0).swatch);
+    // several: the allowed set, in the owner's order; the cover chooses inside it
+    Choice c = inPlaylist("Song", "my mix", "#red #pink #purple", genre::NONE, blue, 1);
+    TEST_ASSERT_EQUAL_INT(PURPLE, c.swatch);   // blue isn't in it; purple is 48 deg off
+    TEST_ASSERT_EQUAL_INT(3, c.setN);
+    TEST_ASSERT_EQUAL_INT(RED, c.set[0]);
+    TEST_ASSERT_EQUAL_INT(PINK, c.set[1]);
+    TEST_ASSERT_EQUAL_INT(PURPLE, c.set[2]);
+    // a grey cover: the first tag, or (as for a playlist's mood) the genre's first inside the set
+    c = inPlaylist("Song", "my mix", "#red #pink #purple", genre::NONE, nullptr, 0);
+    TEST_ASSERT_EQUAL_INT(RED, c.swatch);
+    TEST_ASSERT_NULL(c.genre);
+    c = inPlaylist("Song", "my mix", "#red #pink #purple", RNB, nullptr, 0);
+    TEST_ASSERT_EQUAL_INT(PURPLE, c.swatch);   // R&B: purple, red, pink
+    TEST_ASSERT_EQUAL_STRING("intimate", c.genre);   // the log's "tags, genre intimate"
+    // PT words, accents, case, duplicates once
+    TEST_ASSERT_EQUAL_INT(BLUE, inPlaylist("Song", "x", "#azul", POP, red, 1).swatch);
+    c = inPlaylist("Song", "x", "#P\xC3\xBARPURA #ROXA #Verde, #purple", genre::NONE, nullptr, 0);   // #PÚRPURA
+    TEST_ASSERT_EQUAL_INT(2, c.setN);
+    TEST_ASSERT_EQUAL_INT(PURPLE, c.set[0]);
+    TEST_ASSERT_EQUAL_INT(GREEN, c.set[1]);
+    // not tags: a longer word, an unknown one, a colour word without '#'
+    TEST_ASSERT_EQUAL(Rule::GenreMood, inPlaylist("Song", "x", "#redemption", ROCK, red, 1).rule);
+    TEST_ASSERT_EQUAL(Rule::GenreMood, inPlaylist("Song", "x", "#vibes #2024 red", ROCK, red, 1).rule);
+    // only for a playlist (an album context has no description to read)
+    const Song album{"Song", "A", "X", nullptr, "#white"};
+    TEST_ASSERT_EQUAL(Rule::GenreMood, songmood::choose(album, red, 1, ROCK).rule);
+}
+
+void test_tags_beat_the_playlist_name_but_not_a_pick_or_the_title() {
+    Rgb red[1] = {hex(0xFF0000)};
+    TEST_ASSERT_EQUAL_INT(WHITE, inPlaylist("Song", "Blue Nights", "#white", POP, red, 1).swatch);   // name's word
+    const Song albumWord{"Song", "Someone", "Kind of Blue", "x", "#white"};
+    TEST_ASSERT_EQUAL_INT(WHITE, songmood::choose(albumWord, red, 1, POP).swatch);
+    const Choice t = inPlaylist("P\xC3\xBArpura", "x", "#white", POP, red, 1);   // Púrpura
+    TEST_ASSERT_EQUAL_INT(PURPLE, t.swatch);
+    TEST_ASSERT_EQUAL(Rule::Word, t.rule);
+    const Song pick{"Blinding Lights", "The Weeknd", "After Hours", "x", "#white"};
+    TEST_ASSERT_EQUAL(Rule::Pick, songmood::choose(pick, red, 1, RNB).rule);
+    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(pick, red, 1, RNB).swatch);
+}
+
+void test_picks_song_then_album_then_artist() {
+    const Case cases[] = {
+        {"Anything", "Budah", "Any Album", nullptr, 14, {0xFFD400}, 1, PURPLE, Rule::Pick},
+        {"Outra", "budah", "X", "#white", 14, {}, 0, PURPLE, Rule::Pick},
+    };
+    check(cases, sizeof cases / sizeof cases[0]);
+}
+
+void test_near_hue_is_60_degrees() {
+    // a blue cover in an intimate set (red, pink, purple): purple, 48 deg off
+    const Case cases[] = {
+        {"Song", "A", "X", "love songs", POP, {0x0040FF}, 1, PURPLE, Rule::PlaylistMood},
+        // an 81 deg lime snaps to yellow, not rock's; orange is 56 deg off (at 45 it fell back to red)
+        {"Song", "A", "X", nullptr, ROCK, {0xA6FF00}, 1, ORANGE, Rule::GenreMood},
+    };
+    check(cases, sizeof cases / sizeof cases[0]);
+}
+
+void test_logged_songs_sc2() {
+    const char* cuddles = "Cuddles 'n' Moans";
+    const Case cases[] = {
+        {"Best Part (feat. H.E.R.)", "Daniel Caesar", "Freudian", cuddles, RNB, {0x00B7FF}, 1, PURPLE,
+         Rule::PlaylistMood},
+        {"Mal\xC3\xAD" "cia", "Nina", "X", cuddles, RNB, {0x00AFFF}, 1, PURPLE, Rule::PlaylistMood},   // Malícia
+        {"Faroeste Caboclo", "Legi\xC3\xA3o Urbana", "Que Pa\xC3\xADs \xC3\x89 Este", nullptr, 14, {0x0062FF}, 1,
+         BLUE, Rule::GenreMood},
+        {"Minha Felicidade", "Roberta Campos", "X", nullptr, 14, {0x00F3FF}, 1, BLUE, Rule::GenreMood},
+        {"Redemption Song", "Bob Marley & The Wailers", "Uprising", nullptr, 20, {0xFFCC00, 0xFF1100}, 2, YELLOW,
+         Rule::GenreMood},
+        {"Creepin'", "Metro Boomin", "HEROES & VILLAINS", nullptr, RAP, {}, 0, RED, Rule::GenreMood},
+    };
+    check(cases, sizeof cases / sizeof cases[0]);
 }
 
 int main(int, char**) {
@@ -370,5 +468,10 @@ int main(int, char**) {
     RUN_TEST(test_null_fields_are_empty);
     RUN_TEST(test_lights_send_the_swatchs_screen_colour_and_the_hours_cap);
     RUN_TEST(test_rule_names);
+    RUN_TEST(test_tags_in_the_description);
+    RUN_TEST(test_tags_beat_the_playlist_name_but_not_a_pick_or_the_title);
+    RUN_TEST(test_picks_song_then_album_then_artist);
+    RUN_TEST(test_near_hue_is_60_degrees);
+    RUN_TEST(test_logged_songs_sc2);
     return UNITY_END();
 }
