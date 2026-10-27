@@ -214,9 +214,11 @@ accents, and titles and albums also match without a suffix such as ` - Remastere
    neon); a song from an album, an artist or Liked Songs has no playlist, so its genre decides.
 
    The cover's colours, strongest first: the first whose nearest colour is allowed wins. If none
-   is, the allowed colour nearest the cover's main colour if within 45° of hue, else the mood's
-   first colour (a black-and-white cover too). A white-ish cover colour counts as white only where
-   white is allowed.
+   is, the allowed colour nearest the cover's main colour if within 45° of hue. Failing that (a
+   black-and-white cover too): under a playlist's mood, the first colour of the song's genre list
+   that the playlist allows (a grey pop song in a neon playlist is pink; the log says
+   `playlist mood neon, genre pop`); with no overlap or no genre, or when the genre gave the mood,
+   the mood's first colour. A white-ish cover colour counts as white only where white is allowed.
 
 The time of day changes only the brightness, never the colour. The black deck's serial log has one
 line per song with what it knew and which rule decided:

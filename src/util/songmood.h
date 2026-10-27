@@ -9,8 +9,9 @@
 //  3. otherwise a mood gives a set of allowed swatches: the playlist's (its name, then its
 //     description: words and emoji), else the genre badge's, else all 8 ("any");
 //     the cover chooses inside it: the first cover colour (in weight order) whose nearest swatch is
-//     allowed; else the allowed swatch nearest the first colour if within 45 deg of hue; else the
-//     set's first (a black-and-white cover too). A white-ish colour counts only where white is allowed.
+//     allowed; else the allowed swatch nearest the first colour if within 45 deg of hue. Failing
+//     that (a grey cover too): under a playlist's mood, the genre mood's first swatch that the
+//     playlist's set allows; else the set's first. A white-ish colour counts only where white is allowed.
 // Text matches ignore case and accents (fold); titles and albums also match without a suffix such
 // as " - Remastered" or " (feat. ...)". The time of day changes only the brightness (lights()).
 // PURE, host-tested.
@@ -32,6 +33,7 @@ struct Choice {
     const char* mood;      // the mood whose set applied ("neon", "intimate", ..., "any"), even for a pick
     uint8_t set[8];        // that set, strongest first
     uint8_t setN;
+    const char* genre;     // the genre mood that chose inside a playlist's set (the cover gave none), or nullptr
 };
 Choice choose(const Song& song, const songpalette::Rgb* cover, int coverCount, uint8_t badge);
 // The PalPkt palette for a choice: c[0] the swatch's screen colour (the yellow deck snaps it back to

@@ -78,11 +78,11 @@ static void decideColour(uint32_t gen) {
     songpalette::timeOfDay(minute, &cap, &depth);
     const bool moodRule = c.rule == songmood::Rule::PlaylistMood || c.rule == songmood::Rule::GenreMood;
     char line[512];   // built whole and printed once (printf in pieces came out cut); not in a TLS call
-    snprintf(line, sizeof line, "[colour] \"%s\" | %s | %s | %s%s%s | genre %s | cover%s | %s%s%s | -> %s cap %u\n",
+    snprintf(line, sizeof line, "[colour] \"%s\" | %s | %s | %s%s%s | genre %s | cover%s | %s%s%s%s%s | -> %s cap %u\n",
              s_st.trackName, s_st.artist, s_st.album, playlist ? "\"" : "", playlist ? s_st.context : "-",
              playlist ? "\"" : "", badge == genre::NONE ? "NONE" : genrebadge::at(badge).label, cover,
-             songmood::ruleName(c.rule), moodRule ? " " : "", moodRule ? c.mood : "", ledlook::SWATCHES[c.swatch].name,
-             cap);
+             songmood::ruleName(c.rule), moodRule ? " " : "", moodRule ? c.mood : "", c.genre ? ", genre " : "",
+             c.genre ? c.genre : "", ledlook::SWATCHES[c.swatch].name, cap);
     Serial.print(line);
 }
 

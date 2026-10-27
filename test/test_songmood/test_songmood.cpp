@@ -244,16 +244,67 @@ void test_the_cover_chooses_inside_the_set() {
     Rgb c2[1] = {hex(0xFF6A00)};   // orange, 25 deg: red
     TEST_ASSERT_EQUAL_INT(RED, songmood::choose(s, c2, 1, POP).swatch);
     Rgb c3[1] = {hex(0x00FF30)};   // green: 94 deg from blue
-    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(s, c3, 1, POP).swatch);
+    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(s, c3, 1, genre::NONE).swatch);
+    TEST_ASSERT_EQUAL_INT(PINK, songmood::choose(s, c3, 1, POP).swatch);   // pop's first that neon allows
     // a white-ish colour counts as white only where white is allowed
     Rgb c4[2] = {hex(0xE0E0E0), hex(0x0040FF)};
     TEST_ASSERT_EQUAL_INT(BLUE, songmood::choose(s, c4, 2, POP).swatch);
     const Song calm{"Song", "A", "X", "chill", ""};   // blue, white, purple
     TEST_ASSERT_EQUAL_INT(WHITE, songmood::choose(calm, c4, 2, POP).swatch);
     Rgb c5[1] = {hex(0xE0E0E0)};
-    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(s, c5, 1, POP).swatch);   // no hue to be near: the first
+    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(s, c5, 1, genre::NONE).swatch);   // no hue to be near: the first
+    TEST_ASSERT_EQUAL_INT(PINK, songmood::choose(s, c5, 1, POP).swatch);
     // a null cover with a count is no cover
-    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(s, nullptr, 2, POP).swatch);
+    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(s, nullptr, 2, genre::NONE).swatch);
+}
+
+// Replay 2026-10-27 in the neon playlist: a grey cover (or none near the set) takes the genre
+// mood's first swatch that the playlist's set allows; songs the cover decides stay as they were.
+void test_replay_grey_covers_take_the_genres_colour_in_the_playlists_mood() {
+    const Case cases[] = {
+        {"Love Me Harder", "Ariana Grande", "My Everything", NEON, POP, {}, 0, PINK, Rule::PlaylistMood},
+        {"\xE3\x83\x97\xE3\x83\xA9\xE3\x82\xB9\xE3\x83\x86\xE3\x82\xA3\xE3\x83\x83\xE3\x82\xAF\xE3\x83\xBB"
+         "\xE3\x83\xA9\xE3\x83\x96",   // プラスティック・ラブ
+         "Mariya Takeuchi", "Variety", NEON, 2, {}, 0, PINK, Rule::PlaylistMood},
+        {"SexyBack (feat. Timbaland)", "Justin Timberlake", "FutureSex/LoveSounds", NEON, POP, {}, 0, PINK,
+         Rule::PlaylistMood},
+        // unchanged
+        {"Wake Me Up (feat. Justice)", "The Weeknd", "Hurry Up Tomorrow", NEON, RNB, {0xFF6100}, 1, RED,
+         Rule::PlaylistMood},
+        {"Superman", "Eminem", "The Eminem Show", NEON, RAP, {0xFF1100}, 1, RED, Rule::PlaylistMood},
+        {"Kiss Me More (feat. SZA)", "Doja Cat", "Planet Her", NEON, RNB, {0x0066FF, 0x5500FF}, 2, BLUE,
+         Rule::PlaylistMood},
+        {"Sunflower - Spider-Man: Into the Spider-Verse", "Post Malone", "Spider-Man", NEON, RAP, {0x00E6FF}, 1, BLUE,
+         Rule::PlaylistMood},
+        {"No Role Modelz", "J. Cole", "2014 Forest Hills Drive", NEON, RAP, {0x00A2FF, 0x73FF00}, 2, BLUE,
+         Rule::PlaylistMood},
+        {"PAUSA", "Vulgo FK", "F**K SONGS", NEON, RAP, {}, 0, PINK, Rule::Pick},
+        {"Midnight Pretenders", "Tomoko Aran", "Fuyu-Kukan", NEON, 2, {0x0077FF, 0xFF006B}, 2, BLUE,
+         Rule::PlaylistMood},
+    };
+    check(cases, sizeof cases / sizeof cases[0]);
+}
+
+void test_the_genre_fallback_and_what_it_leaves_alone() {
+    const Song neon{"Song", "A", "X", NEON, ""};
+    Choice c = songmood::choose(neon, nullptr, 0, POP);
+    TEST_ASSERT_EQUAL_INT(PINK, c.swatch);
+    TEST_ASSERT_EQUAL_STRING("neon", c.mood);
+    TEST_ASSERT_EQUAL_STRING("pop", c.genre);   // the log's "playlist mood neon, genre pop"
+    // the cover decided: no genre named
+    Rgb blue[1] = {hex(0x0040FF)};
+    TEST_ASSERT_NULL(songmood::choose(neon, blue, 1, POP).genre);
+    // no overlap (sunny has none of pop's), or no genre: the playlist set's first
+    const Song sunny{"Song", "A", "X", "summer", ""};
+    c = songmood::choose(sunny, nullptr, 0, POP);
+    TEST_ASSERT_EQUAL_INT(YELLOW, c.swatch);
+    TEST_ASSERT_NULL(c.genre);
+    TEST_ASSERT_EQUAL_INT(RED, songmood::choose(neon, nullptr, 0, 29).swatch);   // WORLD: any, not a mood
+    // the set came from the genre itself: its first, as before
+    const Song album{"Song", "A", "X", nullptr, nullptr};
+    c = songmood::choose(album, nullptr, 0, ROCK);
+    TEST_ASSERT_EQUAL_INT(RED, c.swatch);
+    TEST_ASSERT_NULL(c.genre);
 }
 
 void test_null_fields_are_empty() {
@@ -308,6 +359,8 @@ int main(int, char**) {
     RUN_TEST(test_logged_songs_in_the_neon_playlist);
     RUN_TEST(test_logged_songs_in_the_drive_playlist);
     RUN_TEST(test_logged_extras);
+    RUN_TEST(test_replay_grey_covers_take_the_genres_colour_in_the_playlists_mood);
+    RUN_TEST(test_the_genre_fallback_and_what_it_leaves_alone);
     RUN_TEST(test_picks_ignore_case_accents_and_suffixes_and_need_the_artist);
     RUN_TEST(test_a_pick_beats_a_colour_word_which_beats_the_mood);
     RUN_TEST(test_playlist_moods_by_word_and_emoji);

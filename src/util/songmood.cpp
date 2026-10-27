@@ -238,16 +238,18 @@ bool allowed(const Mood& m, int swatch) {
     return false;
 }
 
+// The cover's swatch inside the set, or -1 when it gives none (no usable colour, or none allowed
+// and none within NEAR_DEG).
 int fromCover(const Mood& m, const songpalette::Rgb* cover, int count) {
-    if (!cover || count <= 0) return m.set[0];
+    if (!cover || count <= 0) return -1;
     for (int i = 0; i < count; ++i) {
         const int sw = musiclights::nearestSwatch(cover[i]);   // a white-ish colour is white
         if (allowed(m, sw)) return sw;
     }
     int hue, sat;
     hueSat(cover[0], &hue, &sat);
-    if (sat < musiclights::WHITE_SAT_PCT) return m.set[0];   // no hue to be near
-    int best = m.set[0], bestD = NEAR_DEG + 1;
+    if (sat < musiclights::WHITE_SAT_PCT) return -1;   // no hue to be near
+    int best = -1, bestD = NEAR_DEG + 1;
     for (int i = 0; i < m.n; ++i) {
         if (m.set[i] == WHITE) continue;
         int h, s;
@@ -295,6 +297,18 @@ Choice choose(const Song& song, const songpalette::Rgb* cover, int coverCount, u
         c.rule = Rule::Word;
     } else {
         c.swatch = fromCover(*m, cover, coverCount);
+    }
+    if (c.swatch < 0) {   // the cover gave none: the set's first, or under a playlist's mood the genre's
+        c.swatch = m->set[0];
+        const Mood* g = c.rule == Rule::PlaylistMood && badge < sizeof BADGE_MOOD ? &GENRE_MOODS[BADGE_MOOD[badge]]
+                                                                                   : nullptr;
+        for (int i = 0; g && i < g->n; ++i) {
+            if (allowed(*m, g->set[i])) {   // the genre's first colour that the playlist's mood allows
+                c.swatch = g->set[i];
+                c.genre = g->name;
+                break;
+            }
+        }
     }
     return c;
 }
