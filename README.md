@@ -183,8 +183,8 @@ powershell -ExecutionPolicy Bypass -File tools\run_tests.ps1   # host unit tests
 pio run -e s3 -e cyd_companion                                  # deck and companion
 ```
 
-CI builds the deck, the companion and both hardware checks, enforces the flash budget
-(`s3`, `cyd_companion`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
+CI builds the deck, the yellow deck's LED panel, the companion and both hardware checks,
+enforces the flash budget (`s3`, `ledpanel`, `cyd_companion`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
 the media tool tests (`python -m unittest discover -s tools -p "test_gen_*.py"`). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup, test rules and commit style.
 
