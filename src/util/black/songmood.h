@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-#include "songpalette.h"
+#include "../wire/songpalette.h"
 // Music mode's colour for a song: one of the Lights grid's 8 swatches (ledlook::Colour, RED..YELLOW;
 // never LIGHT_BLUE), strongest signal first:
 //  1. the owner's picks (songpicks.inc): a song (title + artist), else an album, else an artist;

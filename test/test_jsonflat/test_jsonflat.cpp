@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/jsonflat.h"
+#include "../../src/util/common/jsonflat.h"
 
 void setUp() {}
 void tearDown() {}

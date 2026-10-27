@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/qrfit.h"
+#include "../../src/util/black/qrfit.h"
 
 void setUp() {}
 void tearDown() {}

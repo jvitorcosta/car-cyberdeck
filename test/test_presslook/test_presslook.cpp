@@ -3,7 +3,7 @@
 #include "../../src/ui/presslook.h"
 #include "../../src/ui/termfont.h"
 #include "../../src/ui/termlayout.h"
-#include "../../src/util/deckmenu.h"
+#include "../../src/util/yellow/deckmenu.h"
 
 using termfont::Face;
 void setUp() {}

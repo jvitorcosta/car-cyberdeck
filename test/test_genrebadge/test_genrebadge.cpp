@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdio>
 #include <cstring>
-#include "../../src/util/genrebadge.h"
+#include "../../src/util/black/genrebadge.h"
 
 void setUp() {}
 void tearDown() {}

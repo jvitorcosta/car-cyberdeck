@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "rgb565.h"
+#include "../common/rgb565.h"
 // Boot scene motion, light and colour maths (docs/superpowers/specs/2026-10-09-boot-scene-design.md).
 // PURE, host-tested. `t` is ms since the scene started; colours are native RGB565.
 namespace bootanim {

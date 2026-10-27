@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-#include "text.h"
+#include "../common/text.h"
 // UTF-8 text as a run of drawable items: ASCII glyphs of font 2 (with an optional accent mark),
 // Wide glyphs from the CJK font and Emoji pictures. PURE, host-tested; widths come from caller
 // functions.

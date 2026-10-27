@@ -1,5 +1,5 @@
 #include "lyricmsg.h"
-#include "../util/text.h"
+#include "../util/common/text.h"
 #include <cstring>
 
 namespace lyricmsg {

@@ -1,6 +1,6 @@
 #include "bios.h"
 #include <cstring>
-#include "version.h"
+#include "../common/version.h"
 
 namespace bios {
 

@@ -1,10 +1,10 @@
 #include "lrclib.h"
-#include "../util/lrcstream.h"
+#include "../util/black/lrcstream.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "../net/http_config.h"
-#include "../util/text.h"
-#include "../util/readguard.h"
+#include "../util/common/text.h"
+#include "../util/common/readguard.h"
 #include "../core/mem.h"
 
 namespace lyricsvc {

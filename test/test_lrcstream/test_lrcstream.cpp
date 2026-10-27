@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <string>
-#include "../../src/util/lrcstream.h"
+#include "../../src/util/black/lrcstream.h"
 
 using lrcstream::Kind;
 static lyricbuf::Lyrics L;

@@ -1,7 +1,7 @@
 #pragma once
 #include "app_state.h"
-#include "../util/lyricbuf.h"
-#include "../util/lyricstatus.h"
+#include "../util/black/lyricbuf.h"
+#include "../util/wire/lyricstatus.h"
 namespace lyricsvc {
 // The one lyrics arena (~5.6 KB, in PSRAM). Written by the network task, read by the UI through
 // shared::lyricView() — never directly. nullptr while there is no memory for it (then the

@@ -1,8 +1,8 @@
 #include "httpget.h"
 #include <WiFi.h>
 #include <cstdio>
-#include "../util/httphead.h"
-#include "../util/readguard.h"
+#include "../util/yellow/httphead.h"
+#include "../util/common/readguard.h"
 
 namespace net {
 

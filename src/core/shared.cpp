@@ -1,6 +1,6 @@
 #include "shared.h"
-#include "../util/text.h"
-#include "../util/genre.h"
+#include "../util/common/text.h"
+#include "../util/black/genre.h"
 #include <string.h>
 #include "../lyrics/lrclib.h"
 #include <freertos/FreeRTOS.h>

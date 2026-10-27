@@ -1,7 +1,7 @@
 #include "dashtext.h"
 #include <cmath>
 #include <cstdio>
-#include "text.h"
+#include "../common/text.h"
 
 namespace dashtext {
 

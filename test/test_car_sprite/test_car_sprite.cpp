@@ -1,6 +1,6 @@
 #include <unity.h>
 #include "../../src/ui/car_sprite.h"
-#include "../../src/util/bootanim.h"
+#include "../../src/util/black/bootanim.h"
 
 void setUp() {}
 void tearDown() {}

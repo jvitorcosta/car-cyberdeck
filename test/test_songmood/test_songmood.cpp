@@ -1,10 +1,10 @@
 #include <unity.h>
 #include <cstring>
 #include <initializer_list>
-#include "../../src/util/genre.h"
-#include "../../src/util/ledlook.h"
-#include "../../src/util/musiclights.h"
-#include "../../src/util/songmood.h"
+#include "../../src/util/black/genre.h"
+#include "../../src/util/lights/ledlook.h"
+#include "../../src/util/lights/musiclights.h"
+#include "../../src/util/black/songmood.h"
 
 using songmood::Choice;
 using songmood::Rule;

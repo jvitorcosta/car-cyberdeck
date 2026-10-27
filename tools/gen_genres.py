@@ -1,4 +1,4 @@
-"""Generate src/util/genre_data.inc from Apple's music genre tree (dev-time; output is committed).
+"""Generate src/util/black/genre_data.inc from Apple's music genre tree (dev-time; output is committed).
 
 Every Apple genre id maps to one of the deck's genre badges: a top-level genre and all its
 subgenres take the TOP badge, with OVERRIDES winning (Baile Funk -> FUNK BR, K-pop -> K-POP ...).
@@ -11,7 +11,7 @@ import os
 import urllib.request
 
 TREE_URL = "https://itunes.apple.com/WebObjects/MZStoreServices.woa/ws/genres?id=34&cc=br"
-OUT = os.path.join(os.path.dirname(__file__), "..", "src", "util", "genre_data.inc")
+OUT = os.path.join(os.path.dirname(__file__), "..", "src", "util", "black", "genre_data.inc")
 
 # Colours follow genre associations (rap black, R&B brown, China red, Brazil green/yellow ...).
 # Badge order is the runtime index; "???" must stay last (unknown-id fallback).

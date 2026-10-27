@@ -2,7 +2,7 @@
 #include "status_sprite.h"
 #include "pokeball.h"
 #include "sunset.h"
-#include "../util/idlesprite.h"
+#include "../util/black/idlesprite.h"
 
 namespace statusscene {
 

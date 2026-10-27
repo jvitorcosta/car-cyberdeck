@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/intropick.h"
+#include "../../src/util/black/intropick.h"
 
 using namespace intropick;
 

@@ -4,11 +4,11 @@
 #include <esp_heap_caps.h>
 #include "../net/http_config.h"
 #include "../config.h"
-#include "../util/ctxcache.h"
-#include "../util/jsonpath.h"
-#include "../util/playerjson.h"
-#include "../util/text.h"
-#include "../util/netplan.h"
+#include "../util/black/ctxcache.h"
+#include "../util/common/jsonpath.h"
+#include "../util/black/playerjson.h"
+#include "../util/common/text.h"
+#include "../util/black/netplan.h"
 
 // Spotify Web API client: one request per poll (GET /v1/me/player: the song, its progress and the
 // device) on a connection kept open between polls, so a poll costs a request instead of a TLS

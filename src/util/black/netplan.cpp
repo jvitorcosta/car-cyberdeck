@@ -1,5 +1,5 @@
 #include "netplan.h"
-#include "text.h"
+#include "../common/text.h"
 #include <cstring>
 
 namespace netplan {

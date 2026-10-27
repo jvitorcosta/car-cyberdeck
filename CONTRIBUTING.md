@@ -25,7 +25,7 @@ approach before you spend time on it.
 |---|---|
 | `src/core/` | network task, shared state, memory accounting |
 | `src/ui/` | everything drawn on the display |
-| `src/util/` | pure logic, no Arduino: parsers, timing, layout; tested on the PC |
+| `src/util/` | pure logic, no Arduino: parsers, timing, layout; tested on the PC. Grouped by who uses it: `wire/` (the contracts between the decks), `lights/` (the LED domain, both decks), `common/` (both decks), `black/`, `yellow/` |
 | `src/board/s3/` | board-specific code (the black deck); pins in `include/pins.h` |
 | `test/` | one Unity suite per pure module |
 | `tools/` | generators for bundled data, test runners, session analysis |

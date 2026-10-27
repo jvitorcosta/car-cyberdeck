@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/elkcmd.h"
+#include "../../src/util/yellow/elkcmd.h"
 
 void setUp() {}
 void tearDown() {}

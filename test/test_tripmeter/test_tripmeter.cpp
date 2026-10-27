@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdint>
 #include <cstring>
-#include "../../src/util/tripmeter.h"
+#include "../../src/util/yellow/tripmeter.h"
 
 void setUp() {}
 void tearDown() {}

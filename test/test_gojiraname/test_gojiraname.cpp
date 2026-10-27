@@ -7,9 +7,9 @@
 #include "../../src/ui/gojiraname.h"
 #include "../../src/ui/termfont.h"
 #include "../../src/ui/termlayout.h"
-#include "../../src/util/deckmenu.h"
-#include "../../src/util/ledpresets.h"
-#include "../../src/util/lightstatus.h"
+#include "../../src/util/yellow/deckmenu.h"
+#include "../../src/util/yellow/ledpresets.h"
+#include "../../src/util/yellow/lightstatus.h"
 
 using termfont::Face;
 using namespace termlayout;

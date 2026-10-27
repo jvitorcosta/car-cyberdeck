@@ -1,5 +1,5 @@
 #include "icon_map.h"
-#include "../util/text.h"
+#include "../util/common/text.h"
 
 namespace icons {
 

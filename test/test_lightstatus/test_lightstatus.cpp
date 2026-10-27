@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdio>
 #include <cstring>
-#include "../../src/util/lightstatus.h"
+#include "../../src/util/yellow/lightstatus.h"
 
 using lightstatus::State;
 

@@ -3,9 +3,9 @@
 #include <cstring>
 #include "battle.h"
 #include "theme.h"
-#include "../util/backdrop.h"
-#include "../util/ridersprite.h"
-#include "../util/rgb565.h"
+#include "../util/black/backdrop.h"
+#include "../util/black/ridersprite.h"
+#include "../util/common/rgb565.h"
 
 namespace ui {
 

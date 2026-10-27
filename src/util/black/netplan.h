@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "lyricstatus.h"
+#include "../wire/lyricstatus.h"
 #include "idlewait.h"
 // What the network task does next. PURE, host-tested.
 // The task polls Spotify on a fixed cadence and, between polls, does ONE per-track

@@ -3,9 +3,9 @@
 #include <atomic>
 #include <cstring>
 #include "sink.h"
-#include "../util/loudness.h"
-#include "../util/howl.h"
-#include "../util/intropick.h"
+#include "../util/black/loudness.h"
+#include "../util/black/howl.h"
+#include "../util/black/intropick.h"
 #include "../core/media.h"
 
 MEDIA_DECL(data_greeting_pcm);

@@ -1,7 +1,7 @@
 #pragma once
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
-#include "../util/netup.h"
+#include "../util/common/netup.h"
 // Shared HTTP(S) settings for every request the deck makes (Spotify, LRCLIB, Apple, art,
 // walk sheets). Inline where possible: no extra RAM or stack at the call sites.
 namespace netcfg {

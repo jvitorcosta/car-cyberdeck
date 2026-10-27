@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/bios.h"
-#include "../../src/util/version.h"
+#include "../../src/util/black/bios.h"
+#include "../../src/util/common/version.h"
 
 using namespace bios;
 

@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <atomic>
 #include <esp_partition.h>
-#include "../util/mediapack.h"
+#include "../util/black/mediapack.h"
 
 namespace media {
 namespace {

@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <cstdio>
-#include "../../src/util/playerjson.h"
+#include "../../src/util/black/playerjson.h"
 
 void setUp() {}
 void tearDown() {}

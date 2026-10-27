@@ -13,13 +13,13 @@
 #include "../lyrics/lrclib.h"
 #include "../pokemon/pick.h"
 #include "../pokemon/dex.h"
-#include "../util/netplan.h"
-#include "../util/genre.h"
-#include "../util/genrebadge.h"
+#include "../util/black/netplan.h"
+#include "../util/black/genre.h"
+#include "../util/black/genrebadge.h"
 #include "../genre/apple.h"
-#include "../util/ledlook.h"
-#include "../util/songmood.h"
-#include "../util/songpalette.h"
+#include "../util/lights/ledlook.h"
+#include "../util/black/songmood.h"
+#include "../util/wire/songpalette.h"
 
 // History (README "Design & performance history"): these calls used to run inline in
 // loop(). Each is a fresh TLS handshake (poll ~1.5 s, player ~1.4 s, PokeAPI 4.2 s, art

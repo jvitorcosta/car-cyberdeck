@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <cstring>
-#include "../util/rgb565.h"
+#include "../util/common/rgb565.h"
 #include "../audio/greeting.h"
 
 namespace bootterm {

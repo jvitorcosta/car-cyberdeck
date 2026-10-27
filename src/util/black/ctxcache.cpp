@@ -1,5 +1,5 @@
 #include "ctxcache.h"
-#include "text.h"
+#include "../common/text.h"
 #include <cstring>
 
 namespace ctxcache {

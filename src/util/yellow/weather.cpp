@@ -2,7 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include "jsonflat.h"
+#include "../common/jsonflat.h"
 
 namespace weather {
 

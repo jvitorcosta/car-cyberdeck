@@ -1,7 +1,7 @@
 #include "geoip.h"
 #include <cstring>
-#include "jsonflat.h"
-#include "jsonpath.h"
+#include "../common/jsonflat.h"
+#include "../common/jsonpath.h"
 
 namespace geoip {
 

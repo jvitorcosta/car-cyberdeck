@@ -4,7 +4,7 @@
 #include "../../src/ui/qrcard.h"
 #include "../../src/ui/statusscene.h"
 #include "../../src/ui/status_sprite.h"
-#include "../../src/util/idlesprite.h"
+#include "../../src/util/black/idlesprite.h"
 
 using qrcard::Rect;
 

@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "../util/rgb565.h"
+#include "../util/common/rgb565.h"
 
 namespace theme {
 // RGB565 GBA Ruby/Sapphire palette

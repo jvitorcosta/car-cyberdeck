@@ -1,7 +1,7 @@
 #pragma once
 // The CYD's resistive touchscreen (XPT2046) for the yellow deck's buttons. It sits on its own pins
 // (include/pins.h); the yellow deck drives it on VSPI because the display owns HSPI.
-#include "../util/touchcal.h"
+#include "../util/yellow/touchcal.h"
 
 namespace touch {
 void begin();

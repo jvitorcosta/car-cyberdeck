@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/netup.h"
+#include "../../src/util/common/netup.h"
 
 void setUp() {}
 void tearDown() {}

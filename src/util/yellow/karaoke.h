@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-#include "stateparse.h"
+#include "../wire/stateparse.h"
 // What the yellow deck's KARAOKE screen shows of the black deck's GET /state: whether the song can
 // be sung along (synced lyrics), the song position moved on between polls, the progress bar, the
 // state word, and the lyric line due now and the one after it (ui/lyricrun wraps them).

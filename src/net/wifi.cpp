@@ -3,10 +3,10 @@
 #include "remote_config.h"
 #include "ipaddr.h"
 #include "http_config.h"
-#include "../util/hotspotip.h"
-#include "../util/netdiag.h"
-#include "../util/netup.h"
-#include "../util/roam.h"
+#include "../util/common/hotspotip.h"
+#include "../util/common/netdiag.h"
+#include "../util/common/netup.h"
+#include "../util/common/roam.h"
 #include "ping/ping_sock.h"
 
 namespace net {

@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/rgb565.h"
+#include "../../src/util/common/rgb565.h"
 
 void setUp() {}
 void tearDown() {}

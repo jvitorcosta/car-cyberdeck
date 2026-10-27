@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/hue.h"
+#include "../../src/util/lights/hue.h"
 
 void setUp() {}
 void tearDown() {}

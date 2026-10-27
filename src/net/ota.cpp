@@ -8,8 +8,8 @@
 #include <esp_system.h>
 #include "remote_config.h"
 #include "wifi.h"
-#include "../util/bootguard.h"
-#include "../util/otaview.h"
+#include "../util/common/bootguard.h"
+#include "../util/common/otaview.h"
 
 namespace ota {
 namespace {

@@ -1,5 +1,5 @@
 #pragma once
-#include "../util/text.h"
+#include "../util/common/text.h"
 // Pixel art for accent marks drawn over the ASCII glyphs of the 16-px font 2. PURE, tested.
 namespace accents {
 constexpr int W = 5, H = 2;

@@ -1,6 +1,6 @@
 #include "lyricrun.h"
 
-#include "../util/text.h"
+#include "../util/common/text.h"
 
 namespace lyricrun {
 

@@ -6,9 +6,9 @@
 #include <XPT2046_Touchscreen.h>
 #pragma GCC diagnostic pop
 #include "pins.h"
-#include "../util/touchcal.h"
-#include "../util/touchguard.h"
-#include "../util/touchmap.h"
+#include "../util/yellow/touchcal.h"
+#include "../util/yellow/touchguard.h"
+#include "../util/yellow/touchmap.h"
 
 namespace touch {
 static constexpr int MIN_Z = 400;                 // lighter readings are noise

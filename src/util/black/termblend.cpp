@@ -1,5 +1,5 @@
 #include "termblend.h"
-#include "rgb565.h"
+#include "../common/rgb565.h"
 
 namespace termblend {
 

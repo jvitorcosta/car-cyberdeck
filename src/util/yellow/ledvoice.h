@@ -4,7 +4,7 @@
 // doesn't know are skipped, so "set the lights to purple please" works. PURE, host-tested.
 #include <cctype>
 #include <cstring>
-#include "ledlook.h"
+#include "../lights/ledlook.h"
 
 namespace ledvoice {
 // Colours are ledlook's swatches (ledlook::Colour): the grid's eight by ledlook::COLOUR_WORDS, then

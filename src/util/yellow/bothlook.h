@@ -6,7 +6,7 @@
 // carries no colour acts on each light's own look: power sets each one's on/off, a level step
 // steps each one's %, an absolute level sets each one's %. A colour makes them one look again, the
 // usual copy. PURE, host-tested.
-#include "ledlook.h"
+#include "../lights/ledlook.h"
 
 namespace bothlook {
 // One change to a look; -1 / 0 leave that part as it is.

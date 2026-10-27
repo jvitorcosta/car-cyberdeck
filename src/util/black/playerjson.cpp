@@ -1,8 +1,8 @@
 #include "playerjson.h"
 #include <cstdio>
 #include <cstring>
-#include "jsonpath.h"
-#include "jsonflat.h"
+#include "../common/jsonpath.h"
+#include "../common/jsonflat.h"
 
 namespace playerjson {
 

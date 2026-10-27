@@ -1,5 +1,5 @@
 #include "sunset.h"
-#include "../util/rgb565.h"
+#include "../util/common/rgb565.h"
 
 namespace sunset {
 using rgb565::hex;

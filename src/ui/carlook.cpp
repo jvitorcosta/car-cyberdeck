@@ -1,7 +1,7 @@
 #include "carlook.h"
 #include "car_sprite.h"
-#include "../util/carbin.h"
-#include "../util/rgb565.h"
+#include "../util/black/carbin.h"
+#include "../util/common/rgb565.h"
 #ifdef BOARD_S3
 #include "../core/media.h"
 MEDIA_DECL(data_mcqueen_bin);

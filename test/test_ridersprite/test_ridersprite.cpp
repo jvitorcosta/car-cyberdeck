@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <vector>
-#include "../../src/util/ridersprite.h"
+#include "../../src/util/black/ridersprite.h"
 
 void setUp() {}
 void tearDown() {}

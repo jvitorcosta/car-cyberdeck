@@ -5,7 +5,7 @@
 // light's level is the owner's under the palette's time-of-day cap with a floor, a new song fades
 // in, and the prompt line says what is going on. PURE, host-tested.
 #include <cstdint>
-#include "songpalette.h"
+#include "../wire/songpalette.h"
 
 namespace musiclights {
 constexpr int FLOOR_PCT = 40;          // the cap never takes a light below this (unless the owner's is lower)

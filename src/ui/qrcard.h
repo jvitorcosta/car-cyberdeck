@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "../util/qrfit.h"
+#include "../util/black/qrfit.h"
 // The phone-remote link's QR code on "Waiting for a song..." (S3): a Gen-3 battle box at the
 // top left (ui::battleBox, slanted right edge and drop shadow), its name line a phone icon and
 // "REMOTE" in font 2, the code below on a cream panel at 3 px a module with a 2-module quiet

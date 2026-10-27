@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-#include "../util/lyricstatus.h"
+#include "../util/wire/lyricstatus.h"
 // Dialogue-box text for the lyrics status: Pokemon battle-text style messages while searching
 // or retrying, in the intro, and when there are no lyrics, so the box is never empty.
 // Spec: docs/superpowers/specs/2026-10-07-lyrics-reliability-design.md. PURE, host-tested.

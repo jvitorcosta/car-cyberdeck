@@ -1,5 +1,5 @@
 #pragma once
-#include "../util/otaview.h"
+#include "../util/common/otaview.h"
 // Firmware updates over WiFi, pushed from the PC, on both decks (board-neutral; each app hands in
 // its own hooks):
 //   pio run -e s3_ota -t upload          the black deck (main.cpp)

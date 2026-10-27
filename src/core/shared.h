@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include "app_state.h"
-#include "../util/lyricstatus.h"
+#include "../util/wire/lyricstatus.h"
 
 // State shared between the network task (core 0) and the UI loop (core 1), behind one
 // FreeRTOS mutex. Why two tasks: with all HTTPS inline, every Spotify poll froze the

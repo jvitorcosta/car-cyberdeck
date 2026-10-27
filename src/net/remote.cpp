@@ -6,15 +6,15 @@
 #include "wifi.h"
 #include "../audio/greeting.h"
 #include "../audio/musicsvc.h"
-#include "../util/remotegate.h"
-#include "../util/qrfit.h"
-#include "../util/netplan.h"
+#include "../util/common/remotegate.h"
+#include "../util/black/qrfit.h"
+#include "../util/black/netplan.h"
 #include "../core/mem.h"
 #include "../core/shared.h"
-#include "../util/statejson.h"
-#include "../util/version.h"
-#include "../util/tripclock.h"
-#include "../util/interp.h"
+#include "../util/wire/statejson.h"
+#include "../util/common/version.h"
+#include "../util/lights/tripclock.h"
+#include "../util/black/interp.h"
 #include <WiFi.h>
 
 

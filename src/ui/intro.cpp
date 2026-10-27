@@ -4,7 +4,7 @@
 #include <new>
 #include <esp_heap_caps.h>
 #include "montage.h"
-#include "../util/introclock.h"
+#include "../util/black/introclock.h"
 #include "../audio/greeting.h"
 
 #include <FS.h>
@@ -12,8 +12,8 @@ using fs::File;            // JPEGDEC.h names the global File, which this core's
 #include <JPEGDEC.h>
 #include "../core/media.h"
 #include "bootterm.h"
-#include "../util/rgb565.h"
-#include "../util/termblend.h"
+#include "../util/common/rgb565.h"
+#include "../util/black/termblend.h"
 MEDIA_DECL(data_intro_bin);
 MEDIA_DECL(data_max_bin);
 

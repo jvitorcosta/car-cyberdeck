@@ -5,8 +5,8 @@
 #include "../net/http_config.h"
 #include "../core/mem.h"
 #include "tjpgd.h"
-#include "../util/artmap.h"
-#include "../util/rgb565.h"
+#include "../util/black/artmap.h"
+#include "../util/common/rgb565.h"
 
 namespace art {
 

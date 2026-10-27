@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "../util/linkstatus.h"
+#include "../util/black/linkstatus.h"
 // The animated picture on the status screens: a bundled Pokemon per cause (status_sprite)
 // standing 2x on the battle platform, bobbing, with a speech bubble; a Poke Ball rolls along
 // the platform while the deck looks for WiFi. PURE, host-tested: pixel() gives each screen

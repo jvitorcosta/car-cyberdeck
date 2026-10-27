@@ -1,10 +1,10 @@
 #include "songmood.h"
 #include <cstring>
 #include <initializer_list>
-#include "hue.h"
-#include "ledlook.h"
-#include "musiclights.h"
-#include "text.h"
+#include "../lights/hue.h"
+#include "../lights/ledlook.h"
+#include "../lights/musiclights.h"
+#include "../common/text.h"
 
 namespace songmood {
 namespace {

@@ -2,9 +2,9 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "../net/http_config.h"
-#include "../util/genre.h"
-#include "../util/text.h"
-#include "../util/readguard.h"
+#include "../util/black/genre.h"
+#include "../util/common/text.h"
+#include "../util/common/readguard.h"
 
 namespace applegenre {
 

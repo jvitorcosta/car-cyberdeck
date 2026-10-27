@@ -3,9 +3,9 @@
 #include "../core/mem.h"
 #include "png.h"
 #include "fetch.h"
-#include "../util/animdata.h"
-#include "../util/walkanim.h"
-#include "../util/dexset.h"
+#include "../util/black/animdata.h"
+#include "../util/black/walkanim.h"
+#include "../util/black/dexset.h"
 
 // s_dur holds one entry per parsed frame: the two caps must stay equal.
 static_assert(walk::MAX_FRAMES == animdata::MAX_FRAMES, "walk and animdata frame caps differ");

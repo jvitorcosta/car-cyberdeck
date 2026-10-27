@@ -7,10 +7,10 @@
 #include "carlook.h"
 #include "bootterm.h"
 #include "montage.h"
-#include "../util/rgb565.h"
+#include "../util/common/rgb565.h"
 #include "../audio/greeting.h"
 #include "../core/mem.h"
-#include "../util/bootanim.h"
+#include "../util/black/bootanim.h"
 #include "../core/media.h"
 
 MEDIA_DECL(data_montage_bin);

@@ -2,7 +2,7 @@
 #include <cctype>
 #include <cstring>
 #include "theme.h"
-#include "../util/text.h"
+#include "../util/common/text.h"
 
 namespace typebadge {
 

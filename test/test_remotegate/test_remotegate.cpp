@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstdint>
-#include "../../src/util/remotegate.h"
+#include "../../src/util/common/remotegate.h"
 
 using remotegate::Gate;
 using remotegate::Result;

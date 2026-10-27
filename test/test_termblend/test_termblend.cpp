@@ -1,8 +1,8 @@
 #include <unity.h>
 #include <vector>
-#include "../../src/util/termblend.h"
-#include "../../src/util/rgb565.h"
-#include "../../src/util/bootanim.h"
+#include "../../src/util/black/termblend.h"
+#include "../../src/util/common/rgb565.h"
+#include "../../src/util/black/bootanim.h"
 
 void setUp() {}
 void tearDown() {}

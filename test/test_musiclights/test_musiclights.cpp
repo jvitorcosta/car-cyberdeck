@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/ledlook.h"
-#include "../../src/util/musiclights.h"
+#include "../../src/util/lights/ledlook.h"
+#include "../../src/util/lights/musiclights.h"
 
 using songpalette::Rgb;
 using namespace musiclights;

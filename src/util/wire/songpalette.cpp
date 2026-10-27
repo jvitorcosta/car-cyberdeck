@@ -1,6 +1,6 @@
 #include "songpalette.h"
-#include "hue.h"
-#include "rgb565.h"
+#include "../lights/hue.h"
+#include "../common/rgb565.h"
 
 namespace songpalette {
 namespace {

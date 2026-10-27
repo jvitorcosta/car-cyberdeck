@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/deckaddr.h"
+#include "../../src/util/yellow/deckaddr.h"
 
 void setUp() {}
 void tearDown() {}

@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <string>
-#include "../../src/util/stateparse.h"
+#include "../../src/util/wire/stateparse.h"
 
 void setUp() {}
 void tearDown() {}

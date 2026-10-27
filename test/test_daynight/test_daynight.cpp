@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/daynight.h"
+#include "../../src/util/common/daynight.h"
 
 void setUp() {}
 void tearDown() {}

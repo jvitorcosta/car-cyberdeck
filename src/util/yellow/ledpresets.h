@@ -4,7 +4,7 @@
 // word for the wire. Nothing is saved, so there is no storage to validate. PURE, host-tested.
 #include <cstddef>
 
-#include "ledlook.h"
+#include "../lights/ledlook.h"
 
 namespace ledpresets {
 constexpr int N = 6;

@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include <time.h>
 #include "../config.h"
-#include "../util/daynight.h"
+#include "../util/common/daynight.h"
 
 // POSIX TZ string, e.g. "<-04>4" (Manaus), "WET0WEST,M3.5.0/1,M10.5.0" (Lisbon),
 // "EST5EDT,M3.2.0,M11.1.0" (New York); see include/config.example.h.

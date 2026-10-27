@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/ledlook.h"
+#include "../../src/util/lights/ledlook.h"
 
 void setUp() {}
 void tearDown() {}

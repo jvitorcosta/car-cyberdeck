@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <IPAddress.h>
-#include "../util/songmood.h"
+#include "../util/black/songmood.h"
 // Music mode on the black deck ("song colours"): while the yellow deck keeps it alive (net/remote's
 // GET /music), a small task (core 1, 4 KB stack) sends the song's PalPkt (util/songmood's
 // lights(): the swatch the network task chose, the time of day's cap) over UDP to the requester's

@@ -1,7 +1,7 @@
 #pragma once
 #include <TFT_eSPI.h>
 #include <cstdint>
-#include "../util/bios.h"
+#include "../util/black/bios.h"
 // The on-board terminal: the BIOS log carried on in the boot scene's sky (ui/bootscene) and over
 // the intro video (ui/intro). The script and the live lines (WI-FI, ENGINE, GREETING, PARKING) come
 // from util/bios; this draws them, straight on the display or into a sprite.

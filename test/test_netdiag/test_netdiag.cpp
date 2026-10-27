@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/netdiag.h"
+#include "../../src/util/common/netdiag.h"
 
 void setUp() {}
 void tearDown() {}

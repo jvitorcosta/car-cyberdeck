@@ -1,6 +1,6 @@
 #include <unity.h>
-#include "../../src/util/rgb565.h"
-#include "../../src/util/songpalette.h"
+#include "../../src/util/common/rgb565.h"
+#include "../../src/util/wire/songpalette.h"
 
 using songpalette::Rgb;
 

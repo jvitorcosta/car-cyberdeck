@@ -4,9 +4,9 @@
 #include <lwip/sockets.h>
 #include "../core/mem.h"
 #include "../net/clock.h"
-#include "../util/musicwire.h"
-#include "../util/netplan.h"
-#include "../util/songmood.h"
+#include "../util/wire/musicwire.h"
+#include "../util/black/netplan.h"
+#include "../util/black/songmood.h"
 
 namespace musicsvc {
 

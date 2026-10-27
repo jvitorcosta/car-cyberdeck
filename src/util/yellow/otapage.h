@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-#include "otaview.h"
+#include "../common/otaview.h"
 // The yellow deck's update page (ledpanel.cpp): while an update arrives over WiFi (net/ota) a
 // full-screen terminal page in the current theme holds the screen: the phase's title, a 10-cell
 // block bar and the %. net/ota's otaview::Tracker says the phase; this says what a loop pass draws

@@ -1,6 +1,6 @@
 #include "stateparse.h"
 #include <cstring>
-#include "jsonflat.h"
+#include "../common/jsonflat.h"
 
 namespace stateparse {
 
