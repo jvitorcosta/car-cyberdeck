@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include "lyricstatus.h"
+#include "idlewait.h"
 // What the network task does next. PURE, host-tested.
 // The task polls Spotify on a fixed cadence and, between polls, does ONE per-track
 // work step at a time so a slow download never delays the next poll by more than
@@ -65,6 +66,23 @@ private:
     uint32_t interval_ = BASE_MS;
 };
 
+// Idle polling. While the deck shows "Nothing playing" (idlewait: no device or no song at once, a
+// pause after PAUSE_MS) every 4 s poll got the same answer (449 of them in an idle half hour), so
+// the poll waits IDLE_MS instead; a song started on the phone shows within that. Any other poll
+// (playing, a short pause, a failure: LinkGate and Health keep their pace) returns to the
+// backoff's interval, and a 429 wait longer than IDLE_MS still wins.
+class IdlePoll {
+public:
+    static constexpr uint32_t IDLE_MS = 10000;
+    // Feed each poll's resulting state: paused = a song there but not playing; stopped = nothing.
+    void onPoll(bool paused, bool stopped, uint32_t nowMs) { idle_ = clock_.update(paused, stopped, nowMs); }
+    bool idle() const { return idle_; }
+    uint32_t every(uint32_t backoffMs) const { return idle_ && backoffMs < IDLE_MS ? IDLE_MS : backoffMs; }
+private:
+    idlewait::Clock clock_;
+    bool idle_ = false;
+};
+
 // Retry-After header value in seconds (at most a week); -1 when missing or not plain digits
 // (the HTTP-date form).
 int parseRetryAfter(const char* v);
@@ -112,6 +130,14 @@ private:
 // True when a successful poll happened (lastOkMs != 0) more than limitMs ago (wrap-safe).
 inline bool stale(uint32_t nowMs, uint32_t lastOkMs, uint32_t limitMs) {
     return lastOkMs != 0 && nowMs - lastOkMs > limitMs;
+}
+
+// "No signal" once the last good poll is this old. While idle (IdlePoll) the next poll only
+// starts IDLE_MS after the last one, so one slow failure (8 s read timeout, more with a connect
+// and handshake) plus its 4 s retry would cross 20 s: the limit grows by the extra wait.
+constexpr uint32_t STALE_MS = 20000;
+inline uint32_t staleLimit(bool idle) {
+    return idle ? STALE_MS + (IdlePoll::IDLE_MS - PollBackoff::BASE_MS) : STALE_MS;
 }
 
 enum class Step { None, Walk, Art, Lyrics, Prefetch, Genre };

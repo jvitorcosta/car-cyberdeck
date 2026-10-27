@@ -1,6 +1,8 @@
 #include "intro.h"
 #include <Arduino.h>
 #include <atomic>
+#include <new>
+#include <esp_heap_caps.h>
 #include "montage.h"
 #include "../util/introclock.h"
 #include "../audio/greeting.h"
@@ -20,9 +22,25 @@ static TFT_eSPI* s_tft = nullptr;
 static std::atomic<bool> s_playing{false};   // set here, cleared by the intro task
 
 // JPEGDEC (bitbank2): ~2x faster than tjpgd on the S3, ~52 ms a frame with the push. ~18 KB of
-// state: static, the S3 has RAM to spare. No DMA: TFT_eSPI's initDMA() on this board left every
-// later draw (night drive, deck) on a black screen (2026-10-15).
-static JPEGDEC s_jpeg;
+// state, on the heap for the intro only (it was static: held all session for a few seconds' use).
+// Internal RAM, as the static was, so decoding is no slower; PSRAM if that is short (CPU only:
+// no DMA, as TFT_eSPI's initDMA() on this board left every later draw (night drive, deck) on a
+// black screen, 2026-10-15).
+static JPEGDEC* s_jpeg = nullptr;
+
+static bool newJpeg() {
+    void* p = heap_caps_malloc(sizeof(JPEGDEC), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!p) p = heap_caps_malloc(sizeof(JPEGDEC), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    s_jpeg = p ? new (p) JPEGDEC() : nullptr;
+    return s_jpeg;
+}
+
+static void freeJpeg() {
+    if (!s_jpeg) return;
+    s_jpeg->~JPEGDEC();
+    heap_caps_free(s_jpeg);
+    s_jpeg = nullptr;
+}
 
 static bool (*s_online)() = nullptr;
 static TFT_eSprite* s_term = nullptr;   // bootterm::W x H, KEY where there's no glyph
@@ -59,10 +77,10 @@ static bool show(int i) {
     const uint8_t* jpg = nullptr;
     size_t len = 0;
     if (!montage::frame(i, &jpg, &len)) return false;
-    if (s_jpeg.openFLASH((uint8_t*)jpg, (int)len, draw)) {
-        s_jpeg.setPixelType(RGB565_BIG_ENDIAN);   // as pushImage sends it as-is
-        s_jpeg.decode(0, 0, 0);
-        s_jpeg.close();
+    if (s_jpeg->openFLASH((uint8_t*)jpg, (int)len, draw)) {
+        s_jpeg->setPixelType(RGB565_BIG_ENDIAN);   // as pushImage sends it as-is
+        s_jpeg->decode(0, 0, 0);
+        s_jpeg->close();
     }
     return true;
 }
@@ -96,6 +114,7 @@ static void task(void*) {
     }
     Serial.printf("[intro] held %lu ms for WiFi\n", (unsigned long)(millis() - h0));
     freeTerm();
+    freeJpeg();
     s_playing = false;
     vTaskDelete(nullptr);
 }
@@ -115,6 +134,10 @@ void start(TFT_eSPI& t, bool (*online)(), intropick::Opening o) {
         Serial.println("[intro] none");
         return;
     }
+    if (!newJpeg()) {
+        Serial.println("[intro] no memory for the JPEG decoder: skipped");
+        return;
+    }
     s_tft = &t;
     s_online = online;
     s_playing = true;
@@ -131,6 +154,7 @@ void start(TFT_eSPI& t, bool (*online)(), intropick::Opening o) {
     if (xTaskCreatePinnedToCore(task, "intro", 6144, nullptr, 2, nullptr, 1) != pdPASS) {
         s_playing = false;     // wait() would spin forever and the deck never boot
         freeTerm();
+        freeJpeg();
         Serial.println("[intro] no memory for its task: skipped (its sound still plays)");
     }
 }

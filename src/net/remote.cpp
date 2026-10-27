@@ -88,7 +88,9 @@ bool link(char* out, size_t n) {
 static void handleState() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)
-    static char out[statejson::MAX_JSON];   // 768 B overflowed with a long title and lyric lines
+    // 768 B overflowed with a long title and lyric lines. In PSRAM: only the CPU touches it
+    static char* out = (char*)mem::bigAlloc(statejson::MAX_JSON);
+    if (!out) { s_server->send(500, "text/plain", "no memory"); return; }
     static shared::LyricPair lp;   // static: two 160-byte lines, off this task's stack
     shared::snapshot(st);
     char title[sizeof s_title], detail[sizeof s_detail];
@@ -109,7 +111,7 @@ static void handleState() {
     s.playing = st.isPlaying; s.tripS = s_trip.seconds(now);
     s.lyricKind = statejson::lyricKindName(lp.status);
     s.line = lp.line; s.next = lp.next; s.lineStartMs = lp.lineStartMs; s.nextStartMs = lp.nextStartMs;
-    if (!statejson::write(s, out, sizeof out)) { s_server->send(500, "text/plain", "state too big"); return; }
+    if (!statejson::write(s, out, statejson::MAX_JSON)) { s_server->send(500, "text/plain", "state too big"); return; }
     s_server->sendHeader("Cache-Control", "no-store");
     s_server->send(200, "application/json", out);
 }

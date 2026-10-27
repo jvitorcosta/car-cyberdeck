@@ -5,12 +5,22 @@
 #include "../net/http_config.h"
 #include "../util/text.h"
 #include "../util/readguard.h"
+#include "../core/mem.h"
 
 namespace lyricsvc {
 
-static lyricbuf::Lyrics s_arena;   // ~5.6 KB, static: allocated once
 static constexpr uint32_t LYRICS_DEADLINE_MS = 15000;   // whole body, per request
-lyricbuf::Lyrics& arena() { return s_arena; }
+// ~5.6 KB in PSRAM (only the CPU touches it), allocated on first use: the network task's first
+// lyrics step. A failed allocation is tried again on the next call.
+lyricbuf::Lyrics* arena() {
+    static lyricbuf::Lyrics* a = nullptr;
+    if (!a) {
+        auto* p = (lyricbuf::Lyrics*)mem::bigAlloc(sizeof(lyricbuf::Lyrics));
+        if (p) lyricbuf::reset(*p);
+        a = p;
+    }
+    return a;
+}
 
 // Query value via the shared, bounded encoder (one String instead of one per byte). AppState
 // fields are < 96 bytes, so the encoded form (<= 3 bytes each) always fits.

@@ -29,6 +29,7 @@ static netplan::TrackGen s_gen;
 static netplan::Work s_work{};
 static netplan::LinkGate s_link;   // "No signal" only after several failed polls in a row
 static netplan::PollBackoff s_backoff;   // Spotify 429: poll less often until it passes
+static netplan::IdlePoll s_idle;         // "Nothing playing": poll every 10 s, not 4 s
 static netplan::Health s_health;   // pause optional work / restart when polls keep failing
 static netplan::WalkRetry s_walkRetry;       // PNG decoder didn't fit: retry after the polls
 static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB hiccups
@@ -105,8 +106,9 @@ static bool doStep(netplan::Step step) {
         case netplan::Step::Lyrics: {
             tick();
             shared::lyricsInvalidate();       // UI stops reading the arena before we overwrite it
-            lyricstatus::Result r =
-                lyricsvc::fetchInto(s_st, lyricsvc::arena(), s_lyricsRetry.attempts() + 1);
+            lyricbuf::Lyrics* arena = lyricsvc::arena();   // nullptr: no memory yet, retry later
+            lyricstatus::Result r = arena ? lyricsvc::fetchInto(s_st, *arena, s_lyricsRetry.attempts() + 1)
+                                          : lyricstatus::Result::TempError;
             bool final = s_lyricsRetry.onResult(r, millis());
             if (r == lyricstatus::Result::Synced || r == lyricstatus::Result::Plain)
                 shared::postLyrics(gen);      // lines first, then the status that points at them
@@ -182,7 +184,7 @@ static void run(void*) {
         uint32_t now = millis();
         // WiFi down: keep the normal pace (polls fail fast) so Health's 15-minute backstop runs
         // even during an hours-long Retry-After wait.
-        const uint32_t every = net::isOnline() ? s_backoff.interval() : netplan::PollBackoff::BASE_MS;
+        const uint32_t every = net::isOnline() ? s_idle.every(s_backoff.interval()) : netplan::PollBackoff::BASE_MS;
         if (first || now - lastPoll >= every) {
             first = false;
             lastPoll = now;
@@ -190,12 +192,8 @@ static void run(void*) {
             tick();
             spclient::poll(s_st);
             tock("poll");
-            const uint32_t was = s_backoff.interval();
+            const uint32_t was = s_idle.every(s_backoff.interval());
             s_backoff.onPoll(s_st.lastPollCode, s_st.retryAfterS);
-            s_st.nextPollMs = (now + s_backoff.interval()) | 1;   // the status screen's countdown; never 0
-            if (s_backoff.interval() != was)
-                Serial.printf("[net] poll every %lus (HTTP %d)\n",
-                              (unsigned long)(s_backoff.interval() / 1000), s_st.lastPollCode);
             bool ok = s_st.status != PlaybackStatus::Offline;
             if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::failTotal(); ota::onGoodPoll(); }
             // Restart only helps a starved heap: allocations failed since the last good poll,
@@ -216,6 +214,12 @@ static void run(void*) {
             }
             // isolated failure: keep last state; a 429 is an answer, shown at once (next poll may be hours away)
             if (!s_link.update(ok, s_st.lastPollCode == 429) && !ok) s_st.status = before;
+            // a failed poll goes back to 4 s: its retry is due at once, and LinkGate counts at that pace
+            s_idle.onPoll(ok && s_st.status == PlaybackStatus::Paused, ok && s_st.status == PlaybackStatus::Stopped, now);
+            const uint32_t next = s_idle.every(s_backoff.interval());
+            s_st.nextPollMs = (now + next) | 1;   // the status screen's countdown; never 0
+            if (next != was)
+                Serial.printf("[net] poll every %lus (HTTP %d)\n", (unsigned long)(next / 1000), s_st.lastPollCode);
             const char* id = s_st.trackUri[0] ? s_st.trackUri : s_st.trackName;   // URI: same-title songs differ
             if (s_gen.update(id)) onTrackChange();
             else shared::publish(s_st);

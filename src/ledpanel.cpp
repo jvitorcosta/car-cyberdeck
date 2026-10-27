@@ -81,7 +81,6 @@
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #include <ESPmDNS.h>
-#include <HTTPClient.h>
 #include <WiFi.h>
 #include <cstddef>
 #include <type_traits>
@@ -106,6 +105,7 @@
 #include "ui/termlayout.h"
 #include "companion/touch.h"
 #include "net/clock.h"
+#include "net/httpget.h"
 #include "net/ipaddr.h"
 #include "net/ota.h"
 #include "net/remote_config.h"
@@ -127,7 +127,6 @@
 #include "util/lightstatus.h"
 #include "util/pollpace.h"
 #include "util/karaoke.h"
-#include "util/readguard.h"
 #include "util/remotegate.h"
 #include "util/statejson.h"
 #include "util/stateparse.h"
@@ -1395,10 +1394,9 @@ static void waitTap(int* rx, int* ry) {
 static void calibrate() {
     for (;;) {
         tft.fillScreen(TFT_BLACK);
-        tft.setTextDatum(MC_DATUM);
         tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        tft.drawString("Touch calibration", 160, 82, 4);
-        tft.drawString("Tap each cross with the pen", 160, 160, 2);
+        text("Touch calibration", 160, 82, Face::TITLE, MC_DATUM);
+        text("Tap each cross with the pen", 160, 160, Face::BODY, MC_DATUM);
         int rx[N_TARGET], ry[N_TARGET];
         for (int i = 0; i < N_TARGET; i++) {
             drawTarget(CAL_SX[i], CAL_SY[i], TFT_RED);
@@ -1420,13 +1418,13 @@ static void calibrate() {
             touch::setCalibration(k);
             tft.fillScreen(TFT_BLACK);
             tft.setTextColor(TFT_GREEN, TFT_BLACK);
-            tft.drawString("Calibrated", 160, 120, 4);
+            text("Calibrated", 160, 120, Face::TITLE, MC_DATUM);
             delay(800);
             return;
         }
         tft.fillScreen(TFT_BLACK);
         tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-        tft.drawString("Missed a cross - again", 160, 120, 4);
+        text("Missed a cross - again", 160, 120, Face::TITLE, MC_DATUM);
         delay(1500);
     }
 }
@@ -1910,51 +1908,28 @@ static void handlePad() {
 }
 
 // ---- Weather: where the car is (ip-api.com) and its weather (Open-Meteo), over the hotspot ----
-// Its own task (core 1, idle priority like the voice server, which it never blocks): once WiFi is
-// up, at start and every 15 min, GET the place (once per boot, again while it fails), then the
-// weather, both plain http (no TLS on a heap shared with NimBLE, WiFi and the server), 5 s
-// timeouts, the body into a fixed 2 KB buffer. Each try is published under weatherMux; a failed
-// try keeps the last good reading and comes again in 2 min. loop() polls weatherFresh to redraw.
-// The place is the phone's public IP's: approximate (the operator's city, sometimes a
-// neighbour's), which is fine for the weather.
+// Each try is a task of its own (core 1, idle priority like the voice server, which it never
+// blocks) that ends when the try does, so its 6 KB stack isn't held for the 15 min between tries:
+// the voice task starts one once WiFi is up, then every 15 min (weatherTick). A try GETs the place
+// (once per boot, again while it fails), then the weather, both plain http (no TLS on a heap shared
+// with NimBLE, WiFi and the server), 5 s timeouts, the body into a fixed 2 KB buffer. Each try is
+// published under weatherMux; a failed try keeps the last good reading and comes again in 2 min.
+// loop() polls weatherFresh to redraw. The place is the phone's public IP's: approximate (the
+// operator's city, sometimes a neighbour's), which is fine for the weather.
 static constexpr uint32_t WEATHER_EVERY_MS = 15 * 60 * 1000, WEATHER_RETRY_MS = 2 * 60 * 1000;
-static TaskHandle_t weatherHandle = nullptr;
+static volatile bool weatherBusy = false;      // a try's task is running
+static volatile uint32_t weatherDoneAt = 0;    // when the last try ended (millis)
+static volatile uint32_t weatherWait = 0;      // and how long until the next
+static volatile unsigned weatherStackLeft = 0; // the last try's least stack to spare, for [mem]
 static portMUX_TYPE weatherMux = portMUX_INITIALIZER_UNLOCKED;
 static WeatherReading weatherPub;           // guarded by weatherMux
 static volatile bool weatherFresh = false;  // a try was published; loop() clears it
 static char weatherBody[2048];              // only the weather task touches it
 
 // GET `url` into weatherBody (cut at 2 KB, always terminated); the HTTP status, negative without an
-// answer. HTTP/1.0, so the body is never chunked.
+// answer (net/httpget). 5 s timeouts, 8 s for the whole body.
 static int weatherGet(const char* url) {
-    weatherBody[0] = 0;
-    WiFiClient c;
-    HTTPClient h;
-    h.setTimeout(5000);
-    h.setConnectTimeout(5000);
-    h.useHTTP10(true);
-    if (!h.begin(c, url)) return -1;
-    const int rc = h.GET();
-    size_t len = 0;
-    if (rc == 200) {
-        WiFiClient* s = h.getStreamPtr();
-        readguard::Guard g(millis(), 5000, 8000);
-        while (len < sizeof(weatherBody) - 1 && (h.connected() || s->available())) {
-            const int a = s->available();
-            if (a <= 0) {
-                if (g.check(millis()) != readguard::State::Ok) break;
-                vTaskDelay(pdMS_TO_TICKS(5));
-                continue;
-            }
-            size_t want = sizeof(weatherBody) - 1 - len;
-            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
-            len += s->readBytes(weatherBody + len, want);
-            g.onData(millis());
-        }
-    }
-    weatherBody[len] = 0;
-    h.end();
-    return rc;
+    return net::httpGet(url, 5000, weatherBody, sizeof(weatherBody), 8000);
 }
 
 static void publishWeather(const WeatherReading& r) {
@@ -1964,55 +1939,71 @@ static void publishWeather(const WeatherReading& r) {
     weatherFresh = true;
 }
 
-static void weatherTask(void*) {
-    geoip::Place place{};
-    bool placed = false;
-    WeatherReading r;  // the last good reading, with this try's outcome
-    for (;;) {
-        while (ota::active()) vTaskDelay(pdMS_TO_TICKS(500));  // an update has the WiFi
-        bool ok = false;
-        if (!net::isOnline()) {
-            Serial.println("[weather] offline");
-        } else {
-            if (!placed) {
-                const int rc = weatherGet(geoip::URL);
-                placed = rc == 200 && geoip::parse(weatherBody, &place);
-                if (placed) Serial.printf("[weather] place %s (%s, %s)\n", place.city, place.lat, place.lon);
-                else Serial.printf("[weather] place failed (http %d)\n", rc);
-            }
-            if (placed) {
-                char url[256];
-                weather::url(place.lat, place.lon, url, sizeof(url));
-                const int rc = weatherGet(url);
-                weather::Now now;
-                if (rc == 200 && weather::parse(weatherBody, &now)) {
-                    ok = true;
-                    r.ok = true;
-                    r.tempC = now.tempC;
-                    r.code = now.code;
-                    r.day = now.day;
-                    r.daily = weather::parseDaily(weatherBody, &r.maxC, &r.minC);
-                    snprintf(r.city, sizeof(r.city), "%s", place.city);
-                    Serial.printf("[weather] %s %.1fC %s, hi %.1f lo %.1f%s  (heap %u)\n", r.city, r.tempC,
-                                  weather::words(r.code), r.maxC, r.minC, r.daily ? "" : " (no daily)",
-                                  static_cast<unsigned>(ESP.getFreeHeap()));
-                } else {
-                    Serial.printf("[weather] forecast failed (http %d)\n", rc);
-                }
+// Kept from try to try (only the one running touches them): the place, and the last good reading.
+static geoip::Place weatherPlace{};
+static bool weatherPlaced = false;
+static WeatherReading weatherLast;  // with the last try's outcome
+
+static void weatherTry(void*) {
+    geoip::Place& place = weatherPlace;
+    bool& placed = weatherPlaced;
+    WeatherReading& r = weatherLast;
+    bool ok = false;
+    if (!net::isOnline()) {
+        Serial.println("[weather] offline");
+    } else {
+        if (!placed) {
+            const int rc = weatherGet(geoip::URL);
+            placed = rc == 200 && geoip::parse(weatherBody, &place);
+            if (placed) Serial.printf("[weather] place %s (%s, %s)\n", place.city, place.lat, place.lon);
+            else Serial.printf("[weather] place failed (http %d)\n", rc);
+        }
+        if (placed) {
+            char url[256];
+            weather::url(place.lat, place.lon, url, sizeof(url));
+            const int rc = weatherGet(url);
+            weather::Now now;
+            if (rc == 200 && weather::parse(weatherBody, &now)) {
+                ok = true;
+                r.ok = true;
+                r.tempC = now.tempC;
+                r.code = now.code;
+                r.day = now.day;
+                r.daily = weather::parseDaily(weatherBody, &r.maxC, &r.minC);
+                snprintf(r.city, sizeof(r.city), "%s", place.city);
+                Serial.printf("[weather] %s %.1fC %s, hi %.1f lo %.1f%s  (heap %u)\n", r.city, r.tempC,
+                              weather::words(r.code), r.maxC, r.minC, r.daily ? "" : " (no daily)",
+                              static_cast<unsigned>(ESP.getFreeHeap()));
+            } else {
+                Serial.printf("[weather] forecast failed (http %d)\n", rc);
             }
         }
-        r.failed = !ok;
-        publishWeather(r);
-        if (!ok) Serial.println("[weather] retry in 2 min");
-        vTaskDelay(pdMS_TO_TICKS(ok ? WEATHER_EVERY_MS : WEATHER_RETRY_MS));
     }
+    r.failed = !ok;
+    publishWeather(r);
+    if (!ok) Serial.println("[weather] retry in 2 min");
+    weatherWait = ok ? WEATHER_EVERY_MS : WEATHER_RETRY_MS;
+    weatherDoneAt = millis();
+    weatherStackLeft = static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr));
+    weatherBusy = false;  // last: the voice task may start the next try from here on
+    vTaskDelete(nullptr);
 }
 
-// From the voice task, once WiFi is up. 6 KB: HTTPClient and its Strings; the [mem] line shows
-// what's left.
-static void beginWeather() {
-    if (weatherHandle) return;
-    xTaskCreatePinnedToCore(weatherTask, "weather", 6144, nullptr, 0, &weatherHandle, 1);
+// From the voice task, once WiFi is up and then every pass: starts a try when the last one's wait
+// is over (at once the first time), not while an update has the WiFi. 6 KB: the GETs and the
+// logging; the [mem] line shows what the last try left.
+static void weatherTick() {
+    static bool tried = false;
+    if (weatherBusy || ota::active()) return;
+    if (tried && millis() - weatherDoneAt < weatherWait) return;
+    tried = true;
+    weatherBusy = true;
+    if (xTaskCreatePinnedToCore(weatherTry, "weather", 6144, nullptr, 0, nullptr, 1) != pdPASS) {
+        weatherBusy = false;
+        weatherWait = WEATHER_RETRY_MS;
+        weatherDoneAt = millis();
+        Serial.println("[weather] no memory for a try, retry in 2 min");
+    }
 }
 
 // In loop(): takes a published try and, on the Menu, redraws the weather when one of its texts
@@ -2090,33 +2081,7 @@ static int lyricsGet() {
     char host[40], url[128];
     if (!lyricsHost(host, sizeof(host))) return -1;
     snprintf(url, sizeof(url), "http://%s/state?k=%s", host, REMOTE_TOKEN);
-    WiFiClient c;
-    HTTPClient h;
-    h.setTimeout(1500);
-    h.setConnectTimeout(1500);
-    h.useHTTP10(true);
-    if (!h.begin(c, url)) return -1;
-    const int rc = h.GET();
-    size_t len = 0;
-    if (rc == 200) {
-        WiFiClient* s = h.getStreamPtr();
-        readguard::Guard g(millis(), 1500, 3000);
-        while (len < sizeof(lyricsBody) - 1 && (h.connected() || s->available())) {
-            const int a = s->available();
-            if (a <= 0) {
-                if (g.check(millis()) != readguard::State::Ok) break;
-                vTaskDelay(pdMS_TO_TICKS(2));
-                continue;
-            }
-            size_t want = sizeof(lyricsBody) - 1 - len;
-            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
-            len += s->readBytes(lyricsBody + len, want);
-            g.onData(millis());
-        }
-    }
-    lyricsBody[len] = 0;
-    h.end();
-    return rc;
+    return net::httpGet(url, 1500, lyricsBody, sizeof(lyricsBody), 3000);
 }
 
 // ---- Music mode: the black deck sends the song's palette ----
@@ -2136,15 +2101,7 @@ static int musicAsk(bool on) {
     IPAddress a;
     if (a.fromString(host)) musicPeer = static_cast<uint32_t>(a);
     snprintf(url, sizeof(url), "http://%s/music?k=%s&on=%d", host, REMOTE_TOKEN, on ? 1 : 0);
-    WiFiClient c;
-    HTTPClient h;
-    h.setTimeout(1500);
-    h.setConnectTimeout(1500);
-    h.useHTTP10(true);
-    if (!h.begin(c, url)) return -1;
-    const int rc = h.GET();
-    h.end();
-    return rc;
+    return net::httpGet(url, 1500);  // the status is the answer
 }
 
 static int musicGet(bool on) {
@@ -2218,7 +2175,7 @@ static void lyricsTask(void*) {
     }
 }
 
-// From the voice task, once WiFi is up. 6 KB: HTTPClient, its Strings and the mDNS query; the [mem]
+// From the voice task, once WiFi is up. 6 KB: the GETs and the mDNS query; the [mem]
 // line shows what's left.
 static void beginLyrics() {
     if (lyricsHandle) return;
@@ -2735,7 +2692,7 @@ static void voiceTask(void*) {
     }
     server->begin();
     netclock::begin();  // SNTP, for night mode and the Menu's clock
-    beginWeather();
+    weatherTick();  // the first try
     beginLyrics();
     ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (beginVoice's gate: REMOTE_TOKEN is set)
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
@@ -2748,6 +2705,7 @@ static void voiceTask(void*) {
     for (;;) {
         server->handleClient();
         net::loop();  // rejoins after a drop
+        weatherTick();
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
@@ -2926,7 +2884,7 @@ void loop() {
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
-                      weatherHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(weatherHandle)) : 0u,
+                      static_cast<unsigned>(weatherStackLeft),  // the last try's (each ends with it)
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
                       musicHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(musicHandle)) : 0u,
                       ota::stackLeft(),

@@ -70,7 +70,6 @@ static const char* resetReason() {
 // arrives through core/shared (README "Design & performance history").
 static TFT_eSPI s_tft = TFT_eSPI();
 
-constexpr uint32_t STALE_MS = 20000;      // "No signal" once the last good poll is this old
 constexpr uint32_t CD_FRAME_MS = 160;     // spinning CD + Poke Ball, ~6 fps
 constexpr uint32_t PROGRESS_MS = 250;     // time, HP/EXP bars, dialogue box
 constexpr uint32_t NOTES_MS = 330;        // note icons bob ~3 steps/s
@@ -338,7 +337,7 @@ void loop() {
                                      st.status == PlaybackStatus::Stopped, millis());
     int mode = 0;   // 0 = deck, 1 = offline, 2 = nothing playing
     if (!net::isOnline() || st.status == PlaybackStatus::Offline ||
-        netplan::stale(millis(), st.lastPollOkMs, STALE_MS)) mode = 1;
+        netplan::stale(millis(), st.lastPollOkMs, netplan::staleLimit(idleNow))) mode = 1;   // idle: 10 s polls
     else if (idleNow) mode = 2;
     static int lastMode = -1;
     // An update over WiFi (net/ota): its screen, nothing else. With the Green Hill Zone file also
