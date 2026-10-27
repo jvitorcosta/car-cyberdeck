@@ -3,7 +3,7 @@
 ## Reporting a problem
 
 Please don't open a public issue for a security problem. Use GitHub's
-[private vulnerability reporting](https://github.com/jvitorcosta/car-deck/security/advisories/new)
+[private vulnerability reporting](https://github.com/jvitorcosta/spotify-car-deck/security/advisories/new)
 instead, with steps to reproduce and the board and version (first serial line,
 `[boot] cardeck v…`). You'll get an answer within a week.
 

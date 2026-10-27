@@ -175,6 +175,6 @@ First tagged release: everything the deck does today, on both supported boards.
   (ES8311 codec).
 - Firmware version from the git tag on the boot screen and in the serial log.
 
-[Unreleased]: https://github.com/jvitorcosta/car-deck/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/jvitorcosta/car-deck/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/jvitorcosta/car-deck/releases/tag/v1.0.0
+[Unreleased]: https://github.com/jvitorcosta/spotify-car-deck/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/jvitorcosta/spotify-car-deck/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/jvitorcosta/spotify-car-deck/releases/tag/v1.0.0
