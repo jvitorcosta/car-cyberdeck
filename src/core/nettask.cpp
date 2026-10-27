@@ -106,8 +106,9 @@ static bool doStep(netplan::Step step) {
         case netplan::Step::Lyrics: {
             tick();
             shared::lyricsInvalidate();       // UI stops reading the arena before we overwrite it
-            lyricstatus::Result r =
-                lyricsvc::fetchInto(s_st, lyricsvc::arena(), s_lyricsRetry.attempts() + 1);
+            lyricbuf::Lyrics* arena = lyricsvc::arena();   // nullptr: no memory yet, retry later
+            lyricstatus::Result r = arena ? lyricsvc::fetchInto(s_st, *arena, s_lyricsRetry.attempts() + 1)
+                                          : lyricstatus::Result::TempError;
             bool final = s_lyricsRetry.onResult(r, millis());
             if (r == lyricstatus::Result::Synced || r == lyricstatus::Result::Plain)
                 shared::postLyrics(gen);      // lines first, then the status that points at them
@@ -213,7 +214,7 @@ static void run(void*) {
             }
             // isolated failure: keep last state; a 429 is an answer, shown at once (next poll may be hours away)
             if (!s_link.update(ok, s_st.lastPollCode == 429) && !ok) s_st.status = before;
-            // a failed poll goes back to 4 s: the "No signal" debounce (LinkGate, STALE_MS) counts on it
+            // a failed poll goes back to 4 s: its retry is due at once, and LinkGate counts at that pace
             s_idle.onPoll(ok && s_st.status == PlaybackStatus::Paused, ok && s_st.status == PlaybackStatus::Stopped, now);
             const uint32_t next = s_idle.every(s_backoff.interval());
             s_st.nextPollMs = (now + next) | 1;   // the status screen's countdown; never 0

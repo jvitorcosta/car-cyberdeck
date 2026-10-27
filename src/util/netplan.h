@@ -132,6 +132,14 @@ inline bool stale(uint32_t nowMs, uint32_t lastOkMs, uint32_t limitMs) {
     return lastOkMs != 0 && nowMs - lastOkMs > limitMs;
 }
 
+// "No signal" once the last good poll is this old. While idle (IdlePoll) the next poll only
+// starts IDLE_MS after the last one, so one slow failure (8 s read timeout, more with a connect
+// and handshake) plus its 4 s retry would cross 20 s: the limit grows by the extra wait.
+constexpr uint32_t STALE_MS = 20000;
+inline uint32_t staleLimit(bool idle) {
+    return idle ? STALE_MS + (IdlePoll::IDLE_MS - PollBackoff::BASE_MS) : STALE_MS;
+}
+
 enum class Step { None, Walk, Art, Lyrics, Prefetch, Genre };
 struct Work { bool walk, art, lyrics, prefetch, genre; };   // true = still to do
 

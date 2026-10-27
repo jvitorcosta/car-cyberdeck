@@ -10,16 +10,16 @@
 namespace lyricsvc {
 
 static constexpr uint32_t LYRICS_DEADLINE_MS = 15000;   // whole body, per request
-// ~5.6 KB in PSRAM (only the CPU touches it), allocated once on first use. That is the network
-// task's first lyrics step, which runs only with a 20 KB internal block free (netplan::canRun), so
-// even bigAlloc's internal fallback can't fail; shared:: reads it only after a fetch filled it.
-lyricbuf::Lyrics& arena() {
-    static lyricbuf::Lyrics* a = [] {
+// ~5.6 KB in PSRAM (only the CPU touches it), allocated on first use: the network task's first
+// lyrics step. A failed allocation is tried again on the next call.
+lyricbuf::Lyrics* arena() {
+    static lyricbuf::Lyrics* a = nullptr;
+    if (!a) {
         auto* p = (lyricbuf::Lyrics*)mem::bigAlloc(sizeof(lyricbuf::Lyrics));
-        lyricbuf::reset(*p);
-        return p;
-    }();
-    return *a;
+        if (p) lyricbuf::reset(*p);
+        a = p;
+    }
+    return a;
 }
 
 // Query value via the shared, bounded encoder (one String instead of one per byte). AppState

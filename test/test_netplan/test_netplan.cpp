@@ -388,6 +388,23 @@ void test_idle_poll_picks_a_new_song_up_within_the_idle_interval() {
     }
 }
 
+void test_idle_one_slow_failed_poll_is_not_no_signal() {
+    // Idle: a good poll ends at 1.0 s; the next starts 10 s after the last start (0.7 s), times
+    // out after 9.5 s, and its retry (due at once) answers 1.5 s later.
+    const uint32_t lastOk = 1000, failEnd = 700 + netplan::IdlePoll::IDLE_MS + 9500, okEnd = failEnd + 1500;
+    TEST_ASSERT_TRUE(netplan::stale(okEnd, lastOk, netplan::STALE_MS));   // the plain 20 s trips
+    for (uint32_t now = lastOk; now <= okEnd; now += 100)
+        TEST_ASSERT_FALSE(netplan::stale(now, lastOk, netplan::staleLimit(true)));
+}
+
+void test_a_real_outage_still_shows_no_signal_in_time() {
+    const uint32_t lastOk = 1000;   // every poll after this one fails
+    TEST_ASSERT_EQUAL_UINT32(netplan::STALE_MS, netplan::staleLimit(false));
+    TEST_ASSERT_FALSE(netplan::stale(lastOk + 20000, lastOk, netplan::staleLimit(false)));
+    TEST_ASSERT_TRUE(netplan::stale(lastOk + 20001, lastOk, netplan::staleLimit(false)));   // playing: 20 s
+    TEST_ASSERT_TRUE(netplan::stale(lastOk + 26001, lastOk, netplan::staleLimit(true)));    // idle: 26 s
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_track_changes_bump_generation);
@@ -430,5 +447,7 @@ int main(int, char**) {
     RUN_TEST(test_idle_poll_slows_a_pause_only_after_the_idle_switch);
     RUN_TEST(test_idle_poll_never_shortens_a_backoff);
     RUN_TEST(test_idle_poll_picks_a_new_song_up_within_the_idle_interval);
+    RUN_TEST(test_idle_one_slow_failed_poll_is_not_no_signal);
+    RUN_TEST(test_a_real_outage_still_shows_no_signal_in_time);
     return UNITY_END();
 }

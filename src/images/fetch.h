@@ -16,7 +16,8 @@ bool httpsGetInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen,
 // of one per file (the walker's AnimData.xml + Walk-Anim.png). getInto() works like
 // httpsGetInto(). The connection closes when the session ends, after an answer whose body
 // wasn't read to its end (it would poison the next one), or when the server says close. A
-// kept connection the server dropped is reconnected once. A body without a length (chunked)
+// kept connection the server dropped is reconnected once; a GET to another origin (scheme,
+// host, port) closes the open connection first. A body without a length (chunked)
 // is asked again over HTTP/1.0, as httpsGetInto() does, for the rest of the session.
 // Scope it to the downloads: the TLS buffers stay allocated while it lives.
 class Session {
@@ -31,5 +32,6 @@ private:
     WiFiClientSecure client_;   // before http_: http_'s destructor still uses it
     HTTPClient http_;
     bool http10_ = false;
+    char origin_[64] = "";      // "https://host[:port]" of the open connection; "" = none known
 };
 }

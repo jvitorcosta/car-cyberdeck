@@ -1,4 +1,5 @@
 #include "fetch.h"
+#include <cstring>
 #include "../net/http_config.h"
 #include "../util/readguard.h"
 
@@ -82,6 +83,16 @@ bool Session::getInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen,
     if (httpCode) *httpCode = 0;
     if (!url || !url[0] || !buf || cap < 2) return false;
     if (!netcfg::linkUp()) return false;
+    // HTTPClient::connect() reuses whatever socket is open: a new origin (scheme, host, port)
+    // gets a new connection, never the last host's TLS session.
+    const char* sep = strstr(url, "://");
+    const char* path = sep ? strchr(sep + 3, '/') : nullptr;
+    const size_t olen = path ? (size_t)(path - url) : strlen(url);
+    if (olen >= sizeof origin_ || strncmp(origin_, url, olen) != 0 || origin_[olen] != '\0') {
+        client_.stop();
+        origin_[0] = '\0';
+        if (olen < sizeof origin_) { memcpy(origin_, url, olen); origin_[olen] = '\0'; }
+    }
     bool retried = false;
     for (;;) {
         const bool reused = client_.connected();
@@ -104,7 +115,8 @@ bool Session::getInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen,
             http10_ = true;
             http_.end();
             client_.stop();
-            netcfg::streamed(http_);             // HTTP/1.0, no reuse from here on
+            netcfg::streamed(http_);             // HTTP/1.0 for the rest of the session
+            http_.setReuse(false);               // (useHTTP10 already does; said for the reader)
             continue;
         }
         bool whole;
