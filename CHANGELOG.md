@@ -137,6 +137,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - The parked SD card cache (`images/cache`, `-DSD_CACHE`): the S3 never mounted a card and the
   companion doesn't fetch sprites, so it was never used. Walk sheets and sprites are downloaded
   (and prefetched) as before. The last commit with it is `0ba409b`.
+- Dead code: the S3's FT6336 touch driver (`board/s3/touch_ft6336`, `util/ft6336` and its test;
+  nothing called it since the mute button went), the LED panel's `PURPLE_TEST` / `CYAN_TEST`
+  hooks (purple and light blue keep the picked LED mixes) and the unused ArduinoJson dependency.
+  The remaining test hooks are listed in docs/ARCHITECTURE.md "Test hooks".
 
 ### Security
 - Updates over WiFi take their own password, `OTA_PASSWORD` in `src/config.h`, instead of

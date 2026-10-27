@@ -18,7 +18,6 @@ CarDeck stands on a lot of other people's work. Thank you.
 ## Libraries
 
 [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) (FreeBSD/MIT mix),
-[ArduinoJson](https://arduinojson.org/) (MIT),
 [TJpg_Decoder](https://github.com/Bodmer/TJpg_Decoder) (FreeBSD-style, tjpgd),
 [PNGdec](https://github.com/bitbank2/PNGdec) (Apache-2.0),
 [JPEGDEC](https://github.com/bitbank2/JPEGDEC) 1.8.4 (Apache-2.0, S3 intro video),

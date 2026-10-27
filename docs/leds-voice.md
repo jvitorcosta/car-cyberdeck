@@ -262,16 +262,6 @@ $env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
 Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ```
 
-### Picking light blue's LED mix in the car (CYAN_TEST)
-
-Light blue's LED mix is B, `0,130,255` (the owner's pick on 2026-10-26); this hook is how it was
-picked, kept to try again. Build with `-D CYAN_TEST` the same way (then clear the
-variable), apply ゴジラ on the PRESETS tab, and tap it again while it's on: each tap moves to the
-next candidate, A `0,90,255`, B `0,130,255`, C `40,160,255` (it starts on B), and sends it to both
-lights. The status line says which (`>CYAN B 0,130,255`), and the light blue chips on screen show
-that candidate's own RGB. Without the flag the lights get B. `-D PURPLE_TEST` did the same for
-purple (the owner picked A, `140,0,255`).
-
 ## Theme: the inside light's colour
 
 While the **INSIDE** light is on and linked, the whole terminal (main screen, Lights, Lyrics; not the

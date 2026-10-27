@@ -18,8 +18,8 @@ struct Swatch {
 // The first N_GRID are the Lights page's 2x4 grid, in ledvoice's colour order: red, orange, pink,
 // purple, blue, green, white, yellow. Light blue, the last, is a preset's only (GOJIRA, Godzilla's
 // atomic breath): never on the grid, never a song colour (musiclights snaps to the grid's eight);
-// voice ("light blue") and the lights' replies know it. Its LED mix is candidate B of the car test
-// (ledpanel's CYAN_TEST), the owner's pick.
+// voice ("light blue") and the lights' replies know it. Its LED mix, like purple's, is the one the
+// owner picked by eye in the car on 2026-10-26.
 constexpr int N_SWATCH = 9, N_GRID = 8;
 constexpr int BLUE = 4, YELLOW = 7, LIGHT_BLUE = 8;
 inline constexpr Swatch SWATCHES[N_SWATCH] = {

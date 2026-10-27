@@ -167,3 +167,15 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   was retired on 2026-10-21 (git history up to `d4d0a67`).
 - `src/util/`, `src/core/`, `src/images/` never include `src/ui/`; `src/util/` has no Arduino
   dependency, so it builds and tests on a PC.
+
+## Test hooks
+
+Build flags that are never set in `platformio.ini`; add one for a desk check, then clear it
+(`$env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"`, then `Remove-Item Env:PLATFORMIO_BUILD_FLAGS`).
+
+| Flag | Deck (env) | What it does |
+|---|---|---|
+| `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) | black (`s3`) | Forces that boot opening (`main.cpp`, `util/intropick`). |
+| `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
+| `-D NIGHT_TEST` | yellow (`ledpanel`) | Night mode whatever the time (`ledpanel.cpp`). |
+| `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |
