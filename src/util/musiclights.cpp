@@ -1,32 +1,12 @@
 #include "musiclights.h"
+#include "hue.h"
 #include "ledlook.h"
 
 namespace musiclights {
 namespace {
 // Hue in tenths of a degree (0..3599) and saturation as a % of the brightest channel.
-void hueSat(int r, int g, int b, int* hue10, int* satPct) {
-    int mx = r, mn = r;
-    if (g > mx) mx = g;
-    if (b > mx) mx = b;
-    if (g < mn) mn = g;
-    if (b < mn) mn = b;
-    const int d = mx - mn;
-    *satPct = mx ? d * 100 / mx : 0;
-    if (!d) {
-        *hue10 = 0;
-        return;
-    }
-    int h;
-    if (mx == r) h = 600 * (g - b) / d;
-    else if (mx == g) h = 1200 + 600 * (b - r) / d;
-    else h = 2400 + 600 * (r - g) / d;
-    *hue10 = (h + 3600) % 3600;
-}
-
-int hueDist10(int a, int b) {  // 0..1800
-    const int d = ((a - b) % 3600 + 3600) % 3600;
-    return d > 1800 ? 3600 - d : d;
-}
+constexpr int TURN = 3600;
+void hueSat(int r, int g, int b, int* hue10, int* satPct) { hue::hueSat(r, g, b, TURN, 100, hue10, satPct); }
 
 uint8_t mix(uint8_t from, uint8_t to, int k, int n) {
     const int d = (to - from) * k;
@@ -45,7 +25,7 @@ int nearestSwatch(songpalette::Rgb c) {
         int h, st;
         hueSat(static_cast<int>(s >> 16), static_cast<int>((s >> 8) & 0xFF), static_cast<int>(s & 0xFF), &h, &st);
         if ((st < WHITE_SAT_PCT) != white) continue;  // whites against whites, colours against colours
-        const int d = white ? st : hueDist10(hue, h);   // the least saturated white
+        const int d = white ? st : hue::dist(hue, h, TURN);   // the least saturated white
         if (best < 0 || d < bestD) {
             best = i;
             bestD = d;

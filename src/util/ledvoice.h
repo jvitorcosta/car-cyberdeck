@@ -4,10 +4,11 @@
 // doesn't know are skipped, so "set the lights to purple please" works. PURE, host-tested.
 #include <cctype>
 #include <cstring>
+#include "ledlook.h"
 
 namespace ledvoice {
-// Colour indices follow the panel's swatches: red, orange, pink, purple, blue, green, white, yellow,
-// then light blue (8, a preset's colour, off the grid): "light blue", "azul claro", "cyan".
+// Colours are ledlook's swatches (ledlook::Colour): the grid's eight by ledlook::COLOUR_WORDS, then
+// light blue (a preset's colour, off the grid): "light blue", "azul claro", "cyan".
 enum Zone { ZONE_NONE = -1, ZONE_BOTH = 0, ZONE_INSIDE = 1, ZONE_OUTSIDE = 2 };
 
 struct Command {
@@ -29,25 +30,26 @@ inline int lookup(const char* w, const Word* table, int n) {
     return -1;
 }
 
-// Siri transcribes a lone colour word by sound: "red" comes back "Read", "blue" can come back "Blew"
-// (seen in the deck's log, 2026-10-21). Neither homophone means anything else here.
+using ledlook::BLUE, ledlook::LIGHT_BLUE, ledlook::PURPLE, ledlook::RED;
+// Voice's colour words on top of ledlook::COLOUR_WORDS. Siri transcribes a lone colour word by sound:
+// "red" comes back "Read", "blue" can come back "Blew" (seen in the deck's log, 2026-10-21). Neither
+// homophone means anything else here, and neither belongs among a song title's words. Then "lilás"
+// with its accent (the phrase isn't folded) and light blue's own.
 static const Word COLORS[] = {
-    {"red", 0},    {"read", 0},     {"vermelho", 0}, {"vermelha", 0},
-    {"orange", 1}, {"laranja", 1},
-    {"pink", 2},   {"rosa", 2},     {"magenta", 2},
-    {"purple", 3}, {"violet", 3},   {"roxo", 3},    {"roxa", 3}, {"lilac", 3}, {"lilas", 3}, {"lil\xc3\xa1s", 3},
-    {"blue", 4},   {"blew", 4},     {"azul", 4},
-    {"green", 5},  {"verde", 5},
-    {"white", 6},  {"branco", 6},   {"branca", 6},
-    {"yellow", 7}, {"amarelo", 7},  {"amarela", 7},
-    {"cyan", 8},   {"ciano", 8},
+    {"read", RED}, {"blew", BLUE}, {"lil\xc3\xa1s", PURPLE}, {"cyan", LIGHT_BLUE}, {"ciano", LIGHT_BLUE},
 };
-static constexpr int BLUE = 4, LIGHT_BLUE = 8;
 // Light blue in two words: "light" right before a blue word, or "claro" / "clara" right after one
 // ("azul claro"). Only next to each other, so "lights blue" and "light, then blue" stay blue, and
 // either word alone is nothing.
 static const char* const LIGHTER_BEFORE[] = {"light"};
 static const char* const LIGHTER_AFTER[] = {"claro", "clara"};
+// The swatch a colour word names, or -1.
+inline int colour(const char* w) {
+    for (const ledlook::ColourWord& c : ledlook::COLOUR_WORDS) {
+        if (std::strcmp(w, c.word) == 0) return c.swatch;
+    }
+    return lookup(w, COLORS, static_cast<int>(sizeof(COLORS) / sizeof(COLORS[0])));
+}
 inline bool among(const char* w, const char* const* words, int n) {
     for (int i = 0; i < n; i++) {
         if (std::strcmp(w, words[i]) == 0) return true;
@@ -160,9 +162,9 @@ inline bool parse(const char* text, Command* out) {
             light = true;  // not a command by itself ("light off" is just off); a blue word next makes it light blue
             continue;
         }
-        if ((v = lookup(w, COLORS, LEDVOICE_N(COLORS))) >= 0) {
+        if ((v = colour(w)) >= 0) {
             blue = v == BLUE;
-            out->color = afterLight && blue ? LIGHT_BLUE : v;
+            out->color = afterLight && blue ? static_cast<int>(LIGHT_BLUE) : v;
         }
         else if ((v = lookup(w, POWER, LEDVOICE_N(POWER))) >= 0) out->power = v;
         else if ((v = lookup(w, LEVELS, LEDVOICE_N(LEVELS))) >= 0) out->level = v;

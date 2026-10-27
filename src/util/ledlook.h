@@ -18,10 +18,12 @@ struct Swatch {
 // The first N_GRID are the Lights page's 2x4 grid, in ledvoice's colour order: red, orange, pink,
 // purple, blue, green, white, yellow. Light blue, the last, is a preset's only (GOJIRA, Godzilla's
 // atomic breath): never on the grid, never a song colour (musiclights snaps to the grid's eight);
-// voice ("light blue") and the lights' replies know it. Its LED mix is candidate B of the car test
-// (ledpanel's CYAN_TEST), the owner's pick.
-constexpr int N_SWATCH = 9, N_GRID = 8;
-constexpr int BLUE = 4, YELLOW = 7, LIGHT_BLUE = 8;
+// voice ("light blue") and the lights' replies know it. Its LED mix, like purple's, is the one the
+// owner picked by eye in the car on 2026-10-26.
+// The swatches' indices, SWATCHES' order: every table of swatches (presets, colour words, song
+// moods) names them by these.
+enum Colour : uint8_t { RED, ORANGE, PINK, PURPLE, BLUE, GREEN, WHITE, YELLOW, LIGHT_BLUE };
+constexpr int N_SWATCH = LIGHT_BLUE + 1, N_GRID = LIGHT_BLUE;
 inline constexpr Swatch SWATCHES[N_SWATCH] = {
     {"Red", "red", 255, 0, 0, 0xFF0000},          {"Orange", "orange", 255, 40, 0, 0xFF6A00},
     {"Pink", "pink", 255, 0, 70, 0xFF0090},       {"Purple", "purple", 140, 0, 255, 0x8C00FF},
@@ -32,7 +34,28 @@ inline constexpr Swatch SWATCHES[N_SWATCH] = {
 
 // The grid colour that stands for swatch sw where only the grid's eight can (the Lights page's
 // focus, the terminal's theme): itself, or blue for light blue.
-constexpr int gridSwatch(int sw) { return sw == LIGHT_BLUE ? BLUE : sw; }
+constexpr int gridSwatch(int sw) { return sw == LIGHT_BLUE ? static_cast<int>(BLUE) : sw; }
+
+// The grid colours' words, English and Portuguese, lowercase and without accents: what voice commands
+// (ledvoice) and song titles, albums, playlist names and #tags (songmood) call them. Light blue has
+// none here (never a song colour): ledvoice adds its words, and the homophones Siri makes of a lone
+// colour word, on top of these.
+struct ColourWord {
+    const char* word;
+    uint8_t swatch;
+};
+inline constexpr ColourWord COLOUR_WORDS[] = {
+    {"red", RED},         {"vermelho", RED},    {"vermelha", RED},
+    {"orange", ORANGE},   {"laranja", ORANGE},
+    {"pink", PINK},       {"rosa", PINK},       {"magenta", PINK},
+    {"purple", PURPLE},   {"violet", PURPLE},   {"violeta", PURPLE}, {"purpura", PURPLE},
+    {"roxo", PURPLE},     {"roxa", PURPLE},     {"lilac", PURPLE},   {"lilas", PURPLE},
+    {"blue", BLUE},       {"azul", BLUE},
+    {"green", GREEN},     {"verde", GREEN},
+    {"white", WHITE},     {"branco", WHITE},    {"branca", WHITE},
+    {"yellow", YELLOW},   {"amarelo", YELLOW},  {"amarela", YELLOW}, {"gold", YELLOW}, {"dourado", YELLOW}, {"ouro", YELLOW},
+};
+constexpr int N_COLOUR_WORDS = static_cast<int>(sizeof(COLOUR_WORDS) / sizeof(COLOUR_WORDS[0]));
 
 constexpr uint8_t MIN_PCT = 10;
 

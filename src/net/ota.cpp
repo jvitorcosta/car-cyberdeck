@@ -54,7 +54,7 @@ void task(void*) {
     while ((s_hold && s_hold()) || !net::isOnline()) vTaskDelay(pdMS_TO_TICKS(200));
     ArduinoOTA.setPort(3232);
     ArduinoOTA.setHostname(s_name);
-    ArduinoOTA.setPassword(REMOTE_TOKEN);
+    ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.setMdnsEnabled(false);   // the app already answers to its .local name (net/remote, the panel's lyrics)
     ArduinoOTA.setRebootOnSuccess(false);   // the deck reboots itself, after the screen's flash
     ArduinoOTA.onStart([] {
@@ -133,7 +133,7 @@ void checkBoot() {
 }
 
 void begin(const char* name, bool (*hold)(), void (*onStart)()) {
-    if (!REMOTE_TOKEN[0]) { Serial.println("[ota] off (REMOTE_TOKEN empty)"); return; }
+    if (!enabled()) { Serial.println("[ota] off (OTA_PASSWORD empty)"); return; }
     s_name = name;
     s_hold = hold;
     s_onStart = onStart;
@@ -155,6 +155,7 @@ bool active() {
 }
 int progress() { return active() ? view().pct : -1; }
 
+bool enabled() { return OTA_PASSWORD[0] != 0; }
 bool listening() { return s_listening.load(); }
 unsigned stackLeft() { return s_task ? (unsigned)uxTaskGetStackHighWaterMark(s_task) : 0u; }
 

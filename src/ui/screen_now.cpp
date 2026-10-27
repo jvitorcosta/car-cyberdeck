@@ -16,6 +16,7 @@
 #include "../util/interp.h"
 #include "../util/walkrect.h"
 #include "../util/walkanim.h"
+#include "../util/version.h"
 #include "../util/lrcstream.h"
 #include "../images/walksprite.h"
 #include "../core/shared.h"
@@ -320,6 +321,8 @@ void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statuss
     if (look.idle) sunsetBackdrop(t, look.night);
     else background(t);
     topStrip(t);
+    // Small at the top right: after an update over WiFi, which firmware came up.
+    shadowText(t, FW_LABEL, 314, 6, 1, theme::pal().topText, theme::pal().boxBorder, TR_DATUM);
     drawOfflineText(t, msg, detail);
     drawOfflineScene(t, look, animMs, true);
     if (qr) drawQrCard(t, look, animMs, qr);

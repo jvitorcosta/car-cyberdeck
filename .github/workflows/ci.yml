@@ -30,6 +30,10 @@ jobs:
           - board: s3
             envs: -e s3 -e hwcheck_s3
             part: "0x300000"   # partitions_s3.csv (one OTA slot)
+          # the yellow deck's firmware (the LED panel); it took the CYD from cyd_companion
+          - board: ledpanel
+            envs: -e ledpanel
+            part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
     steps:
       - uses: actions/checkout@v4
         with:

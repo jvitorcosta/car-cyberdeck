@@ -6,8 +6,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Added
+- Both decks show which firmware runs: the yellow deck types `FW <version>` under its boot lines,
+  logs `[boot] ledpanel v<version>` and adds ` fw=<version>` to `/status`; the black deck shows it
+  at the top right of its status screens and as `"fw"` in `/state`.
 - Firmware updates over WiFi on the S3: `pio run -e s3_ota -t upload` from a PC on the deck's
-  network (password `REMOTE_TOKEN`; off without it). The deck shows the progress in a battle
+  network (password `OTA_PASSWORD`; off without it). The deck shows the progress in a battle
   box, pauses Spotify polls meanwhile, and goes back to the previous firmware when the new one
   crashes 3 boots in a row before proving itself (60 s and a good poll).
 - A random boot opening on the S3, never the same as last boot: your intro video with the boot
@@ -103,6 +106,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - The config template (`include/config.example.h`) lists the hotspot first.
 - CI also builds the companion, checks its flash budget, counts the S3's real intro, howl and
   greeting sizes in its flash check, and runs the media tool tests.
+- One colour vocabulary for voice commands and music mode (`ledlook::COLOUR_WORDS`): song titles,
+  albums and playlist names now also know "roxa", "branca", "amarela", "violet", "magenta", "lilac"
+  and "lilas"; playlist #tags also "ouro", "violet", "magenta", "lilac" and "lilas"; voice also
+  "violeta", "gold", "dourado" and "ouro". The swatches are named once (`ledlook::Colour`) and the
+  hue maths lives in one place (`util/hue`).
 
 ### Fixed
 - Pokémon whose walk sheet is 320 px wide (Doublade) walk again instead of showing the still
@@ -137,6 +145,16 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - The parked SD card cache (`images/cache`, `-DSD_CACHE`): the S3 never mounted a card and the
   companion doesn't fetch sprites, so it was never used. Walk sheets and sprites are downloaded
   (and prefetched) as before. The last commit with it is `0ba409b`.
+- Dead code: the S3's FT6336 touch driver (`board/s3/touch_ft6336`, `util/ft6336` and its test;
+  nothing called it since the mute button went), the LED panel's `PURPLE_TEST` / `CYAN_TEST`
+  hooks (purple and light blue keep the picked LED mixes) and the unused ArduinoJson dependency.
+  The remaining test hooks are listed in docs/ARCHITECTURE.md "Test hooks".
+
+### Security
+- Updates over WiFi take their own password, `OTA_PASSWORD` in `src/config.h`, instead of
+  `REMOTE_TOKEN` (which travels in plain-HTTP URLs); updates are off while it is empty. A deck
+  still on the old firmware expects `REMOTE_TOKEN`, so the first upload of this one goes over USB.
+  The upload no longer runs espota with `--debug`, whose log printed the password.
 
 ## [1.1.0] - 2026-10-13
 

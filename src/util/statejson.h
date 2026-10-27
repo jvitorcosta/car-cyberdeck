@@ -28,6 +28,7 @@ struct State {
     const char* line;       // current lyric line ("" during the intro or without lyrics)
     const char* next;       // the line after it
     uint32_t lineStartMs, nextStartMs;   // song position where they start (0 = unknown)
+    const char* fw;       // the firmware's version (util/version FW_VERSION); nullptr or "": no "fw" key
 };
 // "searching" (also while retrying), "synced", "plain", "instrumental", "none".
 const char* lyricKindName(lyricstatus::Status s);

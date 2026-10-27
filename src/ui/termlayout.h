@@ -38,8 +38,9 @@ constexpr int PRESET_NAME_Y = 9, PRESET_CHIP = 18, PRESET_CHIP_GAP = 10, PRESET_
 // The Lights status line (SMALL, in deckmenu::STATUS).
 constexpr int STATUS_TEXT_X = 4;
 
-// The boot: three SMALL lines typed out on a blank screen, caps tops BOOT_Y0 + i * BOOT_DY. A line's
-// pitch is its caps and its descent ('Q', ','), so no descender lands on the next line's caps.
+// The boot: three SMALL lines typed out on a blank screen, caps tops BOOT_Y0 + i * BOOT_DY, then the
+// build's FW_LABEL (util/version) under them as line N_BOOT. A line's pitch is its caps and its
+// descent ('Q', ','), so no descender lands on the next line's caps.
 constexpr const char* BOOT_LINES[] = {"WELCOME TO CYBERDECK", ">SET TERMINAL/INQUIRE",
                                       "HONDA CITY // CARDECK OS"};
 constexpr int N_BOOT = sizeof(BOOT_LINES) / sizeof(BOOT_LINES[0]);

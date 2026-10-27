@@ -59,8 +59,23 @@ void test_the_largest_state_fits_max_json() {
     s.rssi = -2147483647; s.uptimeS = s.trackGen = s.progressMs = s.durationMs = s.tripS = 4294967295u;
     s.lineStartMs = s.nextStartMs = 4294967295u;
     s.lyricKind = "instrumental";
+    s.fw = "100.100.100+99999.gabcdef0123.dirty";
     static char out[statejson::MAX_JSON];
     TEST_ASSERT_NOT_EQUAL(0, statejson::write(s, out, sizeof out));
+}
+
+// The firmware's version goes last as "fw" when the deck sets it; without one there is no key.
+void test_fw_goes_last_when_set() {
+    statejson::State s = sample();
+    s.fw = "1.1.0+226.g41b2b7a";
+    char out[768];
+    const size_t n = statejson::write(s, out, sizeof out);
+    TEST_ASSERT_EQUAL_size_t(strlen(out), n);
+    const char* tail = ",\"nextStartMs\":64000,\"fw\":\"1.1.0+226.g41b2b7a\"}";
+    TEST_ASSERT_EQUAL_STRING(tail, out + n - strlen(tail));
+    s.fw = "";
+    statejson::write(s, out, sizeof out);
+    TEST_ASSERT_NULL(strstr(out, "\"fw\""));
 }
 
 void test_lyric_kind_names() {
@@ -113,6 +128,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_writes_the_whole_state);
     RUN_TEST(test_the_largest_state_fits_max_json);
+    RUN_TEST(test_fw_goes_last_when_set);
     RUN_TEST(test_lyric_kind_names);
     RUN_TEST(test_escapes_quotes_backslashes_and_control_characters);
     RUN_TEST(test_utf8_passes_through);

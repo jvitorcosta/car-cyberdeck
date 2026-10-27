@@ -5,10 +5,10 @@
 // its own crashes instead: a counter in
 // RTC memory (it survives a crash reset, not a power-on) goes up after each panic or watchdog
 // reset. Once the deck has run HEALTHY_MS with its sign of working (the S3: a good Spotify poll;
-// the yellow deck's LED panel: online, its update listener up) the running firmware counts
-// as good (remembered in nvs) and the counter clears. LIMIT crashes in a row on firmware not yet
-// good: boot the other slot. A power-on, a self-heal restart or an update's restart clears the
-// count, so a deck with no signal for hours never rolls back. PURE, host-tested.
+// the yellow deck's LED panel: online, and its update listener up when updates are on) the running
+// firmware counts as good (remembered in nvs) and the counter clears. LIMIT crashes in a row on
+// firmware not yet good: boot the other slot. A power-on, a self-heal restart or an update's restart
+// clears the count, so a deck with no signal for hours never rolls back. PURE, host-tested.
 namespace bootguard {
 constexpr uint32_t MAGIC = 0xCDB0071Eu;   // RTC memory holds a count, not power-on noise
 constexpr uint32_t LIMIT = 3;

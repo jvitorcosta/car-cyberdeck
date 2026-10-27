@@ -16,9 +16,10 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
   `1 ROSE pink 40 pink 100` (slot, name, inside colour and level, outside colour and level). A
   colour can be two words: `3 GOJIRA light blue 40 light blue 100`. The list is fixed, so it never
   changes between calls.
-- `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on:
-  `inside=on outside=nolink`. Each word is `on`, `off` or `nolink`; a light the deck has no link
-  to is always `nolink`, whatever it last showed.
+- `GET /status?k=<REMOTE_TOKEN>` tells whether each light is linked and on, then the firmware's
+  version: `inside=on outside=nolink fw=1.1.0+226.g41b2b7a`. Each light's word is `on`, `off` or
+  `nolink`; a light the deck has no link to is always `nolink`, whatever it last showed. The same
+  `FW` version types out under the boot's welcome lines.
 - All of them reply in plain text (`text/plain`). A wrong key gets 403 "Wrong key" (on all of them); a phrase with
   nothing to do gets "Sorry, I didn't get a colour or a command".
 - Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page
@@ -262,16 +263,6 @@ $env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
 Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ```
 
-### Picking light blue's LED mix in the car (CYAN_TEST)
-
-Light blue's LED mix is B, `0,130,255` (the owner's pick on 2026-10-26); this hook is how it was
-picked, kept to try again. Build with `-D CYAN_TEST` the same way (then clear the
-variable), apply ゴジラ on the PRESETS tab, and tap it again while it's on: each tap moves to the
-next candidate, A `0,90,255`, B `0,130,255`, C `40,160,255` (it starts on B), and sends it to both
-lights. The status line says which (`>CYAN B 0,130,255`), and the light blue chips on screen show
-that candidate's own RGB. Without the flag the lights get B. `-D PURPLE_TEST` did the same for
-purple (the owner picked A, `140,0,255`).
-
 ## Theme: the inside light's colour
 
 While the **INSIDE** light is on and linked, the whole terminal (main screen, Lights, Lyrics; not the
@@ -379,7 +370,8 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
 ## Updates over WiFi
 
 The panel takes new firmware over WiFi, like the black deck (ArduinoOTA on port 3232, the password
-is `REMOTE_TOKEN`; off without one).
+is `OTA_PASSWORD` in `src/config.h`, its own random string apart from `REMOTE_TOKEN`; off without
+one). The panel joins WiFi only with `REMOTE_TOKEN` set, so it needs both.
 
 - **Once over USB**: `pio run -e ledpanel -t upload`. This build switches the panel to a flash
   layout with two app slots; the settings (touch calibration, looks, trip, the controller's bond)

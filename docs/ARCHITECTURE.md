@@ -88,7 +88,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   nothing, or once the song has stayed paused 30 s; now and then its second line says how to
   wake a phone that plays on unseen (`PHONE_HINT`). The screen is silent.
 - **Firmware updates** (`net/ota`, `util/otaview`, `util/backdrop`, `ui/otascreen`, `util/bootguard`)
-  — ArduinoOTA on port 3232 (password REMOTE_TOKEN), its own task. `otaview::Tracker` keeps the
+  — ArduinoOTA on port 3232 (password OTA_PASSWORD, off without one), its own task. `otaview::Tracker` keeps the
   update's state (Receiving, Done, Failed held 3 s); ArduinoOTA's own reboot is off, so the deck
   restarts 600 ms after the end, once the screen has flashed red. While Receiving or Done the
   network task pauses; a failure resumes it at once. With `data/backdrop.bin` (Green Hill Zone, from
@@ -104,7 +104,8 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   /play?clip=howl` checks the token, one play per 3 s, `409` while a clip plays. The
   howl is the real recording in `data/howl.pcm` (`tools/gen_howl.py`, 48 kHz) when the build has
   one; otherwise it is synthesised while it plays (`audio/greeting`).
-  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`). The "Waiting for a
+  `/state` is built into a 2 KB buffer (`statejson::MAX_JSON`) and ends with the firmware's
+  version (`"fw"`, util/version), which the status screens also show at the top right. The "Waiting for a
   song..." screen shows the link as a QR code (`esp_qrcode` from the core; `qrfit` builds
   `http://<ip>/?k=<token>` from the current address and picks a version ≤ 3), checked when the
   screen appears and every 5 s. It sits on a Gen-3 battle box at the top left (`ui/qrcard`:
@@ -167,3 +168,15 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   was retired on 2026-10-21 (git history up to `d4d0a67`).
 - `src/util/`, `src/core/`, `src/images/` never include `src/ui/`; `src/util/` has no Arduino
   dependency, so it builds and tests on a PC.
+
+## Test hooks
+
+Build flags that are never set in `platformio.ini`; add one for a desk check, then clear it
+(`$env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"`, then `Remove-Item Env:PLATFORMIO_BUILD_FLAGS`).
+
+| Flag | Deck (env) | What it does |
+|---|---|---|
+| `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) | black (`s3`) | Forces that boot opening (`main.cpp`, `util/intropick`). |
+| `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
+| `-D NIGHT_TEST` | yellow (`ledpanel`) | Night mode whatever the time (`ledpanel.cpp`). |
+| `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |

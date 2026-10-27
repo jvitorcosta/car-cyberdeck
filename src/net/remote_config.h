@@ -7,6 +7,12 @@
 #define REMOTE_TOKEN ""   // older config.h: remote off
 #endif
 
+// The password for firmware updates over WiFi (net/ota), apart from REMOTE_TOKEN: that one travels
+// in plain-HTTP URLs, this one never leaves the PC but for espota's challenge (tools/ota_auth.py).
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD ""   // older config.h: updates over WiFi off
+#endif
+
 // The deck's name on the local network (http://cardeck.local/); the companion looks it up off the
 // hotspot. Each board's own name: http://<name>.local/ (mDNS / Bonjour), different so both can be
 // on at once. REMOTE_NAME renames the deck.

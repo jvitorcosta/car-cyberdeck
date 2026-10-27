@@ -1,6 +1,7 @@
 #include "songmood.h"
 #include <cstring>
 #include <initializer_list>
+#include "hue.h"
 #include "ledlook.h"
 #include "musiclights.h"
 #include "text.h"
@@ -8,7 +9,8 @@
 namespace songmood {
 namespace {
 
-enum : uint8_t { RED, ORANGE, PINK, PURPLE, BLUE, GREEN, WHITE, YELLOW };   // ledlook's grid order
+using ledlook::RED, ledlook::ORANGE, ledlook::PINK, ledlook::PURPLE, ledlook::BLUE, ledlook::GREEN,
+    ledlook::WHITE, ledlook::YELLOW;
 
 struct Pick {
     const char* artist;
@@ -17,20 +19,6 @@ struct Pick {
     uint8_t swatch;
 };
 #include "songpicks.inc"
-
-// A colour word in a title, an album or a playlist's name (folded: lowercase, no accents).
-struct Word {
-    const char* word;
-    uint8_t swatch;
-};
-const Word WORDS[] = {
-    {"purple", PURPLE}, {"purpura", PURPLE}, {"roxo", PURPLE},     {"violeta", PURPLE},
-    {"red", RED},       {"vermelho", RED},   {"vermelha", RED},    {"blue", BLUE},
-    {"azul", BLUE},     {"pink", PINK},      {"rosa", PINK},       {"green", GREEN},
-    {"verde", GREEN},   {"yellow", YELLOW},  {"amarelo", YELLOW},  {"gold", YELLOW},
-    {"dourado", YELLOW}, {"ouro", YELLOW},   {"orange", ORANGE},   {"laranja", ORANGE},
-    {"white", WHITE},   {"branco", WHITE},
-};
 
 // A mood and the swatches it allows, strongest first. A playlist's mood comes from its words
 // (folded, space-separated) or its emoji (UTF-8, space-separated, without the U+FE0F that some
@@ -53,16 +41,6 @@ const Mood PLAYLIST_MOODS[] = {
     {"calm", "chill relax calm calma sleep sono study estudo lofi lo-fi acoustic rain chuva", "🌧 ☕ 🌊",
      {BLUE, WHITE, PURPLE}, 3},
     {"sunny", "verao summer praia beach sol sun tropical", "☀ 🏖 🌴", {YELLOW, ORANGE, GREEN}, 3},
-};
-
-// A playlist's colour tags: "#" + one of these + a non-letter (or the end), in its description
-// (folded). The tags, in the owner's order, are the playlist's allowed set.
-const Word TAGS[] = {
-    {"red", RED},         {"vermelho", RED},     {"vermelha", RED},   {"orange", ORANGE},  {"laranja", ORANGE},
-    {"pink", PINK},       {"rosa", PINK},        {"purple", PURPLE},  {"roxo", PURPLE},    {"roxa", PURPLE},
-    {"purpura", PURPLE},  {"violeta", PURPLE},   {"blue", BLUE},      {"azul", BLUE},      {"green", GREEN},
-    {"verde", GREEN},     {"white", WHITE},      {"branco", WHITE},   {"branca", WHITE},   {"yellow", YELLOW},
-    {"amarelo", YELLOW},  {"amarela", YELLOW},   {"gold", YELLOW},    {"dourado", YELLOW},
 };
 
 // The genre badge's mood (util/genre_data.inc's indices). The first colour is a grey cover's.
@@ -204,7 +182,7 @@ bool colourWord(const char* text, int* swatch) {
     char t[TEXT];
     fold(text, t, sizeof t);
     int best = -1;
-    for (const Word& w : WORDS) {
+    for (const ledlook::ColourWord& w : ledlook::COLOUR_WORDS) {   // a colour word (folded, like the text)
         const int at = findWord(t, w.word);
         if (at >= 0 && (best < 0 || at < best)) {
             best = at;
@@ -214,7 +192,8 @@ bool colourWord(const char* text, int* swatch) {
     return best >= 0;
 }
 
-// The playlist description's colour tags as a set ("tags"); false when it has none.
+// The playlist description's colour tags as a set ("tags"): "#" + a colour word + a non-letter (or
+// the end), in the folded description, in the owner's order. False when it has none.
 bool tagsOf(const char* description, Mood* out) {
     *out = Mood{"tags", nullptr, nullptr, {}, 0};
     if (!description || !description[0]) return false;
@@ -223,7 +202,7 @@ bool tagsOf(const char* description, Mood* out) {
     for (const char* p = strchr(t, '#'); p; p = strchr(p + 1, '#')) {
         size_t n = 0;
         while (p[1 + n] >= 'a' && p[1 + n] <= 'z') ++n;
-        for (const Word& w : TAGS) {
+        for (const ledlook::ColourWord& w : ledlook::COLOUR_WORDS) {
             if (strlen(w.word) != n || strncmp(p + 1, w.word, n) != 0) continue;
             bool seen = false;
             for (int i = 0; i < out->n; ++i) seen = seen || out->set[i] == w.swatch;
@@ -247,24 +226,7 @@ const Mood* playlistMood(const Song& s) {
 }
 
 // Hue in degrees and saturation in %, as musiclights measures them.
-void hueSat(songpalette::Rgb c, int* hue, int* sat) {
-    int mx = c.r, mn = c.r;
-    if (c.g > mx) mx = c.g;
-    if (c.b > mx) mx = c.b;
-    if (c.g < mn) mn = c.g;
-    if (c.b < mn) mn = c.b;
-    const int d = mx - mn;
-    *sat = mx ? d * 100 / mx : 0;
-    if (!d) {
-        *hue = 0;
-        return;
-    }
-    int h;
-    if (mx == c.r) h = 60 * (c.g - c.b) / d;
-    else if (mx == c.g) h = 120 + 60 * (c.b - c.r) / d;
-    else h = 240 + 60 * (c.r - c.g) / d;
-    *hue = (h + 360) % 360;
-}
+void hueSat(songpalette::Rgb c, int* h, int* sat) { hue::hueSat(c.r, c.g, c.b, 360, 100, h, sat); }
 
 songpalette::Rgb screen(int swatch) {
     const uint32_t s = ledlook::SWATCHES[swatch].screen;
@@ -293,8 +255,7 @@ int fromCover(const Mood& m, const songpalette::Rgb* cover, int count) {
         if (m.set[i] == WHITE) continue;
         int h, s;
         hueSat(screen(m.set[i]), &h, &s);
-        int d = ((hue - h) % 360 + 360) % 360;
-        if (d > 180) d = 360 - d;
+        const int d = hue::dist(hue, h, 360);
         if (d < bestD) {
             bestD = d;
             best = m.set[i];

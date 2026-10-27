@@ -62,17 +62,8 @@
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
 // mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
 // (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
-// the inside light does, to see it without the car's lights. Neither is set in platformio.ini.
-// -D PURPLE_TEST lets the owner pick, by eye in the car, the LED mix that looks like the deck's purple:
-// tapping the Purple tile while purple is already the page's colour cycles A 140,0,255 / B 170,0,230 /
-// C 200,0,210 (instead of the double-tap off), every purple sent to the lights (tile, PURPURA) uses the
-// current one, and the status line says ">PURPLE A 140,0,255". The tile stays 0x8C00FF (A, the owner's
-// pick on 2026-10-26). Off by default.
-// -D CYAN_TEST does the same for light blue (GOJIRA's colour; its screen colour is #0082FF): tapping
-// the ゴジラ preset while it is applied cycles A 0,90,255 / B 0,130,255 / C 40,160,255 (from B),
-// every light blue sent to the lights uses the current one, the status line says ">CYAN A 0,90,255",
-// and the screen's light blue chips show the candidate's own RGB. Without it the lights get B, the
-// owner's pick. Off by default.
+// the inside light does, to see it without the car's lights. Neither is set in platformio.ini (every
+// test hook: docs/ARCHITECTURE.md "Test hooks").
 // Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
 //   pio run -e ledpanel_ota -t upload
 // A page in the theme holds the screen meanwhile (see "Update over WiFi" below); three crash resets
@@ -132,6 +123,7 @@
 #include "util/stateparse.h"
 #include "util/tapguard.h"
 #include "util/termpal.h"
+#include "util/version.h"
 #include "util/touchcal.h"
 #include "util/tripclock.h"
 #include "util/tripmeter.h"
@@ -280,39 +272,12 @@ static void write(Controller& c, const elkcmd::Frame& f) {
     }
 }
 
-// What the strip gets for swatch `sw`: the SWATCHES values, but under PURPLE_TEST the purple's
-// candidate mix, under CYAN_TEST light blue's.
+// What the strip gets for swatch `sw`: its SWATCHES LED mix.
 struct Rgb { uint8_t r, g, b; };
-#ifdef PURPLE_TEST
-static constexpr int PURPLE = 3;  // ledlook's order
-static constexpr Rgb PURPLE_MIX[] = {{140, 0, 255}, {170, 0, 230}, {200, 0, 210}};
-static int purpleMix = 0;  // index into PURPLE_MIX; loop-owned
-#endif
-#ifdef CYAN_TEST
-static constexpr Rgb CYAN_MIX[] = {{0, 90, 255}, {0, 130, 255}, {40, 160, 255}};
-static int cyanMix = 1;  // index into CYAN_MIX, B first; loop-owned
-#endif
-static Rgb ledRgb(int sw) {
-#ifdef PURPLE_TEST
-    if (sw == PURPLE) return PURPLE_MIX[purpleMix];
-#endif
-#ifdef CYAN_TEST
-    if (sw == ledlook::LIGHT_BLUE) return CYAN_MIX[cyanMix];
-#endif
-    return {SWATCHES[sw].r, SWATCHES[sw].g, SWATCHES[sw].b};
-}
+static Rgb ledRgb(int sw) { return {SWATCHES[sw].r, SWATCHES[sw].g, SWATCHES[sw].b}; }
 
-// What a chip of swatch `sw` shows on screen: its screen colour, but under CYAN_TEST light blue's
-// candidate as the lights get it, so the owner sees which one is on.
-static uint32_t screenOf(int sw) {
-#ifdef CYAN_TEST
-    if (sw == ledlook::LIGHT_BLUE) {
-        const Rgb m = CYAN_MIX[cyanMix];
-        return (static_cast<uint32_t>(m.r) << 16) | (static_cast<uint32_t>(m.g) << 8) | m.b;
-    }
-#endif
-    return SWATCHES[sw].screen;
-}
+// What a chip of swatch `sw` shows on screen: its screen colour.
+static uint32_t screenOf(int sw) { return SWATCHES[sw].screen; }
 
 // Music mode's looks (see "Music mode" below): from the first song palette after the mode goes on
 // until it goes off, light i shows musicLook[i] (the song's swatch at its music level) instead of
@@ -1033,28 +998,31 @@ static void drawDash() {
 }
 
 // The terminal's boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
-// type out one character every TYPE_MS behind a block cursor (a SMALL cell; 85 characters, ~0.5 s),
-// stay BOOT_HOLD_MS to be read, then drawAll() puts up the dashboard. It runs in setup(), so nothing
-// else draws meanwhile: every other drawing path runs from loop(), and the link and voice tasks start
-// after it (a voice job or a link change that comes later waits in the queue / the link flags for
-// loop() as always).
+// and the build's FW_LABEL (in DIM: "FW 1.1.0+226.g41b2b7a") type out one character every TYPE_MS
+// behind a block cursor (a SMALL cell; ~110 characters, ~0.7 s), stay BOOT_HOLD_MS to be read, then
+// drawAll() puts up the dashboard. It runs in setup(), so nothing else draws meanwhile: every other
+// drawing path runs from loop(), and the link and voice tasks start after it (a voice job or a link
+// change that comes later waits in the queue / the link flags for loop() as always).
 static constexpr uint32_t TYPE_MS = 6, BOOT_HOLD_MS = 400;
+static void typeLine(const char* s, int row, termpal::Role ink) {
+    const int w = termfont::cell(Face::SMALL), h = termfont::capHeight(Face::SMALL);
+    tft.setTextColor(pal(ink));
+    const int y = BOOT_Y0 + row * BOOT_DY;  // the caps' top row
+    int x = BOOT_X;
+    for (const char* p = s; *p; p++) {
+        const char ch[2] = {*p, 0};
+        clearBg(x, y, w, h);  // the cursor
+        x += text(ch, x, y, Face::SMALL, TL_DATUM);
+        tft.fillRect(x, y, w, h, pal(termpal::TEXT));
+        delay(TYPE_MS);
+    }
+    clearBg(x, y, w, h);
+}
+
 static void typeBoot() {
     clearBg(0, 0, tft.width(), tft.height());
-    const int w = termfont::cell(Face::SMALL), h = termfont::capHeight(Face::SMALL);
-    for (int i = 0; i < N_BOOT; i++) {
-        tft.setTextColor(pal(i == N_BOOT - 1 ? termpal::MID : termpal::TEXT));
-        const int y = BOOT_Y0 + i * BOOT_DY;  // the caps' top row
-        int x = BOOT_X;
-        for (const char* p = BOOT_LINES[i]; *p; p++) {
-            const char ch[2] = {*p, 0};
-            clearBg(x, y, w, h);  // the cursor
-            x += text(ch, x, y, Face::SMALL, TL_DATUM);
-            tft.fillRect(x, y, w, h, pal(termpal::TEXT));
-            delay(TYPE_MS);
-        }
-        clearBg(x, y, w, h);
-    }
+    for (int i = 0; i < N_BOOT; i++) typeLine(BOOT_LINES[i], i, i == N_BOOT - 1 ? termpal::MID : termpal::TEXT);
+    typeLine(FW_LABEL, N_BOOT, termpal::DIM);
     delay(BOOT_HOLD_MS);
 }
 
@@ -1588,32 +1556,6 @@ static void tripTick() {
     }
 }
 
-#ifdef PURPLE_TEST
-// ">PURPLE A 140,0,255" on the status line / prompt line.
-static void purpleSay() {
-    const Rgb m = PURPLE_MIX[purpleMix];
-    char s[sizeof(message)];
-    snprintf(s, sizeof(s), ">PURPLE %c %u,%u,%u", 'A' + purpleMix, m.r, m.g, m.b);
-    setMessage(s);
-    drawMessage();
-}
-#endif
-
-#ifdef CYAN_TEST
-// ">CYAN B 0,130,255" on the status line / prompt line.
-static void cyanSay() {
-    const Rgb m = CYAN_MIX[cyanMix];
-    char s[sizeof(message)];
-    snprintf(s, sizeof(s), ">CYAN %c %u,%u,%u", 'A' + cyanMix, m.r, m.g, m.b);
-    setMessage(s);
-    drawMessage();
-}
-
-static bool usesLightBlue(const ledpresets::Preset& p) {
-    return (p.in.lit && p.in.swatch == ledlook::LIGHT_BLUE) || (p.out.lit && p.out.swatch == ledlook::LIGHT_BLUE);
-}
-#endif
-
 // Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
 // shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
@@ -1630,12 +1572,6 @@ static void applyPreset(int slot0) {
     lightstatus::applied(ledpresets::shown(p), m, sizeof(m));  // ">ゴジラ APPLIED" on screen
     setMessage(m);
     if (!drawLooks()) drawMessage();  // Lights' STATUS line, the Menu's prompt line (a repaint drew it)
-#ifdef PURPLE_TEST
-    if ((p.in.lit && p.in.swatch == PURPLE) || (p.out.lit && p.out.swatch == PURPLE)) purpleSay();
-#endif
-#ifdef CYAN_TEST
-    if (usesLightBlue(p)) cyanSay();
-#endif
 }
 
 // A press is averaged over its first SETTLE_MS (a fingertip's first readings jump around) and acts
@@ -1718,14 +1654,8 @@ static void pressLights(int id) {
         return;
     }
     if (deckmenu::isPreset(screen, id)) {
-        const int slot = deckmenu::presetSlot(screen, id);
-#ifdef CYAN_TEST
-        // the ゴジラ preset again while it is on the lights: the next candidate, never a no-op
-        const ledpresets::Preset& p = ledpresets::PRESETS[slot];
-        if (usesLightBlue(p) && !musicDriving && looks[INSIDE] == p.in && looks[OUTSIDE] == p.out) cyanMix = (cyanMix + 1) % 3;
-#endif
-        applyPreset(slot);
-        return;  // applyPreset saved and drew; the release redraws the button (CYAN_TEST: its new chips)
+        applyPreset(deckmenu::presetSlot(screen, id));
+        return;  // applyPreset saved and drew; the release redraws the button
     }
     if (screen != Screen::Lights) return;
     if (id < L_MINUS) {
@@ -1735,12 +1665,7 @@ static void pressLights(int id) {
         static int lastTile = -1;
         static uint32_t lastTileMs = 0;
         const int tile = id - L_TILE0;
-#ifdef PURPLE_TEST
-        if (tile == PURPLE && l.lit && l.swatch == PURPLE) purpleMix = (purpleMix + 1) % 3;  // cycle, never off
-        const bool doubleTap = tile != PURPLE && l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
-#else
         const bool doubleTap = l.lit && tile == l.swatch && tile == lastTile && millis() - lastTileMs < DOUBLE_MS;
-#endif
         lastTile = doubleTap ? -1 : tile;  // a third tap starts over
         lastTileMs = millis();
         bothlook::Change c;
@@ -1748,9 +1673,6 @@ static void pressLights(int id) {
         else c.swatch = tile;
         change(target, c);
         drawLooks();
-#ifdef PURPLE_TEST
-        if (tile == PURPLE) purpleSay();
-#endif
     } else {  // L_MINUS / L_PLUS
         bothlook::Change c;
         c.step = id == L_PLUS ? 1 : -1;
@@ -2678,9 +2600,9 @@ static void handlePresets() {
 static void handleStatus() {
     if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
     const Published p = snapshot();
-    char line[48];
+    char line[96];
     lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
-                       line, sizeof(line));
+                       FW_VERSION, line, sizeof(line));
     server->send(200, "text/plain", line);
 }
 
@@ -2694,7 +2616,7 @@ static void voiceTask(void*) {
     netclock::begin();  // SNTP, for night mode and the Menu's clock
     weatherTick();  // the first try
     beginLyrics();
-    ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (beginVoice's gate: REMOTE_TOKEN is set)
+    ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (off without OTA_PASSWORD; WiFi itself needs REMOTE_TOKEN)
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):
@@ -2799,6 +2721,7 @@ static bool updateTheme() {
 
 void setup() {
     Serial.begin(115200);
+    Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
     ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
     tft.init();
     backlight::begin();  // PWM, at the day level
@@ -2831,12 +2754,13 @@ void setup() {
 }
 
 void loop() {
-    // Up bootguard::HEALTHY_MS, online at that moment and the update listener started: this
-    // firmware has proven itself (net/ota), and can take the next update. Checked once a second.
+    // Up bootguard::HEALTHY_MS, online at that moment and the update listener started (when updates
+    // are on; off, online is enough): this firmware has proven itself (net/ota), and can take the
+    // next update. Checked once a second.
     static uint32_t provenAt = 0;
     if (millis() - provenAt >= 1000) {
         provenAt = millis();
-        if (net::isOnline() && ota::listening()) ota::onGoodPoll();
+        if (net::isOnline() && (ota::listening() || !ota::enabled())) ota::onGoodPoll();
     }
     // An update over WiFi: its page holds the screen, and nothing below draws or acts meanwhile.
     if (updateTick()) {

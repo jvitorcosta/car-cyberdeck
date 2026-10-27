@@ -94,7 +94,8 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
    in nvs survive) and then `pio run -e s3 -t uploadmedia`. Without the media the deck still
    boots, with the default chime, and logs `[media] none`.
 
-   **Updates over WiFi (S3):** with `REMOTE_TOKEN` set and the PC on the deck's network (home
+   **Updates over WiFi (S3):** with `OTA_PASSWORD` set in `src/config.h` (its own random
+   string, not `REMOTE_TOKEN`) and the PC on the deck's network (home
    WiFi on its 2.4 GHz band, see [Two decks](#two-decks); or the PC joined to the iPhone
    hotspot with `--upload-port 172.20.10.10`), run
    `pio run -e s3_ota -t upload`. The deck shows the upload's progress (on Green Hill Zone
@@ -182,8 +183,8 @@ powershell -ExecutionPolicy Bypass -File tools\run_tests.ps1   # host unit tests
 pio run -e s3 -e cyd_companion                                  # deck and companion
 ```
 
-CI builds the deck, the companion and both hardware checks, enforces the flash budget
-(`s3`, `cyd_companion`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
+CI builds the deck, the yellow deck's LED panel, the companion and both hardware checks,
+enforces the flash budget (`s3`, `ledpanel`, `cyd_companion`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
 the media tool tests (`python -m unittest discover -s tools -p "test_gen_*.py"`). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup, test rules and commit style.
 

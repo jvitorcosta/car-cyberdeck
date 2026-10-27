@@ -67,6 +67,13 @@ void test_preset_names() {
     TEST_ASSERT_EQUAL_INT(3, parsed("Godzilla!").preset);
     TEST_ASSERT_EQUAL_INT(3, parsed("set the lights to godzilla").preset);
 }
+// "purpura" is also a purple word in ledlook::COLOUR_WORDS; preset names are checked first, so it
+// stays the PURPURA preset, not a colour.
+void test_purpura_is_the_preset_not_a_colour() {
+    const ledvoice::Command c = parsed("purpura");
+    TEST_ASSERT_EQUAL_INT(4, c.preset);
+    TEST_ASSERT_EQUAL_INT(-1, c.color);
+}
 // CALM and FOREST are gone (2026-10-26): their words do nothing now.
 void test_old_preset_names_are_gone() {
     ledvoice::Command c;
@@ -189,6 +196,7 @@ int main(int, char**) {
     RUN_TEST(test_siri_homophones);
     RUN_TEST(test_nothing_to_do);
     RUN_TEST(test_preset_names);
+    RUN_TEST(test_purpura_is_the_preset_not_a_colour);
     RUN_TEST(test_old_preset_names_are_gone);
     RUN_TEST(test_light_blue);
     RUN_TEST(test_preset_name_with_other_words);
