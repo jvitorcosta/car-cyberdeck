@@ -2,8 +2,8 @@
 #include <cstddef>
 #include <cstdint>
 #include "songpalette.h"
-// Music mode's colour for a song: one of the Lights grid's 8 swatches (ledlook's order: 0 red,
-// 1 orange, 2 pink, 3 purple, 4 blue, 5 green, 6 white, 7 yellow), strongest signal first:
+// Music mode's colour for a song: one of the Lights grid's 8 swatches (ledlook::Colour, RED..YELLOW;
+// never LIGHT_BLUE), strongest signal first:
 //  1. the owner's picks (songpicks.inc): a song (title + artist), else an album, else an artist;
 //  2. a colour word (PT or EN, a whole word: ledlook::COLOUR_WORDS) in the title;
 //  3. the playlist's colour tags ("#red #pink" in its description) give its allowed set;

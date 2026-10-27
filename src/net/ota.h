@@ -23,8 +23,11 @@ void begin(const char* name, bool (*hold)() = nullptr, void (*onStart)() = nullp
 struct View { otaview::Phase phase; int pct; };   // pct -1 when Idle
 View view();
 bool active();     // Receiving or Done: network work pauses (Failed resumes it at once)
-// The listener is up (ArduinoOTA.begin() has run): the deck can take the next update. The LED
-// panel counts its firmware as proven only then, so a good firmware is always one that listens.
+// Updates are on: OTA_PASSWORD is set. Off, begin() starts no listener and listening() stays false.
+bool enabled();
+// The listener is up (ArduinoOTA.begin() has run): the deck can take the next update. With updates
+// on, the LED panel counts its firmware as proven only then, so a good firmware is always one that
+// listens; with them off, being online is enough (or no build could ever prove itself).
 bool listening();
 // The listener task's least stack to spare so far (bytes), for a [mem] line; 0 before begin().
 unsigned stackLeft();

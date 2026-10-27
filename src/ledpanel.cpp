@@ -2754,12 +2754,13 @@ void setup() {
 }
 
 void loop() {
-    // Up bootguard::HEALTHY_MS, online at that moment and the update listener started: this
-    // firmware has proven itself (net/ota), and can take the next update. Checked once a second.
+    // Up bootguard::HEALTHY_MS, online at that moment and the update listener started (when updates
+    // are on; off, online is enough): this firmware has proven itself (net/ota), and can take the
+    // next update. Checked once a second.
     static uint32_t provenAt = 0;
     if (millis() - provenAt >= 1000) {
         provenAt = millis();
-        if (net::isOnline() && ota::listening()) ota::onGoodPoll();
+        if (net::isOnline() && (ota::listening() || !ota::enabled())) ota::onGoodPoll();
     }
     // An update over WiFi: its page holds the screen, and nothing below draws or acts meanwhile.
     if (updateTick()) {

@@ -133,7 +133,7 @@ void checkBoot() {
 }
 
 void begin(const char* name, bool (*hold)(), void (*onStart)()) {
-    if (!OTA_PASSWORD[0]) { Serial.println("[ota] off (OTA_PASSWORD empty)"); return; }
+    if (!enabled()) { Serial.println("[ota] off (OTA_PASSWORD empty)"); return; }
     s_name = name;
     s_hold = hold;
     s_onStart = onStart;
@@ -155,6 +155,7 @@ bool active() {
 }
 int progress() { return active() ? view().pct : -1; }
 
+bool enabled() { return OTA_PASSWORD[0] != 0; }
 bool listening() { return s_listening.load(); }
 unsigned stackLeft() { return s_task ? (unsigned)uxTaskGetStackHighWaterMark(s_task) : 0u; }
 
