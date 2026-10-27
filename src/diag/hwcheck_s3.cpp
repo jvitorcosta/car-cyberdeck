@@ -5,8 +5,8 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <cmath>
-#include "audio/sink.h"
-#include "board/board.h"
+#include "../audio/sink.h"
+#include "../board/board.h"
 #include "pins.h"
 
 static TFT_eSPI s_tft;
