@@ -193,6 +193,27 @@ void test_latin1_upper() {
     TEST_ASSERT_EQUAL_STRING("\xDF\xF7\xB0Y", c);
     txt::latin1Upper(nullptr);
 }
+// A Spotify playlist description: links as <a> tags, quotes and ampersands as entities.
+void test_strip_html_tags_and_entities() {
+    char s[160] = "Late <a href=\"spotify:playlist:37i9\">night</a> drives &amp; city lights &#x27;n&#39; more &quot;neon&quot;";
+    TEST_ASSERT_EQUAL_size_t(strlen("Late night drives & city lights 'n' more \"neon\""), txt::stripHtml(s));
+    TEST_ASSERT_EQUAL_STRING("Late night drives & city lights 'n' more \"neon\"", s);
+    char t[64] = "a &lt;3 b &gt; c &apos;d&apos; &#233;&#xE7;&#x1F319;";
+    txt::stripHtml(t);
+    TEST_ASSERT_EQUAL_STRING("a <3 b > c 'd' \xC3\xA9\xC3\xA7\xF0\x9F\x8C\x99", t);   // é ç 🌙
+}
+void test_strip_html_odd_input() {
+    char a[32] = "cut off <a href=\"spot";     // a description cut inside a tag: the rest goes
+    txt::stripHtml(a);
+    TEST_ASSERT_EQUAL_STRING("cut off ", a);
+    char b[32] = "R&B & soul &nbsp &zz; &#;";  // not entities we know: kept as they are
+    txt::stripHtml(b);
+    TEST_ASSERT_EQUAL_STRING("R&B & soul &nbsp &zz; &#;", b);
+    char c[8] = "";
+    TEST_ASSERT_EQUAL_size_t(0, txt::stripHtml(c));
+    TEST_ASSERT_EQUAL_size_t(0, txt::stripHtml(nullptr));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_copy_truncates_and_terminates);
@@ -211,5 +232,7 @@ int main(int, char**) {
     RUN_TEST(test_latin1_fold);
     RUN_TEST(test_latin1_fold_ends);
     RUN_TEST(test_latin1_upper);
+    RUN_TEST(test_strip_html_tags_and_entities);
+    RUN_TEST(test_strip_html_odd_input);
     return UNITY_END();
 }

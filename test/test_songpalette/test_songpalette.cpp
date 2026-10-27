@@ -1,6 +1,4 @@
 #include <unity.h>
-#include <initializer_list>
-#include "../../src/util/genre.h"
 #include "../../src/util/rgb565.h"
 #include "../../src/util/songpalette.h"
 
@@ -22,7 +20,6 @@ int hueOf(Rgb c) {   // degrees 0..359
     return (h + 360) % 360;
 }
 int dist(int a, int b) { int d = ((a - b) % 360 + 360) % 360; return d > 180 ? 360 - d : d; }
-bool same(Rgb a, Rgb b) { return a.r == b.r && a.g == b.g && a.b == b.b; }
 uint16_t px(uint8_t r, uint8_t g, uint8_t b) { return rgb565::be(rgb565::rgb(r, g, b)); }   // as the art buffer stores it
 constexpr int W = 92, H = 92;
 uint16_t bmp[W * H];
@@ -55,137 +52,19 @@ void test_cover_skips_dark_and_washed_out() {
     Rgb out[3];
     TEST_ASSERT_EQUAL_INT(0, songpalette::fromCover(bmp, W, H, out));
 }
-void test_grey_cover_uses_genre() {
-    fill(px(128, 128, 128), px(128, 128, 128));
-    Rgb out[3];
-    int n = songpalette::fromCover(bmp, W, H, out);
-    TEST_ASSERT_EQUAL_INT(0, n);
-    songpalette::Palette p = songpalette::build(out, n, 7, 720);
-    Rgb fam[3];
-    songpalette::family(7, fam);
-    for (int i = 0; i < 3; ++i) TEST_ASSERT_TRUE(same(fam[i], p.c[i]));
-}
-void test_no_genre_no_cover_neutral() {
-    songpalette::Palette p = songpalette::build(nullptr, 0, genre::NONE, 720);
-    Rgb neutral[3], q[3];
-    songpalette::family(30, neutral);
-    songpalette::family(99, q);
-    for (int i = 0; i < 3; ++i) {
-        TEST_ASSERT_TRUE(same(neutral[i], p.c[i]));
-        TEST_ASSERT_TRUE(same(neutral[i], q[i]));
-    }
-}
-// An unknown genre (NONE, out of range, or the "others" badges 28-30: the neutral family) nudges
-// nothing: the cover's colours as they are. Its family still stands in for a colourless cover.
-void test_unknown_genre_keeps_cover_hues() {
-    const Rgb cover[2] = {{0, 0, 255}, {255, 0, 0}};   // 240 and 0 deg
-    for (uint8_t badge : {genre::NONE, static_cast<uint8_t>(28), static_cast<uint8_t>(29), static_cast<uint8_t>(30),
-                          static_cast<uint8_t>(99)}) {
-        const songpalette::Palette p = songpalette::build(cover, 2, badge, 720);
-        TEST_ASSERT_EQUAL_INT(240, hueOf(p.c[0]));
-        TEST_ASSERT_EQUAL_INT(0, hueOf(p.c[1]));
-        Rgb neutral[3];
-        songpalette::family(badge, neutral);
-        TEST_ASSERT_TRUE(same(p.c[2], neutral[1]) || same(p.c[2], neutral[0]) || same(p.c[2], neutral[2]));
-    }
-    // a known genre still nudges (electro: 240 toward its blue, ~221)
-    TEST_ASSERT_TRUE(hueOf(songpalette::build(cover, 2, 9, 720).c[0]) < 240);
-}
-void test_grey_cover_unknown_genre_is_neutral() {
-    fill(px(128, 128, 128), px(200, 200, 200));
-    Rgb out[3];
-    const int n = songpalette::fromCover(bmp, W, H, out);
-    TEST_ASSERT_EQUAL_INT(0, n);
-    const songpalette::Palette p = songpalette::build(out, n, genre::NONE, 720);
-    Rgb neutral[3];
-    songpalette::family(genre::NONE, neutral);
-    for (int i = 0; i < 3; ++i) TEST_ASSERT_TRUE(same(neutral[i], p.c[i]));
-}
-void test_families_differ() {
-    Rgb a[3], b[3];
-    songpalette::family(6, a);    // rock
-    songpalette::family(9, b);    // electro
-    TEST_ASSERT_FALSE(same(a[0], b[0]));
-    songpalette::family(0, a);    // pop
-    songpalette::family(1, b);    // k-pop: same family
-    TEST_ASSERT_TRUE(same(a[0], b[0]));
-}
-void test_nudge_toward_genre() {
-    Rgb orange = {255, 128, 0};   // hue ~30
-    Rgb other = {0, 255, 0};      // second colour so the cover counts
-    Rgb cover[2] = {orange, other};
-    songpalette::Palette p = songpalette::build(cover, 2, 9, 720);   // electro: blue, purple, cyan
-    Rgb fam[3];
-    songpalette::family(9, fam);
-    int h0 = hueOf(orange), h1 = hueOf(p.c[0]);
-    TEST_ASSERT_TRUE(dist(h0, h1) <= 16);
-    TEST_ASSERT_TRUE(dist(h0, h1) >= 10);
-    int nearest = 0, bestD = 999;
-    for (int k = 0; k < 3; ++k)
-        if (dist(h0, hueOf(fam[k])) < bestD) { bestD = dist(h0, hueOf(fam[k])); nearest = hueOf(fam[k]); }
-    TEST_ASSERT_TRUE(dist(h1, nearest) < dist(h0, nearest));   // moved toward it, by the 15 deg cap
-    // a hue ~8 deg from a family hue lands on it, not past it (the step is the whole distance)
-    Rgb close = {178, 0, 255};    // hue ~281; electro's purple {160, 32, 255} is ~274
-    TEST_ASSERT_TRUE(dist(hueOf(close), hueOf(fam[1])) >= 6 && dist(hueOf(close), hueOf(fam[1])) <= 9);
-    Rgb c2[2] = {close, other};
-    songpalette::Palette q = songpalette::build(c2, 2, 9, 720);
-    TEST_ASSERT_TRUE(dist(hueOf(q.c[0]), hueOf(fam[1])) <= 1);
-}
-void test_one_cover_colour_uses_genre() {
-    Rgb cover[1] = {{255, 0, 0}};
-    songpalette::Palette p = songpalette::build(cover, 1, 9, 720);
-    Rgb fam[3];
-    songpalette::family(9, fam);
-    for (int i = 0; i < 3; ++i) TEST_ASSERT_TRUE(same(p.c[i], fam[i]));
-}
-void test_two_cover_colours_fill_third_from_genre() {
-    Rgb cover[2] = {{255, 0, 0}, {0, 255, 0}};   // red ~0, green ~120
-    songpalette::Palette p = songpalette::build(cover, 2, 9, 720);   // electro: blue ~221, purple ~274, cyan ~188
-    Rgb fam[3];
-    songpalette::family(9, fam);
-    // the two cover hues, nudged (red toward purple to ~345, green toward cyan to ~135)...
-    TEST_ASSERT_TRUE(dist(hueOf(p.c[0]), 345) <= 2);
-    TEST_ASSERT_TRUE(dist(hueOf(p.c[1]), 135) <= 2);
-    // ...and the family colour farthest from both fills the third slot: blue (86 deg away; purple 71, cyan 53)
-    TEST_ASSERT_TRUE(same(p.c[2], fam[0]));
-}
+// The hour sets only the cap and the pulse depth.
 void test_time_of_day() {
-    Rgb blue = {0, 80, 255}, red = {255, 0, 0};
-    Rgb cover[2] = {blue, red};
-    songpalette::Palette day = songpalette::build(cover, 2, genre::NONE, 720);
-    TEST_ASSERT_EQUAL_UINT8(100, day.cap);
-    TEST_ASSERT_EQUAL_UINT8(60, day.depth);
-    songpalette::Palette eve = songpalette::build(cover, 2, genre::NONE, 20 * 60);
-    TEST_ASSERT_EQUAL_UINT8(70, eve.cap);
-    TEST_ASSERT_EQUAL_UINT8(45, eve.depth);
-    TEST_ASSERT_TRUE(hueOf(eve.c[0]) > hueOf(day.c[0]));   // toward purple
-    TEST_ASSERT_TRUE(hueOf(eve.c[0]) <= hueOf(day.c[0]) + 16);
-    songpalette::Palette late = songpalette::build(cover, 2, genre::NONE, 23 * 60 + 30);
-    TEST_ASSERT_EQUAL_UINT8(45, late.cap);
-    TEST_ASSERT_EQUAL_UINT8(30, late.depth);
-    TEST_ASSERT_EQUAL_INT(hueOf(eve.c[0]), hueOf(late.c[0]));
-    songpalette::Palette early = songpalette::build(cover, 2, genre::NONE, 5 * 60 + 30);
-    TEST_ASSERT_EQUAL_UINT8(70, early.cap);
-    songpalette::Palette unsynced = songpalette::build(cover, 2, genre::NONE, -1);
-    TEST_ASSERT_EQUAL_UINT8(100, unsynced.cap);
-    TEST_ASSERT_EQUAL_UINT8(60, unsynced.depth);
-}
-void test_whites_turn_amber_at_night() {
-    songpalette::Palette day = songpalette::build(nullptr, 0, 21, 720);     // jazz family has a warm white
-    songpalette::Palette night = songpalette::build(nullptr, 0, 21, 23 * 60);
-    TEST_ASSERT_TRUE(same(day.c[1], (Rgb{255, 214, 160})));
-    TEST_ASSERT_TRUE(same(night.c[1], (Rgb{255, 176, 0})));
-}
-// The lights' palette: the day's colours at any hour, the hour's cap and depth.
-void test_for_lights_day_colours_timed_cap() {
-    const Rgb cover[2] = {{0, 0, 255}, {255, 0, 0}};
-    const songpalette::Palette day = songpalette::build(cover, 2, genre::NONE, 720);
-    for (int minute : {-1, 720, 1200, 1380, 300}) {
-        const songpalette::Palette timed = songpalette::build(cover, 2, genre::NONE, minute);
-        const songpalette::Palette l = songpalette::forLights(cover, 2, genre::NONE, minute);
-        for (int i = 0; i < 3; ++i) TEST_ASSERT_TRUE(same(l.c[i], day.c[i]));
-        TEST_ASSERT_EQUAL_UINT8(timed.cap, l.cap);
-        TEST_ASSERT_EQUAL_UINT8(timed.depth, l.depth);
+    struct Case { int minute; uint8_t cap, depth; };
+    const Case cases[] = {
+        {720, 100, 60}, {-1, 100, 60}, {360, 100, 60},           // day, clock not synced
+        {20 * 60, 70, 45}, {1080, 70, 45}, {5 * 60 + 30, 70, 45}, // evening, before dawn
+        {23 * 60 + 30, 45, 30}, {1320, 45, 30}, {0, 45, 30},      // late
+    };
+    for (const Case& c : cases) {
+        uint8_t cap = 0, depth = 0;
+        songpalette::timeOfDay(c.minute, &cap, &depth);
+        TEST_ASSERT_EQUAL_UINT8(c.cap, cap);
+        TEST_ASSERT_EQUAL_UINT8(c.depth, depth);
     }
 }
 
@@ -194,16 +73,6 @@ int main(int, char**) {
     RUN_TEST(test_cover_red_blue);
     RUN_TEST(test_cover_none_without_art);
     RUN_TEST(test_cover_skips_dark_and_washed_out);
-    RUN_TEST(test_grey_cover_uses_genre);
-    RUN_TEST(test_no_genre_no_cover_neutral);
-    RUN_TEST(test_unknown_genre_keeps_cover_hues);
-    RUN_TEST(test_grey_cover_unknown_genre_is_neutral);
-    RUN_TEST(test_families_differ);
-    RUN_TEST(test_nudge_toward_genre);
-    RUN_TEST(test_one_cover_colour_uses_genre);
-    RUN_TEST(test_two_cover_colours_fill_third_from_genre);
     RUN_TEST(test_time_of_day);
-    RUN_TEST(test_whites_turn_amber_at_night);
-    RUN_TEST(test_for_lights_day_colours_timed_cap);
     return UNITY_END();
 }

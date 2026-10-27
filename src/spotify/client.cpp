@@ -33,6 +33,10 @@ static char s_auth[512] = "";
 static uint32_t s_tokenExpiry = 0;
 static char* s_body = nullptr;           // the last answer's body, NUL-terminated (PSRAM)
 static size_t s_bodyLen = 0;
+// The current context's playlist description (music mode's mood, util/songmood): fetched with its
+// name in one request and cached with it (ctxcache).
+static char s_desc[160] = "";
+static bool s_fromPlaylist = false;   // as of the last poll with a song
 
 // HTTPClient::writeToStream target: copies the body into s_body (chunked or not), and keeps
 // accepting bytes past BODY_MAX (dropped, flagged) so the connection is read to its end and
@@ -168,9 +172,11 @@ void begin() {
 
 // uri like "spotify:playlist:ID" / ":album:" / ":artist:". Returns false when the lookup
 // failed for a reason worth retrying (no token, network, 5xx/429); `out` then holds the type
-// ("playlist") as a placeholder. 403/404 (private or deleted playlist) are final.
-static bool resolveContext(const char* uri, char* out, size_t n) {
+// ("playlist") as a placeholder. 403/404 (private or deleted playlist) are final. A playlist's
+// description comes in the same request, into desc (dn bytes, HTML stripped; "" otherwise).
+static bool resolveContext(const char* uri, char* out, size_t n, char* desc, size_t dn) {
     out[0] = '\0';
+    desc[0] = '\0';
     const char* p1 = uri ? strchr(uri, ':') : nullptr;
     const char* p2 = p1 ? strchr(p1 + 1, ':') : nullptr;
     if (!p2) { txt::copy(out, "-", n); return true; }
@@ -181,13 +187,20 @@ static bool resolveContext(const char* uri, char* out, size_t n) {
                          : strcmp(type, "artist") == 0   ? "artists" : nullptr;
     txt::copy(out, type, n);                   // placeholder until resolved
     if (!endpoint) return true;                // e.g. "collection": nothing to look up
+    const bool playlist = strcmp(endpoint, "playlists") == 0;
     char path[160];
-    snprintf(path, sizeof path, "/v1/%s/%s?fields=name", endpoint, p2 + 1);
+    snprintf(path, sizeof path, "/v1/%s/%s?fields=%s", endpoint, p2 + 1, playlist ? "name,description" : "name");
     const int rc = apiGet(path);
-    if (rc == 200 && jsonpath::str(s_body, "name", out, n)) return true;   // raw; folded at display time
+    if (rc == 200 && jsonpath::str(s_body, "name", out, n)) {   // raw; folded at display time
+        if (playlist && jsonpath::str(s_body, "description", desc, dn)) txt::stripHtml(desc);   // music mode's mood
+        return true;
+    }
     if (rc == 200) txt::copy(out, type, n);
     return rc == 403 || rc == 404;
 }
+
+bool fromPlaylist() { return s_fromPlaylist; }
+const char* playlistDescription() { return s_fromPlaylist ? s_desc : ""; }
 
 static void copyStr(char* dst, const char* src, size_t n) { txt::copy(dst, src, n); }
 
@@ -248,13 +261,14 @@ void poll(AppState& st) {
     // the same connection. A failed lookup is retried after ctxcache::RETRY_MS.
     static ctxcache::Cache cache;
     static char cachedName[64] = "";
+    s_fromPlaylist = strncmp(n.context, "spotify:playlist:", 17) == 0;
     if (ctxcache::fromAlbum(n.context)) {
         // from an album, or no context (a song from search): the song's own album name,
         // no lookup (the album endpoint's whole track list was too big to parse)
         txt::copy(st.context, st.album, sizeof(st.context));
     } else {
         if (cache.needsLookup(n.context, millis())) {
-            bool ok = resolveContext(n.context, cachedName, sizeof(cachedName));
+            bool ok = resolveContext(n.context, cachedName, sizeof(cachedName), s_desc, sizeof(s_desc));
             cache.store(n.context, ok, millis());
             Serial.printf("[spotify] context: %s%s\n", cachedName, ok ? "" : " (lookup failed, will retry)");
         }

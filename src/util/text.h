@@ -36,6 +36,11 @@ void copy(char* dst, const char* src, size_t n);
 // dst = a + b, all or nothing: if it does not fit in n bytes (or either is nullptr) dst becomes
 // "" and the result is false. For values that must never be truncated (an auth header).
 bool concat(char* dst, size_t n, const char* a, const char* b);
+// Strips HTML from text in place (a Spotify playlist's description): tags go (an unclosed '<', text
+// cut inside a tag, drops the rest), &amp; &lt; &gt; &quot; &apos; and numeric entities (&#39;
+// &#x27;) become their character (UTF-8); anything else stays as it is. Returns the new length;
+// nullptr -> 0.
+size_t stripHtml(char* s);
 // ASCII case-insensitive equality; false if either side is nullptr.
 bool equalsIgnoreCase(const char* a, const char* b);
 }

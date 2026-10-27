@@ -111,13 +111,16 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   phone icon and "REMOTE", 3 px modules on a cream panel, 2-module quiet zone, x 4-127,
   y 22-149), painted once with the screen and again only when the address changes; without a
   link the scene is painted back over it.
-- **Music mode, black deck** (`audio/musicsvc`, `util/songpalette`, `util/musicwire`) —
-  `GET /music?k=<token>&on=1` (the yellow deck, every 10 s) starts or keeps a small task (core 1,
-  4 KB stack) that sends the song's palette (`songpalette::forLights`: cover colours from the
-  decoded art and the genre badge as by day, only the cap follows the time of day; a new song's
-  once its cover is in, or 8 s after the track change without one), on change and every 10 s,
-  over UDP to the requester's port 4210. The yellow deck snaps its main colour to one of the
-  lights' 8 swatches (`util/musiclights`). `on=0` or 30 s without a keep-alive stops it and closes
+- **Music mode, black deck** (`audio/musicsvc`, `util/songmood`, `util/songpalette`,
+  `util/musicwire`) — the network task decides each song's colour (`songmood::choose`: the owner's
+  picks, a colour word, the playlist description's #colour tags, else a mood's allowed swatches
+  from the playlist's name and description or the genre, the cover's colours choosing among them; at the track change, once the cover is in
+  and once the genre is known; one `[colour]` log line per song). `GET /music?k=<token>&on=1` (the
+  yellow deck, every 10 s) starts or keeps a small task (core 1, 4 KB stack) that sends the song's
+  palette (`songmood::lights`: the swatch's screen colour, only the cap follows the time of day;
+  a new song's once its cover is in, or 8 s after the track change without one), on change and
+  every 10 s, over UDP to the requester's port 4210. The yellow deck snaps its main colour to one
+  of the lights' 8 swatches (`util/musiclights`), which gives back exactly the chosen one. `on=0` or 30 s without a keep-alive stops it and closes
   the socket. No mic: the howl plays as usual (`board/s3/mic_es8311` stays in the tree, unused,
   for the voice agent). It starts only with
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)

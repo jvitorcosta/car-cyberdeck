@@ -48,6 +48,75 @@ bool equalsIgnoreCase(const char* a, const char* b) {
     return *a == *b;
 }
 
+// The entity at s ('&'): its code point and length (with the ';'), or false when it isn't one we know.
+static bool entity(const char* s, uint32_t* cp, size_t* len) {
+    static const struct { const char* name; char c; } NAMED[] = {
+        {"&amp;", '&'}, {"&lt;", '<'}, {"&gt;", '>'}, {"&quot;", '"'}, {"&apos;", '\''},
+    };
+    for (const auto& e : NAMED) {
+        const size_t n = strlen(e.name);
+        if (strncmp(s, e.name, n) == 0) {
+            *cp = (uint8_t)e.c;
+            *len = n;
+            return true;
+        }
+    }
+    if (s[1] != '#') return false;
+    const bool hex = s[2] == 'x' || s[2] == 'X';
+    size_t i = hex ? 3 : 2;
+    uint32_t v = 0;
+    const size_t first = i;
+    for (;; ++i) {
+        const char c = s[i];
+        int d = c >= '0' && c <= '9' ? c - '0' : -1;
+        if (hex && d < 0) d = c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+        if (d < 0 || i - first >= 7) break;
+        v = v * (hex ? 16 : 10) + (uint32_t)d;
+    }
+    if (i == first || s[i] != ';' || v == 0 || v > 0x10FFFF) return false;
+    *cp = v;
+    *len = i + 1;
+    return true;
+}
+
+size_t stripHtml(char* s) {
+    if (!s) return 0;
+    size_t o = 0;
+    for (size_t i = 0; s[i];) {
+        if (s[i] == '<') {
+            const char* end = strchr(s + i, '>');
+            if (!end) break;                       // cut inside a tag
+            i = (size_t)(end - s) + 1;
+            continue;
+        }
+        uint32_t cp;
+        size_t len;
+        if (s[i] == '&' && entity(s + i, &cp, &len)) {
+            // UTF-8 is never longer than the entity it came from: writing in place is safe
+            if (cp < 0x80) {
+                s[o++] = (char)cp;
+            } else if (cp < 0x800) {
+                s[o++] = (char)(0xC0 | (cp >> 6));
+                s[o++] = (char)(0x80 | (cp & 0x3F));
+            } else if (cp < 0x10000) {
+                s[o++] = (char)(0xE0 | (cp >> 12));
+                s[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                s[o++] = (char)(0x80 | (cp & 0x3F));
+            } else {
+                s[o++] = (char)(0xF0 | (cp >> 18));
+                s[o++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+                s[o++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+                s[o++] = (char)(0x80 | (cp & 0x3F));
+            }
+            i += len;
+            continue;
+        }
+        s[o++] = s[i++];
+    }
+    s[o] = '\0';
+    return o;
+}
+
 size_t urlEncode(const char* s, char* out, size_t n) {
     if (n == 0) return 0;
     static const char hex[] = "0123456789ABCDEF";
