@@ -2694,7 +2694,7 @@ static void voiceTask(void*) {
     netclock::begin();  // SNTP, for night mode and the Menu's clock
     weatherTick();  // the first try
     beginLyrics();
-    ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (beginVoice's gate: REMOTE_TOKEN is set)
+    ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (off without OTA_PASSWORD; WiFi itself needs REMOTE_TOKEN)
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
     // The deck stays on the network it joined (the decks' rule since 2026-10-14; docs/BACKLOG.md):

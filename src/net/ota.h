@@ -4,8 +4,8 @@
 // its own hooks):
 //   pio run -e s3_ota -t upload          the black deck (main.cpp)
 //   pio run -e ledpanel_ota -t upload    the yellow deck's LED panel (ledpanel.cpp)
-// ArduinoOTA on port 3232, password REMOTE_TOKEN; off when REMOTE_TOKEN is empty, like the phone
-// remote. Never pulled from the internet: the firmware carries the secrets (config.h).
+// ArduinoOTA on port 3232, password OTA_PASSWORD (its own, not the remote's REMOTE_TOKEN); off when
+// OTA_PASSWORD is empty. Never pulled from the internet: the firmware carries the secrets (config.h).
 // The update writes the other app slot and switches only once its SHA-256 checks out; the
 // boot-loop guard (util/bootguard) goes back to the previous slot when new firmware keeps crashing.
 namespace ota {

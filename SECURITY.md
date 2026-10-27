@@ -30,6 +30,11 @@ instead, with steps to reproduce and the board and version (first serial line,
   `REMOTE_TOKEN` is set; use a long random token and don't reuse it, and only on networks you
   trust (your own hotspot): anyone on the network can reach the web server, and a deliberately
   slow request can hold it, though not the display.
+- **Firmware updates over WiFi** (ArduinoOTA on port 3232, both decks) take their own password,
+  `OTA_PASSWORD`, not `REMOTE_TOKEN`: the remote's token travels in plain-HTTP URLs, the update
+  password never does (espota answers a challenge with it). Updates are off while `OTA_PASSWORD`
+  is empty. Anyone with it, on the deck's network, can flash firmware that reads `src/config.h`
+  back out, so make it long and random and don't reuse it. Updates aren't signed.
 - **The companion screen reads `/state` the same way:** it sends `REMOTE_TOKEN` in plain HTTP
   on the hotspot about once a second, so anyone on that network can read the token and the
   now-playing feed.

@@ -379,7 +379,8 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
 ## Updates over WiFi
 
 The panel takes new firmware over WiFi, like the black deck (ArduinoOTA on port 3232, the password
-is `REMOTE_TOKEN`; off without one).
+is `OTA_PASSWORD` in `src/config.h`, its own random string apart from `REMOTE_TOKEN`; off without
+one). The panel joins WiFi only with `REMOTE_TOKEN` set, so it needs both.
 
 - **Once over USB**: `pio run -e ledpanel -t upload`. This build switches the panel to a flash
   layout with two app slots; the settings (touch calibration, looks, trip, the controller's bond)

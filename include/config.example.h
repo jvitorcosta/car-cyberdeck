@@ -33,6 +33,10 @@ static const int WIFI_NETWORK_COUNT = 2;
 #define REMOTE_TOKEN          ""
 // #define REMOTE_NAME        "cardeck"
 
+// Firmware updates over WiFi (both decks): a different random string, never REMOTE_TOKEN; only
+// used by `pio run -e *_ota -t upload` (tools/ota_auth.py reads it from here). Empty turns them off.
+#define OTA_PASSWORD          ""
+
 // Companion screen (env cyd_companion): the new deck it reads. 172.20.10.10 is the S3's fixed
 // address on the iPhone hotspot. Both need the same REMOTE_TOKEN.
 #define COMPANION_DECK        "172.20.10.10"

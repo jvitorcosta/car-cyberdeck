@@ -88,7 +88,7 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
   nothing, or once the song has stayed paused 30 s; now and then its second line says how to
   wake a phone that plays on unseen (`PHONE_HINT`). The screen is silent.
 - **Firmware updates** (`net/ota`, `util/otaview`, `util/backdrop`, `ui/otascreen`, `util/bootguard`)
-  — ArduinoOTA on port 3232 (password REMOTE_TOKEN), its own task. `otaview::Tracker` keeps the
+  — ArduinoOTA on port 3232 (password OTA_PASSWORD, off without one), its own task. `otaview::Tracker` keeps the
   update's state (Receiving, Done, Failed held 3 s); ArduinoOTA's own reboot is off, so the deck
   restarts 600 ms after the end, once the screen has flashed red. While Receiving or Done the
   network task pauses; a failure resumes it at once. With `data/backdrop.bin` (Green Hill Zone, from
