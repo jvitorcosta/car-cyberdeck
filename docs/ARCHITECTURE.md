@@ -4,15 +4,20 @@ Two FreeRTOS tasks share one mutex-protected state. The UI loop only draws; the 
 does every download and decode. See [HISTORY.md](HISTORY.md) for why it is built this way.
 
 ```
-core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main.cpp)
+core 0: network task (core/nettask.cpp)                core 1: UI loop (main.cpp)
   Spotify /me/player 4 s, kept-open conn (429 wait)     snapshot AppState every frame
   per track, one step at a time (util/netplan):           redraw deck on new track generation
     art -> lyrics -> genre -> walker -> prefetch          take art / lyrics / genre / walker
   results tagged with trackGen                            animate: walker 8 fps, CD 6 fps, HP 4 fps
                  \                                        /
-                  +---- src/core/shared.cpp (one mutex) -+
+                  +---- core/shared.cpp (one mutex) -----+
                         AppState + per-track mailbox
 ```
+
+Paths: this page is about the black deck, whose code is in `src/black/` (`core/nettask.cpp` is
+`src/black/core/nettask.cpp`). `net/wifi`, `net/clock`, `net/ota`, `net/httpget`, `ui/backlight`
+are in `src/common/`; `util/x` is `src/util/<group>/x` (groups under Layers); the yellow deck is
+`src/yellow/`.
 
 - **UI loop** draws only: battle layout (`ui/screen_now`, `ui/battle`, `ui/icons`), album
   art JPEG decode, walker, CD, lyric.
@@ -150,10 +155,16 @@ core 0: network task (src/core/nettask.cpp)            core 1: UI loop (src/main
 
 ## Layers
 
-- `src/board/s3/` (the black deck) — everything board-specific
+- `src/black/`, `src/yellow/` — each deck's own code; each env compiles only its deck's folder,
+  `src/common/` (`net/`, `ui/backlight`, `board/board.h`, `core/embed.h`) and its util groups
+  (allow-list `build_src_filter`), so a call into the other deck's code fails to link. `src/diag/` holds the
+  standalone checks, one env each.
+- `src/util/{wire,lights,common,black,yellow}/` — the pure modules by who uses them: the contracts
+  between the decks, the LED domain, generic code for both, and each deck's own.
+- `src/black/board/s3/` (the black deck) — everything board-specific
   (display bus, audio path, backlight); pins in `include/pins.h`. The CYD's standalone deck build
   was retired on 2026-10-21 (git history up to `d4d0a67`).
-- `src/util/`, `src/core/`, `src/images/` never include `src/ui/`; `src/util/` has no Arduino
+- `src/util/`, `src/black/core/`, `src/black/images/` never include a `ui/` folder; `src/util/` has no Arduino
   dependency, so it builds and tests on a PC.
 
 ## Test hooks

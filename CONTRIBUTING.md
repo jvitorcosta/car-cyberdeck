@@ -23,16 +23,20 @@ approach before you spend time on it.
 
 | Path | What lives there |
 |---|---|
-| `src/core/` | network task, shared state, memory accounting |
-| `src/ui/` | everything drawn on the display |
+| `src/black/` | the black deck (S3, env `s3`): `main.cpp`, its network task and shared state (`core/`), what it draws (`ui/`), audio, Spotify, lyrics, images, Pokémon, its board code (`board/s3/`) |
+| `src/yellow/` | the yellow deck (CYD, env `ledpanel`): `ledpanel.cpp`, its touch layer, fonts and drawing helpers (`ui/`) |
+| `src/common/` | Arduino code both decks build: WiFi, clock, HTTP, OTA, remote settings (`net/`), backlight, `board/board.h`, `core/embed.h` |
 | `src/util/` | pure logic, no Arduino: parsers, timing, layout; tested on the PC. Grouped by who uses it: `wire/` (the contracts between the decks), `lights/` (the LED domain, both decks), `common/` (both decks), `black/`, `yellow/` |
-| `src/board/s3/` | board-specific code (the black deck); pins in `include/pins.h` |
+| `src/diag/` | standalone hardware and Bluetooth checks, one env each (`hwcheck`, `hwcheck_s3`, `blescan`, `bletest`, `xboxtest`, `ps3test`) |
 | `test/` | one Unity suite per pure module |
 | `tools/` | generators for bundled data, test runners, session analysis |
 | `docs/` | architecture, history, backlog and design records |
 
 `util/`, `core/` and `images/` must not include `ui/`, and `util/` must not include Arduino.
-Code that can be pure belongs in `util/` with a test.
+Code that can be pure belongs in `util/` with a test. Each deck's env compiles only its own folder,
+`src/common/` and the util groups it uses (an allow-list `build_src_filter` in `platformio.ini`),
+so the black deck can't call yellow code or the other way round: shared code goes in `common/`
+or a shared util group. Pins stay in `include/pins.h`.
 
 ## Tests
 

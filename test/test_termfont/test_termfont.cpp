@@ -3,9 +3,9 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
-#include "../../src/ui/lyricrun.h"
-#include "../../src/ui/termfont.h"
-#include "../../src/ui/termlayout.h"
+#include "../../src/yellow/ui/lyricrun.h"
+#include "../../src/yellow/ui/termfont.h"
+#include "../../src/yellow/ui/termlayout.h"
 #include "../../src/util/yellow/dashtext.h"
 #include "../../src/util/yellow/deckmenu.h"
 #include "../../src/util/yellow/karaoke.h"

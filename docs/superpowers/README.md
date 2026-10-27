@@ -26,3 +26,34 @@ see the main README and
 [CONTRIBUTING](../../CONTRIBUTING.md) for portable commands. These records were written with
 an AI-assisted design workflow ([superpowers](https://github.com/obra/superpowers)) and are
 kept as-is for history. Code review and cleanup: `../review/`.
+
+## Paths before 2026-10-28
+
+The records above name the paths of their day; they are kept as written. On 2026-10-28 the code
+moved into one folder per deck (`git log --follow` and blame see through the moves):
+
+| Before | Since 2026-10-28 |
+|---|---|
+| `src/main.cpp`, `src/{audio,core,genre,images,lyrics,pokemon,spotify}/` | `src/black/` (same names), but `core/embed.h` → `src/common/core/` |
+| `src/ui/*` | `src/black/ui/*`; `termfont`, `jpfont`, `lyricrun`, `gojiraname`, `termlayout`, `presslook` → `src/yellow/ui/`; `backlight` → `src/common/ui/` |
+| `src/net/*` | `src/common/net/*`; `remote.{h,cpp}` and `icon.inc` → `src/black/net/` |
+| `src/board/board.h`, `src/board/s3/` | `src/common/board/board.h`, `src/black/board/s3/` |
+| `src/ledpanel.cpp`, `src/fonts/` | `src/yellow/ledpanel.cpp`, `src/yellow/fonts/` |
+| `src/companion/touch.{h,cpp}` | `src/yellow/touch.{h,cpp}` |
+| `src/{hwcheck,hwcheck_s3,blescan,bletest,xboxtest,ps3test}.cpp` | `src/diag/` |
+| `src/util/<module>` | `src/util/<group>/<module>`, groups below |
+| `src/companion/`, `src/board/cyd/`, env `cyd_companion`, `util/{avatarbin,avatarlines,avatarscene,avatarsing,follow,lyricclock,menunav,phonepress,press}`, `tools/{gen_avatar,avatar_clip}.py` | removed (the companion screen; in git history before 2026-10-28) |
+| config `COMPANION_DECK`, flag `CARDECK_COMPANION` | `BLACK_DECK_ADDR` (the old name still works), `YELLOW_DECK` |
+
+Util groups:
+- `wire/`: lyricstatus, musicwire, songpalette, statejson, stateparse
+- `lights/`: hue, ledlook, musiclights, tripclock
+- `common/`: bootguard, daynight, hotspotip, jsonflat, jsonpath, netdiag, netup, otaview, readguard,
+  remotegate, rgb565, roam, text, version
+- `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
+  genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock, intropick,
+  linkstatus, loudness, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit, ridersprite,
+  songmood (+ songpicks.inc), termblend, walkanim, walkrect
+- `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, geoip, httphead, karaoke, ledpresets,
+  ledvoice, lightstatus, otapage, pollpace, tapguard, termpal, touchcal, touchguard, touchmap,
+  tripmeter, weather

@@ -16,7 +16,7 @@ instead, with steps to reproduce and the board and version (first serial line,
   passwords.
 - The refresh token is obtained on a PC with `tools/spotify_auth.py`, because Spotify only
   allows plain-`http` redirects to the loopback address.
-- The Spotify client (`src/spotify/client.cpp`) never logs the token request, the access token
+- The Spotify client (`src/black/spotify/client.cpp`) never logs the token request, the access token
   or the secret.
 
 ## Known limitations
@@ -40,7 +40,7 @@ instead, with steps to reproduce and the board and version (first serial line,
   so anyone on that network can read the token and the now-playing feed.
 
 - Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
-  7 bundled root certificates (`src/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).
+  7 bundled root certificates (`src/common/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).
   If Spotify moves to a CA outside the bundle, the log shows
   `[tls] certificate rejected: <host>`: regenerate the bundle and flash again. Certificate
   expiry is not checked (the board has no trusted clock during the handshake).

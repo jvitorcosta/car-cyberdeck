@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdio>
 #include <vector>
-#include "../../src/ui/jpfont.h"
+#include "../../src/yellow/ui/jpfont.h"
 
 void setUp() {}
 void tearDown() {}

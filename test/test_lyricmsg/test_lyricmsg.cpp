@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <initializer_list>
-#include "../../src/ui/lyricmsg.h"
+#include "../../src/black/ui/lyricmsg.h"
 
 using lyricstatus::Status;
 void setUp() {}

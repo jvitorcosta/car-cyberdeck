@@ -4,7 +4,7 @@ Why: Spotify names and lyrics are full of emoji, and the deck dropped them all. 
 used (Unicode's frequency tiers 0..11, tools/emoji_freq.txt) cover nearly every name; the 248
 joined (ZWJ) emoji without skin tones (tools/emoji_zwj.txt: black cat, rainbow flag, families...)
 draw as one picture. With a 16-colour palette per emoji that is ~195 KB of flash and 0 RAM
-(src/ui/emojifont.h).
+(src/black/ui/emojifont.h).
 
   python tools/gen_emoji.py [--tiers N] [--cache DIR]
 

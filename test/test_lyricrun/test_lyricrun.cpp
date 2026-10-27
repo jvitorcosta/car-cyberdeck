@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <string>
-#include "../../src/ui/lyricrun.h"
+#include "../../src/yellow/ui/lyricrun.h"
 #include "../../src/util/common/text.h"
 
 using lyricrun::Item;

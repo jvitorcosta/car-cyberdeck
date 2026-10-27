@@ -1,4 +1,4 @@
-"""Generate src/net/ca_bundle.inc: the root certificates the deck trusts for Spotify, in the
+"""Generate src/common/net/ca_bundle.inc: the root certificates the deck trusts for Spotify, in the
 format of the ESP32's bundle checker (WiFiClientSecure::setCACertBundle, esp_crt_bundle.c):
   u16 count, then per root: u16 subject length, u16 key length, subject DER, public key DER
 (big-endian), sorted by subject because the checker finds a root by binary search.
@@ -27,7 +27,7 @@ ROOTS = [
     "GTS Root R1",
 ]
 URL = "https://curl.se/ca/cacert.pem"
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "net", "ca_bundle.inc")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "common", "net", "ca_bundle.inc")
 
 
 def der_item(buf, pos):

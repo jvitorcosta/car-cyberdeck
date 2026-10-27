@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstdint>
-#include "../../src/ui/status_sprite.h"
+#include "../../src/black/ui/status_sprite.h"
 
 void setUp() {}
 void tearDown() {}

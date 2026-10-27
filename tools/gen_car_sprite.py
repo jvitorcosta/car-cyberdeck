@@ -1,4 +1,4 @@
-"""Generate src/ui/car_sprite.inc: the boot scene's car, a side view of a silver Honda City sedan
+"""Generate src/black/ui/car_sprite.inc: the boot scene's car, a side view of a silver Honda City sedan
 (7th gen, Brazil 2024) facing right, 200 x 66 px, built from geometry measured off reference
 photos (docs/superpowers/specs/2026-10-09-boot-scene-design.md, "Car sprite").
 Side profile measured from "2024 Honda City RS - Sideview" (Wikimedia Commons, CC BY-SA 4.0).
@@ -13,7 +13,7 @@ import zlib
 
 W, H = 200, 66
 RWX, FWX, WCY = 46, 160, 51.5            # wheel centres (x rear, x front, y)
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "ui", "car_sprite.inc")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "black", "ui", "car_sprite.inc")
 
 # Pixel kinds (match ui/car_sprite.h)
 NONE, UPPER, LOWER, OTHER, HEAD, TAIL = 0, 1, 2, 3, 4, 5

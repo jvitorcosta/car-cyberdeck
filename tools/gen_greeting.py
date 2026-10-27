@@ -1,4 +1,4 @@
-"""Greeting clip for the boot sound (src/audio/greeting): raw signed 16-bit little-endian mono,
+"""Greeting clip for the boot sound (src/black/audio/greeting): raw signed 16-bit little-endian mono,
 16 kHz. 16-bit so the firmware can lower the volume before reducing to the DAC's 8 bits.
 
   python tools/gen_greeting.py              rebuild the default chime -> data/greeting_default.pcm
