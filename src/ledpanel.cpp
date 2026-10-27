@@ -81,7 +81,6 @@
 //   pio run -e ledpanel -t upload
 #include <Arduino.h>
 #include <ESPmDNS.h>
-#include <HTTPClient.h>
 #include <WiFi.h>
 #include <cstddef>
 #include <type_traits>
@@ -106,6 +105,7 @@
 #include "ui/termlayout.h"
 #include "companion/touch.h"
 #include "net/clock.h"
+#include "net/httpget.h"
 #include "net/ipaddr.h"
 #include "net/ota.h"
 #include "net/remote_config.h"
@@ -127,7 +127,6 @@
 #include "util/lightstatus.h"
 #include "util/pollpace.h"
 #include "util/karaoke.h"
-#include "util/readguard.h"
 #include "util/remotegate.h"
 #include "util/statejson.h"
 #include "util/stateparse.h"
@@ -1928,36 +1927,9 @@ static volatile bool weatherFresh = false;  // a try was published; loop() clear
 static char weatherBody[2048];              // only the weather task touches it
 
 // GET `url` into weatherBody (cut at 2 KB, always terminated); the HTTP status, negative without an
-// answer. HTTP/1.0, so the body is never chunked.
+// answer (net/httpget). 5 s timeouts, 8 s for the whole body.
 static int weatherGet(const char* url) {
-    weatherBody[0] = 0;
-    WiFiClient c;
-    HTTPClient h;
-    h.setTimeout(5000);
-    h.setConnectTimeout(5000);
-    h.useHTTP10(true);
-    if (!h.begin(c, url)) return -1;
-    const int rc = h.GET();
-    size_t len = 0;
-    if (rc == 200) {
-        WiFiClient* s = h.getStreamPtr();
-        readguard::Guard g(millis(), 5000, 8000);
-        while (len < sizeof(weatherBody) - 1 && (h.connected() || s->available())) {
-            const int a = s->available();
-            if (a <= 0) {
-                if (g.check(millis()) != readguard::State::Ok) break;
-                vTaskDelay(pdMS_TO_TICKS(5));
-                continue;
-            }
-            size_t want = sizeof(weatherBody) - 1 - len;
-            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
-            len += s->readBytes(weatherBody + len, want);
-            g.onData(millis());
-        }
-    }
-    weatherBody[len] = 0;
-    h.end();
-    return rc;
+    return net::httpGet(url, 5000, weatherBody, sizeof(weatherBody), 8000);
 }
 
 static void publishWeather(const WeatherReading& r) {
@@ -2109,33 +2081,7 @@ static int lyricsGet() {
     char host[40], url[128];
     if (!lyricsHost(host, sizeof(host))) return -1;
     snprintf(url, sizeof(url), "http://%s/state?k=%s", host, REMOTE_TOKEN);
-    WiFiClient c;
-    HTTPClient h;
-    h.setTimeout(1500);
-    h.setConnectTimeout(1500);
-    h.useHTTP10(true);
-    if (!h.begin(c, url)) return -1;
-    const int rc = h.GET();
-    size_t len = 0;
-    if (rc == 200) {
-        WiFiClient* s = h.getStreamPtr();
-        readguard::Guard g(millis(), 1500, 3000);
-        while (len < sizeof(lyricsBody) - 1 && (h.connected() || s->available())) {
-            const int a = s->available();
-            if (a <= 0) {
-                if (g.check(millis()) != readguard::State::Ok) break;
-                vTaskDelay(pdMS_TO_TICKS(2));
-                continue;
-            }
-            size_t want = sizeof(lyricsBody) - 1 - len;
-            if (static_cast<size_t>(a) < want) want = static_cast<size_t>(a);
-            len += s->readBytes(lyricsBody + len, want);
-            g.onData(millis());
-        }
-    }
-    lyricsBody[len] = 0;
-    h.end();
-    return rc;
+    return net::httpGet(url, 1500, lyricsBody, sizeof(lyricsBody), 3000);
 }
 
 // ---- Music mode: the black deck sends the song's palette ----
@@ -2155,15 +2101,7 @@ static int musicAsk(bool on) {
     IPAddress a;
     if (a.fromString(host)) musicPeer = static_cast<uint32_t>(a);
     snprintf(url, sizeof(url), "http://%s/music?k=%s&on=%d", host, REMOTE_TOKEN, on ? 1 : 0);
-    WiFiClient c;
-    HTTPClient h;
-    h.setTimeout(1500);
-    h.setConnectTimeout(1500);
-    h.useHTTP10(true);
-    if (!h.begin(c, url)) return -1;
-    const int rc = h.GET();
-    h.end();
-    return rc;
+    return net::httpGet(url, 1500);  // the status is the answer
 }
 
 static int musicGet(bool on) {
@@ -2237,7 +2175,7 @@ static void lyricsTask(void*) {
     }
 }
 
-// From the voice task, once WiFi is up. 6 KB: HTTPClient, its Strings and the mDNS query; the [mem]
+// From the voice task, once WiFi is up. 6 KB: the GETs and the mDNS query; the [mem]
 // line shows what's left.
 static void beginLyrics() {
     if (lyricsHandle) return;
