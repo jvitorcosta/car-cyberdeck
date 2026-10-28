@@ -45,55 +45,77 @@ bool Log::flush() {
 }
 
 bool Log::recover() {
-    char names[MAX_FILES][24];
-    int n = s_.list(names, MAX_FILES);
+    char names[PAGE][24];
     bool changed = false;
-    for (int i = 0; i < n; i++) {
-        long sz = s_.size(names[i]);
-        if (sz <= 0) continue;
-        char last = 0;
-        if (s_.read(names[i], sz - 1, &last, 1) != 1) continue;
-        if (last == '\n') continue;
-        // Walk back in chunks to the last '\n'; keep everything up to and including it.
-        long cut = 0;
-        long end = sz;
-        char buf[64];
-        while (end > 0) {
-            long start = end > (long)sizeof(buf) ? end - (long)sizeof(buf) : 0;
-            size_t got = s_.read(names[i], start, buf, (size_t)(end - start));
-            long found = -1;
-            for (size_t k = got; k > 0; k--) {
-                if (buf[k - 1] == '\n') {
-                    found = start + (long)k;
-                    break;
-                }
-            }
-            if (found >= 0) {
-                cut = found;
-                break;
-            }
-            end = start;
+    int skip = 0;
+    for (;;) {
+        int n = s_.list(names, PAGE, skip);
+        if (n <= 0) break;
+        for (int i = 0; i < n; i++) {
+            bool removed = false;
+            if (cutPartialRow(names[i], &removed)) changed = true;
+            if (!removed) skip++;  // a removed file leaves the listing, so the next one slides into its place
         }
-        if (cut == 0) s_.remove(names[i]);
-        else s_.truncate(names[i], cut);
-        changed = true;
     }
     return changed;
 }
 
-void Log::enforceCap() {
-    char names[MAX_FILES][24];
-    int n = s_.list(names, MAX_FILES);
-    long sizes[MAX_FILES];
-    long total = 0;
-    for (int i = 0; i < n; i++) {
-        long sz = s_.size(names[i]);
-        sizes[i] = sz > 0 ? sz : 0;
-        total += sizes[i];
+bool Log::cutPartialRow(const char* name, bool* removed) {
+    long sz = s_.size(name);
+    if (sz <= 0) return false;
+    char last = 0;
+    if (s_.read(name, sz - 1, &last, 1) != 1 || last == '\n') return false;
+    // Walk back in chunks to the last '\n'; keep everything up to and including it.
+    long cut = 0;
+    long end = sz;
+    char buf[64];
+    while (end > 0) {
+        long start = end > (long)sizeof(buf) ? end - (long)sizeof(buf) : 0;
+        size_t got = s_.read(name, start, buf, (size_t)(end - start));
+        long found = -1;
+        for (size_t k = got; k > 0; k--) {
+            if (buf[k - 1] == '\n') {
+                found = start + (long)k;
+                break;
+            }
+        }
+        if (found >= 0) {
+            cut = found;
+            break;
+        }
+        end = start;
     }
-    for (int i = 0; i < n && total > CAP_BYTES; i++) {
-        if (open_ && strcmp(names[i], name_) == 0) continue;
-        if (s_.remove(names[i])) total -= sizes[i];
+    if (cut == 0) *removed = s_.remove(name);
+    else s_.truncate(name, cut);
+    return true;
+}
+
+void Log::enforceCap() {
+    char names[PAGE][24];
+    long total = 0;
+    for (int skip = 0;;) {
+        int n = s_.list(names, PAGE, skip);
+        if (n <= 0) break;
+        for (int i = 0; i < n; i++) {
+            long sz = s_.size(names[i]);
+            if (sz > 0) total += sz;
+        }
+        skip += n;
+    }
+    // Oldest first; a file we keep (the open one, or one that won't go) stays in the listing, so skip it.
+    int skip = 0;
+    while (total > CAP_BYTES) {
+        if (s_.list(names, 1, skip) < 1) break;
+        if (open_ && strcmp(names[0], name_) == 0) {
+            skip++;
+            continue;
+        }
+        long sz = s_.size(names[0]);
+        if (s_.remove(names[0])) {
+            if (sz > 0) total -= sz;
+        } else {
+            skip++;
+        }
     }
 }
 

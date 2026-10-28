@@ -50,9 +50,10 @@ struct RamStore : triplog::Store {
             if (files[i].first == name) { files.erase(files.begin() + (long)i); return true; }
         return false;
     }
-    int list(char (*names)[24], int max) override {
+    int list(char (*names)[24], int max, int skip) override {
         int n = 0;
-        for (auto& f : files) {
+        for (size_t i = (size_t)skip; i < files.size(); i++) {
+            auto& f = files[i];
             if (n >= max) break;
             strncpy(names[n], f.first.c_str(), 23);
             names[n][23] = '\0';
@@ -196,6 +197,47 @@ void test_long_trip_id_is_cut_to_fit_the_name() {
     TEST_ASSERT_EQUAL_STRING(".jsonl", st.files[0].first.c_str() + 17);
 }
 
+void test_many_files_are_all_recovered_and_capped() {
+    RamStore st;
+    char nm[24];
+    for (int i = 1; i <= 24; i++) {
+        snprintf(nm, sizeof(nm), "/t%d.jsonl", i);
+        st.put(nm, std::string(5 * 1024 - 1, 'a') + "\n");  // 120 KB in all, over the cap
+    }
+    st.put("/t24.jsonl", std::string(5 * 1024 - 1, 'a') + "\n" + "{\"cut");
+    triplog::Log log(st);
+    log.open("24");
+    TEST_ASSERT_TRUE(log.recover());
+    TEST_ASSERT_EQUAL_INT(24, (int)st.files.size());
+    TEST_ASSERT_EQUAL_INT(5 * 1024, (int)st.find("/t24.jsonl")->size());
+    TEST_ASSERT_EQUAL('\n', st.find("/t24.jsonl")->back());
+    log.enforceCap();
+    long total = 0;
+    for (auto& f : st.files) total += (long)f.second.size();
+    TEST_ASSERT_TRUE(total <= triplog::CAP_BYTES);
+    TEST_ASSERT_NULL(st.find("/t1.jsonl"));
+    TEST_ASSERT_NOT_NULL(st.find("/t24.jsonl"));
+}
+
+void test_cap_sums_every_page_and_drops_oldest_first() {
+    RamStore st;
+    char nm[24];
+    for (int i = 1; i <= 24; i++) {
+        snprintf(nm, sizeof(nm), "/t%d.jsonl", i);
+        st.put(nm, std::string(5 * 1024 - 1, 'a') + "\n");
+    }
+    triplog::Log log(st);
+    log.open("24");
+    log.enforceCap();
+    long total = 0;
+    for (auto& f : st.files) total += (long)f.second.size();
+    TEST_ASSERT_TRUE(total <= triplog::CAP_BYTES);
+    TEST_ASSERT_TRUE(total > triplog::CAP_BYTES - 5 * 1024);
+    TEST_ASSERT_NULL(st.find("/t1.jsonl"));
+    TEST_ASSERT_NOT_NULL(st.find("/t24.jsonl"));
+    TEST_ASSERT_EQUAL_STRING("/t6.jsonl", st.files[0].first.c_str());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_flush_appends_queued_lines);
@@ -209,5 +251,7 @@ int main(int, char**) {
     RUN_TEST(test_full_queue_drops_oldest_and_counts);
     RUN_TEST(test_oversize_line_is_dropped_and_counted);
     RUN_TEST(test_long_trip_id_is_cut_to_fit_the_name);
+    RUN_TEST(test_many_files_are_all_recovered_and_capped);
+    RUN_TEST(test_cap_sums_every_page_and_drops_oldest_first);
     return UNITY_END();
 }
