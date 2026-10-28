@@ -233,7 +233,7 @@ static void playOpening() {
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
 static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, char* detail, size_t dn) {
     const bool wifiUp = net::isOnline();
-    linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected});
+    linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected, st.loginFailed});
     char names[96];
     if (wifiUp) strlcpy(names, net::ssid().c_str(), sizeof names);
     else net::savedNetworks(names, sizeof names);

@@ -88,7 +88,10 @@ are in `src/common/`; `util/x` is `src/util/<group>/x` (groups under Layers); th
   (`statusscene::frameRect`; the Pokémon with a bubble or a ball repaint the region). He waits on a
   sidewalk in front of the Sunset drive (`ui/sunset`, procedural, edge to edge, painted once per
   screen; night palette with stars and a moon) instead of the battle platform. A 429 shows **Spotify busy...** with Spotify's `Retry-After`
-  countdown; the network task stays quiet that long (`netplan::PollBackoff`).
+  countdown; the network task stays quiet that long (`netplan::PollBackoff`). A login Spotify
+  refuses (the refresh token revoked or expired) shows **Login failed** / re-run
+  `spotify_auth.py`; a refused or failed login is tried again 4 s, 8 s, ... up to every 5 min
+  (`netplan::LoginBackoff`), not at every poll.
 - **Waiting for a song** (`util/idlewait`) — "Waiting for a song..." shows when Spotify has
   nothing, or once the song has stayed paused 30 s; now and then its second line says how to
   wake a phone that plays on unseen (`PHONE_HINT`). The screen is silent.

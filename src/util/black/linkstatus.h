@@ -3,16 +3,18 @@
 #include <cstdint>
 // Which status screen to show when Spotify can't be polled, and its text. "No signal" used
 // to cover all of these; on the road the useful question is whose fault it is: the WiFi
-// (turn the hotspot on), the hotspot's internet (mobile data, quota) or Spotify (wait).
+// (turn the hotspot on), the hotspot's internet (mobile data, quota) or Spotify (wait), or the
+// owner (Spotify refused the login: re-run tools/spotify_auth.py).
 // Pure: main.cpp feeds the state, ui::drawOffline draws the result.
 namespace linkstatus {
-enum class Kind { Ok, NoWifi, NoInternet, SpotifyError, CertRejected };
+enum class Kind { Ok, NoWifi, NoInternet, SpotifyError, CertRejected, LoginFailed };
 
 struct Input {
     bool wifiUp;
     bool down;           // debounced: failed polls in a row (netplan::LinkGate) or stale
     int lastCode;        // last poll's HTTP status; < 0 = no answer (connect/TLS/timeout)
     bool certRejected;   // last failure was a rejected certificate (netcfg::certRejected)
+    bool loginFailed = false;   // last failure was Spotify refusing the login (netplan::LoginBackoff)
 };
 Kind classify(const Input& in);
 
