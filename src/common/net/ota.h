@@ -32,8 +32,9 @@ bool listening();
 // The listener task's least stack to spare so far (bytes), for a [mem] line; 0 before begin().
 unsigned stackLeft();
 int progress();    // 0-100 while active, else -1
-// After each sign the app works (the S3: a good Spotify poll; the LED panel: a check while online
-// and listening()): once the deck has run bootguard::HEALTHY_MS the running firmware counts as
-// good and the crash count clears.
+// After each sign the app works (the S3: a good Spotify poll; the LED panel: a check while online):
+// once the deck has run bootguard::HEALTHY_MS and the listener is up (when updates are on;
+// bootguard::proven) the running firmware counts as good, the crash count clears and an update on
+// probation is confirmed (IDF rollback: until then any reset boots the previous firmware).
 void onGoodPoll();
 }

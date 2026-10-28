@@ -11,6 +11,13 @@
 #include "../../util/common/bootguard.h"
 #include "../../util/common/otaview.h"
 
+// IDF's rollback (util/bootguard): the core marks each new image valid as it starts (initArduino)
+// unless the app says it checks later. It does: ota::onGoodPoll() confirms the image once it is
+// proven, so an update that resets before that (a crash in a global constructor, before setup(), a
+// hang the watchdog catches) boots the previous firmware. Only images set to boot by an update are
+// on probation: a USB flash resets otadata, and its image boots as it always did.
+extern "C" bool verifyRollbackLater() { return true; }
+
 namespace ota {
 namespace {
 // Survive a crash reset (not a power-on): the crash count and the last rollback, for its log line.
@@ -28,6 +35,7 @@ template <typename F> void locked(F f) {
 }
 std::atomic<bool> s_good{false};   // the running firmware has proven itself (nvs "ota"/"good")
 std::atomic<bool> s_listening{false};   // ArduinoOTA.begin() has run
+std::atomic<bool> s_proven{false};   // onGoodPoll() found it proven this boot
 TaskHandle_t s_task = nullptr;
 bool (*s_hold)() = nullptr;
 void (*s_onStart)() = nullptr;
@@ -39,6 +47,17 @@ void runningId(char* out, size_t n) {
     esp_ota_get_app_elf_sha256(sha, sizeof sha);
     strlcpy(out, sha, n < 17 ? n : 17);
 }
+
+// The running image is on probation (IDF rollback): booted by an update, not confirmed yet.
+bool onProbation() {
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    esp_ota_img_states_t state;
+    return running && esp_ota_get_state_partition(running, &state) == ESP_OK &&
+           state == ESP_OTA_IMG_PENDING_VERIFY;
+}
+
+// Confirms an image on probation: no rollback from here. True when it was on probation.
+bool confirm() { return onProbation() && esp_ota_mark_app_valid_cancel_rollback() == ESP_OK; }
 
 bool isGood() {
     char id[17], good[17] = "";
@@ -114,6 +133,12 @@ void checkBoot() {
     s_good.store(isGood());
     Serial.printf("[ota] running %s%s, crashes in a row %u\n", running ? running->label : "?",
                   s_good.load() ? " (good)" : "", (unsigned)s_crashes);
+    const esp_partition_t* aborted = esp_ota_get_last_invalid_partition();
+    if (aborted) Serial.printf("[ota] %s holds an update the bootloader rolled back\n", aborted->label);
+    // The same build sent again: it proved itself before, so no probation for it.
+    if (s_good.load() && confirm()) Serial.println("[ota] update already proven: confirmed");
+    else if (onProbation())
+        Serial.println("[ota] new firmware on probation: a reset before it proves itself boots the previous one");
     if (!s_crashes) return;
     const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
     esp_app_desc_t desc;
@@ -160,7 +185,10 @@ bool listening() { return s_listening.load(); }
 unsigned stackLeft() { return s_task ? (unsigned)uxTaskGetStackHighWaterMark(s_task) : 0u; }
 
 void onGoodPoll() {
-    if (s_good.load() || !bootguard::healthy(millis(), true)) return;
+    if (s_proven.load() || !bootguard::proven(millis(), true, enabled(), listening())) return;
+    s_proven.store(true);
+    if (confirm()) Serial.println("[ota] update confirmed: no rollback from here");
+    if (s_good.load()) return;
     char id[17];
     runningId(id, sizeof id);
     Preferences p;
