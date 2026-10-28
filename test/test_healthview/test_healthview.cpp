@@ -78,7 +78,7 @@ void test_cost_uses_comma() {
     TEST_ASSERT_EQUAL_STRING("18.4 KM", p.km.text);
     TEST_ASSERT_EQUAL_STRING("32 MIN", p.minutes.text);
     TEST_ASSERT_EQUAL_STRING("12.1 KM/L", p.kml.text);
-    TEST_ASSERT_EQUAL_STRING("AVG 34 KM/H  IDLE 6 MIN  RANGE ~290 KM", p.small.text);
+    TEST_ASSERT_EQUAL_STRING("AVG 34 KM/H  IDLE 6 MIN  290 KM LEFT", p.small.text);
     TEST_ASSERT_EQUAL_STRING("BATTERY OK", p.battery.text);
     TEST_ASSERT_EQUAL_STRING(">SAFE TO SHUT DOWN", p.footer.text);
     auto q = healthview::parked(s, NAN, NAN, v(Level::Problem, "X"), v(Level::Note, "Y"));
@@ -126,20 +126,31 @@ void test_parkgate_hides_on_move_and_dismiss_holds_until_moving() {
     TEST_ASSERT_TRUE(g.update(0.0f, 2.0f, 77000));
 }
 
+// Worst realistic inputs; exact strings, so a cut-off tail fails (setLine would silently truncate).
 void test_lines_fit_forty_chars() {
-    Verdict w = v(Level::Problem, "012345678901234567890123456789012345678901234");
-    tripsum::Summary s{99999.0f, 1e9f, 99999.0f, 9999.0f, 4000000000U, 4000000000U};
-    auto c = healthview::check(w, 99999.0f, w, &s, 1e9f, 1e9f);
-    const healthview::Line* ls[] = {&c.battery, &c.batteryWhy, &c.engine, &c.engineWhy, &c.lastTrip, &c.range, &c.status};
-    for (auto* l : ls) TEST_ASSERT_LESS_THAN(40, std::strlen(l->text));
-    auto p = healthview::parked(s, 1e9f, 1e9f, w, w);
-    const healthview::Line* ps[] = {&p.km, &p.minutes, &p.kml, &p.cost, &p.small, &p.battery, &p.engine, &p.footer};
-    for (auto* l : ps) TEST_ASSERT_LESS_THAN(40, std::strlen(l->text));
-    auto b = healthview::band(1e9f, 1e9f, 1e9f, 4000000000U, 1e9f, 1e9f, 1e9f);
-    TEST_ASSERT_LESS_THAN(12, std::strlen(b.trip));
-    TEST_ASSERT_LESS_THAN(12, std::strlen(b.kmlNow));
-    TEST_ASSERT_LESS_THAN(16, std::strlen(b.range));
-    TEST_ASSERT_LESS_THAN(40, std::strlen(b.small));
+    Verdict w = v(Level::Problem, "99 PENDING CODES, NOT CONFIRMED");
+    tripsum::Summary s{999.9f, 80.0f, 99.9f, 199.0f, 999U * 60U, 999U * 60U};
+    auto c = healthview::check(w, 15.9f, w, &s, 999.99f, 999.0f);
+    TEST_ASSERT_EQUAL_STRING("BATTERY  15.9V  LOW", c.battery.text);
+    TEST_ASSERT_EQUAL_STRING("99 PENDING CODES, NOT CONFIRMED", c.batteryWhy.text);
+    TEST_ASSERT_EQUAL_STRING("ENGINE  CHECK", c.engine.text);
+    TEST_ASSERT_EQUAL_STRING("LAST TRIP 1000 KM  99.9 KM/L  R$ 999,99", c.lastTrip.text);
+    TEST_ASSERT_EQUAL_STRING("RANGE ~999 KM", c.range.text);
+    TEST_ASSERT_EQUAL_STRING(">2 ISSUES  [TAP FOR DETAILS]", c.status.text);
+    auto p = healthview::parked(s, 999.99f, 999.0f, w, w);
+    TEST_ASSERT_EQUAL_STRING("1000 KM", p.km.text);
+    TEST_ASSERT_EQUAL_STRING("999 MIN", p.minutes.text);
+    TEST_ASSERT_EQUAL_STRING("99.9 KM/L", p.kml.text);
+    TEST_ASSERT_EQUAL_STRING("R$ 999,99", p.cost.text);
+    TEST_ASSERT_EQUAL_STRING("AVG 199 KM/H  IDLE 999 MIN  999 KM LEFT", p.small.text);
+    TEST_ASSERT_EQUAL_UINT(39, std::strlen(p.small.text));
+    auto b = healthview::band(999.9f, 99.9f, 999.0f, 99U * 3600U + 59U * 60U, 999.99f, 15.9f, 130.0f);
+    TEST_ASSERT_EQUAL_STRING("1000 KM", b.trip);
+    TEST_ASSERT_EQUAL_STRING("99.9 KM/L", b.kmlNow);
+    TEST_ASSERT_EQUAL_STRING("999 KM LEFT", b.range);
+    TEST_ASSERT_EQUAL_STRING("99:59  R$ 999,99  15.9V  130C", b.small);
+    auto q = healthview::parked(s, NAN, NAN, w, w);
+    TEST_ASSERT_EQUAL_STRING("AVG 199 KM/H  IDLE 999 MIN  -- KM LEFT", q.small.text);
 }
 
 int main(int, char**) {

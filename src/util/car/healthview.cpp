@@ -129,11 +129,11 @@ Parked parked(const tripsum::Summary& s, float costRs, float rangeKm, const carh
     rsText(a, sizeof a, costRs);
     setLine(&p.cost, Role::Text, a);
 
-    num(a, sizeof a, s.avgKmh, 0, 999.0f);
-    std::snprintf(b, sizeof b, "%u", static_cast<unsigned>((s.idleS / 60U) + ((s.idleS % 60U) >= 30U ? 1U : 0U)));
-    rangeText(c, sizeof c, rangeKm);
-    if (c[0] == '-') std::snprintf(buf, sizeof buf, "AVG %s KM/H  IDLE %s MIN  RANGE -- KM", a, b);
-    else std::snprintf(buf, sizeof buf, "AVG %s KM/H  IDLE %s MIN  RANGE ~%s KM", a, b, c);
+    // Capped so the worst case "AVG 199 KM/H  IDLE 999 MIN  999 KM LEFT" is exactly 39 chars.
+    num(a, sizeof a, s.avgKmh, 0, 199.0f);
+    num(b, sizeof b, static_cast<float>((s.idleS / 60U) + ((s.idleS % 60U) >= 30U ? 1U : 0U)), 0, 999.0f);
+    num(c, sizeof c, rangeKm, 0, 999.0f);
+    std::snprintf(buf, sizeof buf, "AVG %s KM/H  IDLE %s MIN  %s KM LEFT", a, b, c);
     setLine(&p.small, Role::Mid, buf);
 
     std::snprintf(buf, sizeof buf, "BATTERY %s", battWord(batt.level));
