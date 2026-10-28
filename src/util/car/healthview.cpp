@@ -116,7 +116,9 @@ Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdic
 
 Band band(float tripKm, float kmlNow, float rangeKm, uint32_t seconds, float costRs, float volts, float coolantC) {
     Band b{};
-    char a[16], c[24], v[16], cool[12];
+    // Sized to what the helpers can write ("100.0" / "9999", "R$ 999,99", "99.9V", "999"), so the
+    // target GCC can prove each field fits (-Wformat-truncation under -Werror).
+    char a[6], c[10], v[6], cool[4];
     kmText(a, sizeof a, tripKm);
     std::snprintf(b.trip, sizeof b.trip, "%s KM", a);
     kmlText(a, sizeof a, kmlNow);
