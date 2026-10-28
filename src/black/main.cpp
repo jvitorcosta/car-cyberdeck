@@ -44,13 +44,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "images/art.h"
 #include "images/walksprite.h"
 #include <esp_system.h>
-#include <esp_task_wdt.h>
-
-// Task watchdog: 30 s instead of the default 5 s. It was raised for SpotifyArduino's spinning
-// response loops (one spun ~11 s on a reset TLS connection: the "unexplained rst:0xc"); that
-// library is gone, but a TLS handshake plus reads can still take 8 + 8 s on a weak hotspot.
-// A genuine hang still reboots, after 30 s.
-static const uint32_t TASK_WDT_S = 30;
+#include "../common/core/watchdog.h"
 
 static const char* resetReason() {
     switch (esp_reset_reason()) {
@@ -129,14 +123,21 @@ static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen, bool have
     return (intropick::Opening)o;
 }
 
+static void playOpening();
+
 void setup() {
     Serial.begin(115200);
     delay(200);
     Serial.printf("[boot] cardeck v%s (s3)\n", FW_VERSION);
     Serial.printf("[boot] reset reason: %s\n", resetReason());
     ota::checkBoot();   // may boot the other app slot (net/ota)
+    const bool quiet = nettask::quietBoot();   // after its self-heal restart: no opening (below)
+    if (quiet) Serial.println("[boot] after a self-heal restart: no opening");
     board::begin();
-    esp_task_wdt_init(TASK_WDT_S, true);   // reconfigures the already-running watchdog
+    // Task watchdog (common/core/watchdog): 90 s, not the default 5 s, for the network task and
+    // this loop (from the end of setup()). It was 30 s on core 0's idle task only, raised for
+    // SpotifyArduino's spinning response loops (the "unexplained rst:0xc"; that library is gone).
+    watchdog::begin();   // reconfigures the already-running watchdog
     mem::installFailHook();
     pinMode(PIN_BL, OUTPUT); digitalWrite(PIN_BL, HIGH);
     shared::begin();
@@ -170,12 +171,30 @@ void setup() {
     media::begin();
     const media::Blob idle = MEDIA(data_idle_bin, "idle.bin");
     Serial.println(idlesprite::parse(idle.data, idle.size)
-                       ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
+                       ? "[idle] Sonic waits on Waiting for a song" : "[idle] none: Pikachu");
     const media::Blob bkd = MEDIA(data_backdrop_bin, "backdrop.bin");
     Serial.println(backdrop::parse(bkd.data, bkd.size) ? "[ota] update screen: Green Hill Zone"
                                                        : "[ota] update screen: battle box");
     const media::Blob rider = MEDIA(data_shadow_bin, "shadow.bin");
     if (ridersprite::parse(rider.data, rider.size)) Serial.println("[ota] Shadow skates the rail");
+    if (quiet) {
+        // The network task restarted the deck to heal it (util/quietboot), most likely mid-drive
+        // without the hotspot: no opening, no greeting and no WiFi wait here. The status screen
+        // shows at once ("No WiFi..." while there is none) and the task connects underneath, as it
+        // does for a late hotspot.
+        nettask::start();
+    } else {
+        playOpening();
+    }
+    remote::begin(bootscene::active);
+    ota::begin(REMOTE_NAME, bootscene::active);
+    // The UI loop is watched from here (the core feeds it before each loop()); setup()'s waits for
+    // the opening and the WiFi are not.
+    enableLoopWDT();
+}
+
+// The boot's opening, its greeting and the WiFi connect under it; back when the display is free.
+static void playOpening() {
     carlook::Look mcqueen;
     const bool haveMcQueen = carlook::mcqueen(&mcqueen);
     const intropick::Opening opening = pickOpening(intro::available(intropick::KISS), haveMcQueen,
@@ -209,14 +228,12 @@ void setup() {
     }
     if (wifi) bootscene::setCaption("Connecting to Spotify...");
     bootscene::waitDone();                // the display is ours again
-    remote::begin(bootscene::active);
-    ota::begin(REMOTE_NAME, bootscene::active);
 }
 
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).
 static linkstatus::Kind offlineText(const AppState& st, char* title, size_t tn, char* detail, size_t dn) {
     const bool wifiUp = net::isOnline();
-    linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected});
+    linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected, st.loginFailed});
     char names[96];
     if (wifiUp) strlcpy(names, net::ssid().c_str(), sizeof names);
     else net::savedNetworks(names, sizeof names);
@@ -335,7 +352,7 @@ void loop() {
     static idlewait::Clock idle;
     const bool idleNow = idle.update(st.status == PlaybackStatus::Paused,
                                      st.status == PlaybackStatus::Stopped, millis());
-    int mode = 0;   // 0 = deck, 1 = offline, 2 = nothing playing
+    int mode = 0;   // 0 = deck, 1 = offline, 2 = waiting for a song
     if (!net::isOnline() || st.status == PlaybackStatus::Offline ||
         netplan::stale(millis(), st.lastPollOkMs, netplan::staleLimit(idleNow))) mode = 1;   // idle: 10 s polls
     else if (idleNow) mode = 2;

@@ -1,6 +1,6 @@
 #pragma once
-// Spoken lights commands ("purple inside", "dimmer", "lights off", "azul 50%") -> what to change.
-// The text is whatever Siri dictated, English or Portuguese, any case, with punctuation. Words it
+// Spoken lights commands ("purple inside", "dimmer", "lights off", "azul 50%", "music mode") -> what
+// to change. The text is whatever Siri dictated, English or Portuguese, any case, with punctuation. Words it
 // doesn't know are skipped, so "set the lights to purple please" works. PURE, host-tested.
 #include <cctype>
 #include <cstring>
@@ -8,7 +8,7 @@
 
 namespace ledvoice {
 // Colours are ledlook's swatches (ledlook::Colour): the grid's eight by ledlook::COLOUR_WORDS, then
-// light blue (a preset's colour, off the grid): "light blue", "azul claro", "cyan".
+// cyan (a preset's colour, off the grid): "cyan", "light blue", "azul claro".
 enum Zone { ZONE_NONE = -1, ZONE_BOTH = 0, ZONE_INSIDE = 1, ZONE_OUTSIDE = 2 };
 
 struct Command {
@@ -18,6 +18,7 @@ struct Command {
     int levelStep = 0;   // +1 brighter, -1 dimmer (one 10 % step each)
     int zone = ZONE_NONE;
     int preset = -1;     // preset 1..6 ("rose", "favourite two"), or -1
+    int music = -1;      // music mode: 1 on ("music", "music mode"), 0 off ("music off"), -1 not asked
 };
 
 namespace detail {
@@ -30,15 +31,15 @@ inline int lookup(const char* w, const Word* table, int n) {
     return -1;
 }
 
-using ledlook::BLUE, ledlook::LIGHT_BLUE, ledlook::PURPLE, ledlook::RED;
+using ledlook::BLUE, ledlook::CYAN, ledlook::PURPLE, ledlook::RED;
 // Voice's colour words on top of ledlook::COLOUR_WORDS. Siri transcribes a lone colour word by sound:
 // "red" comes back "Read", "blue" can come back "Blew" (seen in the deck's log, 2026-10-21). Neither
 // homophone means anything else here, and neither belongs among a song title's words. Then "lilás"
-// with its accent (the phrase isn't folded) and light blue's own.
+// with its accent (the phrase isn't folded) and cyan's own.
 static const Word COLORS[] = {
-    {"read", RED}, {"blew", BLUE}, {"lil\xc3\xa1s", PURPLE}, {"cyan", LIGHT_BLUE}, {"ciano", LIGHT_BLUE},
+    {"read", RED}, {"blew", BLUE}, {"lil\xc3\xa1s", PURPLE}, {"cyan", CYAN}, {"ciano", CYAN},
 };
-// Light blue in two words: "light" right before a blue word, or "claro" / "clara" right after one
+// Cyan in two words too: "light" right before a blue word, or "claro" / "clara" right after one
 // ("azul claro"). Only next to each other, so "lights blue" and "light, then blue" stay blue, and
 // either word alone is nothing.
 static const char* const LIGHTER_BEFORE[] = {"light"};
@@ -95,6 +96,10 @@ static const Word SLOTS[] = {
 static const Word PRESET_NAMES[] = {
     {"rose", 1}, {"fire", 2}, {"gojira", 3}, {"godzilla", 3}, {"purpura", 4}, {"civic", 5}, {"ocean", 6},
 };
+// Music mode, the MUSIC MODE button's toggle by name: "music" turns it on, with an off word off. The
+// phrase is then that and nothing else ("music red off" only turns the mode off). "mode" / "modo" are
+// filler, like any unknown word.
+static const char* const MUSIC[] = {"music", "musica", "música"};
 #define LEDVOICE_N(t) static_cast<int>(sizeof(t) / sizeof(t[0]))
 }  // namespace detail
 
@@ -106,6 +111,7 @@ inline bool parse(const char* text, Command* out) {
     bool armed = false;  // a favourite word was heard and its slot number hasn't come yet
     bool light = false;  // the word before was "light"
     bool blue = false;   // the word before was a blue colour word
+    bool music = false;  // a music word was heard
     char w[24];
     for (const char* p = text; *p;) {
         // a word: letters, digits and UTF-8 bytes (accents); everything else separates
@@ -122,7 +128,7 @@ inline bool parse(const char* text, Command* out) {
         const bool afterLight = light, afterBlue = blue;
         light = blue = false;
         if (afterBlue && among(w, LIGHTER_AFTER, LEDVOICE_N(LIGHTER_AFTER))) {  // "azul claro"
-            out->color = LIGHT_BLUE;
+            out->color = CYAN;
             continue;
         }
         if (std::isdigit(static_cast<unsigned char>(w[0]))) {  // "50", "50%": a level, or a slot right after "favourite"
@@ -154,17 +160,22 @@ inline bool parse(const char* text, Command* out) {
             any = true;
             continue;
         }
+        if (among(w, MUSIC, LEDVOICE_N(MUSIC))) {
+            music = true;
+            armed = false;
+            continue;
+        }
         if (lookup(w, FAVS, LEDVOICE_N(FAVS)) >= 0) {
             armed = true;  // not a command by itself: "favourite" alone parses to nothing
             continue;
         }
         if (among(w, LIGHTER_BEFORE, LEDVOICE_N(LIGHTER_BEFORE))) {
-            light = true;  // not a command by itself ("light off" is just off); a blue word next makes it light blue
+            light = true;  // not a command by itself ("light off" is just off); a blue word next makes it cyan
             continue;
         }
         if ((v = colour(w)) >= 0) {
             blue = v == BLUE;
-            out->color = afterLight && blue ? static_cast<int>(LIGHT_BLUE) : v;
+            out->color = afterLight && blue ? static_cast<int>(CYAN) : v;
         }
         else if ((v = lookup(w, POWER, LEDVOICE_N(POWER))) >= 0) out->power = v;
         else if ((v = lookup(w, LEVELS, LEDVOICE_N(LEVELS))) >= 0) out->level = v;
@@ -173,6 +184,13 @@ inline bool parse(const char* text, Command* out) {
         else continue;  // not a command ("set", "the", "please", or "number" in "favourite number 2"): stays armed
         armed = false;  // a command word means no slot is coming
         any = true;
+    }
+    if (music) {  // a music command only: on, or off with an off word
+        const int on = out->power == 0 ? 0 : 1, zone = out->zone;
+        *out = Command{};
+        out->music = on;
+        out->zone = zone;
+        return true;
     }
     return any;
 }

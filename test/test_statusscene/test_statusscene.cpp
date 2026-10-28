@@ -25,6 +25,7 @@ void test_each_cause_gets_its_own_pokemon_and_bubble() {
         {Kind::NoInternet,   status_sprite::PSYDUCK,  Bubble::Dots,     false},
         {Kind::SpotifyError, status_sprite::SLOWPOKE, Bubble::Zzz,      false},
         {Kind::CertRejected, status_sprite::PORYGON,  Bubble::Bang,     false},
+        {Kind::LoginFailed,  status_sprite::PORYGON,  Bubble::Bang,     false},   // the owner must act
     };
     for (auto& r : rows) {
         statusscene::Look l = statusscene::lookFor(r.k);

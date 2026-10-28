@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-// When the deck gives up on the song and shows "Nothing playing": at once when Spotify has
+// When the deck gives up on the song and shows "Waiting for a song...": at once when Spotify has
 // nothing at all, or after the song has stayed paused for PAUSE_MS (a short pause keeps the
 // deck). PURE, host-tested; the UI loop feeds it every pass.
 namespace idlewait {
@@ -17,7 +17,7 @@ inline bool hintNow(uint32_t waitingMs) {
 
 class Clock {
 public:
-    // paused: a song is there but not playing; stopped: Spotify has nothing. True: "Nothing playing".
+    // paused: a song is there but not playing; stopped: Spotify has nothing. True: "Waiting for a song...".
     bool update(bool paused, bool stopped, uint32_t now);
 private:
     bool timing_ = false;

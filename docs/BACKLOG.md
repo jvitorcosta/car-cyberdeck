@@ -2,61 +2,62 @@
 
 Open items, not scheduled. Newest decisions first within each section.
 
+## Done (moved out of the lists below)
+
+- **Yellow deck** (the CYD as the car's light panel): the car LEDs over BLE by touch, voice, Xbox
+  controller and the watch (#13, tested in the car 2026-10-22); the CYBERDECK dashboard, presets,
+  LYRICS, weather, trip, themes and night mode (#18, tested in the car 2026-10-24: "works great");
+  Japanese lyrics (#21).
+- **Updates over WiFi** on both decks (#9, #19; the yellow deck's first OTA went through on
+  2026-10-24 and kept its touch calibration), with their own `OTA_PASSWORD` (#25) and the
+  rollback of new firmware that resets in its first minute (#27).
+- **The Honda City watch app** (#13, #20): pages, presets, glance, signed requests (#27).
+- **Music mode as song colours** (#20, #23): the black deck picks each song's colour, the yellow
+  deck shows it; by voice, `/status` and the watch since wave 4.
+- **INSIDE / OUTSIDE** controllers confirmed the right way round (2026-10-24); their addresses
+  are in `config.h` since wave 4.
+- **The repo reorganisation** (#26): one folder per deck, util in groups; the companion screen
+  retired.
+- **Dropped WiFi receive buffers** (closed 2026-10-23): a 30-min S3 capture had no failed
+  allocation; the drops were the retired CYD deck build's.
+
 ## Verification (on device)
 
-- **Yellow deck menu** (`feat/yellow-menu`): **tested in the car 2026-10-24, owner: "works great
-  in the car"**: the dashboard (layout B), presets (touch, voice, Xbox, watch), LYRICS, weather, trip,
-  VT323, the inside-colour theme and night mode. Shades were tuned on the panel (day contrast
-  picks, the owner's night ambers T3/M3/D3); the 8 themes were previewed with `-D THEME_TEST`.
-
-- **Yellow deck updates over WiFi** (2026-10-24): **done on the deck**: the USB flash to the two-slot
-  layout kept the touch calibration (no calibration screen), and the first
-  `pio run -e ledpanel_ota -t upload` from the PC on the hotspot went through (`Result: OK`); the
-  new build booted and logged `[ota] this firmware is good`, heap ~93 KB (min ~86 KB). Note: Windows
-  moves the PC back to the home WiFi on its own, so check the PC is still on the hotspot before an
-  upload. Still to see: the `>UPDATING` page by eye on a later update, and a cut update
-  (stop the PC's upload mid-way): `>UPDATE FAILED` in ALERT
-  for ~3 s, then the screen that was showing, lights, lyrics and weather carrying on. The rollback:
-  upload a build that crashes early (e.g. an `abort()` in setup); after three crash resets the
-  serial log says `[ota] rolled back` and the previous firmware runs.
-
-- **Green Hill Zone update screen** (built 2026-10-22, `feat/shadow-update`, only compiled): first
-  USB `pio run -e s3 -t upload` and `pio run -e s3 -t uploadmedia` (the new `data/backdrop.bin` and
-  `data/shadow.bin`), then an update over WiFi (`pio run -e s3_ota -t upload`): Green Hill fills
-  the screen, the rail fills red with Shadow skating its tip, a red flash at 100%, the reboot. Cut the PC's upload
-  mid-way: grey rail and "Update failed" for ~3 s, then the deck, polling again.
-
-- **Car LEDs** (branch `feat/car-leds`): **tested in the car 2026-10-22, owner: "they worked"**,
-  the lights and voice (Siri) on the final build (NimBLE 2, pages, debounced saves). The Garmin app
-  works against the deck (tested at home over the hotspot); in the car it takes the same path, so
-  it's assumed to work there too, not seen yet. Still open, not reported either way:
-  - the LED colours (orange, pink, purple, white and yellow are guesses for RGB LEDs) and whether
-    the perceptual 10 % brightness steps look even;
-  - INSIDE / OUTSIDE not swapped (the controller addresses were assigned by signal strength);
-  - the Xbox controller with the lights connected;
-  - memory over a long drive (heap's low point drifted 130 → 123 KB over 25 min at home).
-
-- **Old deck touch works with the pen** (2026-10-21; was "faulty" on 2026-10-14): at rest the
-  panel reads a press at raw x=0 (y~4000, z~600), which tripped the stuck-press guard for good.
-  The touch layer (`companion/touch` then, `yellow/touch` since 2026-10-28) treats raw x < 100 as
-  released, and `TOUCH_RAW_*` were recalibrated from pen taps (x 532..3477, y 590..3513). Taps
-  register under `ledpanel`.
-
+- **Wave 4 on the decks and the watch**: "music" / "music off" by Siri; the watch's Music mode
+  item (On / Off, then the lights follow); `/status` says `music=`; the colour lists in the deck's
+  order; "Cyan" in Siri's reply to "gojira" and on the watch.
+- **A cut update, by eye** (both decks): stop the PC's upload mid-way. Yellow: `>UPDATE FAILED`
+  for ~3 s, then the screen that was showing, with the lights, lyrics and weather carrying on;
+  also see the `>UPDATING` page on a normal update. Black: grey rail and "Update failed" for ~3 s,
+  then the deck polling again. Windows moves the PC back to the home WiFi on its own: check it is
+  still on the hotspot before an upload.
+- **Rollback on the device**: upload a build that crashes early (an `abort()` in `setup()`);
+  within its first minute the bootloader boots the previous firmware (`[ota] ... rolled back`);
+  a build that crashes 3 times after that minute goes back too (`[ota] rolled back`).
+- **Green Hill Zone update screen** (built 2026-10-22, only compiled): after `uploadmedia` with
+  `data/backdrop.bin` and `data/shadow.bin`, an update over WiFi shows Green Hill, the rail filling
+  red with Shadow at its tip, a red flash at 100 %, the reboot.
+- **Car LEDs, the rest**: the LED colours (orange, pink, purple, white and yellow are guesses for
+  RGB LEDs) and whether the 10 % brightness steps look even; the Xbox controller with the lights
+  connected; memory over a long drive (the heap's low point drifted 130 → 123 KB over 25 min at
+  home).
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
-  path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
+  path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
+
+## Code health
+
+- **Split `src/yellow/ledpanel.cpp`** (~3 000 lines): the link task, the web server, the lyrics
+  and music tasks and the weather are each a candidate file under `src/yellow/`.
+- **`blescan` / `bletest` don't link**: NimBLE 1.4.3 (their `lib_deps`) and a NimBLE 2 both end up
+  in the link (`multiple definition of NimBLEClient::serviceDiscoveredCB`), likely NimBLE 2 coming
+  in as `lib/xboxpad`'s dependency. Try `lib_ignore = xboxpad` on them, or move them to NimBLE 2.
+- **Port the parked branches to the new layout**: `feat/obd` and `feat/voice-agent` predate the
+  2026-10-28 reorganisation (`src/black`, `src/yellow`, `src/util/<group>`); rebase them with the
+  path table in `docs/superpowers/README.md`.
 
 ## Investigate
-
-- **Dropped WiFi receive buffers: not on the S3** (re-measured 2026-10-23, closed). A 30-min
-  serial capture on the home WiFi while Spotify played (20 songs: 20 art downloads, 34 lyrics
-  fetches, 439 polls over the kept-open connection): 0 failed allocations in 74 `[mem]` reports,
-  lowest free 154 KB, largest block never under 102 KB (TLS needs 20 KB). The 1 800-4 900 drops
-  per 5 min (2026-10-08) were the CYD's (~65 KB free), whose deck build is retired. So the
-  self-heal's "any failed allocation since the last good poll = starved" check (`nettask.cpp`)
-  can't turn an outage into a reboot loop on the S3; it stays as is (fix on `feat/obd`,
-  `1d44c44`, if a low-memory board ever runs the deck again). Logs: `.superpowers/debug/selfheal-s3*.log`.
 
 - **DMA for the S3 intro** (blocked, 2026-10-15): pushing frames by DMA from two buffers ran
   at ~36 ms a frame, but TFT_eSPI's `initDMA()` on this board left every later draw black, with
@@ -66,8 +67,8 @@ Open items, not scheduled. Newest decisions first within each section.
 ## Spotify rate limit
 
 - One Spotify app is shared by every deck that runs a Spotify client: running the CYD's old
-  standalone build next to the S3 got both blocked for ~2 h on 2026-10-13. That build is retired
-  (2026-10-21); the companion (`cyd_companion`) has no Spotify client and doesn't count.
+  standalone build next to the S3 got both blocked for ~2 h on 2026-10-13. Only the black deck
+  runs one now.
 
 ## Lyrics polish (deferred minors, final review 2026-10-08)
 
@@ -80,107 +81,72 @@ Open items, not scheduled. Newest decisions first within each section.
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
 
-## SD card cache (removed 2026-10-21)
-
-The parked SD cache for walk sheets and sprites was removed; it is in git history up to
-`0ba409b`. If repeat songs ever need it, the S3's SDMMC slot (pins in `include/pins.h`) is
-the place to add it.
-
 ## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
 
-The companion with an OBD gauge cluster, kept for later, on the branch `feat/obd` (pushed to
-GitHub as a backup on 2026-10-23, no PR): 41 commits on an older main, 56 behind as of that day.
+The OBD gauge cluster, kept for later on the branch `feat/obd` (pushed to GitHub as a backup on
+2026-10-23, no PR): 41 commits on an older main.
 
 - **What it has:** the gauge cluster (RPM arc, speed, coolant, km/l, battery and the crank dip)
   read from an ELM327 over Bluetooth Classic, **seen working in the Honda City on 2026-10-19**;
-  the drive screens built 2026-10-21 and only compiled: a lyric strip under the cluster while
-  moving, her lyrics with a gauge strip when stopped, her coolant and battery warnings, the phone
-  page's status box and a pinned view (specs `2026-10-15-obd-gauges`, `2026-10-19-gauge-cluster`,
-  `2026-10-21-companion-drive`, on the branch). Read-only toward the car by construction: one
+  drive screens built 2026-10-21 and only compiled. Read-only toward the car by construction: one
   gate, `obd::allowed()`, mode 01 and adapter setup only.
-- **Why parked:** the yellow deck (the CYD) now runs `ledpanel`, the car LEDs over BLE (#13), and
-  the companion with OBD needs that same board. Bluetooth Classic for OBD leaves ~29 KB of heap,
-  so the LEDs' BLE on the same ESP32 is unlikely to fit. Decide the yellow deck's role (or add a
-  third board) before returning.
-- **To return:** rebase onto main. Expect conflicts in `CHANGELOG.md`, `docs/ARCHITECTURE.md`,
-  `docs/BACKLOG.md`, `src/core/nettask.cpp`, `src/ui/carlook.cpp`, `src/spotify/client.cpp`.
-  Drop `d079b62` (the 204 fix and `util/nowplaying.h`: main's own Spotify client made it
-  obsolete), and the copies of fixes main already has (`6af77a8` boot-terminal dots, `d34c366`
-  remote key); `1d44c44` (self-heal) isn't needed on the S3 (see Investigate). The car checks
-  still to do are in the branch's own BACKLOG ("Gauge cluster in the car", "Companion drive
-  screens").
-- **Trip reset: keep or remove, when the companion returns** (asked 2026-10-23, deferred; the
-  companion build was retired on 2026-10-28 and is in git history). The companion's TRIP screen
-  and its phone page had a hold-to-reset button that zeroes the S3's own trip clock (`POST /trip/reset`, `net/remote`, `util/tripclock`); it never touches the car.
-  Dormant while the yellow deck runs `ledpanel`. Removing it means the companion's TRIP button,
-  the phone page's hold button, the S3 endpoint and her TripReset line.
+- **Why parked:** it was built on the companion screen, which needs the CYD, and the CYD is now
+  the yellow deck. Bluetooth Classic for OBD leaves ~29 KB of heap, so the lights' BLE on the same
+  ESP32 is unlikely to fit. Decide on a third board (or a BLE adapter for the yellow deck) before
+  returning.
+- **To return:** rebase onto main (see "Port the parked branches" above). Drop `d079b62` (main's
+  own Spotify client made it obsolete) and the copies of fixes main already has (`6af77a8`,
+  `d34c366`); `1d44c44` (self-heal) isn't needed on the S3. The car checks still to do are in the
+  branch's own BACKLOG.
+- **Trip reset**: the S3 still has `POST /trip/reset` (`net/remote`, `util/tripclock`), which only
+  the retired companion used. Keep it or remove it when the OBD work returns.
+
+## Parked: PS3 controller (2026-10-22, waiting on a battery)
+
+A DualShock 3 over Bluetooth Classic (`ps3test`, Bluedroid): it is already paired to the yellow
+deck over USB (its master address set to the CYD's Bluetooth address, no SixaxisPairTool), but its
+battery is dead, and a genuine DS3 powers on only from a USB host. Next: a new LIP1472 (3.7 V
+570 mAh), charge, unplug, press PS. Bluedroid can't share a firmware with the lights' NimBLE, so
+it is one or the other.
 
 ## Accepted as is
 
-- Backlight stays at full brightness (decided 2026-10-07): no auto-dim from the CYD light
-  sensor (GPIO 34), even though it was suggested for night glare.
+- **No auto-dim from the light sensor** (decided 2026-10-07): the backlight is full by day and
+  about a third at night on both decks (by the clock, 18:00-06:00), never from the CYD's light
+  sensor (GPIO 34).
+- **Decks stay on the network they joined** (tried 2026-10-14 and 2026-10-22, removed both
+  times): scanning for the hotspot from home WiFi paused the S3's network task, and the iPhone
+  hides its hotspot unless its settings screen is open, so the scan rarely saw it. Restarting the
+  deck with that screen open is what works; in the car only the hotspot exists.
 
 ## Ideas
 
-- **Yellow deck menu, parts 3-7** (spec
-  `docs/superpowers/specs/2026-10-23-yellow-deck-menu-design.md`): Car over BLE (once the
-  Vgate iCar Pro BLE arrives), Heart, Music, LED effects. Parts 1-2 (menu, favourites, night mode)
-  are built; the weather is on the main screen (dashboard, 2026-10-23).
-- **Car lights from the Garmin watch**: done 2026-10-22, see docs/leds-voice.md.
 - **Car lights from CarPlay** (researched 2026-10-23, wireless CarPlay in the City). In order:
-  (1) Siri from the steering-wheel button running the "Honda" Shortcut. Nothing to build, so try
+  (1) Siri from the steering-wheel button running the voice Shortcut. Nothing to build, so try
   it on the next drive. Wireless CarPlay uses 5 GHz and the decks 2.4 GHz, so the hotspot should
   hold; keep Maximize Compatibility on. (2) Tap buttons via a Shortcuts widget on the CarPlay
-  dashboard (iOS 26 widgets). This is unproven. Apple's CarPlay guide says a widget can't open a
-  non-CarPlay app, and only in-widget buttons work (Music play/pause, Reminders). A Shortcuts
-  button that runs a URL in place *might* work. Test with one shortcut ("Honda Red", Get Contents
-  of `/say?k=…&text=red`) before making a set, and if it works keep it to 4-5 colours plus Off.
+  dashboard (iOS 26 widgets). This is unproven: Apple's CarPlay guide says a widget can't open a
+  non-CarPlay app, and only in-widget buttons work. Test with one shortcut (Get Contents of
+  `/say?k=…&text=red`) before making a set, and if it works keep it to 4-5 colours plus Off.
   (3) A real CarPlay app ("driving task" category) needs a Mac, a $99/yr developer account and
-  Apple's approval of the CarPlay entitlement, and offers only fixed list/grid templates (no music
-  wave).
-
-- **Avatar, next** (home screen built 2026-10-14): more menu items (Weather, Map, OBD); the
-  Claude assistant (Siri Shortcut + a `POST /say`); blinking; VROOM on the new deck.
-- **PS3 controller for the avatar menu** (side idea, 2026-10-14): over Bluetooth Classic on the
-  CYD (the S3 has BLE only), library `esp32-ps3`; D-pad = cursor, X = open, O = back. A cable
-  needs a USB host (MAX3421E module + wiring): the CYD's USB port is a device-only CH340.
-  **2026-10-22, waiting on a battery:** João's original DS3 is already paired to the yellow deck
-  (its master address set over USB to the CYD's Bluetooth address, 68:09:47:F8:25:9E, no
-  SixaxisPairTool needed) and the `ps3test` env (Bluedroid) is ready, but its battery is dead. A
-  genuine DS3 only powers on from a USB host, not a wall charger, and on the PC it stays wired.
-  Next: a new LIP1472 (3.7 V 570 mAh), charge, unplug, press PS. Bluetooth Classic means Bluedroid,
-  so it can't share a firmware with the LED panel's NimBLE (Xbox + lights): one or the other.
-- **Switch back to the hotspot automatically** (tried 2026-10-14, then removed): scanning on
-  the home WiFi paused the S3's network task and blipped the companion, and the move back was
-  never seen working (joins were refused, likely "Allow Others to Join" off). Owner: decks stay
-  where they joined; home WiFi is dev only, the car has only the hotspot. Tried again in the LED
-  panel on 2026-10-22 (a short passive scan every 20 s) and removed again: the iPhone hides its
-  hotspot unless its settings screen is open, so the scan rarely saw it; restarting the deck with
-  that screen open is what worked.
-
-- **Companion dashboard, the rest of the spec** (cut from v1 on 2026-10-13, "just lyrics"):
-  a top strip with the clock and outside weather (`util/weather` is committed, not wired in).
-  Howl, Vroom and trip reset are built (the avatar menu and its phone page), and the trip time
-  has its own screen. Plan: `docs/superpowers/plans/2026-10-13-companion-screen.md`.
-- **Retro map** on the companion, located by the iPhone over HTTPS (spec section "Optional
-  extra: retro map"): gets its own plan.
-
-- **Phone remote, more buttons** (Howl built 2026-10-13, see ARCHITECTURE): another sound,
-  skip/pause through the deck, a screen flash. After the hotspot check above.
+  Apple's approval of the CarPlay entitlement, and offers only fixed list/grid templates.
+- **Yellow deck, more pages** (spec `docs/superpowers/specs/2026-10-23-yellow-deck-menu-design.md`):
+  Car over BLE (once a BLE OBD adapter arrives), Heart, LED effects.
+- **When Siri gets "Sorry"**, the Shortcut asks Claude to turn the phrase into a command
+  ("something cozy" → "purple 30") and sends that instead.
+- **Phone remote, more buttons** (Howl built 2026-10-13): another sound, skip/pause through the
+  deck, a screen flash.
 - **Musixmatch as a second lyrics source** (parked 2026-10-07). Official API free plan: API
   key, ~2k calls/day, only a ~30% untimed preview (full/synced lyrics are paid, licensed).
-  Unofficial desktop endpoint (`apic-desktop.musixmatch.com`, `macro.subtitles.get` +
-  usertoken): full synced lyrics, but bypasses their API auth (against Musixmatch's terms),
-  can be blocked any time, token tied to an account; large JSON responses would need a
-  second stream parser and another TLS host on a memory-tight board.
+  Unofficial desktop endpoint: full synced lyrics, but bypasses their API auth (against
+  Musixmatch's terms), can be blocked any time, token tied to an account; large JSON responses
+  would need a second stream parser and another TLS host.
 - **Bigger status panel when a song has no lyrics** (parked 2026-10-07; current layout kept).
-  Instead of the dialogue box, the status panel grows into the bottom of the screen. Two
-  mocked-up variants: (A) everything scales up: name/badge/time in the large font, Poke Ball
-  and walker at 2x (pixel doubling), 14-16 px HP bar; (B) name row unchanged, a large
-  time-remaining readout next to a 2x walker, thicker HP bar. The lyrics status
-  (lyricstatus::Status::None / Instrumental) now reports that final state.
+  Instead of the dialogue box, the status panel grows into the bottom of the screen: (A)
+  everything scales up, or (B) the name row unchanged, a large time-remaining readout next to a
+  2x walker, a thicker HP bar.
 - Car power: brownout behaviour on noisy USB during engine start (`[boot] reset reason`
-  now says "brownout" if it happens).
-- Touch controls (play/pause/skip). The unused groundwork (Spotify play/next/prev/volume
-  calls, button widgets) was removed in the 2026-10-08 cleanup; see git history.
-- Korean / emoji / Cyrillic lyrics (render blank today; spec non-goal).
+  says "brownout" if it happens).
+- Touch controls on the black deck (play/pause/skip). The unused groundwork was removed in the
+  2026-10-08 cleanup; see git history.
+- Korean / Cyrillic lyrics (blank on the black deck; Korean shows as boxes on the yellow deck).

@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <WiFiClient.h>
 #include "../../common/net/http_config.h"
+#include "../../common/core/watchdog.h"
 #include "../core/mem.h"
 #include "tjpgd.h"
 #include "../../util/black/artmap.h"
@@ -73,6 +74,7 @@ bool fetch(const char* url) {
     HTTPClient http;
     netcfg::streamed(http);
     if (!http.begin(client, plain)) return false;
+    watchdog::feed();   // the request and the decode are bounded (common/core/watchdog)
     int code = http.GET();
     if (code != 200) {
         Serial.printf("[art] http %d\n", code);

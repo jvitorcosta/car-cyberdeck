@@ -42,4 +42,11 @@ bool localNow(int* minute, int* y, int* month, int* day) {
     return true;
 }
 
+bool unixNow(int64_t* t) {
+    const time_t now = time(nullptr);
+    if (!daynight::synced((int64_t)now)) return false;
+    *t = (int64_t)now;
+    return true;
+}
+
 }

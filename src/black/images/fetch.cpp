@@ -1,6 +1,7 @@
 #include "fetch.h"
 #include <cstring>
 #include "../../common/net/http_config.h"
+#include "../../common/core/watchdog.h"
 #include "../../util/common/readguard.h"
 
 namespace fetch {
@@ -54,6 +55,7 @@ bool httpsGetInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen, int
     HTTPClient https;
     netcfg::streamed(https);   // plain (non-chunked) body, so getSize() is the length
     if (!https.begin(client, url)) return false;
+    watchdog::feed();   // each request is bounded by its own timeouts (common/core/watchdog)
     int code = https.GET();
     if (httpCode) *httpCode = code;
     if (code != 200) {
@@ -97,6 +99,7 @@ bool Session::getInto(const char* url, uint8_t* buf, size_t cap, size_t* outLen,
     for (;;) {
         const bool reused = client_.connected();
         if (!http_.begin(client_, url)) return false;
+        watchdog::feed();
         const int code = http_.GET();
         if (code < 0 && reused && !retried) {   // the kept connection had gone stale: once more
             retried = true;

@@ -3,6 +3,7 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include "../../common/net/remote_config.h"
+#include "../../common/net/reqauth.h"
 #include "../../common/net/wifi.h"
 #include "../audio/greeting.h"
 #include "../audio/musicsvc.h"
@@ -11,6 +12,7 @@
 #include "../../util/black/netplan.h"
 #include "../core/mem.h"
 #include "../core/shared.h"
+#include "../../util/wire/musicwire.h"
 #include "../../util/wire/statejson.h"
 #include "../../util/common/version.h"
 #include "../../util/lights/tripclock.h"
@@ -86,8 +88,9 @@ bool link(char* out, size_t n) {
     return qrfit::link(net::deviceIp().c_str(), REMOTE_TOKEN, out, n);
 }
 
+// The phone page sends the key; the yellow deck signs (common/net/reqauth): either will do.
 static void handleState() {
-    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    if (!reqauth::pass(*s_server, s_gate, "/state", "wrong key")) return;
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)
     // 768 B overflowed with a long title and lyric lines. In PSRAM: only the CPU touches it
     static char* out = (char*)mem::bigAlloc(statejson::MAX_JSON);
@@ -141,9 +144,9 @@ static void handlePlay() {
 }
 
 // Music mode (audio/musicsvc): the yellow deck sends on=1 every 10 s while it wants the song's
-// palette over UDP, on=0 to stop at once.
+// palette over UDP, on=0 to stop at once. Signed by the yellow deck; the key also does (a test by hand).
 static void handleMusic() {
-    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    if (!reqauth::pass(*s_server, s_gate, "/music", "wrong key")) return;
     const String on = s_server->arg("on");
     if (on == "0") {
         musicsvc::stop();
@@ -152,7 +155,19 @@ static void handleMusic() {
     }
     if (on != "1") { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
     switch (musicsvc::keepAlive(s_server->client().remoteIP())) {
-    case musicsvc::Start::On:        s_server->send(200, "application/json", "{\"on\":1}"); break;
+    case musicsvc::Start::On: {
+        // The boot id the packets carry, proven for this request's nonce (util/wire/musicwire): the
+        // yellow deck takes packets only from it. A request with the key (no nonce) gets no proof.
+        char proof[musicwire::PROOF_HEX + 1];
+        char body[80];
+        const uint32_t boot = musicsvc::bootId();
+        if (musicwire::bootProof(REMOTE_TOKEN, boot, s_server->arg("n").c_str(), proof))
+            snprintf(body, sizeof body, "{\"on\":1,\"boot\":%lu,\"proof\":\"%s\"}", (unsigned long)boot, proof);
+        else
+            snprintf(body, sizeof body, "{\"on\":1}");
+        s_server->send(200, "application/json", body);
+        break;
+    }
     case musicsvc::Start::LowMemory: s_server->send(503, "text/plain", "low memory"); break;
     case musicsvc::Start::Stopping:  s_server->send(409, "text/plain", "stopping, ask again"); break;
     case musicsvc::Start::NoTask:    s_server->send(503, "text/plain", "no memory for the task"); break;
@@ -190,6 +205,7 @@ static void task(void*) {
 
 void begin(bool (*hold)()) {
     if (!s_gate.enabled()) { Serial.println("[remote] off (REMOTE_TOKEN empty)"); return; }
+    reqauth::begin();
     s_hold = hold;
     s_server = new WebServer(80);
     s_server->on("/", HTTP_GET, [] {

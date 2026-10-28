@@ -17,7 +17,7 @@ approach before you spend time on it.
    One suite: `tools\ntest.ps1 test\<suite>\<suite>.cpp <module.cpp ...>`.
    (`pio test -e native` doesn't work with this layout.)
 4. Run the media tool tests (standard library only, no ffmpeg):
-   `python -m unittest discover -s tools -p "test_gen_*.py"`.
+   `python -m unittest discover -s tools -p "test_*.py"`.
 
 ## Project layout
 
@@ -28,6 +28,9 @@ approach before you spend time on it.
 | `src/common/` | Arduino code both decks build: WiFi, clock, HTTP, OTA, remote settings (`net/`), backlight, `board/board.h`, `core/embed.h` |
 | `src/util/` | pure logic, no Arduino: parsers, timing, layout; tested on the PC. Grouped by who uses it: `wire/` (the contracts between the decks), `lights/` (the LED domain, both decks), `common/` (both decks), `black/`, `yellow/` |
 | `src/diag/` | standalone hardware and Bluetooth checks, one env each (`hwcheck`, `hwcheck_s3`, `blescan`, `bletest`, `xboxtest`, `ps3test`) |
+| `include/` | `config.example.h` (copy it to the git-ignored `src/config.h`), `pins.h`, the black deck's `app_state.h` |
+| `lib/xboxpad/` | the Xbox controller library, vendored for the yellow deck |
+| `garmin/carlights/` | the Honda City watch app (Connect IQ, Monkey C; [garmin/README.md](garmin/README.md)) |
 | `test/` | one Unity suite per pure module |
 | `tools/` | generators for bundled data, test runners, session analysis |
 | `docs/` | architecture, history, backlog and design records |
@@ -42,7 +45,7 @@ or a shared util group. Pins stay in `include/pins.h`.
 
 Every change to logic comes with a test, written first. Firmware logic goes in a Unity suite under
 `test/`; the media tools (`tools/gen_*.py`) have Python `unittest` tests next to them
-(`tools/test_gen_*.py`, see Setup). CI runs both. What a test must earn:
+(`tools/test_*.py`, see Setup). CI runs both. What a test must earn:
 
 - A test earns its place when a plausible change would make it fail **and** the failure points
   at a real problem: behaviour a user or another module relies on, a past bug, a bound, a wrap.
@@ -76,7 +79,8 @@ partition (CI enforces both, counting your media's real sizes from `data/media_s
   example `fix(lyrics): retry on 503` or `feat(ui): genre badge`. The type decides the next
   version number (README "Versioning").
 - One logical change per commit; the tests pass at every commit.
-- Never commit `src/config.h`, personal photos or audio, or anything with a number plate.
+- Never commit `src/config.h`, the watch's `Secrets.mc`, personal photos or audio, or anything
+  with a number plate.
   `.gitignore` covers the usual paths; check `git status` anyway.
 - Pull requests describe what changed, why, and how it was tested (host tests and which
   board).

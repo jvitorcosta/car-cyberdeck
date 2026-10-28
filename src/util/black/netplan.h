@@ -66,7 +66,38 @@ private:
     uint32_t interval_ = BASE_MS;
 };
 
-// Idle polling. While the deck shows "Nothing playing" (idlewait: no device or no song at once, a
+// Spotify login: the access-token refresh at accounts.spotify.com (spotify/client). A refused
+// refresh token (4xx: revoked, expired, the client secret rotated) or an accounts outage (5xx) was
+// tried again at every poll: a TLS handshake every 4 s for as long as it lasted. Now each answer
+// that isn't a token doubles the wait before the next try, BASE_MS up to MAX_MS; a token resets it.
+// No answer at all (< 0: no WiFi, DNS, TLS) is the network's fault: the login keeps the poll's pace
+// then, so it follows the network back at once, and a wait already running is left as it is, with
+// its answer (a blip during a refused login's wait keeps "Login failed" on screen).
+class LoginBackoff {
+public:
+    static constexpr uint32_t BASE_MS = 4000;
+    static constexpr uint32_t MAX_MS = 300000;
+    bool due(uint32_t nowMs) const { return wait_ == 0 || nowMs - at_ >= wait_; }   // wrap-safe
+    void onResult(int httpCode, uint32_t nowMs) {
+        if (httpCode < 0) {
+            if (wait_ == 0) last_ = httpCode;
+            return;
+        }
+        last_ = httpCode;
+        if (httpCode == 200) { wait_ = 0; return; }
+        wait_ = wait_ == 0 ? BASE_MS : wait_ >= MAX_MS / 2 ? MAX_MS : wait_ * 2;
+        at_ = nowMs;
+    }
+    // Spotify refused the refresh token (a 4xx, not a 429): only tools/spotify_auth.py fixes that.
+    bool refused() const { return last_ >= 400 && last_ < 500 && last_ != 429; }
+    int lastCode() const { return last_; }   // the last try's answer (< 0: none)
+    uint32_t waitMs() const { return wait_; }   // 0: no wait
+private:
+    uint32_t wait_ = 0, at_ = 0;
+    int last_ = 0;
+};
+
+// Idle polling. While the deck shows "Waiting for a song..." (idlewait: no device or no song at once, a
 // pause after PAUSE_MS) every 4 s poll got the same answer (449 of them in an idle half hour), so
 // the poll waits IDLE_MS instead; a song started on the phone shows within that. Any other poll
 // (playing, a short pause, a failure: LinkGate and Health keep their pace) returns to the
@@ -93,7 +124,10 @@ int parseRetryAfter(const char* v);
 //  - restart only on memory evidence (memStarved: failed allocations since the last good poll,
 //    or the largest block below TLS_NEED) after 180 s without a good poll — a dead zone or a
 //    401/429 can't be fixed by rebooting, and must not become a reboot loop;
-//  - WiFi down for 15 min straight -> restart (backstop if the WiFi driver can't come back).
+//  - WiFi down for 15 min straight -> restart (backstop if the WiFi driver can't come back). The
+//    restart is quiet (util/quietboot: no opening). Health only runs once the task has been
+//    online, so it is one restart per outage: after it, a boot with no WiFi stays in the task's
+//    connect loop (retrying, no reboot) until WiFi is up again.
 class Health {
 public:
     enum class Action { None, PauseOptional, Restart };

@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <esp_heap_caps.h>
 #include "../../common/net/http_config.h"
+#include "../../common/core/watchdog.h"
 #include "../../config.h"
 #include "../../util/black/ctxcache.h"
 #include "../../util/common/jsonpath.h"
@@ -90,6 +91,7 @@ static int refreshToken() {
     String body = "grant_type=refresh_token&refresh_token=" + String(SPOTIFY_REFRESH_TOKEN) +
                   "&client_id=" + SPOTIFY_CLIENT_ID +
                   "&client_secret=" + SPOTIFY_CLIENT_SECRET;
+    watchdog::feed();   // each request is bounded by its own timeouts (common/core/watchdog)
     int rc = https.POST(body);
     if (rc < 0) netcfg::certRejected(c, "accounts.spotify.com");
     if (rc == 200) {
@@ -113,14 +115,33 @@ static int refreshToken() {
 
 static bool tokenFresh() { return s_auth[0] && (int32_t)(s_tokenExpiry - millis()) > 0; }
 
+// Logs in (refreshToken) unless a failed login is still waiting out its back-off
+// (netplan::LoginBackoff): then the last answer again, with no request. s_loginFail: the request
+// that called it ends at the login, for the status screen.
+static netplan::LoginBackoff s_login;
+static bool s_loginFail = false;
+static int login() {
+    if (!s_login.due(millis())) { s_loginFail = true; return s_login.lastCode(); }
+    const int rc = refreshToken();
+    const uint32_t was = s_login.waitMs();
+    s_login.onResult(rc, millis());
+    s_loginFail = rc != 200;
+    if (s_login.waitMs() != was && s_login.waitMs())
+        Serial.printf("[spotify] login %s (HTTP %d): next try in %lus\n",
+                      s_login.refused() ? "refused, re-run tools/spotify_auth.py" : "failed", rc,
+                      (unsigned long)(s_login.waitMs() / 1000));
+    return rc;
+}
+
 // GET API + path with the access token, on the kept-open connection. Returns the HTTP status
 // (< 0: no answer; a failed token refresh answers with its own status). A 200's body is in
 // s_body; a 429's Retry-After (seconds) in *retryAfterS, else -1.
 static int apiGet(const char* path, int* retryAfterS = nullptr) {
     if (retryAfterS) *retryAfterS = -1;
+    s_loginFail = false;
     if (!s_body) return -1;
     if (!tokenFresh()) {
-        int rc = refreshToken();
+        int rc = login();
         if (rc != 200) return rc;
     }
     char url[256];
@@ -131,6 +152,7 @@ static int apiGet(const char* path, int* retryAfterS = nullptr) {
         if (!s_http.begin(s_api, url)) return -1;
         s_http.addHeader("Authorization", s_auth);
         s_http.collectHeaders(KEYS, 1);
+        watchdog::feed();
         int rc = s_http.GET();
         if (rc < 0 && reused && attempt == 0) {      // the kept connection had gone stale: once more
             s_http.end();
@@ -140,7 +162,7 @@ static int apiGet(const char* path, int* retryAfterS = nullptr) {
         if (rc == 401 && attempt == 0) {             // token revoked or expired early
             s_http.end();
             s_api.stop();
-            const int t = refreshToken();
+            const int t = login();
             if (t != 200) return t;
             continue;
         }
@@ -167,7 +189,7 @@ void begin() {
         if (s_body) s_body[0] = '\0';
         else Serial.println("[spotify] no memory for the answer buffer");
     }
-    refreshToken();
+    login();
 }
 
 // uri like "spotify:playlist:ID" / ":album:" / ":artist:". Returns false when the lookup
@@ -210,6 +232,7 @@ void poll(AppState& st) {
     const int code = apiGet(PLAYER_PATH, &retryAfter);
     st.lastPollCode = code;
     st.certRejected = false;
+    st.loginFailed = s_loginFail && s_login.refused();   // Spotify said no to the refresh token
     st.retryAfterS = code == 429 ? retryAfter : -1;
     if (code == 204) {                          // no active device: nothing to show
         if (st.status != PlaybackStatus::Stopped) Serial.println("[spotify] poll 204: no active device");

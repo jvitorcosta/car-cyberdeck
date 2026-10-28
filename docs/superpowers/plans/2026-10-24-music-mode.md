@@ -1,5 +1,8 @@
 # Music mode for the car lights: implementation plan
 
+> **Status:** superseded by song colours (#20, #23): the lights take each song's colour from the
+> black deck; no microphone or beat pulse was built. See `docs/yellow-deck.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The car's inside LED light follows the music heard by the black deck's microphone (beat pulses, loudness, colour moving through
@@ -25,7 +28,7 @@ WebServer, HTTPClient), NimBLE 2, TFT_eSPI + VT323 faces, Unity host tests (`too
 - Outside light never pulses (law + owner): steady palette colour, crossfade ≥ 5 s on a new song only.
 - Inside writes ≤ 15 frames/s per controller in total; no brightness step faster than 4 Hz at full depth.
 - Music mode never switches on a light left off (outside); any manual change from any source ends it.
-- INSIDE = `be:16:b6:00:9b:ff`, OUTSIDE = `be:68:93:1d:22:00` (confirmed by the owner).
+- INSIDE = `LED_INSIDE_MAC`, OUTSIDE = `LED_OUTSIDE_MAC` (confirmed by the owner).
 - Builds that must pass after every task that touches them: `pio run -e s3`, `pio run -e ledpanel`; host suite all green.
 - Deliver the yellow deck by WiFi when testing (`pio run -e ledpanel_ota -t upload`, PC on the hotspot), the black deck by `s3_ota` or USB.
 

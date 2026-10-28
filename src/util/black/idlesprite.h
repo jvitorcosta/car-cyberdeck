@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-// Sonic waiting on the new deck's "Nothing playing" screen (data/idle.bin, from
+// Sonic waiting on the black deck's "Waiting for a song..." screen (data/idle.bin, from
 // tools/gen_idle_sprite.py; git-ignored, S3 only): his four Sonic 1 frames and the game's own
 // waiting timeline. PURE, host-tested. A missing, empty or bad file reads as none (count 0):
 // the screen keeps its Pokemon.

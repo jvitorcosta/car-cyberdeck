@@ -29,8 +29,7 @@ bool isAlert(const char* msg);
 // both, appended to `line` (cut to n bytes). inMissed / outMissed: the change was for that light and
 // it isn't linked. Neither: the line stays as it is.
 void notConnected(bool inMissed, bool outMissed, char* line, size_t n);
-// The GET /status reply: "inside=on outside=nolink", then " fw=<version>" when fw is set (the watch
-// reads the words it knows and skips the rest). Cut to n bytes.
-void reply(State in, State out, char* buf, size_t n);
-void reply(State in, State out, const char* fw, char* buf, size_t n);
+// The GET /status reply: "inside=on outside=nolink music=off", then " fw=<version>" when fw is set
+// (the watch reads the words it knows and skips the rest). music: music mode is on. Cut to n bytes.
+void reply(State in, State out, bool music, const char* fw, char* buf, size_t n);
 }  // namespace lightstatus

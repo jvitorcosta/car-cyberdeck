@@ -8,6 +8,7 @@ Kind classify(const Input& in) {
     if (!in.wifiUp) return Kind::NoWifi;
     if (!in.down) return Kind::Ok;
     if (in.certRejected) return Kind::CertRejected;
+    if (in.loginFailed) return Kind::LoginFailed;
     // An HTTP answer other than success means Spotify itself is talking back.
     if (in.lastCode > 0 && in.lastCode != 200 && in.lastCode != 204) return Kind::SpotifyError;
     return Kind::NoInternet;
@@ -47,6 +48,7 @@ void describe(Kind k, int lastCode, int retryS, const char* network, char* title
         }
         break;
     case Kind::CertRejected: t = "Spotify error";  snprintf(d, sizeof d, "Certificate rejected"); break;
+    case Kind::LoginFailed:  t = "Login failed";   snprintf(d, sizeof d, "Spotify: re-run spotify_auth.py"); break;
     case Kind::Ok:           t = "";               d[0] = '\0'; break;
     }
     fit(title, titleN, t, TITLE_MAX);

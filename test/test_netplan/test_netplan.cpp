@@ -148,6 +148,73 @@ void test_health_first_call_failing_starts_clock() {
     netplan::Health h;
     TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, true, true, 900000));
 }
+// Spotify login (token refresh): a refused refresh token or an accounts outage doubles the wait
+// before the next try, 4 s up to 5 min; a token resets it.
+void test_login_backoff_doubles_up_to_five_minutes() {
+    netplan::LoginBackoff b;
+    TEST_ASSERT_TRUE(b.due(0));
+    uint32_t t = 1000;
+    const uint32_t want[] = {4000, 8000, 16000, 32000, 64000, 128000, 256000, 300000, 300000};
+    for (uint32_t w : want) {
+        b.onResult(400, t);
+        TEST_ASSERT_EQUAL_UINT32(w, b.waitMs());
+        TEST_ASSERT_FALSE(b.due(t + w - 1));
+        TEST_ASSERT_TRUE(b.due(t + w));
+        t += w;
+    }
+    b.onResult(200, t);
+    TEST_ASSERT_EQUAL_UINT32(0, b.waitMs());
+    TEST_ASSERT_TRUE(b.due(t));
+    TEST_ASSERT_FALSE(b.refused());
+}
+// No answer at all (no WiFi, DNS, TLS): the network's fault, so the login keeps the poll's pace
+// and follows the network back at once; a wait already running from an answer stays.
+void test_login_backoff_no_answer_neither_grows_nor_clears() {
+    netplan::LoginBackoff b;
+    b.onResult(-1, 1000);
+    TEST_ASSERT_EQUAL_UINT32(0, b.waitMs());
+    TEST_ASSERT_TRUE(b.due(1000));
+    b.onResult(503, 2000);
+    b.onResult(503, 6000);                       // 8 s from 6 s
+    b.onResult(-1, 14000);
+    TEST_ASSERT_EQUAL_UINT32(8000, b.waitMs());
+    TEST_ASSERT_FALSE(b.refused());
+}
+// Refused = Spotify said no to the refresh token (4xx, not a 429): re-run tools/spotify_auth.py.
+void test_login_refused_only_on_a_4xx_answer() {
+    netplan::LoginBackoff b;
+    b.onResult(400, 0);
+    TEST_ASSERT_TRUE(b.refused());
+    TEST_ASSERT_EQUAL_INT(400, b.lastCode());
+    b.onResult(401, 0);
+    TEST_ASSERT_TRUE(b.refused());
+    b.onResult(429, 0);
+    TEST_ASSERT_FALSE(b.refused());              // busy, not refused
+    b.onResult(503, 0);
+    TEST_ASSERT_FALSE(b.refused());              // an outage
+    b.onResult(-1, 0);
+    TEST_ASSERT_FALSE(b.refused());
+}
+// A network blip while a refused login waits out its back-off keeps "Login failed" on screen: the
+// blip says nothing new about the refresh token.
+void test_login_refused_survives_a_network_blip_while_waiting() {
+    netplan::LoginBackoff b;
+    b.onResult(400, 0);
+    b.onResult(-1, 2000);
+    TEST_ASSERT_TRUE(b.refused());
+    TEST_ASSERT_EQUAL_INT(400, b.lastCode());
+    TEST_ASSERT_EQUAL_UINT32(4000, b.waitMs());
+    b.onResult(200, 4000);                       // a token: no wait, nothing refused
+    b.onResult(-1, 5000);                        // a blip with no wait running is just that
+    TEST_ASSERT_EQUAL_INT(-1, b.lastCode());
+    TEST_ASSERT_FALSE(b.refused());
+}
+void test_login_backoff_due_survives_millis_wrap() {
+    netplan::LoginBackoff b;
+    b.onResult(400, 0xFFFFF000u);
+    TEST_ASSERT_FALSE(b.due(0xFFFFF000u + 3999u));
+    TEST_ASSERT_TRUE(b.due(0xFFFFF000u + 4000u));
+}
 void test_stale_after_limit_and_handles_wrap() {
     TEST_ASSERT_FALSE(netplan::stale(10000, 0, 20000));        // never polled: not "stale"
     TEST_ASSERT_FALSE(netplan::stale(30000, 10000, 20000));
@@ -428,6 +495,11 @@ int main(int, char**) {
     RUN_TEST(test_health_wifi_back_resets_backstop_and_memory_clock);
     RUN_TEST(test_health_first_call_failing_starts_clock);
     RUN_TEST(test_stale_after_limit_and_handles_wrap);
+    RUN_TEST(test_login_backoff_doubles_up_to_five_minutes);
+    RUN_TEST(test_login_backoff_no_answer_neither_grows_nor_clears);
+    RUN_TEST(test_login_refused_only_on_a_4xx_answer);
+    RUN_TEST(test_login_backoff_due_survives_millis_wrap);
+    RUN_TEST(test_login_refused_survives_a_network_blip_while_waiting);
     RUN_TEST(test_lyrics_retry_after_5s_then_20s_then_gives_up);
     RUN_TEST(test_lyrics_other_results_are_final);
     RUN_TEST(test_lyrics_retry_reset_on_track_change);

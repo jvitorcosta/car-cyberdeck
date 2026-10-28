@@ -14,4 +14,8 @@ bool rollBack(uint32_t crashes, bool good, bool otherValid) {
 
 bool healthy(uint32_t upMs, bool goodPoll) { return goodPoll && upMs >= HEALTHY_MS; }
 
+bool proven(uint32_t upMs, bool goodPoll, bool updatesOn, bool listening) {
+    return healthy(upMs, goodPoll) && (listening || !updatesOn);
+}
+
 }

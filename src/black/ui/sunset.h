@@ -1,6 +1,6 @@
 #pragma once
 #include <cstdint>
-// The "Sunset drive" backdrop behind Sonic on the "Nothing playing" screen: a banded sky with a
+// The "Sunset drive" backdrop behind Sonic on the "Waiting for a song..." screen: a banded sky with a
 // striped low sun, a city skyline with lit windows, two street lamps, the sidewalk he waits on
 // and the road. At night: navy sky, stars, a crescent moon, more windows lit. PURE, host-tested:
 // pixel() gives any screen pixel below the top strip (0..319 x 20..239); nothing moves.

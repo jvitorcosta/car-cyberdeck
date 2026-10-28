@@ -7,8 +7,8 @@ using linkstatus::Kind;
 void setUp() {}
 void tearDown() {}
 
-static Kind k(bool wifiUp, bool down, int code, bool cert) {
-    return linkstatus::classify({wifiUp, down, code, cert});
+static Kind k(bool wifiUp, bool down, int code, bool cert, bool login = false) {
+    return linkstatus::classify({wifiUp, down, code, cert, login});
 }
 
 void test_classify_picks_the_screen_for_each_cause() {
@@ -28,10 +28,23 @@ void test_classify_picks_the_screen_for_each_cause() {
     for (auto& r : rows) TEST_ASSERT_EQUAL_INT_MESSAGE((int)r.want, (int)k(r.wifi, r.down, r.code, r.cert), r.why);
 }
 
+// Spotify refused the login (the refresh token): its own screen, not "Spotify error", since only
+// the owner can fix it (tools/spotify_auth.py). No WiFi still comes first; an OK link shows nothing.
+void test_a_refused_login_has_its_own_screen() {
+    TEST_ASSERT_EQUAL_INT((int)Kind::LoginFailed, (int)k(true, true, 400, false, true));
+    TEST_ASSERT_EQUAL_INT((int)Kind::NoWifi, (int)k(false, true, 400, false, true));
+    TEST_ASSERT_EQUAL_INT((int)Kind::Ok, (int)k(true, false, 400, false, true));
+    TEST_ASSERT_EQUAL_INT((int)Kind::SpotifyError, (int)k(true, true, 400, false, false));   // the player's 400
+    char title[32], detail[64];
+    linkstatus::describe(Kind::LoginFailed, 400, -1, "iPhone", title, sizeof title, detail, sizeof detail);
+    TEST_ASSERT_EQUAL_STRING("Login failed", title);
+    TEST_ASSERT_NOT_NULL(strstr(detail, "spotify_auth"));
+}
+
 void test_every_screen_fits_its_box() {
     // Title: font 4 in the 280 px dialogue box; detail: font 2 on the line under it.
     const char* longName = "A very long network name that never fits on the screen at all";
-    Kind kinds[] = {Kind::NoWifi, Kind::NoInternet, Kind::SpotifyError, Kind::CertRejected};
+    Kind kinds[] = {Kind::NoWifi, Kind::NoInternet, Kind::SpotifyError, Kind::CertRejected, Kind::LoginFailed};
     for (Kind kind : kinds) {
         char title[32], detail[64];
         linkstatus::describe(kind, 503, -1, longName, title, sizeof title, detail, sizeof detail);
@@ -50,7 +63,7 @@ void test_no_internet_names_the_network_and_errors_show_the_code() {
 
 void test_a_cut_network_name_ends_in_an_ellipsis() {
     char title[32], detail[64];
-    linkstatus::describe(Kind::NoWifi, 0, -1, "Cecilia, iPhone, Office WiFi, Parents house 5G, Car",
+    linkstatus::describe(Kind::NoWifi, 0, -1, "Home WiFi, iPhone, Office WiFi, Parents house 5G, Car",
                          title, sizeof title, detail, sizeof detail);
     TEST_ASSERT_EQUAL_size_t(linkstatus::DETAIL_MAX, strlen(detail));
     TEST_ASSERT_EQUAL_STRING("...", detail + strlen(detail) - 3);
@@ -95,6 +108,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_classify_picks_the_screen_for_each_cause);
     RUN_TEST(test_every_screen_fits_its_box);
+    RUN_TEST(test_a_refused_login_has_its_own_screen);
     RUN_TEST(test_no_internet_names_the_network_and_errors_show_the_code);
     RUN_TEST(test_a_cut_network_name_ends_in_an_ellipsis);
     RUN_TEST(test_small_buffers_are_never_overrun);
