@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** The new deck (S3) boots in 15–25 s with one random opening (Sabrina kiss video, pixel Honda + "bem vindo moreno", or pixel McQueen + "eu sou a velocidade"), then a shorter photo montage and a "POWERED BY HONDA" end card. The boot log runs over every opening.
+**Goal:** The new deck (S3) boots in 15–25 s with one random opening (the kiss video, pixel Honda + "bem vindo moreno", or pixel McQueen + "eu sou a velocidade"), then a shorter photo montage and a "POWERED BY HONDA" end card. The boot log runs over every opening.
 
 **Architecture:** A pure picker (`util/intropick`) chooses the opening (never last boot's, NVS) and its greeting. The night drive reads its car through one interface (`ui/carlook`: the committed Honda or the git-ignored McQueen, `util/carbin`). The on-board terminal moves out of `bootscene.cpp` into `ui/bootterm`, so `ui/intro` can composite it into the kiss video's JPEG blocks (`util/termblend`, pure). `bootscene` gains a "no drive" start that goes straight to the montage.
 
@@ -1170,12 +1170,12 @@ git commit -m "feat(s3): boot with a random opening, then the montage"
 - [ ] **Step 1: Find the seconds.** Extract one frame a second from the clip into the scratchpad and look at them (Read the JPGs):
 
 ```bash
-ffmpeg -loglevel error -i montage-photos/sabrina-carpenter-kissing-screen-live-wallpaper.mp4 -vf fps=1,scale=160:-1 <scratchpad>/kiss_%02d.jpg
+ffmpeg -loglevel error -i montage-photos/<your clip>.mp4 -vf fps=1,scale=160:-1 <scratchpad>/kiss_%02d.jpg
 ```
 
 Pick START = the first frame where her shadow appears on the wall, END = just after the kiss lands (the lips on the wall), so END − START ≈ 10 s. Refine to 0.1 s with `-ss`/`-t` frame grabs if needed.
 - [ ] **Step 2: Make it the default.** `DEFAULT_SEGMENTS = [(START, END)]`, and rewrite the docstring's "Default" sentence: "Default, for the kiss wallpaper: the walk-in and the kiss, START–END s (~10 s)."
-- [ ] **Step 3: Rebuild.** `python tools/gen_intro.py montage-photos/sabrina-carpenter-kissing-screen-live-wallpaper.mp4`. Expected: a ~10 s clip, ~200 frames, well under `MAX_BYTES`.
+- [ ] **Step 3: Rebuild.** `python tools/gen_intro.py montage-photos/<your clip>.mp4`. Expected: a ~10 s clip, ~200 frames, well under `MAX_BYTES`.
 - [ ] **Step 4: Run the tool tests** `python -m unittest discover -s tools -p "test_gen_*.py"` → `OK`.
 - [ ] **Step 5: Commit**
 

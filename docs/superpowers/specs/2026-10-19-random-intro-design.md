@@ -14,7 +14,7 @@ The new deck's boot takes ~39 s today: the whole kiss video (23 s), one greeting
 
 ## Decisions taken while brainstorming
 
-- **Openings:** A. Sabrina kiss (video), B. pixel Honda with "bem vindo moreno", C. pixel McQueen with "eu sou a velocidade".
+- **Openings:** A. the kiss (video), B. pixel Honda with "bem vindo moreno", C. pixel McQueen with "eu sou a velocidade".
 - **Kiss cut:** the walk-in and the kiss (~10 s), without the empty wall or the loop's tail.
 - **McQueen:** new pixel art drawn to the Honda sprite's size and style, git-ignored like Sonic (Disney/Pixar's character).
 - **Montage:** shorter (~5 s of photos) by quicker cuts, keeping the opener and finale sounds.

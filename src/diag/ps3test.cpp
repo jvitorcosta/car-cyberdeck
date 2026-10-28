@@ -1,8 +1,8 @@
 // Standalone PS3 (DualShock 3) controller test on the yellow deck (CYD). Not the firmware. The
 // DS3 speaks Bluetooth Classic only, so this runs Bluedroid (esp32-ps3), not NimBLE: it can't
 // share a firmware with the LED panel's BLE code. The controller connects to the address stored in
-// it (its "master"); write the deck's Bluetooth address there over USB first (68:09:47:F8:25:9E
-// for this deck: base MAC + 2). Then press PS on the controller.
+// it (its "master"); write the deck's Bluetooth address there over USB first (the base MAC that
+// esptool's read_mac shows, plus 2). Then press PS on the controller.
 //   pio run -e ps3test -t upload -t monitor
 #include <Arduino.h>
 #include <Ps3Controller.h>

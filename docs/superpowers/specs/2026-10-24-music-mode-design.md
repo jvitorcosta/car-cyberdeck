@@ -1,5 +1,8 @@
 # Music mode for the car lights (design)
 
+> **Status:** superseded by song colours (#20, #23): the lights take each song's colour from the
+> black deck; no microphone or beat pulse was built. See `docs/yellow-deck.md`.
+
 Date: 2026-10-24. Builds on the yellow deck's LED panel (`src/ledpanel.cpp`, env `ledpanel`, merged in #13/#18) and the black deck
 (S3, `src/main.cpp`, env `s3`). Related: the paused music-mode brainstorm, the voice-agent mic findings (branch `feat/voice-agent`).
 
@@ -125,8 +128,8 @@ adjusted by the **time of day**.
 - Normal listening volume: car stereo ~18 (mid).
 
 ## Settled after the builder check (2026-10-24)
-- **INSIDE / OUTSIDE mapping is confirmed** by the owner ("correct all this time"): the controller at `be:16:b6:00:9b:ff` is INSIDE,
-  `be:68:93:1d:22:00` OUTSIDE. Update the "guess from signal strength" comment in `src/ledpanel.cpp` and close the BACKLOG item. Music mode
+- **INSIDE / OUTSIDE mapping is confirmed** by the owner ("correct all this time"): the controller at `LED_INSIDE_MAC` is INSIDE,
+  `LED_OUTSIDE_MAC` OUTSIDE. Update the "guess from signal strength" comment in `src/ledpanel.cpp` and close the BACKLOG item. Music mode
   pulses only the INSIDE controller.
 - *Controller's call:* **one mode for both lights.** Turning MUSIC on never switches on a light the owner left off (an off outside light
   stays off; an off inside light is switched on, since that's the point of the mode). Any change from any page (BOTH, INSIDE or OUTSIDE),
