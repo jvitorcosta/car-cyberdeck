@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include "../../src/util/wire/hmac256.h"
 #include "../../src/util/wire/sigreq.h"
 
 void setUp() {}
@@ -12,6 +13,7 @@ using sigreq::Param;
 using sigreq::Verdict;
 static const char* KEY = "test-key-123";
 static constexpr int64_t T = 1761600000;
+static constexpr int64_t UP = 1000;   // the verifier's uptime in most tests: booted long before
 
 // The value of name= in a query that sign() wrote ("" if absent).
 static std::string field(const char* q, const char* name) {
@@ -32,7 +34,7 @@ static Signed signOf(const char* path, const Param* p, int count, int64_t t, uin
 }
 static Verdict verify(sigreq::Verifier& v, const char* path, const Param* p, int count, const Signed& s, int64_t now,
                       const char* method = "GET") {
-    return v.check(method, path, p, count, s.t.c_str(), s.n.c_str(), s.sig.c_str(), true, now);
+    return v.check(method, path, p, count, s.t.c_str(), s.n.c_str(), s.sig.c_str(), true, now, UP);
 }
 
 // Known answers from Python's hmac (HMAC-SHA256, first 16 bytes): the wire format is pinned, so the
@@ -106,7 +108,7 @@ static void test_a_value_cant_pose_as_params() {
 static void test_the_time_window() {
     const Param p[] = {{"on", "1"}};
     sigreq::Verifier v(KEY);
-    // the first check sets the boot floor at its now - BOOT_SLACK_S: start well before the times tried below
+    // the first check sets the boot floor (now - uptime): start well before the times tried below
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/music", p, 1, signOf("/music", p, 1, T - 500, 1), T - 500));
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/music", p, 1, signOf("/music", p, 1, T - 120, 2), T));
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/music", p, 1, signOf("/music", p, 1, T + 120, 3), T));
@@ -118,12 +120,12 @@ static void test_no_clock_checks_nothing() {
     sigreq::Verifier v(KEY);
     const Signed s = signOf("/state", nullptr, 0, T, 1);
     TEST_ASSERT_EQUAL(Verdict::NoClock,
-                      v.check("GET", "/state", nullptr, 0, s.t.c_str(), s.n.c_str(), s.sig.c_str(), false, 5));
+                      v.check("GET", "/state", nullptr, 0, s.t.c_str(), s.n.c_str(), s.sig.c_str(), false, 5, UP));
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/state", nullptr, 0, s, T));
 }
 
 static Verdict raw(sigreq::Verifier& v, const char* t, const char* n, const char* sig) {
-    return v.check("GET", "/state", nullptr, 0, t, n, sig, true, T);
+    return v.check("GET", "/state", nullptr, 0, t, n, sig, true, T, UP);
 }
 
 static void test_unsigned_and_malformed() {
@@ -180,15 +182,34 @@ static void test_the_floor_is_the_newest_time_let_go() {
     TEST_ASSERT_EQUAL(Verdict::Stale, verify(v, "/state", nullptr, 0, ahead, T + 40));
 }
 
-// After a reboot the ring is empty: what was captured before it is refused by time. A clock a few
-// seconds behind still gets in.
-static void test_nothing_from_before_the_first_check() {
+// After a reboot the ring is empty: nothing signed before the boot instant (now - uptime at the
+// first check) gets in, whenever that first check comes.
+static void test_nothing_from_before_the_boot() {
     sigreq::Verifier v(KEY);
-    const Signed before = signOf("/state", nullptr, 0, T - sigreq::BOOT_SLACK_S, 1);
-    const Signed behind = signOf("/state", nullptr, 0, T - sigreq::BOOT_SLACK_S + 1, 3);
-    TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/state", nullptr, 0, signOf("/state", nullptr, 0, T, 2), T));
-    TEST_ASSERT_EQUAL(Verdict::Stale, verify(v, "/state", nullptr, 0, before, T));
-    TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/state", nullptr, 0, behind, T));
+    const Signed before = signOf("/state", nullptr, 0, T - 31, 1);   // booted at T - 30
+    const Signed atBoot = signOf("/state", nullptr, 0, T - 30, 2);
+    TEST_ASSERT_EQUAL(Verdict::Stale,
+                      v.check("GET", "/state", nullptr, 0, before.t.c_str(), before.n.c_str(), before.sig.c_str(), true, T, 30));
+    TEST_ASSERT_EQUAL(Verdict::Ok,
+                      v.check("GET", "/state", nullptr, 0, atBoot.t.c_str(), atBoot.n.c_str(), atBoot.sig.c_str(), true, T, 30));
+    TEST_ASSERT_EQUAL(Verdict::Stale, verify(v, "/state", nullptr, 0, before, T + 1));   // the floor stays
+}
+
+// The HMAC failing (on the decks: never, the SHA-256 is our own, but if it did) refuses: no sign, no
+// accept, and a zero tag is never what is compared against.
+static void test_a_failing_hmac_fails_closed() {
+    sigreq::Verifier v(KEY);
+    const Signed good = signOf("/state", nullptr, 0, T, 1);
+    char q[sigreq::AUTH_LEN];
+    hmac256::failForTest(true);
+    TEST_ASSERT_FALSE(sigreq::sign(KEY, "GET", "/state", nullptr, 0, T, 2, q, sizeof q));
+    TEST_ASSERT_EQUAL_STRING("", q);
+    TEST_ASSERT_EQUAL(Verdict::Failed, verify(v, "/state", nullptr, 0, good, T));
+    const Signed zeros{std::to_string(T), "0000000000000003", std::string(32, '0')};
+    TEST_ASSERT_EQUAL(Verdict::Failed, verify(v, "/state", nullptr, 0, zeros, T));
+    hmac256::failForTest(false);
+    TEST_ASSERT_EQUAL(Verdict::BadSig, verify(v, "/state", nullptr, 0, zeros, T));
+    TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/state", nullptr, 0, good, T));   // the failed check left no trace
 }
 
 static void test_sign_refuses() {
@@ -225,7 +246,8 @@ int main(int, char**) {
     RUN_TEST(test_unsigned_and_malformed);
     RUN_TEST(test_a_request_that_left_the_ring_is_stale);
     RUN_TEST(test_the_floor_is_the_newest_time_let_go);
-    RUN_TEST(test_nothing_from_before_the_first_check);
+    RUN_TEST(test_nothing_from_before_the_boot);
+    RUN_TEST(test_a_failing_hmac_fails_closed);
     RUN_TEST(test_sign_refuses);
     RUN_TEST(test_a_verifier_without_a_key_refuses);
     return UNITY_END();

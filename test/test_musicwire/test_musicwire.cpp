@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <cstring>
+#include "../../src/util/wire/hmac256.h"
 #include "../../src/util/wire/musicwire.h"
 
 void setUp() {}
@@ -91,27 +92,90 @@ static void test_an_old_version_is_refused() {
 
 static void test_a_replay_is_dropped() {
     musicwire::Fresh f;
-    TEST_ASSERT_TRUE(f.accept(Seq{10, 100}));
-    TEST_ASSERT_FALSE(f.accept(Seq{10, 100}));   // the same packet again
-    TEST_ASSERT_FALSE(f.accept(Seq{10, 99}));    // an older one
-    TEST_ASSERT_TRUE(f.accept(Seq{10, 101}));
-    TEST_ASSERT_TRUE(f.accept(Seq{10, 150}));    // lost packets in between are fine
-    TEST_ASSERT_FALSE(f.accept(Seq{10, 120}));
+    TEST_ASSERT_TRUE(f.accept(Seq{10, 100}, 10));
+    TEST_ASSERT_FALSE(f.accept(Seq{10, 100}, 10));   // the same packet again
+    TEST_ASSERT_FALSE(f.accept(Seq{10, 99}, 10));    // an older one
+    TEST_ASSERT_TRUE(f.accept(Seq{10, 101}, 10));
+    TEST_ASSERT_TRUE(f.accept(Seq{10, 150}, 10));    // lost packets in between are fine
+    TEST_ASSERT_FALSE(f.accept(Seq{10, 120}, 10));
 }
 
-static void test_a_new_boot_starts_over() {
+// Only the boot the black deck proved in its /music reply: nothing before one is proved, and
+// alternating an earlier boot's packets with this boot's old counters gets nothing in.
+static void test_only_the_proved_boot() {
     musicwire::Fresh f;
-    TEST_ASSERT_TRUE(f.accept(Seq{10, 5000}));
-    TEST_ASSERT_TRUE(f.accept(Seq{11, 3}));   // the black deck rebooted: a new random start
-    TEST_ASSERT_FALSE(f.accept(Seq{11, 3}));
-    TEST_ASSERT_TRUE(f.accept(Seq{11, 4}));
+    TEST_ASSERT_FALSE(f.accept(Seq{11, 3}, 0));
+    TEST_ASSERT_TRUE(f.accept(Seq{11, 3}, 11));
+    TEST_ASSERT_FALSE(f.accept(Seq{10, 5000}, 11));   // an earlier boot's packet, recorded
+    TEST_ASSERT_FALSE(f.accept(Seq{11, 3}, 11));      // and this boot's again
+    TEST_ASSERT_FALSE(f.accept(Seq{10, 5000}, 11));
+    TEST_ASSERT_TRUE(f.accept(Seq{11, 4}, 11));
+}
+
+static void test_a_new_proved_boot_starts_over() {
+    musicwire::Fresh f;
+    TEST_ASSERT_TRUE(f.accept(Seq{10, 5000}, 10));
+    TEST_ASSERT_TRUE(f.accept(Seq{11, 3}, 11));       // the black deck rebooted and proved its new id
+    TEST_ASSERT_FALSE(f.accept(Seq{10, 5001}, 11));   // the old boot's ids are done
+    TEST_ASSERT_FALSE(f.accept(Seq{11, 3}, 11));
+    TEST_ASSERT_TRUE(f.accept(Seq{11, 4}, 11));
 }
 
 static void test_reset_forgets_the_sender() {
     musicwire::Fresh f;
-    TEST_ASSERT_TRUE(f.accept(Seq{10, 100}));
+    TEST_ASSERT_TRUE(f.accept(Seq{10, 100}, 10));
     f.reset();
-    TEST_ASSERT_TRUE(f.accept(Seq{10, 100}));
+    TEST_ASSERT_TRUE(f.accept(Seq{10, 100}, 10));
+}
+
+static void test_boot_proof() {
+    char proof[musicwire::PROOF_HEX + 1];
+    TEST_ASSERT_TRUE(musicwire::bootProof(KEY, 0xA1B2C3D4u, "0123456789abcdef", proof));
+    TEST_ASSERT_EQUAL_STRING("1f7a2581335efd9c", proof);   // Python's hmac, "music-boot|2712847316|0123456789abcdef"
+    TEST_ASSERT_FALSE(musicwire::bootProof(KEY, 1, "0123", proof));
+    TEST_ASSERT_EQUAL_STRING("", proof);
+    TEST_ASSERT_FALSE(musicwire::bootProof("", 1, "0123456789abcdef", proof));
+}
+
+static void test_read_boot_from_the_reply() {
+    const char* n = "0123456789abcdef";
+    uint32_t boot = 0;
+    TEST_ASSERT_TRUE(musicwire::readBoot("{\"on\":1,\"boot\":2712847316,\"proof\":\"1f7a2581335efd9c\"}", KEY, n, &boot));
+    TEST_ASSERT_EQUAL_HEX32(0xA1B2C3D4u, boot);
+    boot = 7;
+    // another nonce (a reply recorded for another request), another id, a wrong proof, missing parts
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"on\":1,\"boot\":2712847316,\"proof\":\"1f7a2581335efd9c\"}", KEY, "0123456789abcdee", &boot));
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"on\":1,\"boot\":2712847317,\"proof\":\"1f7a2581335efd9c\"}", KEY, n, &boot));
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"on\":1,\"boot\":2712847316,\"proof\":\"0000000000000000\"}", KEY, n, &boot));
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"on\":1,\"boot\":2712847316,\"proof\":\"1f7a\"}", KEY, n, &boot));
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"on\":1}", KEY, n, &boot));
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"boot\":-1,\"proof\":\"1f7a2581335efd9c\"}", KEY, n, &boot));
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"boot\":99999999999,\"proof\":\"1f7a2581335efd9c\"}", KEY, n, &boot));
+    TEST_ASSERT_FALSE(musicwire::readBoot(nullptr, KEY, n, &boot));
+    TEST_ASSERT_EQUAL_UINT32(7, boot);   // untouched by a refusal
+}
+
+// The HMAC failing: nothing is encoded, nothing decodes (a zero tag included), no proof.
+static void test_a_failing_hmac_fails_closed() {
+    uint8_t p[34];
+    TEST_ASSERT_EQUAL(34, musicwire::encode(PalPkt{9, {}}, Seq{1, 2}, KEY, p, sizeof p));
+    uint8_t zeroTag[34];
+    memcpy(zeroTag, p, 34);
+    memset(zeroTag + 26, 0, 8);
+    PalPkt po{};
+    Seq so{};
+    char proof[musicwire::PROOF_HEX + 1];
+    uint32_t boot = 0;
+    uint8_t out[34];
+    hmac256::failForTest(true);
+    TEST_ASSERT_EQUAL(0, musicwire::encode(PalPkt{9, {}}, Seq{1, 3}, KEY, out, sizeof out));
+    TEST_ASSERT_FALSE(musicwire::decode(p, 34, KEY, &po, &so));
+    TEST_ASSERT_FALSE(musicwire::decode(zeroTag, 34, KEY, &po, &so));
+    TEST_ASSERT_FALSE(musicwire::bootProof(KEY, 1, "0123456789abcdef", proof));
+    TEST_ASSERT_FALSE(musicwire::readBoot("{\"boot\":1,\"proof\":\"0000000000000000\"}", KEY, "0123456789abcdef", &boot));
+    hmac256::failForTest(false);
+    TEST_ASSERT_FALSE(musicwire::decode(zeroTag, 34, KEY, &po, &so));
+    TEST_ASSERT_TRUE(musicwire::decode(p, 34, KEY, &po, &so));
 }
 
 int main(int, char**) {
@@ -122,7 +186,11 @@ int main(int, char**) {
     RUN_TEST(test_bad_packets_rejected);
     RUN_TEST(test_an_old_version_is_refused);
     RUN_TEST(test_a_replay_is_dropped);
-    RUN_TEST(test_a_new_boot_starts_over);
+    RUN_TEST(test_only_the_proved_boot);
+    RUN_TEST(test_a_new_proved_boot_starts_over);
     RUN_TEST(test_reset_forgets_the_sender);
+    RUN_TEST(test_boot_proof);
+    RUN_TEST(test_read_boot_from_the_reply);
+    RUN_TEST(test_a_failing_hmac_fails_closed);
     return UNITY_END();
 }

@@ -49,10 +49,19 @@ instead, with steps to reproduce and the board and version (first serial line,
   on the hotspot has it. The responses aren't signed (they carry nothing secret). On the hotspot the
   yellow deck looks the black deck up by mDNS when its fixed address stops answering as the deck.
 - **Music mode's UDP palettes are signed too** (`src/util/wire/musicwire.h`): an 8-byte HMAC tag
-  with `REMOTE_TOKEN`, a random boot id and a counter that must rise, so a spoofed source address
-  or a recorded packet can't set the car's lights. A packet from an *earlier* boot of the black deck
-  is still accepted when it arrives (a new boot id starts the counter over); it can only replay a
-  real song's colours, at the usual levels (never under 40 %).
+  with `REMOTE_TOKEN`, a random boot id and a counter that must rise. The yellow deck takes only the
+  boot id the black deck proves in its `/music` reply (an HMAC over the id and the nonce of the
+  yellow deck's own signed request), so a spoofed source address, a recorded packet, or one from an
+  earlier boot can't set the car's lights.
+- **The HMAC fails closed.** It is our own SHA-256 (no heap: mbedTLS's HMAC allocates, and the black
+  deck's heap runs short), checked against RFC 4231 on the host and by a self-test at each boot; if
+  it can't compute a tag the request or packet is refused and nothing is signed or sent.
+- **The clock comes from SNTP, which isn't authenticated.** Someone on the hotspot who can answer a
+  deck's NTP queries can set its clock. A signature's 2-minute window and the "nothing from before
+  this boot" floor are measured on that clock, so a deck given a past time accepts requests recorded
+  back then whose nonces it no longer remembers (after a reboot, or once they left its 32-entry ring);
+  one given a far-off time refuses the real devices ("clock off"). The routes involved only read
+  state or repeat a recorded light command; the bearer key is never exposed by it.
 
 - Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
   7 bundled root certificates (`src/common/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).

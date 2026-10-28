@@ -153,8 +153,10 @@ class Deck {
                 status = "No answer";            // timed out: the deck isn't on the hotspot
             } else if (code == -104 || code == -2) {
                 status = "Phone not connected";  // no Bluetooth link to Garmin Connect
+            } else if (code == 403 && data != null && data.toString().find("clock") != null) {
+                status = "Clock off: sync watch";  // the deck's clock and the watch's are over 2 min apart
             } else if (code == 403) {
-                status = "Wrong key";            // Secrets.mc doesn't match REMOTE_TOKEN, or the clocks are 2 min apart
+                status = "Wrong key";            // Secrets.mc doesn't match REMOTE_TOKEN
             } else if (code == 503 && data != null && data.toString().find("clock") != null) {
                 status = "Deck has no clock";   // it can't check a signature before its first SNTP answer
             } else if (code == 503) {

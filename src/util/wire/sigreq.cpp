@@ -76,10 +76,14 @@ size_t message(const char* method, const char* path, const Param* params, int co
     return o.ok() ? o.len : 0;
 }
 
-void tag(const char* key, const char* msg, size_t len, uint8_t out[TAG]) {
+// False when the HMAC couldn't be computed: out is then unusable.
+bool tag(const char* key, const char* msg, size_t len, uint8_t out[TAG]) {
     uint8_t full[hmac256::LEN];
-    hmac256::mac(reinterpret_cast<const uint8_t*>(key), strlen(key), reinterpret_cast<const uint8_t*>(msg), len, full);
+    if (!hmac256::mac(reinterpret_cast<const uint8_t*>(key), strlen(key), reinterpret_cast<const uint8_t*>(msg), len,
+                      full))
+        return false;
     memcpy(out, full, TAG);
+    return true;
 }
 
 int hexVal(char c) {
@@ -126,7 +130,7 @@ bool sign(const char* key, const char* method, const char* path, const Param* pa
     const size_t len = message(method, path, params, count, ts, ns, msg);
     if (!len) return false;
     uint8_t sig[TAG];
-    tag(key, msg, len, sig);
+    if (!tag(key, msg, len, sig)) return false;   // out stays ""
     char sh[2 * TAG + 1];
     for (size_t i = 0; i < TAG; ++i) {
         sh[2 * i] = HEX[sig[i] >> 4];
@@ -146,28 +150,29 @@ const char* name(Verdict v) {
     case Verdict::Stale: return "stale";
     case Verdict::BadSig: return "bad signature";
     case Verdict::Replay: return "replay";
+    case Verdict::Failed: return "hmac failed";
     }
     return "?";
 }
 
 Verdict Verifier::check(const char* method, const char* path, const Param* params, int count, const char* t,
-                        const char* n, const char* sig, bool synced, int64_t now) {
+                        const char* n, const char* sig, bool synced, int64_t now, int64_t uptimeS) {
     if (!sig) return Verdict::Unsigned;
     int64_t when;
     uint8_t nonceBytes[8], got[TAG];
     if (!key_ || !key_[0] || !parseTime(t, &when) || !unhex(n, 16, nonceBytes) || !unhex(sig, 2 * TAG, got))
         return Verdict::Malformed;
     if (!synced) return Verdict::NoClock;
-    if (!started_) {   // after a boot: nothing from before it (its ring is gone)
+    if (!started_) {   // after a boot: nothing signed before the boot instant (its ring is gone)
         started_ = true;
-        floor_ = now - BOOT_SLACK_S;
+        floor_ = now - (uptimeS > 0 ? uptimeS : 0) - 1;
     }
     if (when - now > WINDOW_S || now - when > WINDOW_S || when <= floor_) return Verdict::Stale;
     char msg[MAX_MSG + 1];
     const size_t len = message(method, path, params, count, t, n, msg);
     if (!len) return Verdict::Malformed;
     uint8_t want[TAG];
-    tag(key_, msg, len, want);
+    if (!tag(key_, msg, len, want)) return Verdict::Failed;
     if (!hmac256::same(got, want, TAG)) return Verdict::BadSig;
     uint64_t nonce = 0;
     for (int i = 0; i < 8; ++i) nonce = nonce << 8 | nonceBytes[i];

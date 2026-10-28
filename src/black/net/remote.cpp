@@ -12,6 +12,7 @@
 #include "../../util/black/netplan.h"
 #include "../core/mem.h"
 #include "../core/shared.h"
+#include "../../util/wire/musicwire.h"
 #include "../../util/wire/statejson.h"
 #include "../../util/common/version.h"
 #include "../../util/lights/tripclock.h"
@@ -154,7 +155,19 @@ static void handleMusic() {
     }
     if (on != "1") { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
     switch (musicsvc::keepAlive(s_server->client().remoteIP())) {
-    case musicsvc::Start::On:        s_server->send(200, "application/json", "{\"on\":1}"); break;
+    case musicsvc::Start::On: {
+        // The boot id the packets carry, proven for this request's nonce (util/wire/musicwire): the
+        // yellow deck takes packets only from it. A request with the key (no nonce) gets no proof.
+        char proof[musicwire::PROOF_HEX + 1];
+        char body[80];
+        const uint32_t boot = musicsvc::bootId();
+        if (musicwire::bootProof(REMOTE_TOKEN, boot, s_server->arg("n").c_str(), proof))
+            snprintf(body, sizeof body, "{\"on\":1,\"boot\":%lu,\"proof\":\"%s\"}", (unsigned long)boot, proof);
+        else
+            snprintf(body, sizeof body, "{\"on\":1}");
+        s_server->send(200, "application/json", body);
+        break;
+    }
     case musicsvc::Start::LowMemory: s_server->send(503, "text/plain", "low memory"); break;
     case musicsvc::Start::Stopping:  s_server->send(409, "text/plain", "stopping, ask again"); break;
     case musicsvc::Start::NoTask:    s_server->send(503, "text/plain", "no memory for the task"); break;

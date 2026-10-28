@@ -2014,23 +2014,30 @@ static bool lyricsHost(char* out, size_t n) {
     return true;
 }
 
-// What deckGet returns when it sent nothing: the clock isn't set, so nothing can be signed (the
-// bearer key is never sent). Not a miss: the deck wasn't asked.
+// What deckGet returns when it sent nothing: the clock isn't set (or HMAC's self-test failed), so
+// nothing can be signed (the bearer key is never sent). Not a miss: the deck wasn't asked.
 static constexpr int NOT_SIGNED = -1000;
 
 // A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
 // body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
-// peer: the address asked. Short timeouts: the deck is one hop away, and a missing deck must not hold
-// the polls up.
+// peer: the address asked; nonce: the request's n (16 hex). Short timeouts: the deck is one hop
+// away, and a missing deck must not hold the polls up.
 static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
-                   uint32_t* peer = nullptr) {
+                   uint32_t* peer = nullptr, char* nonce = nullptr) {
     if (!net::isOnline()) return -1;
     char auth[sigreq::AUTH_LEN];
     if (!reqauth::signGet(path, params, count, auth, sizeof(auth))) {
         static bool told = false;
-        if (!told) Serial.println("[lyrics] waiting for the clock: requests to the deck are signed");
+        if (!told) {
+            Serial.println(reqauth::hmacOk() ? "[lyrics] waiting for the clock: requests to the deck are signed"
+                                             : "[lyrics] HMAC self-test failed: nothing is sent to the deck");
+        }
         told = true;
         return NOT_SIGNED;
+    }
+    if (nonce) {  // auth is "t=..&n=<16 hex>&sig=.."
+        const char* at = strstr(auth, "&n=");
+        snprintf(nonce, 17, "%.16s", at ? at + 3 : "");
     }
     char host[40], query[32] = "", url[160];
     if (!lyricsHost(host, sizeof(host))) return -1;
@@ -2057,15 +2064,28 @@ static int lyricsGet() {
 // but MUSIC_KEEP_MS after a 503 (its low memory: Spotify's TLS needs that heap, so no hurry); on=0 once
 // when it goes. Each ask also records the black deck's address (musicPeer), the one sender the music
 // task takes packets from, and counts toward lyricsAddr's misses like a lyrics poll (a stale mDNS
-// address is looked up again). The log tells each change of answer.
+// address is looked up again). An on=1 answered 200 also proves the black deck's boot id for this
+// request's nonce (util/wire/musicwire::readBoot): the music task takes packets only from that boot
+// (musicBoot). The log tells each change of answer.
 static constexpr uint32_t MUSIC_KEEP_MS = 10000, MUSIC_RETRY_MS = 2000;
 static volatile uint32_t musicPeer = 0;  // IPv4, network order (IPAddress's dword); 0: not asked yet
+static volatile uint32_t musicBoot = 0;  // the black deck's proven boot id; 0: none yet
 
 static int musicAsk(bool on) {
     const sigreq::Param p[] = {{"on", on ? "1" : "0"}};
     uint32_t peer = 0;
-    const int rc = deckGet("/music", p, 1, nullptr, 0, &peer);  // the status is the answer
+    char reply[96], nonce[17] = "";
+    const int rc = deckGet("/music", p, 1, reply, sizeof(reply), &peer, nonce);  // the status is the answer
     if (peer) musicPeer = peer;
+    if (on && rc == 200) {
+        uint32_t boot = 0;
+        if (!musicwire::readBoot(reply, REMOTE_TOKEN, nonce, &boot)) {
+            Serial.println("[music] the deck's reply has no valid boot proof: its packets are ignored");
+        } else if (boot != musicBoot) {
+            musicBoot = boot;
+            Serial.println("[music] the deck's boot id is proven: taking its packets");
+        }
+    }
     return rc;
 }
 
@@ -2129,7 +2149,10 @@ static void lyricsTask(void*) {
                 continue;
             }
             const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
-            if (pace.misses() == 0 && !ok) Serial.printf("[lyrics] deck lost (rc=%d)\n", rc);
+            if (pace.misses() == 0 && !ok) {
+                // 403: another REMOTE_TOKEN, or clocks 2 min apart (the black deck's [auth] line says which)
+                Serial.printf("[lyrics] deck lost (rc=%d%s)\n", rc, rc == 403 ? ": wrong key or clock off" : "");
+            }
             if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
             pace.onResult(ok);
             // the deck's own answers (a /state that parses, low memory 503); 3 misses in a row: look it up again
@@ -2260,7 +2283,7 @@ static void musicTask(void*) {
         musicwire::Seq seq;
         // signed with REMOTE_TOKEN (a spoofed source address isn't enough), and not one heard before
         if (!reqauth::hmacOk() || !musicwire::decode(buf, static_cast<size_t>(n), REMOTE_TOKEN, &p, &seq)) continue;
-        if (!fresh.accept(seq)) continue;
+        if (!fresh.accept(seq, musicBoot)) continue;  // only the boot the deck proved, counter rising
         const uint32_t now = millis();
         portENTER_CRITICAL(&musicMux);
         musicPub.palOk = true;

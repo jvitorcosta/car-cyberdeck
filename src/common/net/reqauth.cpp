@@ -46,11 +46,17 @@ bool pass(WebServer& s, const remotegate::Gate& gate, const char* path, const ch
         const sigreq::Verdict v =
             tooMany ? sigreq::Verdict::Malformed
                     : s_verifier.check(method, path, params, count, s.hasArg("t") ? t.c_str() : nullptr,
-                                       s.hasArg("n") ? n.c_str() : nullptr, sig.c_str(), synced, now);
+                                       s.hasArg("n") ? n.c_str() : nullptr, sig.c_str(), synced, now,
+                                       (int64_t)(millis() / 1000));
         if (v == sigreq::Verdict::Ok) return true;
         if (v == sigreq::Verdict::NoClock) {
             Serial.printf("[auth] %s signed before the clock is set: refused\n", path);
             s.send(503, "text/plain", "clock not set");
+            return false;
+        }
+        if (v == sigreq::Verdict::Stale) {   // its own answer: the sender can tell its clock is off
+            Serial.printf("[auth] %s from %s refused: clock off\n", path, s.client().remoteIP().toString().c_str());
+            s.send(403, "text/plain", "clock off");
             return false;
         }
         why = sigreq::name(v);

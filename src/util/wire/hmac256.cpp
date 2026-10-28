@@ -1,22 +1,14 @@
 #include "hmac256.h"
 #include <cstring>
-#ifdef ARDUINO
-#include <mbedtls/md.h>
-#endif
 
 namespace hmac256 {
 
-#ifdef ARDUINO
-
-void mac(const uint8_t* key, size_t keyLen, const uint8_t* msg, size_t msgLen, uint8_t out[LEN]) {
-    const mbedtls_md_info_t* info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    if (!info || mbedtls_md_hmac(info, key, keyLen, msg, msgLen, out) != 0) memset(out, 0, LEN);  // selfTest catches it
-}
-
-#else
-
 namespace {
-// SHA-256 (FIPS 180-4), for the host build only.
+#ifndef ARDUINO
+bool s_fail = false;
+#endif
+
+// SHA-256 (FIPS 180-4). State on the caller's stack: ~400 bytes.
 constexpr uint32_t K[64] = {
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -74,7 +66,15 @@ struct Sha {
 };
 }  // namespace
 
-void mac(const uint8_t* key, size_t keyLen, const uint8_t* msg, size_t msgLen, uint8_t out[LEN]) {
+#ifndef ARDUINO
+void failForTest(bool on) { s_fail = on; }
+#endif
+
+bool mac(const uint8_t* key, size_t keyLen, const uint8_t* msg, size_t msgLen, uint8_t out[LEN]) {
+#ifndef ARDUINO
+    if (s_fail) return false;
+#endif
+    if ((!key && keyLen) || (!msg && msgLen)) return false;
     uint8_t k[64] = {};
     if (keyLen > 64) {   // a long key is hashed first (RFC 2104)
         Sha s;
@@ -94,9 +94,8 @@ void mac(const uint8_t* key, size_t keyLen, const uint8_t* msg, size_t msgLen, u
     o.update(pad, 64);
     o.update(inner, LEN);
     o.finish(out);
+    return true;
 }
-
-#endif
 
 bool same(const uint8_t* a, const uint8_t* b, size_t n) {
     uint8_t diff = 0;
@@ -111,8 +110,8 @@ bool selfTest() {
                                       0x39, 0x83, 0x9d, 0xec, 0x58, 0xb9, 0x64, 0xec, 0x38, 0x43};
     const char* msg = "what do ya want for nothing?";
     uint8_t got[LEN];
-    mac(reinterpret_cast<const uint8_t*>("Jefe"), 4, reinterpret_cast<const uint8_t*>(msg), strlen(msg), got);
-    return same(got, want, LEN);
+    return mac(reinterpret_cast<const uint8_t*>("Jefe"), 4, reinterpret_cast<const uint8_t*>(msg), strlen(msg), got) &&
+           same(got, want, LEN);
 }
 
 }

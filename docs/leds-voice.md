@@ -25,8 +25,9 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
 - **Signed requests**: instead of `k=`, any of the four takes a signature, `t=<unix s>&n=<16 hex>&sig=<32 hex>`
   (the first 16 bytes of HMAC-SHA256 with `REMOTE_TOKEN` over `GET|<path>|<params>|<t>|<n>`, params sorted
   by name and percent-encoded; `src/util/wire/sigreq.h`). The Garmin app signs; Siri Shortcuts can't, so
-  they keep `k=`. A signed request must be within 2 minutes of the deck's clock and is accepted once;
-  before the deck's first SNTP answer it gets 503 "clock not set" (the `k=` still works).
+  they keep `k=`. A signed request must be within 2 minutes of the deck's clock (else 403 "clock off")
+  and is accepted once; before the deck's first SNTP answer it gets 503 "clock not set" (the `k=` still
+  works).
 - Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page
   on the deck's screen is left as it is.
 
@@ -185,9 +186,10 @@ WiFi, and the deck does the rest.
   30 s after the last ask. `/music` also takes `k=<token>` for a test by hand. Until its clock is set
   the yellow deck asks nothing (it waits rather than send the key). The palettes come over UDP
   (port 4210) signed: each packet carries the black deck's boot id, a counter that rises with every
-  packet and an HMAC tag with `REMOTE_TOKEN` (`src/util/wire/musicwire.h`); the yellow deck drops a
-  packet with a bad tag, from another address, or with a counter not above the last one, so a
-  spoofed or replayed packet can't set the lights. Both decks need this firmware: the old
+  packet and an HMAC tag with `REMOTE_TOKEN` (`src/util/wire/musicwire.h`). The `/music?on=1` reply
+  proves the boot id for that request's nonce (`{"on":1,"boot":..,"proof":".."}`); the yellow deck
+  drops a packet with a bad tag, from another address, from any other boot, or with a counter not
+  above the last one, so a spoofed or replayed packet can't set the lights. Both decks need this firmware: the old
   unsigned packet is refused.
   `GET /music/debug?k=<token>` on the black deck shows the palette it last sent, its cap and the
   socket (`&on=1` also keeps it alive).
@@ -371,8 +373,9 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
 - **Glance**: a card for the watch face's glance loop with both lights' dots and levels, as of
   the last time the app ran (a glance can't make web requests). START on it opens the app.
 - Requests go one at a time from a short queue; every reply is read back into the screen, so it
-  shows what the deck reports. Errors: "No answer", "Phone not connected", "Wrong key" (also when the
-  watch's clock is more than 2 minutes off the deck's), "Deck has no clock" (no SNTP answer yet).
+  shows what the deck reports. Errors: "No answer", "Phone not connected", "Wrong key", "Clock off: sync
+  watch" (the watch's clock is more than 2 minutes off the deck's: the deck answers 403 "clock off"),
+  "Deck has no clock" (no SNTP answer yet).
 - Key: copy `source/Secrets.mc.example` to `source/Secrets.mc` (git-ignored) with REMOTE_TOKEN. The
   app signs each request with it (`source/Sign.mc`, `Toybox.Cryptography` HMAC-SHA256, the watch's
   clock) and never sends it. `monkeyc ... --unit-test` and `monkeydo <prg> fr255 /t` in the simulator

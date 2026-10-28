@@ -13,8 +13,9 @@ void begin();
 // HMAC's self-test passed (begin): music mode's signed packets (util/wire/musicwire) are off without it.
 bool hmacOk();
 // True when the request carries the bearer key (gate) or a valid signature for `path`. Else it has
-// answered: 403 with wrongKeyText, or 503 "clock not set" for a signed request before SNTP (a
-// signature can't be checked yet). Logs a refused signature's reason, never the key or the tag.
+// answered: 403 "clock off" for a signature outside the 2-minute window (or from before this boot),
+// 503 "clock not set" for a signed request before SNTP (a signature can't be checked yet), else 403
+// with wrongKeyText. Logs a refused signature's reason, never the key or the tag.
 bool pass(WebServer& s, const remotegate::Gate& gate, const char* path, const char* wrongKeyText);
 // "t=..&n=..&sig=.." (sigreq::AUTH_LEN) for a GET of `path` with these params. False while the clock
 // isn't set or after a failed self-test: the caller sends nothing then.
