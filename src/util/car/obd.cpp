@@ -52,6 +52,20 @@ float value(Pid p, const uint8_t* b) {
     }
 }
 
+// Where a reply's data starts: just after marker ("41"+pid, "43", "47"), but only when the marker
+// is the line's first byte, or follows a CAN header (7Ex, with ATH1) and optionally its length byte.
+// Anywhere else it is just data of some other reply ("43 02 01 47" is not a mode 07 reply), or
+// half of two bytes. nullptr when it isn't there. h: hex digits only, upper case.
+const char* anchored(const char* h, const char* marker) {
+    const size_t m = strlen(marker), n = strlen(h);
+    if (strncmp(h, marker, m) == 0) return h + m;
+    if (n >= 5 && h[0] == '7' && h[1] == 'E' && hexVal(h[2]) >= 0) {
+        if (strncmp(h + 3, marker, m) == 0) return h + 3 + m;
+        if (strncmp(h + 5, marker, m) == 0) return h + 5 + m;
+    }
+    return nullptr;
+}
+
 // One line, hex digits only (spaces dropped, upper case): finds "41"+pid and reads `bytes` bytes
 // after it into b. False when the line has no such reply or it is cut off.
 bool reply41(const char* line, size_t len, uint8_t pid, int bytes, uint8_t* b) {
@@ -66,9 +80,8 @@ bool reply41(const char* line, size_t len, uint8_t pid, int bytes, uint8_t* b) {
     char want[5];
     static const char* digits = "0123456789ABCDEF";
     want[0] = '4'; want[1] = '1'; want[2] = digits[pid >> 4]; want[3] = digits[pid & 15]; want[4] = 0;
-    const char* at = strstr(hex, want);
+    const char* at = anchored(hex, want);
     if (!at) return false;
-    at += 4;
     for (int k = 0; k < bytes; ++k) {
         const int hi = hexVal(at[2 * k]), lo = hi < 0 ? -1 : hexVal(at[2 * k + 1]);
         if (hi < 0 || lo < 0) return false;               // cut off
@@ -192,13 +205,12 @@ int parseCodes(const char* raw, bool pending, char (*out)[6], int max) {
     bool got = false, sawOther = false, bad = false;
     // One ECU's answer, as hex: "<mode+40> <count> <2 bytes per code>..." (zero pairs are padding).
     auto reply = [&](const char* h) {
-        const char* at = strstr(h, want);
+        const char* at = anchored(h, want);
         if (!at) {
-            if (strstr(h, other)) sawOther = true;
+            if (anchored(h, other)) sawOther = true;
             return;
         }
         got = true;
-        at += 2;
         if (strlen(at) < 2) { bad = true; return; }
         const int count = hexVal(at[0]) << 4 | hexVal(at[1]);
         at += 2;

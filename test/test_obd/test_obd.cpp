@@ -274,6 +274,23 @@ void test_reply_for_other_pid_is_error() {         // the tracker's traffic must
     TEST_ASSERT_EQUAL(-1, obd::parseCodes("43 01 03 01\r", true, codes, 2));
 }
 
+void test_markers_are_anchored() {
+    char codes[4][6];
+    TEST_ASSERT_EQUAL(-1, obd::parseCodes("43 02 01 47 00 00\r", true, codes, 4));   // mode 03 reply to 07
+    TEST_ASSERT_EQUAL(-1, obd::parseCodes("47 02 01 43 00 00\r", false, codes, 4));
+    TEST_ASSERT_EQUAL(1, obd::parseCodes("43 02 01 47 00 00\r", false, codes, 4));
+    TEST_ASSERT_EQUAL_STRING("P0147", codes[0]);
+    TEST_ASSERT_EQUAL(-1, obd::parseCodes("14 30 00 00\r", false, codes, 4));        // "43" across two bytes
+    TEST_ASSERT_EQUAL(1, obd::parseCodes("7E8 06 43 01 03 01 00 00\r", false, codes, 4));   // CAN header on
+    TEST_ASSERT_EQUAL_STRING("P0301", codes[0]);
+    TEST_ASSERT_EQUAL(1, obd::parseCodes("7E8 43 01 03 01\r", false, codes, 4));
+    float v = -1;
+    TEST_ASSERT_EQUAL(Reply::Error, obd::parse(Pid::Speed, "41 0C 41 0D\r", &v));    // 410D inside 0C's data
+    TEST_ASSERT_EQUAL_FLOAT(-1, v);
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Speed, "7E8 03 41 0D 3C\r", &v));
+    TEST_ASSERT_EQUAL_FLOAT(60, v);
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_extended_coolant_and_intake);
@@ -298,5 +315,6 @@ int main() {
     RUN_TEST(test_codes_from_several_ecus_and_noise);
     RUN_TEST(test_codes_overflow_and_errors);
     RUN_TEST(test_reply_for_other_pid_is_error);
+    RUN_TEST(test_markers_are_anchored);
     return UNITY_END();
 }
