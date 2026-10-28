@@ -22,7 +22,7 @@
 //           differ]  [+]; on PRESETS the six presets, two rows of three, each its name over its
 //           inside and outside chips (tap: apply, ">ROSE APPLIED"; the tab stays). GOJIRA's name is
 //           ゴジラ on screen (">ゴジラ APPLIED"): three Unifont glyphs (ui/gojiraname), as VT323 has
-//           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, light blue,
+//           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, cyan,
 //           is a preset's only: not on the grid, never a song colour; the theme takes blue's for it
 //   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
 //           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
@@ -405,7 +405,7 @@ static void linkTask(void*) {
 
 // ---- Buttons (320x240 landscape, laid out by util/deckmenu) ----
 
-// The grid is all colours (ledlook's first N_GRID; light blue is a preset's only); there is no power
+// The grid is all colours (ledlook's first N_GRID; cyan is a preset's only); there is no power
 // tile: double-tapping the lit colour turns the lights off, and tapping any colour turns them back on.
 static_assert(ledlook::N_GRID == 8 && L_MINUS - L_TILE0 == ledlook::N_GRID, "the grid is 2x4 colours");
 static_assert(deckmenu::P_N - P_PRE0 == ledpresets::N, "a button per preset");
@@ -422,7 +422,7 @@ static bool padUp = false;  // an Xbox controller is connected and reporting
 static void drawFocus(int id, bool on);
 
 // Where the focus starts on each screen: the first item, the first preset, or the colour the page
-// shows (blue for light blue, which has no tile).
+// shows (blue for cyan, which has no tile).
 static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Karaoke) return K_BACK;
@@ -920,8 +920,7 @@ static void drawLightsBand() {
             continue;
         }
         char name[12], s[32];
-        if (l.swatch == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);  // the full name won't fit
-        else upper(SWATCHES[l.swatch].name, name, sizeof(name));
+        upper(SWATCHES[l.swatch].name, name, sizeof(name));
         snprintf(s, sizeof(s), "%s %u%%", name, static_cast<unsigned>(l.pct));
         tft.setTextColor(pal(termpal::TEXT));
         text(s, lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
@@ -2676,7 +2675,7 @@ static void handlePresets() {
     char body[ledpresets::N * 48] = "";
     size_t len = 0;
     for (int i = 0; i < ledpresets::N && len < sizeof(body); i++) {
-        char l[48];  // "3 GOJIRA light blue 40 light blue 100" is 37
+        char l[48];  // "1 ROSE pink 40 pink 100" is 23
         ledpresets::wireLine(i + 1, l, sizeof(l));
         const int k = snprintf(body + len, sizeof(body) - len, "%s%s", i ? "\n" : "", l);
         if (k > 0) len += static_cast<size_t>(k);
@@ -2792,7 +2791,7 @@ static int wantTheme() {
     return THEME_TEST;
 #else
     const Look l = shownLook(0);  // in music mode the song's swatch
-    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? ledlook::gridSwatch(l.swatch) : -1;  // light blue: blue's
+    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? ledlook::gridSwatch(l.swatch) : -1;  // cyan: blue's
 #endif
 }
 

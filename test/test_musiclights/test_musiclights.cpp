@@ -54,9 +54,9 @@ void test_each_grid_swatchs_screen_colour_snaps_to_itself() {
     }
 }
 
-// Song colours snap to the Lights grid's eight only, never the preset-only light blue: not its own
+// Song colours snap to the Lights grid's eight only, never the preset-only cyan: not its own
 // screen colour, not a sky blue, not any colour at all (a sweep of the RGB cube).
-void test_never_light_blue() {
+void test_never_cyan() {
     TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch({0x3C, 0xD2, 0xFF}));
     TEST_ASSERT_EQUAL_INT(swatch("blue"), nearestSwatch({0, 130, 255}));
     for (int r = 0; r < 256; r += 15) {
@@ -119,7 +119,7 @@ int main(int, char**) {
     RUN_TEST(test_pure_colours_snap_to_their_swatch);
     RUN_TEST(test_whites_and_washed_out_colours_are_white);
     RUN_TEST(test_cover_colours_snap_by_hue);
-    RUN_TEST(test_never_light_blue);
+    RUN_TEST(test_never_cyan);
     RUN_TEST(test_each_grid_swatchs_screen_colour_snaps_to_itself);
     RUN_TEST(test_level_is_the_owners_under_the_cap_with_a_floor);
     RUN_TEST(test_blend_goes_from_one_colour_to_the_other);

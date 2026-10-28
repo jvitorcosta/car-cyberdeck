@@ -10,17 +10,17 @@ const DECK_URL = "http://172.20.10.11";
 
 // [label, word sent to the deck, screen colour]: the deck's own screen colours, but purple, which
 // is #8C00FF on the deck and the lights; the watch's 64 colours show it as AA00FF, so that is set here.
-// Light blue (GOJIRA's, #0082FF on the deck) is last and is 00AAFF here: of the watch's colours the
+// Cyan (GOJIRA's, #0082FF on the deck) is last and is 00AAFF here: of the watch's colours the
 // nearest that stays apart from OCEAN's blue (0040FF, shown as 0055FF) and from green. The deck's
-// grid has only the first N_PICK; light blue comes from a preset, so the zone lists don't offer it.
+// grid has only the first N_PICK; cyan comes from a preset, so the zone lists don't offer it.
 const COLORS = [
     ["Purple", "purple", 0xAA00FF], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
     ["Pink", "pink", 0xFF0090], ["Green", "green", 0x00FF30], ["White", "white", 0xFFFFFF],
     ["Orange", "orange", 0xFF6A00], ["Yellow", "yellow", 0xFFD400],
-    ["Light blue", "light blue", 0x00AAFF],
+    ["Cyan", "cyan", 0x00AAFF],
 ];
 const N_PICK = 8;       // the colours a zone's list offers
-const BLUE_INDEX = 2;   // where a zone's list starts when its light is light blue
+const BLUE_INDEX = 2;   // where a zone's list starts when its light is cyan
 
 // Zones, as the deck names them. BOTH changes both lights; its reply describes both.
 enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
@@ -170,9 +170,8 @@ class Deck {
     }
 
     // "1 ROSE pink 40 pink 100" / "4 PURPURA off 0 purple 100" per line, to presets in the deck's
-    // order, with the deck's number last (what /say needs). A colour can be two words ("3 GOJIRA
-    // light blue 40 light blue 100"): each colour is the words up to its level. An answer with no
-    // valid line keeps the old list.
+    // order, with the deck's number last (what /say needs). Each colour is the words up to its level
+    // (one word today; two would still read). An answer with no valid line keeps the old list.
     private function readPresets(text as String) as Void {
         var out = [] as Array;
         var lines = split(text, "\n");

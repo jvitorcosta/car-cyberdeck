@@ -42,7 +42,7 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
         }
         menu.addItem(new WatchUi.MenuItem("Brightness", null, :level, {}));
         menu.addItem(new WatchUi.MenuItem("Off", null, "off", {}));
-        // start on the zone's current colour (inside's for BOTH; blue for light blue, not in the list)
+        // start on the zone's current colour (inside's for BOTH; blue for cyan, not in the list)
         var color = _deck.look(zone == BOTH ? INSIDE : zone).color;
         menu.setFocus(color < N_PICK ? color : BLUE_INDEX);
         WatchUi.pushView(menu, new ZoneMenuDelegate(_deck, zone), WatchUi.SLIDE_LEFT);

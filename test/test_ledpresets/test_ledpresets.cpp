@@ -19,7 +19,7 @@ void test_table() {
     TEST_ASSERT_EQUAL_INT(6, ledpresets::N);
     expectPreset(0, "ROSE", "rose", 2, 40, 100);
     expectPreset(1, "FIRE", "fire", 0, 40, 100);
-    expectPreset(2, "GOJIRA", "gojira", ledlook::LIGHT_BLUE, 40, 100);
+    expectPreset(2, "GOJIRA", "gojira", ledlook::CYAN, 40, 100);
     expectPreset(3, "PURPURA", "purpura", 3, 40, 100);
     expectPreset(4, "CIVIC", "civic", 5, 40, 100);
     expectPreset(5, "OCEAN", "ocean", 4, 40, 100);
@@ -42,7 +42,7 @@ void test_describe() {
     ledpresets::describe(6, buf, sizeof buf);
     TEST_ASSERT_EQUAL_STRING("Ocean: inside Blue 40 percent, outside Blue 100 percent", buf);
     ledpresets::describe(3, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("Gojira: inside Light blue 40 percent, outside Light blue 100 percent", buf);
+    TEST_ASSERT_EQUAL_STRING("Gojira: inside Cyan 40 percent, outside Cyan 100 percent", buf);
 }
 void test_describe_fits() {
     char buf[112];
@@ -54,7 +54,7 @@ void test_describe_fits() {
 void test_wire_line() {
     char buf[64];
     ledpresets::wireLine(3, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("3 GOJIRA light blue 40 light blue 100", buf);
+    TEST_ASSERT_EQUAL_STRING("3 GOJIRA cyan 40 cyan 100", buf);
     ledpresets::wireLine(5, buf, sizeof buf);
     TEST_ASSERT_EQUAL_STRING("5 CIVIC green 40 green 100", buf);
     ledpresets::wireLine(1, buf, sizeof buf);
@@ -70,27 +70,27 @@ void test_wire_line_clamps_slot() {
 }
 
 // The swatch words in this order are the /presets wire contract (the watch maps them back). The
-// first eight are the Lights grid; light blue, the ninth, is only a preset's.
+// first eight are the Lights grid; cyan, the ninth, is only a preset's.
 void test_swatch_words() {
-    const char* order[] = {"red", "orange", "pink", "purple", "blue", "green", "white", "yellow", "light blue"};
+    const char* order[] = {"red", "orange", "pink", "purple", "blue", "green", "white", "yellow", "cyan"};
     TEST_ASSERT_EQUAL_INT(9, ledlook::N_SWATCH);
     TEST_ASSERT_EQUAL_INT(8, ledlook::N_GRID);
-    TEST_ASSERT_EQUAL_INT(8, ledlook::LIGHT_BLUE);
+    TEST_ASSERT_EQUAL_INT(8, ledlook::CYAN);
     for (int i = 0; i < ledlook::N_SWATCH; i++) TEST_ASSERT_EQUAL_STRING(order[i], ledlook::SWATCHES[i].word);
-    const ledlook::Swatch& lb = ledlook::SWATCHES[ledlook::LIGHT_BLUE];
-    TEST_ASSERT_EQUAL_STRING("Light blue", lb.name);
+    const ledlook::Swatch& lb = ledlook::SWATCHES[ledlook::CYAN];
+    TEST_ASSERT_EQUAL_STRING("Cyan", lb.name);
     TEST_ASSERT_EQUAL_HEX32(0x0082FF, lb.screen);
     TEST_ASSERT_TRUE(lb.r == 0 && lb.g == 130 && lb.b == 255);  // the owner's pick from the car test
 }
-// The default look is yellow (the grid's last), not the preset-only light blue.
+// The default look is yellow (the grid's last), not the preset-only cyan.
 void test_default_look() {
     TEST_ASSERT_EQUAL_INT(ledlook::YELLOW, ledlook::Look{}.swatch);
     TEST_ASSERT_EQUAL_STRING("yellow", ledlook::SWATCHES[ledlook::Look{}.swatch].word);
 }
-// The grid colour standing for a swatch (the Lights focus, the theme): itself, blue for light blue.
+// The grid colour standing for a swatch (the Lights focus, the theme): itself, blue for cyan.
 void test_grid_swatch() {
     for (int i = 0; i < ledlook::N_GRID; i++) TEST_ASSERT_EQUAL_INT(i, ledlook::gridSwatch(i));
-    TEST_ASSERT_EQUAL_INT(ledlook::BLUE, ledlook::gridSwatch(ledlook::LIGHT_BLUE));
+    TEST_ASSERT_EQUAL_INT(ledlook::BLUE, ledlook::gridSwatch(ledlook::CYAN));
     TEST_ASSERT_EQUAL_STRING("blue", ledlook::SWATCHES[ledlook::BLUE].word);
 }
 

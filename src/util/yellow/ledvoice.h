@@ -8,7 +8,7 @@
 
 namespace ledvoice {
 // Colours are ledlook's swatches (ledlook::Colour): the grid's eight by ledlook::COLOUR_WORDS, then
-// light blue (a preset's colour, off the grid): "light blue", "azul claro", "cyan".
+// cyan (a preset's colour, off the grid): "cyan", "light blue", "azul claro".
 enum Zone { ZONE_NONE = -1, ZONE_BOTH = 0, ZONE_INSIDE = 1, ZONE_OUTSIDE = 2 };
 
 struct Command {
@@ -30,15 +30,15 @@ inline int lookup(const char* w, const Word* table, int n) {
     return -1;
 }
 
-using ledlook::BLUE, ledlook::LIGHT_BLUE, ledlook::PURPLE, ledlook::RED;
+using ledlook::BLUE, ledlook::CYAN, ledlook::PURPLE, ledlook::RED;
 // Voice's colour words on top of ledlook::COLOUR_WORDS. Siri transcribes a lone colour word by sound:
 // "red" comes back "Read", "blue" can come back "Blew" (seen in the deck's log, 2026-10-21). Neither
 // homophone means anything else here, and neither belongs among a song title's words. Then "lilás"
-// with its accent (the phrase isn't folded) and light blue's own.
+// with its accent (the phrase isn't folded) and cyan's own.
 static const Word COLORS[] = {
-    {"read", RED}, {"blew", BLUE}, {"lil\xc3\xa1s", PURPLE}, {"cyan", LIGHT_BLUE}, {"ciano", LIGHT_BLUE},
+    {"read", RED}, {"blew", BLUE}, {"lil\xc3\xa1s", PURPLE}, {"cyan", CYAN}, {"ciano", CYAN},
 };
-// Light blue in two words: "light" right before a blue word, or "claro" / "clara" right after one
+// Cyan in two words too: "light" right before a blue word, or "claro" / "clara" right after one
 // ("azul claro"). Only next to each other, so "lights blue" and "light, then blue" stay blue, and
 // either word alone is nothing.
 static const char* const LIGHTER_BEFORE[] = {"light"};
@@ -122,7 +122,7 @@ inline bool parse(const char* text, Command* out) {
         const bool afterLight = light, afterBlue = blue;
         light = blue = false;
         if (afterBlue && among(w, LIGHTER_AFTER, LEDVOICE_N(LIGHTER_AFTER))) {  // "azul claro"
-            out->color = LIGHT_BLUE;
+            out->color = CYAN;
             continue;
         }
         if (std::isdigit(static_cast<unsigned char>(w[0]))) {  // "50", "50%": a level, or a slot right after "favourite"
@@ -159,12 +159,12 @@ inline bool parse(const char* text, Command* out) {
             continue;
         }
         if (among(w, LIGHTER_BEFORE, LEDVOICE_N(LIGHTER_BEFORE))) {
-            light = true;  // not a command by itself ("light off" is just off); a blue word next makes it light blue
+            light = true;  // not a command by itself ("light off" is just off); a blue word next makes it cyan
             continue;
         }
         if ((v = colour(w)) >= 0) {
             blue = v == BLUE;
-            out->color = afterLight && blue ? static_cast<int>(LIGHT_BLUE) : v;
+            out->color = afterLight && blue ? static_cast<int>(CYAN) : v;
         }
         else if ((v = lookup(w, POWER, LEDVOICE_N(POWER))) >= 0) out->power = v;
         else if ((v = lookup(w, LEVELS, LEDVOICE_N(LEVELS))) >= 0) out->level = v;

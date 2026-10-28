@@ -12,7 +12,7 @@ import Toybox.WatchUi;
 const GLANCE_COLORS = [
     ["Purple", 0xAA00FF], ["Red", 0xFF0000], ["Blue", 0x0040FF], ["Pink", 0xFF0090],
     ["Green", 0x00FF30], ["White", 0xFFFFFF], ["Orange", 0xFF6A00], ["Yellow", 0xFFD400],
-    ["Light blue", 0x00AAFF],
+    ["Cyan", 0x00AAFF],
 ];
 
 (:glance)

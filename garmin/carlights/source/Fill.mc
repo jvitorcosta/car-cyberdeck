@@ -18,7 +18,7 @@ module Fill {
         return top;
     }
 
-    // The ink that reads on a colour: black on the light ones (white, yellow, green, light blue),
+    // The ink that reads on a colour: black on the light ones (white, yellow, green, cyan),
     // white on the rest.
     function ink(rgb as Number) as Graphics.ColorType {
         return rgb == 0xFFFFFF || rgb == 0xFFD400 || rgb == 0x00FF30 || rgb == 0x00AAFF

@@ -17,7 +17,7 @@ struct Preset {
     ledlook::Look in, out;
     const char* glyphs = nullptr;  // what the screen shows instead of name, or nullptr: GOJIRA's ゴジラ
 };
-// Swatch indices come from ledlook: red 0, pink 2, purple 3, blue 4, green 5, light blue 8.
+// Swatch indices come from ledlook: red 0, pink 2, purple 3, blue 4, green 5, cyan 8.
 extern const Preset PRESETS[N];
 // The name as the deck's screen shows it: "ROSE", or GOJIRA's mark (see GOJIRA_MARK).
 inline const char* shown(const Preset& p) { return p.glyphs ? p.glyphs : p.name; }

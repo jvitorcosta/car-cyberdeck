@@ -80,10 +80,10 @@ void test_old_preset_names_are_gone() {
     TEST_ASSERT_FALSE(ledvoice::parse("calm", &c));
     TEST_ASSERT_FALSE(ledvoice::parse("Forest.", &c));
 }
-// Light blue (GOJIRA's colour, not on the grid): "light blue" (the two words next to each other),
+// Cyan (GOJIRA's colour, not on the grid): "light blue" (the two words next to each other),
 // "azul claro" / "azul clara", "cyan" / "ciano". "light" or "claro" alone does nothing, "lights
 // blue" and "light, then blue" are plain blue, and only blue turns light.
-void test_light_blue() {
+void test_cyan() {
     TEST_ASSERT_EQUAL_INT(8, parsed("light blue").color);
     TEST_ASSERT_EQUAL_INT(8, parsed("Light Blue inside").color);
     TEST_ASSERT_EQUAL_INT(ledvoice::ZONE_INSIDE, parsed("Light Blue inside").zone);
@@ -198,7 +198,7 @@ int main(int, char**) {
     RUN_TEST(test_preset_names);
     RUN_TEST(test_purpura_is_the_preset_not_a_colour);
     RUN_TEST(test_old_preset_names_are_gone);
-    RUN_TEST(test_light_blue);
+    RUN_TEST(test_cyan);
     RUN_TEST(test_preset_name_with_other_words);
     RUN_TEST(test_purple_is_still_the_colour);
     RUN_TEST(test_preset_number_words);

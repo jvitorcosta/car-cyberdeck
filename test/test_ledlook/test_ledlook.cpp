@@ -7,9 +7,9 @@ void tearDown() {}
 
 // The swatch names follow SWATCHES' order, so a table written with them can't drift from the grid.
 void test_colour_names_follow_the_swatch_table() {
-    const char* order[] = {"red", "orange", "pink", "purple", "blue", "green", "white", "yellow", "light blue"};
+    const char* order[] = {"red", "orange", "pink", "purple", "blue", "green", "white", "yellow", "cyan"};
     const int ids[] = {ledlook::RED,   ledlook::ORANGE, ledlook::PINK,   ledlook::PURPLE,    ledlook::BLUE,
-                       ledlook::GREEN, ledlook::WHITE,  ledlook::YELLOW, ledlook::LIGHT_BLUE};
+                       ledlook::GREEN, ledlook::WHITE,  ledlook::YELLOW, ledlook::CYAN};
     TEST_ASSERT_EQUAL_INT(9, ledlook::N_SWATCH);
     TEST_ASSERT_EQUAL_INT(8, ledlook::N_GRID);
     for (int i = 0; i < ledlook::N_SWATCH; i++) TEST_ASSERT_EQUAL_STRING(order[i], ledlook::SWATCHES[ids[i]].word);
@@ -31,7 +31,7 @@ void test_every_grid_colour_has_words() {
         TEST_ASSERT_TRUE_MESSAGE(wire, ledlook::SWATCHES[sw].word);
         TEST_ASSERT_TRUE_MESSAGE(wordsFor(sw) >= 2, ledlook::SWATCHES[sw].word);
     }
-    TEST_ASSERT_EQUAL_INT(0, wordsFor(ledlook::LIGHT_BLUE));
+    TEST_ASSERT_EQUAL_INT(0, wordsFor(ledlook::CYAN));
 }
 
 // Each word names one colour, lowercase ASCII (the folded text songmood matches against).
