@@ -53,8 +53,10 @@ Verdict Watch::item(Item i) const {
         return v;
     }
     if (i != Item::Engine) return v;
-    worst(v, ltftVerdict_);
+    // Live readings go first so they win a tie with the restored last-trip fuel trim (worst() keeps the
+    // first on a tie); the trim joins after them, or alone when there is no live engine data yet.
     if (!haveLast_) {
+        worst(v, ltftVerdict_);
         v.known = codesRead_ || ltftJudged_ || v.level != Level::Ok;
         return v;
     }
@@ -81,6 +83,7 @@ Verdict Watch::item(Item i) const {
         set(p, Level::Note, buf);
         worst(v, p);
     }
+    worst(v, ltftVerdict_);
     v.known = codesRead_ || ltftJudged_ || v.level != Level::Ok;
     return v;
 }

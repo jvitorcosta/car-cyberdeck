@@ -9,8 +9,10 @@ using carhealth::Level;
 Role roleOf(Level l) { return l == Level::Problem ? Role::Alert : l == Level::Note ? Role::Mid : Role::Text; }
 
 void setLine(Line* l, Role r, const char* s) {
-    std::strncpy(l->text, s, sizeof l->text - 1);
-    l->text[sizeof l->text - 1] = '\0';
+    size_t n = std::strlen(s);
+    if (n > sizeof l->text - 1) n = sizeof l->text - 1;
+    std::memcpy(l->text, s, n);
+    l->text[n] = '\0';
     l->role = r;
 }
 

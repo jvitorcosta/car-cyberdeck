@@ -247,6 +247,35 @@ void test_restore_then_end_trip_judges_the_last_trip() {
     TEST_ASSERT_FALSE(w.item(Item::Battery).known);
 }
 
+// A restored last-trip LTFT must not hide a live reason of the same level (live readings win ties).
+void test_live_mil_beats_restored_ltft_problem() {
+    Watch w;
+    w.restore(Memo{false, 250.0f, 10u});  // mean +25 %
+    w.endTrip();
+    Reading r;
+    r.nowMs = 1000;
+    r.engineRunning = true;
+    r.mil = true;
+    w.feed(r);
+    Verdict e = w.item(Item::Engine);
+    TEST_ASSERT_EQUAL(Level::Problem, e.level);
+    TEST_ASSERT_EQUAL_STRING("CHECK ENGINE LIGHT ON", e.why);
+}
+
+void test_live_pending_beats_restored_ltft_note() {
+    Watch w;
+    w.restore(Memo{false, 120.0f, 10u});  // mean +12 %
+    w.endTrip();
+    Reading r;
+    r.nowMs = 1000;
+    r.engineRunning = true;
+    r.pendingCodes = 1;
+    w.feed(r);
+    Verdict e = w.item(Item::Engine);
+    TEST_ASSERT_EQUAL(Level::Note, e.level);
+    TEST_ASSERT_EQUAL_STRING("1 PENDING CODE, NOT CONFIRMED", e.why);
+}
+
 void test_restored_low_battery_is_a_note() {
     Watch w;
     w.restore(Memo{true, 0.0f, 0u});
@@ -297,6 +326,8 @@ int main(int, char**) {
     RUN_TEST(test_memo_roundtrip_and_bad_records);
     RUN_TEST(test_memo_tracks_this_trip);
     RUN_TEST(test_restore_then_end_trip_judges_the_last_trip);
+    RUN_TEST(test_live_mil_beats_restored_ltft_problem);
+    RUN_TEST(test_live_pending_beats_restored_ltft_note);
     RUN_TEST(test_restored_low_battery_is_a_note);
     RUN_TEST(test_known_needs_a_reading_or_a_codes_read);
     return UNITY_END();
