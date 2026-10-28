@@ -101,6 +101,7 @@
 #include "../common/net/ipaddr.h"
 #include "../common/net/ota.h"
 #include "../common/net/remote_config.h"
+#include "../common/net/reqauth.h"
 #include "../common/net/wifi.h"
 #include "../util/yellow/bothlook.h"
 #include "../util/yellow/dashtext.h"
@@ -1986,10 +1987,12 @@ static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches th
 static deckaddr::Keep lyricsAddr;
 static bool lyricsMdns = false;
 
-// Where the black deck is: its fixed address on the hotspot, else its mDNS name on whatever network
-// both are on. False when it can't be found.
+// Where the black deck is: its fixed address on the hotspot (until it stops answering as the deck),
+// else its mDNS name on whatever network both are on. False when it can't be found.
 static bool lyricsHost(char* out, size_t n) {
-    if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()))) {
+    const bool hot =
+        hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()));
+    if (hot && lyricsAddr.addr() == 0 && lyricsAddr.tryFixed()) {
         snprintf(out, n, "%s", BLACK_DECK_ADDR);
         return true;
     }
@@ -2000,23 +2003,52 @@ static bool lyricsHost(char* out, size_t n) {
         if (!lyricsPace.mayLookup(now)) return false;
         lyricsPace.lookedUp(now);
         const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
-        if (static_cast<uint32_t>(a) == 0) return false;
+        if (static_cast<uint32_t>(a) == 0) {
+            lyricsAddr.lookupFailed();  // on the hotspot: the fixed address again
+            return false;
+        }
         lyricsAddr.found(static_cast<uint32_t>(a));
-        Serial.printf("[lyrics] deck found at %s (mDNS)\n", a.toString().c_str());
+        Serial.printf("[lyrics] deck found at %s (mDNS%s)\n", a.toString().c_str(), hot ? ", off its fixed address" : "");
     }
     snprintf(out, n, "%s", IPAddress(lyricsAddr.addr()).toString().c_str());
     return true;
 }
 
-// GET /state into lyricsBody (cut at MAX_JSON, always terminated); the HTTP status, negative without
-// an answer. Short timeouts: the deck is one hop away, and a missing deck must not hold the polls up.
+// What deckGet returns when it sent nothing: the clock isn't set, so nothing can be signed (the
+// bearer key is never sent). Not a miss: the deck wasn't asked.
+static constexpr int NOT_SIGNED = -1000;
+
+// A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
+// body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
+// peer: the address asked. Short timeouts: the deck is one hop away, and a missing deck must not hold
+// the polls up.
+static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
+                   uint32_t* peer = nullptr) {
+    if (!net::isOnline()) return -1;
+    char auth[sigreq::AUTH_LEN];
+    if (!reqauth::signGet(path, params, count, auth, sizeof(auth))) {
+        static bool told = false;
+        if (!told) Serial.println("[lyrics] waiting for the clock: requests to the deck are signed");
+        told = true;
+        return NOT_SIGNED;
+    }
+    char host[40], query[32] = "", url[160];
+    if (!lyricsHost(host, sizeof(host))) return -1;
+    for (int i = 0; i < count; ++i) {
+        const size_t at = strlen(query);
+        snprintf(query + at, sizeof(query) - at, "%s=%s&", params[i].name, params[i].value);
+    }
+    if (snprintf(url, sizeof(url), "http://%s%s?%s%s", host, path, query, auth) >= static_cast<int>(sizeof(url)))
+        return -1;
+    IPAddress a;
+    if (peer && a.fromString(host)) *peer = static_cast<uint32_t>(a);
+    return net::httpGet(url, 1500, body, bodyLen, body ? 3000 : 0);
+}
+
+// GET /state into lyricsBody (cut at MAX_JSON, always terminated).
 static int lyricsGet() {
     lyricsBody[0] = 0;
-    if (!net::isOnline()) return -1;
-    char host[40], url[128];
-    if (!lyricsHost(host, sizeof(host))) return -1;
-    snprintf(url, sizeof(url), "http://%s/state?k=%s", host, REMOTE_TOKEN);
-    return net::httpGet(url, 1500, lyricsBody, sizeof(lyricsBody), 3000);
+    return deckGet("/state", nullptr, 0, lyricsBody, sizeof(lyricsBody));
 }
 
 // ---- Music mode: the black deck sends the song's palette ----
@@ -2030,18 +2062,17 @@ static constexpr uint32_t MUSIC_KEEP_MS = 10000, MUSIC_RETRY_MS = 2000;
 static volatile uint32_t musicPeer = 0;  // IPv4, network order (IPAddress's dword); 0: not asked yet
 
 static int musicAsk(bool on) {
-    if (!net::isOnline()) return -1;
-    char host[40], url[128];
-    if (!lyricsHost(host, sizeof(host))) return -1;
-    IPAddress a;
-    if (a.fromString(host)) musicPeer = static_cast<uint32_t>(a);
-    snprintf(url, sizeof(url), "http://%s/music?k=%s&on=%d", host, REMOTE_TOKEN, on ? 1 : 0);
-    return net::httpGet(url, 1500);  // the status is the answer
+    const sigreq::Param p[] = {{"on", on ? "1" : "0"}};
+    uint32_t peer = 0;
+    const int rc = deckGet("/music", p, 1, nullptr, 0, &peer);  // the status is the answer
+    if (peer) musicPeer = peer;
+    return rc;
 }
 
 static int musicGet(bool on) {
     const int rc = musicAsk(on);
-    lyricsAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
+    // the deck's own answers (200, "stopping" 409, low memory 503); 3 misses in a row: look it up again
+    if (rc != NOT_SIGNED) lyricsAddr.onPoll(rc == 200 || rc == 409 || rc == 503);
     return rc;
 }
 
@@ -2093,11 +2124,16 @@ static void lyricsTask(void*) {
             lastPoll = now;
             lyricsNudge = false;
             const int rc = lyricsGet();
+            if (rc == NOT_SIGNED) {  // no clock yet: nothing was asked, so nothing is lost either
+                vTaskDelay(pdMS_TO_TICKS(50));
+                continue;
+            }
             const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
             if (pace.misses() == 0 && !ok) Serial.printf("[lyrics] deck lost (rc=%d)\n", rc);
             if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
             pace.onResult(ok);
-            lyricsAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
+            // the deck's own answers (a /state that parses, low memory 503); 3 misses in a row: look it up again
+            lyricsAddr.onPoll(ok || rc == 503);
             const uint32_t at = millis();
             portENTER_CRITICAL(&lyricsMux);
             lyricsPub.wrongKey = rc == 403;
@@ -2658,6 +2694,7 @@ static void beginVoice() {
         Serial.println("[voice] off (REMOTE_TOKEN empty)");
         return;
     }
+    reqauth::begin();  // HMAC's self-test: the requests to the black deck are signed
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);

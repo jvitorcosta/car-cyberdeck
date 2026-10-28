@@ -3,6 +3,7 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include "../../common/net/remote_config.h"
+#include "../../common/net/reqauth.h"
 #include "../../common/net/wifi.h"
 #include "../audio/greeting.h"
 #include "../audio/musicsvc.h"
@@ -86,8 +87,9 @@ bool link(char* out, size_t n) {
     return qrfit::link(net::deviceIp().c_str(), REMOTE_TOKEN, out, n);
 }
 
+// The phone page sends the key; the yellow deck signs (common/net/reqauth): either will do.
 static void handleState() {
-    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    if (!reqauth::pass(*s_server, s_gate, "/state", "wrong key")) return;
     static AppState st;        // static: ~1 KB, off this task's 4 KB stack (one request at a time)
     // 768 B overflowed with a long title and lyric lines. In PSRAM: only the CPU touches it
     static char* out = (char*)mem::bigAlloc(statejson::MAX_JSON);
@@ -141,9 +143,9 @@ static void handlePlay() {
 }
 
 // Music mode (audio/musicsvc): the yellow deck sends on=1 every 10 s while it wants the song's
-// palette over UDP, on=0 to stop at once.
+// palette over UDP, on=0 to stop at once. Signed by the yellow deck; the key also does (a test by hand).
 static void handleMusic() {
-    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    if (!reqauth::pass(*s_server, s_gate, "/music", "wrong key")) return;
     const String on = s_server->arg("on");
     if (on == "0") {
         musicsvc::stop();
@@ -190,6 +192,7 @@ static void task(void*) {
 
 void begin(bool (*hold)()) {
     if (!s_gate.enabled()) { Serial.println("[remote] off (REMOTE_TOKEN empty)"); return; }
+    reqauth::begin();
     s_hold = hold;
     s_server = new WebServer(80);
     s_server->on("/", HTTP_GET, [] {
