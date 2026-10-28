@@ -8,7 +8,7 @@ labels: bug
 <!-- What you saw on the screen or heard, and what you expected instead. -->
 
 **Board and version**
-<!-- Deck (S3) or companion (CYD), and the first serial line, e.g. `[boot] cardeck v1.0.0 (s3)`. -->
+<!-- Black deck (S3) or yellow deck (CYD), and the first serial line, e.g. `[boot] cardeck v1.0.0 (s3)`. -->
 
 **Network**
 <!-- Home WiFi or phone hotspot (which phone)? -->

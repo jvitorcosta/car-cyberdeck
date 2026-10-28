@@ -3,7 +3,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include "../../src/net/ca_bundle.inc"
+#include "../../src/common/net/ca_bundle.inc"
 
 // The ESP32's bundle checker (WiFiClientSecure esp_crt_bundle.c) trusts the bytes blindly:
 // u16 count, then per root u16 name length, u16 key length, subject DER, public key DER, and

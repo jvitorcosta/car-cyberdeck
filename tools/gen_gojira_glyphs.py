@@ -3,11 +3,11 @@
 Why: GOJIRA's name is shown in katakana, and neither the yellow deck's VT323 fonts (Latin-1) nor the
 FR255's fonts have kana. The three glyphs come from the GNU Unifont blob the black deck already
 ships (data/cjk16.bin, made by tools/gen_cjk_font.py; GPLv2+ with the font embedding exception, or
-SIL OFL 1.1: see CREDITS.md), read with the blob's own format (src/ui/cjkfont's reader; the host
+SIL OFL 1.1: see CREDITS.md), read with the blob's own format (src/black/ui/cjkfont's reader; the host
 test test_gojiraname checks the header against it).
 Run: python tools/gen_gojira_glyphs.py
 Writes:
-  src/fonts/gojira16.h                                 the three 16x16 bitmaps (2 B/row, MSB left)
+  src/yellow/fonts/gojira16.h                          the three 16x16 bitmaps (2 B/row, MSB left)
   garmin/carlights/resources/drawables/gojira_white.png the name, white on transparent, cropped to its ink
   garmin/carlights/resources/drawables/gojira_black.png the same in black (for a light fill under it)
 """
@@ -18,7 +18,7 @@ from PIL import Image
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 BLOB = os.path.join(ROOT, "data", "cjk16.bin")
-HEADER = os.path.join(ROOT, "src", "fonts", "gojira16.h")
+HEADER = os.path.join(ROOT, "src", "yellow", "fonts", "gojira16.h")
 DRAWABLES = os.path.join(ROOT, "garmin", "carlights", "resources", "drawables")
 CODEPOINTS = [0x30B4, 0x30B8, 0x30E9]  # ゴ ジ ラ
 

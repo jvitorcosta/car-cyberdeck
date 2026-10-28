@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/walkanim.h"
+#include "../../src/util/black/walkanim.h"
 
 using namespace walkanim;
 void setUp() {}

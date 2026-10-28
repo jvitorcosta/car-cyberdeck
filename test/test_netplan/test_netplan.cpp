@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <initializer_list>
-#include "../../src/util/netplan.h"
-#include "../../src/util/lyricstatus.h"
+#include "../../src/util/black/netplan.h"
+#include "../../src/util/wire/lyricstatus.h"
 
 using netplan::Step;
 void setUp() {}

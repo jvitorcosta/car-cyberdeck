@@ -8,7 +8,7 @@ The glyphs come from data/cjk16.bin (GNU Unifont 16.0.04, made by tools/gen_cjk_
 with the GNU font embedding exception, or SIL OFL 1.1: see CREDITS.md), read with that blob's own
 format, as tools/gen_gojira_glyphs.py does.
 Run: python -I tools/gen_jp_font.py
-Format (little-endian), read by src/ui/jpfont: "JFNT", u16 n, n x u16 codepoint (ascending),
+Format (little-endian), read by src/yellow/ui/jpfont: "JFNT", u16 n, n x u16 codepoint (ascending),
 n x u8 width (8 or 16), then n glyphs of 32 bytes each: 16 rows, 2 B/row for width 16, 1 B/row
 in the first 16 bytes for width 8 (the rest zero); MSB the leftmost pixel.
 """

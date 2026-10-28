@@ -1,4 +1,4 @@
-"""Generate src/pokemon/dex_data.inc from PokeAPI CSV data (dev-time; output is committed).
+"""Generate src/black/pokemon/dex_data.inc from PokeAPI CSV data (dev-time; output is committed).
 
 Why: the deck used to call https://pokeapi.co/api/v2/pokemon/<n> on every track change
 just to get a name and a type: ~4.2 s of TLS + a multi-hundred-KB JSON body on a board
@@ -13,7 +13,7 @@ import urllib.request
 
 BASE = "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/"
 COUNT = 1025
-OUT = os.path.join(os.path.dirname(__file__), "..", "src", "pokemon", "dex_data.inc")
+OUT = os.path.join(os.path.dirname(__file__), "..", "src", "black", "pokemon", "dex_data.inc")
 
 
 def rows(name):

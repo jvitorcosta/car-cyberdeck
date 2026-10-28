@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/ui/typebadge.h"
+#include "../../src/black/ui/typebadge.h"
 
 void setUp() {}
 void tearDown() {}

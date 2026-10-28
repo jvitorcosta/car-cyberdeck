@@ -3,18 +3,18 @@
 #include <cstdio>
 #include <cstring>
 #include <initializer_list>
-#include "../../src/ui/lyricrun.h"
-#include "../../src/ui/termfont.h"
-#include "../../src/ui/termlayout.h"
-#include "../../src/util/dashtext.h"
-#include "../../src/util/deckmenu.h"
-#include "../../src/util/karaoke.h"
-#include "../../src/util/ledlook.h"
-#include "../../src/util/ledpresets.h"
-#include "../../src/util/otapage.h"
-#include "../../src/util/tripmeter.h"
-#include "../../src/util/version.h"
-#include "../../src/util/weather.h"
+#include "../../src/yellow/ui/lyricrun.h"
+#include "../../src/yellow/ui/termfont.h"
+#include "../../src/yellow/ui/termlayout.h"
+#include "../../src/util/yellow/dashtext.h"
+#include "../../src/util/yellow/deckmenu.h"
+#include "../../src/util/yellow/karaoke.h"
+#include "../../src/util/lights/ledlook.h"
+#include "../../src/util/yellow/ledpresets.h"
+#include "../../src/util/yellow/otapage.h"
+#include "../../src/util/yellow/tripmeter.h"
+#include "../../src/util/common/version.h"
+#include "../../src/util/yellow/weather.h"
 
 using termfont::Face;
 using namespace termlayout;

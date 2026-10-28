@@ -2,7 +2,7 @@
 
 ## How it was tested
 - [ ] Host tests pass (`tools\run_tests.ps1`)
-- [ ] Built the deck and the companion (`pio run -e s3 -e cyd_companion`)
+- [ ] Built both decks (`pio run -e s3 -e ledpanel`)
 - [ ] Ran on a board: <!-- which one, and the relevant [mem] / [net] log lines -->
 
 ## Checklist

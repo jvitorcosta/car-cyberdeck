@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/touchmap.h"
+#include "../../src/util/yellow/touchmap.h"
 
 void setUp() {}
 void tearDown() {}

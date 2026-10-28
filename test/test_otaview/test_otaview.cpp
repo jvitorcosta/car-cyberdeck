@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/otaview.h"
+#include "../../src/util/common/otaview.h"
 
 using otaview::Phase;
 using otaview::Tracker;

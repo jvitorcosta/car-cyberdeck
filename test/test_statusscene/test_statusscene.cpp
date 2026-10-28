@@ -1,10 +1,10 @@
 #include <unity.h>
 #include <cstdint>
-#include "../../src/ui/statusscene.h"
-#include "../../src/ui/status_sprite.h"
-#include "../../src/util/idlesprite.h"
-#include "../../src/ui/sunset.h"
-#include "../../src/ui/qrcard.h"
+#include "../../src/black/ui/statusscene.h"
+#include "../../src/black/ui/status_sprite.h"
+#include "../../src/util/black/idlesprite.h"
+#include "../../src/black/ui/sunset.h"
+#include "../../src/black/ui/qrcard.h"
 #include <cstring>
 
 using linkstatus::Kind;

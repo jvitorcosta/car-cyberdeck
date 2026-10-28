@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/linkstatus.h"
+#include "../../src/util/black/linkstatus.h"
 
 using linkstatus::Kind;
 

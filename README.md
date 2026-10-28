@@ -47,14 +47,11 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
   screen shows the link as a QR code in a Gen-3 battle box named REMOTE, built from the deck's
   current address (`172.20.10.10` on the iPhone hotspot, the DHCP one elsewhere), and Howl plays a real wolf recording when you
   build one (otherwise a synthesised howl).
-- **Companion screen:** a Cheap Yellow Display (CYD) beside the S3 shows the current lyric line big,
-  with the next one dimmed underneath. It reads the S3 over the hotspot and has no Spotify
-  client of its own (build target `cyd_companion`).
-- **Avatar (companion):** a character of your choice becomes the companion's home screen, drawn
-  2x and centred on her own. She sings along with synced lyrics, greets you, remarks on new
-  songs and reacts when you play a sound or reset the trip. The Lyrics, Sounds and Trip screens,
-  Howl and trip reset (Vroom once the new deck offers it) are on the companion's own phone page.
-  Her portraits come from your own images (`tools/gen_avatar.py`).
+- **Yellow deck (the car's lights):** a Cheap Yellow Display (CYD) beside the S3 drives the car's
+  two LED controllers over Bluetooth: colours, levels and presets on its touchscreen, by voice
+  through a Siri Shortcut, from an Xbox controller or the watch, the S3's lyrics karaoke-style and
+  its song colours (music mode). It reads the S3 over the hotspot (build target `ledpanel`; see
+  [Car lights by voice](docs/leds-voice.md)).
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>
@@ -65,10 +62,11 @@ Spotify account as a FireRed/Emerald battle screen, and runs off your phone's ho
 | Board | Build target | Notes |
 |---|---|---|
 | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | The deck. 8 MB PSRAM, 16 MB flash, ES8311 codec and speaker. |
-| ESP32-2432S028R "Cheap Yellow Display" (CYD) | `cyd_companion` | Optional companion screen. ESP32, no PSRAM. Reads the S3's `/state`; needs the S3 with `REMOTE_TOKEN` set. |
+| ESP32-2432S028R "Cheap Yellow Display" (CYD) | `ledpanel` | The yellow deck, optional: the car's LED lights. ESP32, no PSRAM. Reads the S3's `/state` for lyrics and music mode; needs the S3 with `REMOTE_TOKEN` set. |
 
 Both are 320×240 ILI9341 boards. The CYD's standalone deck build (`cyd`) was retired on
-2026-10-21; it is in git history up to `d4d0a67`. You also need a USB car charger
+2026-10-21 (git history up to `d4d0a67`), and its companion-screen build (`cyd_companion`, the
+lyrics and avatar screen) on 2026-10-28 (git history before that date). You also need a USB car charger
 (5 V, 2 A recommended) and a phone with a 2.4 GHz hotspot (on iPhone, turn on
 **Maximize Compatibility**). The microSD slot isn't used.
 
@@ -110,27 +108,26 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
 To check a new board without WiFi or Spotify, flash `hwcheck_s3` (S3) or `hwcheck` (CYD): it
 tests the display, colours, backlight and audio.
 
-**Companion screen (optional):** set the same `REMOTE_TOKEN` on both decks and
-`COMPANION_DECK` to the S3's address (`172.20.10.10`, its fixed address on the iPhone hotspot),
-then flash the CYD with `pio run -e cyd_companion -t upload`. It shows
-**Looking for the deck...** until it reaches the S3, and **Wrong key** if the tokens differ.
-With an avatar file (see Make it yours) the companion serves its own menu remote at
-`http://172.20.10.11/?k=<REMOTE_TOKEN>` (its fixed hotspot address).
+**Yellow deck (optional):** set the same `REMOTE_TOKEN` on both decks and `BLACK_DECK_ADDR` to
+the S3's address (`172.20.10.10`, its fixed address on the iPhone hotspot; a `config.h` that
+still says `COMPANION_DECK` works too), then flash the CYD with `pio run -e ledpanel -t upload`
+(after that, over WiFi with `ledpanel_ota`). Its voice and watch endpoints are in
+[Car lights by voice](docs/leds-voice.md).
 
 ## Two decks
 
-The deck (S3) and the companion (a CYD) are meant to share the
+The black deck (S3) and the yellow deck (a CYD) are meant to share the
 iPhone hotspot. There each takes a fixed address, so a Home Screen bookmark never breaks (unless
 something already answers there); on any other network they use DHCP and mDNS names.
 
 | Deck | Build target | On the iPhone hotspot | mDNS name (other networks) | Phone page |
 |---|---|---|---|---|
-| Deck (S3) | `s3` | `172.20.10.10` | `cardeck.local` | `http://172.20.10.10/?k=<REMOTE_TOKEN>` |
-| Companion (CYD) | `cyd_companion` | `172.20.10.11` | `cardeck-companion.local` | `http://172.20.10.11/?k=<REMOTE_TOKEN>` (with an avatar) |
+| Black deck (S3) | `s3` | `172.20.10.10` | `cardeck.local` | `http://172.20.10.10/?k=<REMOTE_TOKEN>` |
+| Yellow deck (CYD) | `ledpanel` | `172.20.10.11` | `cardeck-leds.local` | none: `/say`, `/state`, `/presets`, `/status` ([Car lights by voice](docs/leds-voice.md)) |
 
 - **The hotspot goes first in `WIFI_NETWORKS`.** It gets two tries after a drop, and the fixed
   addresses are pinned only on an iPhone hotspot. A deck stays on the network it joined; off the
-  hotspot the companion finds the S3 by its mDNS name.
+  hotspot the yellow deck finds the S3 by its mDNS name.
 - **Home WiFi:** the ESP32 speaks 2.4 GHz only. If the router isolates clients, or puts 2.4 and
   5 GHz on separate networks, a phone or PC on the other band can't reach the decks' pages even
   while the two decks see each other (seen 2026-10-15: "Destination host unreachable" from a PC
@@ -138,7 +135,7 @@ something already answers there); on any other network they use DHCP and mDNS na
 
 ## Make it yours
 
-All personal media is git-ignored. The companion embeds its own (font, avatar) at build time; the S3
+All personal media is git-ignored. The S3
 packs it (`tools/pack_media.py`) into its media partition with `pio run -e s3 -t uploadmedia`.
 Without it the deck uses built-in defaults.
 
@@ -156,7 +153,6 @@ Without it the deck uses built-in defaults.
 | Shadow on the update rail (S3) | `python tools/gen_shadow_rider.py` → `data/shadow.bin` (his Sonic Battle running loop, cut from the sprite sheet it fetches into `sonic-sprites/shadow/`) | two jet glows ride the rail |
 | Sonic waiting (S3) | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Waiting for a song..." |
 | Wolf howl (S3) | `python tools/gen_howl.py wolf.ogg` → `data/howl.pcm` (cut 13-19.5 s by default, `--start`/`--end`; needs ffmpeg), for example the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) | a synthesised howl |
-| Avatar (companion) | images + `avatar-photos/avatar.json`, then `python tools/gen_avatar.py` (needs ffmpeg; see the script's header) | lyrics only |
 | Car sprite | edit and run `python tools/gen_car_sprite.py` (`--png out.png` previews it) | a silver sedan |
 
 Convert other audio formats to WAV first, for example `ffmpeg -i in.mp3 in.wav`. After
@@ -180,11 +176,11 @@ so a skipped song's art never lands on the next one. Everything is sized to fit 
 
 ```sh
 powershell -ExecutionPolicy Bypass -File tools\run_tests.ps1   # host unit tests (Unity, g++)
-pio run -e s3 -e cyd_companion                                  # deck and companion
+pio run -e s3 -e ledpanel                                       # both decks
 ```
 
-CI builds the deck, the yellow deck's LED panel, the companion and both hardware checks,
-enforces the flash budget (`s3`, `ledpanel`, `cyd_companion`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
+CI builds both decks and both hardware checks,
+enforces the flash budget (`s3`, `ledpanel`), runs the host tests with ASan/UBSan and again as 32-bit, and runs
 the media tool tests (`python -m unittest discover -s tools -p "test_gen_*.py"`). See
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup, test rules and commit style.
 

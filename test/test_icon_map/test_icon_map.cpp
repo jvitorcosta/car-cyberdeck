@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/ui/icon_map.h"
+#include "../../src/black/ui/icon_map.h"
 
 using icons::Icon;
 void setUp() {}

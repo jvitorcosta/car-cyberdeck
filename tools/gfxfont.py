@@ -9,11 +9,11 @@ advance width, x/yOffset from the pen position on the baseline, yAdvance the fon
 height (ascent + descent). GFXfont covers one run first..last, so the codes in it that are no
 character (DEL and the C1 controls, 0x7F-0x9F) get an empty glyph that doesn't move the pen.
 
-The types are written as `termfont::Glyph` / `termfont::Font` (src/ui/termfont.h: the same layout
+The types are written as `termfont::Glyph` / `termfont::Font` (src/yellow/ui/termfont.h: the same layout
 as GFXglyph / GFXfont), so the header builds on the host too.
 
 Usage (from the repo root; Pillow only):
-    python tools/gfxfont.py tools/fonts/VT323-Regular.ttf 24 src/fonts/vt323_24.h VT323_24
+    python tools/gfxfont.py tools/fonts/VT323-Regular.ttf 24 src/yellow/fonts/vt323_24.h VT323_24
 """
 import os
 import sys

@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/jsonpath.h"
+#include "../../src/util/common/jsonpath.h"
 
 void setUp() {}
 void tearDown() {}

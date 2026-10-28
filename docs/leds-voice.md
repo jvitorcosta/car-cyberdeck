@@ -33,7 +33,7 @@ a second), then shows the **main screen**, whatever page it last showed. The loo
 only (`-- NO LINK`, `>OFFLINE`, the `NO LINK` messages, `>WRONG KEY`; a deeper red at night). Every
 screen has faint scanlines and ALL CAPS bracket labels. To read at a glance in a moving car, every
 colour clears a contrast on black of at least 4.5:1 by day (the dimmest green too) and 3:1 at night
-(WCAG; `src/util/termpal.h` lists each one's figure), and the darker greens carry no blue, which
+(WCAG; `src/util/yellow/termpal.h` lists each one's figure), and the darker greens carry no blue, which
 the panel would turn teal.
 
 - **Main screen** (a dashboard, top to bottom; it puts first what the car's panel and CarPlay don't
@@ -119,7 +119,7 @@ inside and 100 % outside:
 GOJIRA (2026-10-26, in CALM's place; FOREST became CIVIC the same day) is Godzilla's atomic
 breath. Its name shows as **ゴジラ** on the deck's PRESETS tab and in `>ゴジラ APPLIED`: VT323 has no
 kana, so the three glyphs are 16 px bitmaps from GNU Unifont (the black deck's `data/cjk16.bin`),
-made by `tools/gen_gojira_glyphs.py` into `src/fonts/gojira16.h` and drawn by `src/ui/gojiraname`.
+made by `tools/gen_gojira_glyphs.py` into `src/yellow/fonts/gojira16.h` and drawn by `src/yellow/ui/gojiraname`.
 On the wire (`/presets`), in the logs and in Siri's replies it is `GOJIRA`; the watch shows the
 same glyphs as a bitmap.
 
@@ -188,7 +188,7 @@ accents, and titles and albums also match without a suffix such as ` - Remastere
 
 1. **Your picks** always win: a song (title and artist), an album or an artist, each to a colour
    (a song's pick beats its album's, which beats its artist's). They live in
-   `src/util/songpicks.inc`. To add one, add a line there and rebuild the black deck:
+   `src/util/black/songpicks.inc`. To add one, add a line there and rebuild the black deck:
    `{"Artist", "Song title", nullptr, RED},` for a song, `{"Artist", nullptr, "Album", PINK},` for a
    whole album, `{"Artist", nullptr, nullptr, BLUE},` for every song of an artist (Budah is purple).
    Colours: `RED`, `ORANGE`, `PINK`, `PURPLE`, `BLUE`, `GREEN`, `WHITE`, `YELLOW`.
@@ -268,7 +268,7 @@ Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 While the **INSIDE** light is on and linked, the whole terminal (main screen, Lights, Lyrics; not the
 boot typing or the touch calibration) takes that light's colour: the same three brightnesses in its
 hue, by day and darker at night (`termpal::rgb(role, night, theme)`, every colour's contrast in
-`src/util/termpal.h`). Blue and purple are lighter shades so the text reads; green by day is the usual
+`src/util/yellow/termpal.h`). Blue and purple are lighter shades so the text reads; green by day is the usual
 green; white is a pale grey-white by day and the usual **amber at night** (no white glare). Problems
 stay red, except on the red, orange and pink themes, where they show in **white** (a dimmer white at
 night) so they stand apart from the text. The colour tiles, chips and preset chips keep their real
@@ -279,7 +279,7 @@ blue, green, white, yellow) the same way as `NIGHT_TEST` above, then clear it.
 
 ## What it understands
 
-English or Portuguese, any order, other words ignored (`src/util/ledvoice.h`):
+English or Portuguese, any order, other words ignored (`src/util/yellow/ledvoice.h`):
 
 | Kind | Words |
 |---|---|

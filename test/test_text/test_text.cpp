@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/text.h"
+#include "../../src/util/common/text.h"
 
 void setUp() {}
 void tearDown() {}

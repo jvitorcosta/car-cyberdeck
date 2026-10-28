@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <vector>
-#include "../../src/ui/emojifont.h"
+#include "../../src/black/ui/emojifont.h"
 
 void setUp() {}
 void tearDown() {}

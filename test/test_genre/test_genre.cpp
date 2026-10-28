@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdio>
 #include <cstring>
-#include "../../src/util/genre.h"
+#include "../../src/util/black/genre.h"
 
 void setUp() {}
 void tearDown() {}

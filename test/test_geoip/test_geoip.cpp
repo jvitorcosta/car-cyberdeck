@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/geoip.h"
+#include "../../src/util/yellow/geoip.h"
 
 void setUp() {}
 void tearDown() {}

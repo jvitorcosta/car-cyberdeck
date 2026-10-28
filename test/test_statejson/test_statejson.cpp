@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/statejson.h"
+#include "../../src/util/wire/statejson.h"
 
 void setUp() {}
 void tearDown() {}

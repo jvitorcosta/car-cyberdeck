@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstdint>
-#include "../../src/util/tripclock.h"
+#include "../../src/util/lights/tripclock.h"
 
 void setUp() {}
 void tearDown() {}

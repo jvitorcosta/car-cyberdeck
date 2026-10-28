@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/artmap.h"
+#include "../../src/util/black/artmap.h"
 
 void setUp() {}
 void tearDown() {}

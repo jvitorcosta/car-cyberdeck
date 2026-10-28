@@ -1,4 +1,4 @@
-"""Pack the S3's media into media.bin for its "media" flash partition (src/util/mediapack.h).
+"""Pack the S3's media into media.bin for its "media" flash partition (src/util/black/mediapack.h).
 
   python tools/pack_media.py [out, default .pio/media.bin]
 

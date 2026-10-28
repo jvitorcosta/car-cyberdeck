@@ -19,7 +19,7 @@ static const int AMP_ON = 0;                        // LOW plays (verified with 
 // SD card (SDMMC 4-bit), unused for now: CLK 38, CMD 40, D0 39, D1 41, D2 48, D3 47.
 
 #elif defined(BOARD_CYD)
-// ESP32-2432S028R "Cheap Yellow Display": the companion screen (and its hwcheck).
+// ESP32-2432S028R "Cheap Yellow Display": the yellow deck (ledpanel) and its hwcheck.
 // Touch (XPT2046) — SEPARATE SPI bus (HSPI); only hwcheck uses it.
 static const int TOUCH_SCLK = 25;
 static const int TOUCH_MISO = 39;
@@ -27,7 +27,7 @@ static const int TOUCH_MOSI = 32;
 static const int TOUCH_CS   = 33;
 static const int TOUCH_IRQ  = 36;
 // Touch calibration: raw XPT2046 readings at the screen's left/right (x) and top/bottom (y)
-// edges in rotation 1. Tune from the companion's "[touch] raw x=.. y=.." log lines; swap a pair
+// edges in rotation 1. Tune from the yellow deck's "[touch] raw x=.. y=.." log lines; swap a pair
 // to flip an axis. Measured with the pen on 2026-10-21 (taps reached x 532..3477, y 590..3513).
 static const int TOUCH_RAW_X0 = 500, TOUCH_RAW_X1 = 3510;
 static const int TOUCH_RAW_Y0 = 560, TOUCH_RAW_Y1 = 3540;

@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/karaoke.h"
+#include "../../src/util/yellow/karaoke.h"
 
 void setUp() {}
 void tearDown() {}

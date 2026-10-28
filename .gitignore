@@ -32,7 +32,7 @@ greeting-sounds/
 data/finale.pcm
 data/opener.pcm
 
-# Your deck avatar (tools/gen_avatar.py): the images and the built file stay local
+# The retired companion's avatar (its images and built file, if still on disk): never committed
 avatar-photos/
 data/avatar.bin
 __pycache__/

@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/tapguard.h"
+#include "../../src/util/yellow/tapguard.h"
 
 void setUp() {}
 void tearDown() {}

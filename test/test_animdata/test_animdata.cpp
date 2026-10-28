@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/animdata.h"
+#include "../../src/util/black/animdata.h"
 
 void setUp() {}
 void tearDown() {}

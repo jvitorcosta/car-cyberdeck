@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstring>
-#include "../../src/util/musicwire.h"
+#include "../../src/util/wire/musicwire.h"
 
 void setUp() {}
 void tearDown() {}

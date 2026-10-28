@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/bothlook.h"
+#include "../../src/util/yellow/bothlook.h"
 
 using ledlook::Look;
 

@@ -16,7 +16,7 @@ instead, with steps to reproduce and the board and version (first serial line,
   passwords.
 - The refresh token is obtained on a PC with `tools/spotify_auth.py`, because Spotify only
   allows plain-`http` redirects to the loopback address.
-- The Spotify client (`src/spotify/client.cpp`) never logs the token request, the access token
+- The Spotify client (`src/black/spotify/client.cpp`) never logs the token request, the access token
   or the secret.
 
 ## Known limitations
@@ -25,7 +25,7 @@ instead, with steps to reproduce and the board and version (first serial line,
   the request, readable by anyone on the same WiFi or hotspot. It gates more than a sound
   effect: on the decks' web servers it guards `GET /state` (now playing, lyrics, the deck's
   status, network name and trip), `POST /play` (sounds), `POST /trip/reset`, and on the
-  companion `POST /press` (its menu, Howl and trip reset). The page itself and the Home Screen
+  yellow deck `/say`, `/state`, `/presets` and `/status` (the car's lights). The page itself and the Home Screen
   icon are public; they carry no data of their own. The remote is off unless
   `REMOTE_TOKEN` is set; use a long random token and don't reuse it, and only on networks you
   trust (your own hotspot): anyone on the network can reach the web server, and a deliberately
@@ -35,12 +35,12 @@ instead, with steps to reproduce and the board and version (first serial line,
   password never does (espota answers a challenge with it). Updates are off while `OTA_PASSWORD`
   is empty. Anyone with it, on the deck's network, can flash firmware that reads `src/config.h`
   back out, so make it long and random and don't reuse it. Updates aren't signed.
-- **The companion screen reads `/state` the same way:** it sends `REMOTE_TOKEN` in plain HTTP
-  on the hotspot about once a second, so anyone on that network can read the token and the
-  now-playing feed.
+- **The yellow deck reads the black deck's `/state` the same way:** it sends `REMOTE_TOKEN` in
+  plain HTTP on the hotspot (about once a second on its karaoke screen, less often on its Menu),
+  so anyone on that network can read the token and the now-playing feed.
 
 - Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
-  7 bundled root certificates (`src/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).
+  7 bundled root certificates (`src/common/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).
   If Spotify moves to a CA outside the bundle, the log shows
   `[tls] certificate rejected: <host>`: regenerate the bundle and flash again. Certificate
   expiry is not checked (the board has no trusted clock during the handshake).

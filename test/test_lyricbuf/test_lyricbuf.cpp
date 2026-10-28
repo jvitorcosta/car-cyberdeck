@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstring>
 #include <string>
-#include "../../src/util/lyricbuf.h"
+#include "../../src/util/black/lyricbuf.h"
 
 static lyricbuf::Lyrics L;   // ~5.6 KB: keep it off the stack
 void setUp() {}

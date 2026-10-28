@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstdint>
-#include "../../src/util/hotspotip.h"
+#include "../../src/util/common/hotspotip.h"
 
 void setUp() {}
 void tearDown() {}

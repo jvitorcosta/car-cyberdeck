@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/touchguard.h"
+#include "../../src/util/yellow/touchguard.h"
 
 void setUp() {}
 void tearDown() {}

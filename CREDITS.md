@@ -35,18 +35,18 @@ generated files contain third-party material and keep their own terms:
 
 | File | Contains | Terms |
 |---|---|---|
-| `src/ui/status_sprite.inc` | Pikachu, Zubat, Psyduck, Slowpoke and Porygon sprites from PokeAPI/sprites (`tools/gen_status_sprite.py`) | © Nintendo / Creatures Inc. / GAME FREAK inc.; fan use |
+| `src/black/ui/status_sprite.inc` | Pikachu, Zubat, Psyduck, Slowpoke and Porygon sprites from PokeAPI/sprites (`tools/gen_status_sprite.py`) | © Nintendo / Creatures Inc. / GAME FREAK inc.; fan use |
 | `data/cjk16.bin` | [GNU Unifont](https://unifoundry.com/unifont/) 16.0.04 glyphs (`tools/gen_cjk_font.py`) | GPLv2+ with the GNU font embedding exception, or SIL OFL 1.1 |
-| `src/fonts/gojira16.h`, `garmin/carlights/resources/drawables/gojira_*.png`, `data/jp16.bin` | Unifont glyphs taken from `data/cjk16.bin`: the three of ゴジラ (`tools/gen_gojira_glyphs.py`), GOJIRA's name on the yellow deck and the watch; and the Japanese subset for the yellow deck's lyrics: kana, CJK punctuation, half/fullwidth forms and the JIS X 0208 level 1 kanji (`tools/gen_jp_font.py`) | GPLv2+ with the GNU font embedding exception, or SIL OFL 1.1 |
+| `src/yellow/fonts/gojira16.h`, `garmin/carlights/resources/drawables/gojira_*.png`, `data/jp16.bin` | Unifont glyphs taken from `data/cjk16.bin`: the three of ゴジラ (`tools/gen_gojira_glyphs.py`), GOJIRA's name on the yellow deck and the watch; and the Japanese subset for the yellow deck's lyrics: kana, CJK punctuation, half/fullwidth forms and the JIS X 0208 level 1 kanji (`tools/gen_jp_font.py`) | GPLv2+ with the GNU font embedding exception, or SIL OFL 1.1 |
 | `data/emoji16.bin` | [Twemoji](https://github.com/jdecked/twemoji) 15.1.0 graphics, © Twitter, Inc and other contributors, shrunk to 16 px (`tools/gen_emoji.py`) | CC-BY 4.0 |
 | `tools/fonts/VT323-Regular.ttf` | [VT323](https://fonts.google.com/specimen/VT323), © 2011 The VT323 Project Authors; licence text in `tools/fonts/VT323-OFL.txt` | SIL OFL 1.1 |
-| `src/fonts/vt323_*.h` | VT323 glyph bitmaps at 17, 19, 24 and 36 px, derived from the font above (`tools/gfxfont.py`) | SIL OFL 1.1 (see `tools/fonts/VT323-OFL.txt`) |
+| `src/yellow/fonts/vt323_*.h` | VT323 glyph bitmaps at 17, 19, 24 and 36 px, derived from the font above (`tools/gfxfont.py`) | SIL OFL 1.1 (see `tools/fonts/VT323-OFL.txt`) |
 | `tools/emoji_freq.txt` | Unicode's [emoji frequency](https://home.unicode.org/emoji/emoji-frequency/) tiers | Unicode terms of use |
 | `tools/emoji_zwj.txt` | Unicode 15.1 [emoji ZWJ sequences](https://unicode.org/Public/emoji/15.1/) without skin tones | Unicode terms of use |
-| `src/pokemon/dex_data.inc` | Pokémon names and types from PokéAPI's CSV data (`tools/gen_dex.py`) | PokéAPI data; names © Nintendo |
-| `src/util/genre_data.inc` | Apple's genre ids and names (`tools/gen_genres.py`) | Apple iTunes Search API terms |
+| `src/black/pokemon/dex_data.inc` | Pokémon names and types from PokéAPI's CSV data (`tools/gen_dex.py`) | PokéAPI data; names © Nintendo |
+| `src/util/black/genre_data.inc` | Apple's genre ids and names (`tools/gen_genres.py`) | Apple iTunes Search API terms |
 
-The boot chime (`data/greeting_default.pcm`) and the car sprite (`src/ui/car_sprite.inc`) are
+The boot chime (`data/greeting_default.pcm`) and the car sprite (`src/black/ui/car_sprite.inc`) are
 original and MIT-licensed.
 
 ## Personal media

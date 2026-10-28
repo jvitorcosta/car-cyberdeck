@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdint>
-#include "../../src/ui/sunset.h"
-#include "../../src/ui/statusscene.h"
+#include "../../src/black/ui/sunset.h"
+#include "../../src/black/ui/statusscene.h"
 
 using sunset::DAY;
 using sunset::NIGHT;

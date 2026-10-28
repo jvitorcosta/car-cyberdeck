@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdint>
 #include <cstring>
-#include "../../src/util/idlesprite.h"
+#include "../../src/util/black/idlesprite.h"
 
 void setUp() {}
 void tearDown() {}

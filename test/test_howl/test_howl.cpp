@@ -1,7 +1,7 @@
 #include <unity.h>
 #include <cstdlib>
 #include <vector>
-#include "../../src/util/howl.h"
+#include "../../src/util/black/howl.h"
 
 // The howl is synthesised while it plays (no stored clip). What a listener and the speaker
 // rely on: it lasts the advertised time, rises then falls like a howl, never clips, and starts

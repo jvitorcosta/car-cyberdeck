@@ -1,9 +1,9 @@
 #include <unity.h>
 #include <initializer_list>
-#include "../../src/ui/presslook.h"
-#include "../../src/ui/termfont.h"
-#include "../../src/ui/termlayout.h"
-#include "../../src/util/deckmenu.h"
+#include "../../src/yellow/ui/presslook.h"
+#include "../../src/yellow/ui/termfont.h"
+#include "../../src/yellow/ui/termlayout.h"
+#include "../../src/util/yellow/deckmenu.h"
 
 using termfont::Face;
 void setUp() {}

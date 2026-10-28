@@ -7,7 +7,6 @@ intro.bin 1793840
 intro.pcm 1233600
 greeting_alt.pcm 54502
 howl.pcm 624000
-avatar.bin 67736
 idle.bin 2536
 mcqueen.bin 33020
 backdrop.bin 153608

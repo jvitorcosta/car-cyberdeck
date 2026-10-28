@@ -1,5 +1,5 @@
 #include <unity.h>
-#include "../../src/util/bootguard.h"
+#include "../../src/util/common/bootguard.h"
 
 void setUp() {}
 void tearDown() {}

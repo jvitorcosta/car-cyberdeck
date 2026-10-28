@@ -1,4 +1,4 @@
-"""Generate src/net/icon.inc: the phone remote's Home Screen icon (apple-touch-icon, 180x180
+"""Generate src/black/net/icon.inc: the phone remote's Home Screen icon (apple-touch-icon, 180x180
 PNG). An original design drawn here: a speaker with sound waves over a road stripe, in the
 page's colours. Output is committed. Run: python tools/gen_icon.py   (standard library only)
 """
@@ -12,7 +12,7 @@ BG = (16, 24, 32)          # page background #101820
 FG = (232, 160, 32)        # button orange #e8a020
 ROAD = (64, 72, 80)
 LINE = (248, 248, 216)     # page text colour #f8f8d8
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "net", "icon.inc")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "black", "net", "icon.inc")
 
 
 def inside_speaker(x, y):

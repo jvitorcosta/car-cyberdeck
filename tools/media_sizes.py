@@ -4,7 +4,7 @@ firmware you actually flash. Only the sizes are committed (data/media_sizes.txt)
   python tools/media_sizes.py record          after changing your clips/montage: update the sizes
   python tools/media_sizes.py placeholders    CI: same-size stand-ins for the missing files
 
-Stand-ins are silent PCM and empty containers (montage/intro "MTG1" with 0 frames, avatar "AVT1")
+Stand-ins are silent PCM and empty containers (montage/intro "MTG1" with 0 frames)
 padded to size, so the firmware links at its real size and still boots.
 """
 import os
@@ -13,16 +13,16 @@ import sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
 SIZES = os.path.join(DATA, "media_sizes.txt")
-# Both decks' media: the S3's sounds, montage, intro videos (kiss, Max) and their sound, second greeting, wolf howl,
-# Sonic and McQueen (its media partition), the companion's avatar. A zero-filled McQueen stand-in
+# The S3's media: its sounds, montage, intro videos (kiss, Max) and their sound, second greeting, wolf howl,
+# Sonic and McQueen (its media partition). A zero-filled McQueen stand-in
 # fails carbin's checks, so the S3 reads it as no McQueen.
 FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin",
-         "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "avatar.bin", "idle.bin",
+         "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "idle.bin",
          "mcqueen.bin", "backdrop.bin", "max.bin", "max.pcm", "shadow.bin"]
 MONTAGE_EMPTY = b"MTG1" + (0).to_bytes(2, "little") + (10).to_bytes(2, "little")
-# Stand-ins start with an empty header, so the firmware reads "no clip" / "no avatar" and boots.
+# Stand-ins start with an empty header, so the firmware reads "no clip" and boots.
 HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "max.bin": MONTAGE_EMPTY,
-         "avatar.bin": b"AVT1", "idle.bin": b"IDL1", "backdrop.bin": b"BKD1", "shadow.bin": b"SHR1"}
+         "idle.bin": b"IDL1", "backdrop.bin": b"BKD1", "shadow.bin": b"SHR1"}
 
 
 def record():

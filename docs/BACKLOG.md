@@ -38,18 +38,14 @@ Open items, not scheduled. Newest decisions first within each section.
 
 - **Old deck touch works with the pen** (2026-10-21; was "faulty" on 2026-10-14): at rest the
   panel reads a press at raw x=0 (y~4000, z~600), which tripped the stuck-press guard for good.
-  `companion/touch` now treats raw x < 100 as released, and `TOUCH_RAW_*` were recalibrated from
-  pen taps (x 532..3477, y 590..3513). Taps register under `ledpanel`; the companion's own
-  touch menu hasn't been retried yet.
+  The touch layer (`companion/touch` then, `yellow/touch` since 2026-10-28) treats raw x < 100 as
+  released, and `TOUCH_RAW_*` were recalibrated from pen taps (x 532..3477, y 590..3513). Taps
+  register under `ledpanel`.
 
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. Hotspot needs "Maximize Compatibility" on (2.4 GHz only).
-
-- **Companion screen timing** (runs on the old deck since 2026-10-14): not yet measured. Check
-  the lyric line follows the S3 within ~0.3 s, **Looking for the deck...** within ~2 s of
-  unplugging the S3 and recovery within ~5 s, and that `[mem]` stays stable over 10 min.
 
 ## Investigate
 
@@ -113,9 +109,9 @@ GitHub as a backup on 2026-10-23, no PR): 41 commits on an older main, 56 behind
   remote key); `1d44c44` (self-heal) isn't needed on the S3 (see Investigate). The car checks
   still to do are in the branch's own BACKLOG ("Gauge cluster in the car", "Companion drive
   screens").
-- **Trip reset: keep or remove, when the companion returns** (asked 2026-10-23, deferred). On main
-  the companion's TRIP screen and its phone page have a hold-to-reset button that zeroes the S3's
-  own trip clock (`POST /trip/reset`, `net/remote`, `util/tripclock`); it never touches the car.
+- **Trip reset: keep or remove, when the companion returns** (asked 2026-10-23, deferred; the
+  companion build was retired on 2026-10-28 and is in git history). The companion's TRIP screen
+  and its phone page had a hold-to-reset button that zeroes the S3's own trip clock (`POST /trip/reset`, `net/remote`, `util/tripclock`); it never touches the car.
   Dormant while the yellow deck runs `ledpanel`. Removing it means the companion's TRIP button,
   the phone page's hold button, the S3 endpoint and her TripReset line.
 

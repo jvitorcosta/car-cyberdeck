@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <cstdint>
-#include "../../src/util/readguard.h"
+#include "../../src/util/common/readguard.h"
 
 using readguard::Guard;
 using readguard::State;

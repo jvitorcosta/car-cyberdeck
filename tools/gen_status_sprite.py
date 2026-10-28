@@ -1,4 +1,4 @@
-"""Generate src/ui/status_sprite.inc: the Pokemon bundled in flash for the status screens
+"""Generate src/black/ui/status_sprite.inc: the Pokemon bundled in flash for the status screens
 ("No WiFi...", "Spotify busy...", "Nothing playing"), which show exactly when nothing can be
 downloaded. One per screen; ui/statusscene picks which.
 Run: python tools/gen_status_sprite.py   (output is committed)
@@ -11,7 +11,7 @@ import zlib
 # (C name, dex). Order = status_sprite::Id.
 SPRITES = [("PIKACHU", 25), ("ZUBAT", 41), ("PSYDUCK", 54), ("SLOWPOKE", 79), ("PORYGON", 137)]
 URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/%d.png"
-OUT = os.path.join(os.path.dirname(__file__), "..", "src", "ui", "status_sprite.inc")
+OUT = os.path.join(os.path.dirname(__file__), "..", "src", "black", "ui", "status_sprite.inc")
 
 
 def decode_png(data):
