@@ -259,6 +259,7 @@ static void run(void*) {
         }
         net::loop();
         watchdog::feed();   // a reconnect can take ~25 s
+        if (net::isOnline()) ota::onOnline();   // a pending update: confirmed once up a minute, online
         uint32_t now = millis();
         // WiFi down: keep the normal pace (polls fail fast) so Health's 15-minute backstop runs
         // even during an hours-long Retry-After wait.

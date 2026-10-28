@@ -12,9 +12,9 @@
 #include "../../util/common/otaview.h"
 
 // IDF's rollback (util/bootguard): the core marks each new image valid as it starts (initArduino)
-// unless the app says it checks later. It does: ota::onGoodPoll() confirms the image once it is
-// proven, so an update that resets before that (a crash in a global constructor, before setup(), a
-// hang the watchdog catches) boots the previous firmware. Only images set to boot by an update are
+// unless the app says it checks later. It does: ota::onOnline() confirms the image once it has
+// booted well (up a minute, online, listening), so an update that resets before that (a crash in a
+// global constructor, before setup(), a hang the watchdog catches) boots the previous firmware. Only images set to boot by an update are
 // on probation: a USB flash resets otadata, and its image boots as it always did.
 extern "C" bool verifyRollbackLater() { return true; }
 
@@ -36,6 +36,7 @@ template <typename F> void locked(F f) {
 std::atomic<bool> s_good{false};   // the running firmware has proven itself (nvs "ota"/"good")
 std::atomic<bool> s_listening{false};   // ArduinoOTA.begin() has run
 std::atomic<bool> s_proven{false};   // onGoodPoll() found it proven this boot
+std::atomic<bool> s_bootedWell{false};   // onOnline() found it up, online and listening this boot
 TaskHandle_t s_task = nullptr;
 bool (*s_hold)() = nullptr;
 void (*s_onStart)() = nullptr;
@@ -138,7 +139,7 @@ void checkBoot() {
     // The same build sent again: it proved itself before, so no probation for it.
     if (s_good.load() && confirm()) Serial.println("[ota] update already proven: confirmed");
     else if (onProbation())
-        Serial.println("[ota] new firmware on probation: a reset before it proves itself boots the previous one");
+        Serial.println("[ota] update pending: keep the deck on for a minute");
     if (!s_crashes) return;
     const esp_partition_t* other = esp_ota_get_next_update_partition(nullptr);
     esp_app_desc_t desc;
@@ -184,10 +185,16 @@ bool enabled() { return OTA_PASSWORD[0] != 0; }
 bool listening() { return s_listening.load(); }
 unsigned stackLeft() { return s_task ? (unsigned)uxTaskGetStackHighWaterMark(s_task) : 0u; }
 
+void onOnline() {
+    if (s_bootedWell.load() || !bootguard::proven(millis(), true, enabled(), listening())) return;
+    s_bootedWell.store(true);
+    if (confirm()) Serial.println("[ota] update confirmed");
+}
+
 void onGoodPoll() {
+    onOnline();   // a good poll is online too
     if (s_proven.load() || !bootguard::proven(millis(), true, enabled(), listening())) return;
     s_proven.store(true);
-    if (confirm()) Serial.println("[ota] update confirmed: no rollback from here");
     if (s_good.load()) return;
     char id[17];
     runningId(id, sizeof id);

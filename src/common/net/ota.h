@@ -32,9 +32,14 @@ bool listening();
 // The listener task's least stack to spare so far (bytes), for a [mem] line; 0 before begin().
 unsigned stackLeft();
 int progress();    // 0-100 while active, else -1
+// While online (joined to WiFi; a hotspot without data counts): once the deck has run
+// bootguard::HEALTHY_MS and the listener is up (when updates are on; bootguard::proven) an update
+// pending in the bootloader is confirmed (IDF rollback: until then any reset, the ignition
+// included, boots the previous firmware). Cheap after the first time: call it every pass.
+void onOnline();
 // After each sign the app works (the S3: a good Spotify poll; the LED panel: a check while online):
-// once the deck has run bootguard::HEALTHY_MS and the listener is up (when updates are on;
-// bootguard::proven) the running firmware counts as good, the crash count clears and an update on
-// probation is confirmed (IDF rollback: until then any reset boots the previous firmware).
+// does onOnline(), and with the same rule the running firmware counts as good in nvs and the crash
+// count clears. The S3 keeps Spotify for this layer only, so no data or a refused login never
+// leaves an update to be rolled back by the next ignition-off.
 void onGoodPoll();
 }

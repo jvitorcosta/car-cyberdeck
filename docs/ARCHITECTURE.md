@@ -96,7 +96,12 @@ are in `src/common/`; `util/x` is `src/util/<group>/x` (groups under Layers); th
   nothing, or once the song has stayed paused 30 s; now and then its second line says how to
   wake a phone that plays on unseen (`PHONE_HINT`). The screen is silent.
 - **Firmware updates** (`net/ota`, `util/otaview`, `util/backdrop`, `ui/otascreen`, `util/bootguard`)
-  — ArduinoOTA on port 3232 (password OTA_PASSWORD, off without one), its own task. `otaview::Tracker` keeps the
+  — ArduinoOTA on port 3232 (password OTA_PASSWORD, off without one), its own task. **After an
+  update keep the deck powered for about a minute**: the bootloader holds the new firmware pending
+  (IDF app rollback) until it has run a minute online with its listener up (`ota::onOnline`,
+  `[ota] update confirmed`); any reset before that boots the previous firmware. The nvs "good" mark
+  and the crash counter (`util/bootguard`) still wait for the deck's sign of working (the S3: a good
+  Spotify poll). `otaview::Tracker` keeps the
   update's state (Receiving, Done, Failed held 3 s); ArduinoOTA's own reboot is off, so the deck
   restarts 600 ms after the end, once the screen has flashed red. While Receiving or Done the
   network task pauses; a failure resumes it at once. With `data/backdrop.bin` (Green Hill Zone, from

@@ -3,7 +3,8 @@
 // Both decks' boot-loop guard for firmware that arrived over WiFi (net/ota). Two layers:
 //  - IDF's rollback (the bootloader is built with it): a new image boots once on probation, and
 //    any reset before the app confirms it, from a crash in a global constructor to the ignition,
-//    boots the previous one. net/ota confirms the image once it is proven (below).
+//    boots the previous one. net/ota confirms the image once it is proven with "online" as the
+//    sign (ota::onOnline: a hotspot without data, or a login Spotify refuses, still confirms).
 //  - this counter, for firmware that got past that (a USB flash, or a confirmed image): a counter
 //    in RTC memory (it survives a crash reset, not a power-on) goes up after each panic or watchdog
 //    reset. LIMIT crashes in a row on firmware not yet good: boot the other slot.

@@ -385,9 +385,11 @@ one). The panel joins WiFi only with `REMOTE_TOKEN` set, so it needs both.
   and voice wait (`/say` answers busy). A failed or cut upload shows `>UPDATE FAILED` in the alert
   colour (red; white on the red, orange and pink themes) for about 3 s, then the screen that was
   showing; the running firmware stays.
-- **Rollback**: new firmware proves itself once it has run a minute, is online and listens for
-  updates. If it crashes three times in a row before that, the panel boots the previous firmware
-  (`[ota] rolled back` in the serial log). A power cut doesn't count as a crash.
+- **Rollback**: keep the panel powered for about a minute after an update. New firmware proves
+  itself once it has run a minute, is online and listens for updates (`[ota] update confirmed`);
+  any reset before that, a crash or the ignition, boots the previous firmware (the bootloader's
+  rollback). After that, three crashes in a row before it is marked good still go back
+  (`[ota] rolled back` in the serial log).
 
 ## Notes
 
