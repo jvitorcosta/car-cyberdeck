@@ -7,7 +7,7 @@ static constexpr char GOJIRA_SHOWN[] = {GOJIRA_MARK, 0};
 const Preset PRESETS[N] = {
     {"ROSE", "rose", {ledlook::PINK, 40, true}, {ledlook::PINK, 100, true}},
     {"FIRE", "fire", {ledlook::RED, 40, true}, {ledlook::RED, 100, true}},
-    {"GOJIRA", "gojira", {ledlook::LIGHT_BLUE, 40, true}, {ledlook::LIGHT_BLUE, 100, true}, GOJIRA_SHOWN},
+    {"GOJIRA", "gojira", {ledlook::CYAN, 40, true}, {ledlook::CYAN, 100, true}, GOJIRA_SHOWN},
     {"PURPURA", "purpura", {ledlook::PURPLE, 40, true}, {ledlook::PURPLE, 100, true}},
     {"CIVIC", "civic", {ledlook::GREEN, 40, true}, {ledlook::GREEN, 100, true}},
     {"OCEAN", "ocean", {ledlook::BLUE, 40, true}, {ledlook::BLUE, 100, true}},

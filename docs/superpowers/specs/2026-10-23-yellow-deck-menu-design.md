@@ -1,5 +1,8 @@
 # Yellow deck: terminal menu, night mode, favourites (design)
 
+> **Status:** the menu and night mode were built (#18); the four saved favourites were superseded by
+> six fixed presets (#20), and the Car and Heart pages were not built. See `docs/yellow-deck.md`.
+
 Date: 2026-10-23. Builds on the LED panel (`src/ledpanel.cpp`, env `ledpanel`, merged in #13) and
 the Garmin "Honda City" app (`garmin/carlights/`). Voice and the watch are documented in
 `docs/leds-voice.md`.

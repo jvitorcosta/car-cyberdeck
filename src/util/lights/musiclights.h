@@ -12,7 +12,7 @@ constexpr int FLOOR_PCT = 40;          // the cap never takes a light below this
 constexpr int WHITE_SAT_PCT = 50;      // a colour less saturated than this is white
 constexpr uint32_t SIGNAL_MS = 15000;  // no palette for this long: ">MUSIC: NO SIGNAL"
 
-// The Lights grid's swatch (ledlook's first N_GRID: never the preset-only light blue) whose screen
+// The Lights grid's swatch (ledlook's first N_GRID: never the preset-only cyan) whose screen
 // colour is nearest: by hue (circular) among the saturated ones, or the white one for a colour under
 // WHITE_SAT_PCT saturation (black included).
 int nearestSwatch(songpalette::Rgb c);

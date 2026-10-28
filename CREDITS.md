@@ -14,6 +14,10 @@ CarDeck stands on a lot of other people's work. Thank you.
 - **Lyrics:** [LRCLIB](https://lrclib.net/).
 - **Artist genres:** Apple's [iTunes Search API](https://performance-partners.apple.com/search-api).
 - **Now playing:** the [Spotify Web API](https://developer.spotify.com/documentation/web-api).
+- **Weather on the yellow deck:** [Weather data by Open-Meteo.com](https://open-meteo.com/),
+  licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- **Where the car is, for the weather:** [ip-api.com](https://ip-api.com/) (free for
+  non-commercial use, no key).
 
 ## Libraries
 
@@ -21,8 +25,17 @@ CarDeck stands on a lot of other people's work. Thank you.
 [TJpg_Decoder](https://github.com/Bodmer/TJpg_Decoder) (FreeBSD-style, tjpgd),
 [PNGdec](https://github.com/bitbank2/PNGdec) (Apache-2.0),
 [JPEGDEC](https://github.com/bitbank2/JPEGDEC) 1.8.4 (Apache-2.0, S3 intro video),
-[XPT2046_Touchscreen](https://github.com/PaulStoffregen/XPT2046_Touchscreen) (MIT, hardware
-check only), [Unity](https://github.com/ThrowTheSwitch/Unity) (MIT, host tests).
+[XPT2046_Touchscreen](https://github.com/PaulStoffregen/XPT2046_Touchscreen) (MIT, the yellow
+deck's touch), [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) (Apache-2.0, the yellow
+deck's Bluetooth LE), [Unity](https://github.com/ThrowTheSwitch/Unity) (MIT, host tests).
+
+The yellow deck's Xbox controller support is Asuki Kono's
+[XboxSeriesXControllerESP32_asukiaaa](https://github.com/asukiaaa/arduino-XboxSeriesXControllerESP32)
+1.1.2, vendored in `lib/xboxpad/` with a shorter connect timeout and a gentler unbond (MIT, its
+licence in `lib/xboxpad/LICENSE`), with the same author's XboxControllerNotificationParser and
+XboxSeriesXHIDReportBuilder_asukiaaa (MIT).
+
+The watch app is built with Garmin's [Connect IQ SDK](https://developer.garmin.com/connect-iq/).
 
 The S3's QR code uses `esp_qrcode`, ESP-IDF's qrcode component shipped in the Arduino-ESP32
 core (Apache-2.0), which is built on Project Nayuki's
@@ -52,7 +65,7 @@ original and MIT-licensed.
 ## Personal media
 
 Your own media are built locally, git-ignored and never distributed with this repository: the
-avatar art (`tools/gen_avatar.py`), the intro clips (`tools/gen_intro.py`), the greeting clips
+intro clips (`tools/gen_intro.py`), the greeting clips
 (`tools/gen_greeting.py`), the photo montage (`tools/gen_montage.py`) and the wolf howl
 (`tools/gen_howl.py`). Use media you have the rights to. For the howl, the suggested source is
 the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) on
@@ -66,7 +79,7 @@ The Max Verstappen opening is a clip of Formula 1's broadcast graphics (Formula 
 cut locally by `tools/gen_intro.py` from a copy you download yourself. It lives in the git-ignored
 `max-clip/` and `data/max.bin` / `max.pcm`, never distributed here.
 
-Sonic waiting on the S3's "Nothing playing" screen is rebuilt locally by `tools/gen_idle_sprite.py`
+Sonic waiting on the S3's "Waiting for a song..." screen is rebuilt locally by `tools/gen_idle_sprite.py`
 from Sonic the Hedgehog (Mega Drive, 1991) art in the
 [s1disasm](https://github.com/sonicretro/s1disasm) disassembly. The art is © SEGA; it is fetched
 into the git-ignored `sonic-sprites/` and `data/idle.bin`, never distributed here. The Green Hill
@@ -84,7 +97,9 @@ into `sonic-sprites/shadow/` and `data/shadow.bin`, never distributed here.
 ## Trademarks
 
 CarDeck is a personal, non-commercial fan project, not affiliated with or endorsed by
-Spotify, Nintendo, The Pokémon Company, Creatures Inc., GAME FREAK inc., SEGA, Toho or Honda.
+Spotify, Nintendo, The Pokémon Company, Creatures Inc., GAME FREAK inc., SEGA, Toho, Microsoft,
+Garmin or Honda.
 Pokémon is a trademark of Nintendo; Sonic the Hedgehog is a trademark of SEGA; Godzilla (ゴジラ,
-the GOJIRA light preset's namesake) is a trademark of Toho Co., Ltd.; Spotify is a trademark of
-Spotify AB.
+the GOJIRA light preset's namesake) is a trademark of Toho Co., Ltd.; Xbox is a trademark of
+Microsoft; Garmin, Forerunner and Connect IQ are trademarks of Garmin Ltd.; Spotify is a trademark
+of Spotify AB.

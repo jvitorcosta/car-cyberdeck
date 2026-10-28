@@ -63,7 +63,7 @@ void test_no_internet_names_the_network_and_errors_show_the_code() {
 
 void test_a_cut_network_name_ends_in_an_ellipsis() {
     char title[32], detail[64];
-    linkstatus::describe(Kind::NoWifi, 0, -1, "Cecilia, iPhone, Office WiFi, Parents house 5G, Car",
+    linkstatus::describe(Kind::NoWifi, 0, -1, "Home WiFi, iPhone, Office WiFi, Parents house 5G, Car",
                          title, sizeof title, detail, sizeof detail);
     TEST_ASSERT_EQUAL_size_t(linkstatus::DETAIL_MAX, strlen(detail));
     TEST_ASSERT_EQUAL_STRING("...", detail + strlen(detail) - 3);

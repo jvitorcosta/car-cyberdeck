@@ -107,7 +107,7 @@ bool switchNetwork() {
     if (WIFI_NETWORK_COUNT < 2) return false;
     const int next = (s_index < 0 ? 0 : s_index + 1) % WIFI_NETWORK_COUNT;
     // Only when it's actually in range (a ~1.6 s scan): in the car the home WiFi isn't, and a
-    // blind switch dropped the hotspot for 10-20 s each time the new deck was late.
+    // blind switch dropped the hotspot for 10-20 s each time the black deck was late.
     const int n = WiFi.scanNetworks(false, false, false, 120);
     bool seen = false;
     for (int k = 0; k < n && !seen; ++k) seen = WiFi.SSID(k) == WIFI_NETWORKS[next].ssid;

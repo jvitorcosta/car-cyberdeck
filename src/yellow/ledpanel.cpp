@@ -22,7 +22,7 @@
 //           differ]  [+]; on PRESETS the six presets, two rows of three, each its name over its
 //           inside and outside chips (tap: apply, ">ROSE APPLIED"; the tab stays). GOJIRA's name is
 //           ゴジラ on screen (">ゴジラ APPLIED"): three Unifont glyphs (ui/gojiraname), as VT323 has
-//           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, light blue,
+//           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, cyan,
 //           is a preset's only: not on the grid, never a song colour; the theme takes blue's for it
 //   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
 //           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
@@ -56,8 +56,9 @@
 // palette's time-of-day cap (never under 40 %). An outside light left off stays off; an inside one
 // off is switched on. The theme follows the swatch. The prompt line shows ">MUSIC", a chip and the
 // swatch's name (">MUSIC: WAITING" before the first palette), or ">MUSIC: NO SIGNAL" when no palette
-// came for 15 s. Any manual change (touch, the Xbox controller, voice, the watch) ends the mode,
-// then applies; turning it off brings back the looks from before. Not kept over a reboot (see
+// came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). Any manual
+// change (touch, the Xbox controller, voice, the watch) ends the mode, then applies; turning it off
+// brings back the looks from before. Not kept over a reboot (see
 // "Music mode" below).
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
 // mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
@@ -258,10 +259,16 @@ struct Controller {
     volatile bool fresh = false;                         // just connected: needs the current state
 };
 
-// Which is inside and which outside is a guess from signal strength; swap the addresses if wrong.
+// The two controllers' BLE addresses come from src/config.h (include/config.example.h says how to
+// find them). A config.h without them doesn't build; the example's all-zero placeholders build and
+// are named in the boot log (setup).
+#if !defined(LED_INSIDE_MAC) || !defined(LED_OUTSIDE_MAC)
+#error "Set LED_INSIDE_MAC and LED_OUTSIDE_MAC in src/config.h (see include/config.example.h)"
+#endif
+static constexpr const char* NO_MAC = "00:00:00:00:00:00";
 static Controller controllers[] = {
-    {"INSIDE", "be:16:b6:00:9b:ff"},   // MELK-OA25PQ
-    {"OUTSIDE", "be:68:93:1d:22:00"},  // ELK-BLEDDM F8
+    {"INSIDE", LED_INSIDE_MAC},
+    {"OUTSIDE", LED_OUTSIDE_MAC},
 };
 static constexpr int N_CTRL = sizeof(controllers) / sizeof(controllers[0]);
 
@@ -405,7 +412,7 @@ static void linkTask(void*) {
 
 // ---- Buttons (320x240 landscape, laid out by util/deckmenu) ----
 
-// The grid is all colours (ledlook's first N_GRID; light blue is a preset's only); there is no power
+// The grid is all colours (ledlook's first N_GRID; cyan is a preset's only); there is no power
 // tile: double-tapping the lit colour turns the lights off, and tapping any colour turns them back on.
 static_assert(ledlook::N_GRID == 8 && L_MINUS - L_TILE0 == ledlook::N_GRID, "the grid is 2x4 colours");
 static_assert(deckmenu::P_N - P_PRE0 == ledpresets::N, "a button per preset");
@@ -422,7 +429,7 @@ static bool padUp = false;  // an Xbox controller is connected and reporting
 static void drawFocus(int id, bool on);
 
 // Where the focus starts on each screen: the first item, the first preset, or the colour the page
-// shows (blue for light blue, which has no tile).
+// shows (blue for cyan, which has no tile).
 static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Karaoke) return K_BACK;
@@ -920,8 +927,7 @@ static void drawLightsBand() {
             continue;
         }
         char name[12], s[32];
-        if (l.swatch == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);  // the full name won't fit
-        else upper(SWATCHES[l.swatch].name, name, sizeof(name));
+        upper(SWATCHES[l.swatch].name, name, sizeof(name));
         snprintf(s, sizeof(s), "%s %u%%", name, static_cast<unsigned>(l.pct));
         tft.setTextColor(pal(termpal::TEXT));
         text(s, lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
@@ -2403,6 +2409,13 @@ static void setMusic(bool on, bool restore) {
     drawMessage();
 }
 
+// The Menu's MUSIC MODE item again (its ON / OFF tag), after a change that didn't come from a tap on it.
+static void drawMusicItem() {
+    if (screen != Screen::Menu) return;
+    const int item = M_ITEM0 + deckmenu::MUSIC;
+    drawButton(item, pressedNow(item));
+}
+
 // A manual change (a tap, the Xbox controller, voice, the watch) while music mode is on: the mode
 // ends first (the MUSIC item shows OFF), then the change applies to the pages' looks. True when the
 // lights showed the song: the caller pushes both lights (the one it doesn't change goes back too).
@@ -2411,10 +2424,7 @@ static bool musicYield() {
     const bool drove = musicDriving;
     Serial.println("[music] a manual change ends it");
     setMusic(false, false);
-    if (screen == Screen::Menu) {
-        const int item = M_ITEM0 + deckmenu::MUSIC;
-        drawButton(item, pressedNow(item));
-    }
+    drawMusicItem();
     return drove;
 }
 
@@ -2507,8 +2517,9 @@ static bool updateTick() {
 // ignored); &zone=inside|outside (the Garmin app) acts on that zone's page only.
 // GET /state?k=[&zone=] answers that zone's line (level included) without changing anything.
 // A preset ("rose", "preset 2") is applied to both lights and answered with its line; the rest of
-// that phrase (a colour, a level, the zone) is ignored. GET /presets?k= lists the six presets (one
-// ledpresets::wireLine each), GET /status?k= each light's state.
+// that phrase (a colour, a level, the zone) is ignored. "music" / "music mode" turns music mode on,
+// "music off" off, like the MUSIC MODE button ("Music mode on"). GET /presets?k= lists the six
+// presets (one ledpresets::wireLine each), GET /status?k= each light's state and music mode's.
 // Each of the four takes the bearer ?k= (Siri Shortcuts can't sign) or a signature (common/net/reqauth:
 // the Garmin app signs, so it never sends the key).
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
@@ -2603,6 +2614,16 @@ static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
 static void applyVoice(const VoiceJob& job) {
     const ledvoice::Command& c = job.c;
     char line[sizeof(voiceReply)];
+    if (c.music >= 0) {  // "music", "music off": the MUSIC MODE button's toggle, both lights
+        if ((c.music == 1) != musicOn) {
+            setMusic(c.music == 1);
+            drawMusicItem();
+        }
+        snprintf(line, sizeof(line), "Music mode %s", musicOn ? "on" : "off");
+        noteUnlinked(line, sizeof(line), BOTH);
+        answerVoice(line, job.seq);
+        return;
+    }
     if (c.preset >= 1 && c.preset <= ledpresets::N) {  // "rose", "preset 2": both lights, whatever zone was asked
         applyPreset(c.preset - 1);
         ledpresets::describe(c.preset, line, sizeof(line));
@@ -2676,7 +2697,7 @@ static void handlePresets() {
     char body[ledpresets::N * 48] = "";
     size_t len = 0;
     for (int i = 0; i < ledpresets::N && len < sizeof(body); i++) {
-        char l[48];  // "3 GOJIRA light blue 40 light blue 100" is 37
+        char l[48];  // "1 ROSE pink 40 pink 100" is 23
         ledpresets::wireLine(i + 1, l, sizeof(l));
         const int k = snprintf(body + len, sizeof(body) - len, "%s%s", i ? "\n" : "", l);
         if (k > 0) len += static_cast<size_t>(k);
@@ -2684,13 +2705,14 @@ static void handlePresets() {
     server->send(200, "text/plain", body);
 }
 
-// Each light on, off or out of reach: "inside=on outside=nolink".
+// Each light on, off or out of reach, then music mode and the firmware:
+// "inside=on outside=nolink music=off fw=2.0.0".
 static void handleStatus() {
     if (!reqauth::pass(*server, gate, "/status", "Wrong key")) return;
     const Published p = snapshot();
     char line[96];
     lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
-                       FW_VERSION, line, sizeof(line));
+                       musicWant, FW_VERSION, line, sizeof(line));
     server->send(200, "text/plain", line);
 }
 
@@ -2792,7 +2814,7 @@ static int wantTheme() {
     return THEME_TEST;
 #else
     const Look l = shownLook(0);  // in music mode the song's swatch
-    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? ledlook::gridSwatch(l.swatch) : -1;  // light blue: blue's
+    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? ledlook::gridSwatch(l.swatch) : -1;  // cyan: blue's
 #endif
 }
 
@@ -2842,6 +2864,11 @@ void setup() {
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
     xbox.begin();
+    for (const Controller& c : controllers) {
+        if (strcmp(c.addr, NO_MAC) == 0) {
+            Serial.printf("[leds] %s: no address in config.h (LED_%s_MAC)\n", c.label, c.label);
+        }
+    }
     // 8 KB: the Xbox library's connect, discovery and subscribe (std::function, std::string) run on
     // this task too; the [mem] line shows what's left.
     xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);

@@ -168,7 +168,7 @@ asserts the boot state):
 
 Run (PowerShell, repo root):
 ```
-$env:MINGW_BIN = "C:\Users\joaov\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin"
+$env:MINGW_BIN = "C:\Users\<user>\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin"
 powershell -ExecutionPolicy Bypass -File tools\ntest.ps1 test\test_theme\test_theme.cpp src\ui\theme.cpp src\util\text.cpp
 ```
 Expected: COMPILE FAILED, `'Palette' in namespace 'theme' does not name a type` / `'DAY' is

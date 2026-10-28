@@ -315,13 +315,11 @@ void test_dash_lights_fit() {
             int k = 0;
             for (; sw.name[k]; k++) name[k] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[k])));
             name[k] = 0;
-            if (n == ledlook::LIGHT_BLUE) snprintf(name, sizeof(name), "%s", LIGHT_BLUE_SHORT);  // CYAN
             snprintf(s, sizeof(s), "%s 100%%", name);
             fitsLeft(Face::BODY, s, lightTextX(i), right);
         }
         for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(Face::BODY, s, lightTextX(i), right);
     }
-    TEST_ASSERT_EQUAL_STRING("CYAN", LIGHT_BLUE_SHORT);  // what voice takes for it too ("cyan")
     // the longest case, pinned: "OUT [chip] YELLOW 100%" is about 136 px, in its half's 145
     const int outRow = lightTextX(1) + termfont::width(Face::BODY, "YELLOW 100%") - lightX(1);
     TEST_ASSERT_TRUE(outRow >= 130 && outRow <= 140);

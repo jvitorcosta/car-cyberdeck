@@ -8,19 +8,20 @@ import Toybox.WatchUi;
 // The deck on the iPhone hotspot (net/wifi pins it there).
 const DECK_URL = "http://172.20.10.11";
 
-// [label, word sent to the deck, screen colour]: the deck's own screen colours, but purple, which
-// is #8C00FF on the deck and the lights; the watch's 64 colours show it as AA00FF, so that is set here.
-// Light blue (GOJIRA's, #0082FF on the deck) is last and is 00AAFF here: of the watch's colours the
+// [label, word sent to the deck, screen colour], in the deck's Lights grid order (ledlook): the deck's
+// own screen colours, but purple, which is #8C00FF on the deck and the lights; the watch's 64 colours
+// show it as AA00FF, so that is set here.
+// Cyan (GOJIRA's, #0082FF on the deck) is last and is 00AAFF here: of the watch's colours the
 // nearest that stays apart from OCEAN's blue (0040FF, shown as 0055FF) and from green. The deck's
-// grid has only the first N_PICK; light blue comes from a preset, so the zone lists don't offer it.
+// grid has only the first N_PICK; cyan comes from a preset, so the zone lists don't offer it.
 const COLORS = [
-    ["Purple", "purple", 0xAA00FF], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
-    ["Pink", "pink", 0xFF0090], ["Green", "green", 0x00FF30], ["White", "white", 0xFFFFFF],
-    ["Orange", "orange", 0xFF6A00], ["Yellow", "yellow", 0xFFD400],
-    ["Light blue", "light blue", 0x00AAFF],
+    ["Red", "red", 0xFF0000], ["Orange", "orange", 0xFF6A00], ["Pink", "pink", 0xFF0090],
+    ["Purple", "purple", 0xAA00FF], ["Blue", "blue", 0x0040FF], ["Green", "green", 0x00FF30],
+    ["White", "white", 0xFFFFFF], ["Yellow", "yellow", 0xFFD400],
+    ["Cyan", "cyan", 0x00AAFF],
 ];
 const N_PICK = 8;       // the colours a zone's list offers
-const BLUE_INDEX = 2;   // where a zone's list starts when its light is light blue
+const BLUE_INDEX = 4;   // where a zone's list starts when its light is cyan
 
 // Zones, as the deck names them. BOTH changes both lights; its reply describes both.
 enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
@@ -28,6 +29,9 @@ enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
 // The Presets page, and the marker on a job that isn't about one zone (/presets, /status, and the
 // /say that applies a preset: no zone param, and its reply must not be read as a look).
 const PRESETS = 3;
+// The marker on the /say that turns music mode on or off: no zone param, and its reply ("Music mode
+// on") isn't a look.
+const MUSIC = 4;
 
 // One light's look as the watch knows it.
 class Look {
@@ -44,11 +48,14 @@ class Deck {
     var outside as Look = new Look();
     var status as String = "";  // "Sending...", "No answer", ...; "" when all is well
     // The deck's fixed presets, in its order: [name, inColor, inPct, inLit, outColor, outPct, outLit, number],
-    // the colours as indices into COLORS (found by word: the deck's order differs). Empty until
+    // the colours as indices into COLORS (found by word). Empty until
     // /presets answers (and if it never does).
     var presets as Array = [];
     // Each controller's link, [inside, outside]: "on" | "off" | "nolink", "" until the deck answers.
     var links as Array<String> = ["", ""];
+    // The deck's music mode: "on" | "off", "" until /status answers. Any other change sent from here
+    // ends it on the deck, so a reply to one sets it "off" here too.
+    var music as String = "";
 
     private var _queue as Array<Array> = [];  // [path, text or null, zone]
     private var _busy as Boolean = false;
@@ -76,6 +83,11 @@ class Deck {
     // Applies preset n (its number on the deck) via /say. The reply isn't a look; onReply re-syncs instead.
     function applyPreset(n as Number) as Void {
         push(["/say", "preset " + n, PRESETS]);
+    }
+
+    // Music mode on, or off when it is on: the deck's MUSIC MODE button, by voice ("music", "music off").
+    function toggleMusic() as Void {
+        push(["/say", music.equals("on") ? "music off" : "music", MUSIC]);
     }
 
     function look(zone as Number) as Look {
@@ -134,13 +146,22 @@ class Deck {
                 readPresets(text);
             } else if (_path.equals("/status")) {
                 links = [linkOf(text, "inside="), linkOf(text, "outside=")];
-            } else if (_zone == PRESETS) {
-                syncLooks();  // a preset was applied: read the lights it set
-            } else if (_zone == BOTH) {
-                absorb(text, inside);
-                absorb(text, outside);
+                music = linkOf(text, "music=");
+            } else if (_zone == MUSIC) {
+                music = text.find("Music mode on") != null ? "on" : "off";
+                syncLooks();  // what the lights show now
             } else {
-                absorb(text, look(_zone));
+                if (text.find("Sorry") == null && music.equals("on")) {
+                    music = "off";  // the deck ends music mode on any other change
+                }
+                if (_zone == PRESETS) {
+                    syncLooks();  // a preset was applied: read the lights it set
+                } else if (_zone == BOTH) {
+                    absorb(text, inside);
+                    absorb(text, outside);
+                } else {
+                    absorb(text, look(_zone));
+                }
             }
             // for the glance: the last state the deck reported, [colour, pct, lit] per light
             if (!_path.equals("/presets") && !_path.equals("/status")) {
@@ -170,9 +191,8 @@ class Deck {
     }
 
     // "1 ROSE pink 40 pink 100" / "4 PURPURA off 0 purple 100" per line, to presets in the deck's
-    // order, with the deck's number last (what /say needs). A colour can be two words ("3 GOJIRA
-    // light blue 40 light blue 100"): each colour is the words up to its level. An answer with no
-    // valid line keeps the old list.
+    // order, with the deck's number last (what /say needs). Each colour is the words up to its level
+    // (one word today; two would still read). An answer with no valid line keeps the old list.
     private function readPresets(text as String) as Void {
         var out = [] as Array;
         var lines = split(text, "\n");

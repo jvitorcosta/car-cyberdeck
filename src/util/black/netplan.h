@@ -97,7 +97,7 @@ private:
     int last_ = 0;
 };
 
-// Idle polling. While the deck shows "Nothing playing" (idlewait: no device or no song at once, a
+// Idle polling. While the deck shows "Waiting for a song..." (idlewait: no device or no song at once, a
 // pause after PAUSE_MS) every 4 s poll got the same answer (449 of them in an idle half hour), so
 // the poll waits IDLE_MS instead; a song started on the phone shows within that. Any other poll
 // (playing, a short pause, a failure: LinkGate and Health keep their pace) returns to the

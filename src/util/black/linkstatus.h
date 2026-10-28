@@ -21,7 +21,7 @@ Kind classify(const Input& in);
 constexpr size_t TITLE_MAX = 15;    // font 4 in the 280 px dialogue box
 constexpr size_t DETAIL_MAX = 32;   // font 2 on the line under it (wide letters included)
 // Title and detail for a screen. `network` is the connected network for NoInternet and the
-// saved networks ("Cecilia, iPhone") for NoWifi. retryS: seconds to the next poll (shown as a
+// saved networks ("Home, iPhone") for NoWifi. retryS: seconds to the next poll (shown as a
 // countdown while Spotify rate-limits, HTTP 429), < 0 = unknown. Cut texts end in "...".
 void describe(Kind k, int lastCode, int retryS, const char* network, char* title, size_t titleN,
               char* detail, size_t detailN);

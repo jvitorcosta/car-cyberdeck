@@ -16,28 +16,29 @@ struct Swatch {
     uint32_t screen;   // 0xRRGGBB
 };
 // The first N_GRID are the Lights page's 2x4 grid, in ledvoice's colour order: red, orange, pink,
-// purple, blue, green, white, yellow. Light blue, the last, is a preset's only (GOJIRA, Godzilla's
-// atomic breath): never on the grid, never a song colour (musiclights snaps to the grid's eight);
-// voice ("light blue") and the lights' replies know it. Its LED mix, like purple's, is the one the
-// owner picked by eye in the car on 2026-10-26.
+// purple, blue, green, white, yellow. Cyan, the last, is a preset's only (GOJIRA, Godzilla's atomic
+// breath): never on the grid, never a song colour (musiclights snaps to the grid's eight); voice
+// ("cyan", "light blue", "azul claro") and the lights' replies know it. One name everywhere a person
+// reads it (the screen, voice replies, /state, /presets, the watch). Its LED mix, like purple's, is
+// the one the owner picked by eye in the car on 2026-10-26.
 // The swatches' indices, SWATCHES' order: every table of swatches (presets, colour words, song
 // moods) names them by these.
-enum Colour : uint8_t { RED, ORANGE, PINK, PURPLE, BLUE, GREEN, WHITE, YELLOW, LIGHT_BLUE };
-constexpr int N_SWATCH = LIGHT_BLUE + 1, N_GRID = LIGHT_BLUE;
+enum Colour : uint8_t { RED, ORANGE, PINK, PURPLE, BLUE, GREEN, WHITE, YELLOW, CYAN };
+constexpr int N_SWATCH = CYAN + 1, N_GRID = CYAN;
 inline constexpr Swatch SWATCHES[N_SWATCH] = {
     {"Red", "red", 255, 0, 0, 0xFF0000},          {"Orange", "orange", 255, 40, 0, 0xFF6A00},
     {"Pink", "pink", 255, 0, 70, 0xFF0090},       {"Purple", "purple", 140, 0, 255, 0x8C00FF},
     {"Blue", "blue", 0, 0, 255, 0x0040FF},        {"Green", "green", 0, 255, 0, 0x00FF30},
     {"White", "white", 255, 215, 170, 0xFFFFFF},  {"Yellow", "yellow", 255, 110, 0, 0xFFD400},  // LED yellow: full green goes lime
-    {"Light blue", "light blue", 0, 130, 255, 0x0082FF},
+    {"Cyan", "cyan", 0, 130, 255, 0x0082FF},
 };
 
 // The grid colour that stands for swatch sw where only the grid's eight can (the Lights page's
-// focus, the terminal's theme): itself, or blue for light blue.
-constexpr int gridSwatch(int sw) { return sw == LIGHT_BLUE ? static_cast<int>(BLUE) : sw; }
+// focus, the terminal's theme): itself, or blue for cyan.
+constexpr int gridSwatch(int sw) { return sw == CYAN ? static_cast<int>(BLUE) : sw; }
 
 // The grid colours' words, English and Portuguese, lowercase and without accents: what voice commands
-// (ledvoice) and song titles, albums, playlist names and #tags (songmood) call them. Light blue has
+// (ledvoice) and song titles, albums, playlist names and #tags (songmood) call them. Cyan has
 // none here (never a song colour): ledvoice adds its words, and the homophones Siri makes of a lone
 // colour word, on top of these.
 struct ColourWord {

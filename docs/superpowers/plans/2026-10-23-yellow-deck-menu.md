@@ -1,5 +1,8 @@
 # Yellow deck menu, night mode and favourites: implementation plan
 
+> **Status:** the menu and night mode were built (#18); the four saved favourites were superseded by
+> six fixed presets (#20), and the Car and Heart pages were not built. See `docs/yellow-deck.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The yellow deck boots to a Fallout-terminal main menu. Its Lights page gains Back, an
