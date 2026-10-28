@@ -9,9 +9,9 @@ void tearDown() {}
 
 // The common clone layout: service FFF0, FFF1 notify, FFF2 write.
 void test_fff0_clone() {
-    const Char c[] = {{0x180A, 0x2A29, false, false, false, false},     // device info: ignored
-                      {0xFFF0, 0xFFF1, false, false, true, false},
-                      {0xFFF0, 0xFFF2, true, true, false, false}};
+    const Char c[] = {{0x180A, 0x2A29, false, false, false, false, 0},     // device info: ignored
+                      {0xFFF0, 0xFFF1, false, false, true, false, 0},
+                      {0xFFF0, 0xFFF2, true, true, false, false, 0}};
     const obdble::Pick p = obdble::pick(c, 3);
     TEST_ASSERT_EQUAL_INT(1, p.notify);
     TEST_ASSERT_EQUAL_INT(2, p.write);
@@ -19,7 +19,7 @@ void test_fff0_clone() {
 
 // FFE0 / FFE1: one characteristic both notifies and takes writes.
 void test_ffe0_single_characteristic() {
-    const Char c[] = {{0xFFE0, 0xFFE1, false, true, true, false}};
+    const Char c[] = {{0xFFE0, 0xFFE1, false, true, true, false, 0}};
     const obdble::Pick p = obdble::pick(c, 1);
     TEST_ASSERT_EQUAL_INT(0, p.notify);
     TEST_ASSERT_EQUAL_INT(0, p.write);
@@ -27,10 +27,10 @@ void test_ffe0_single_characteristic() {
 
 // vLinker-style 18F0 (2AF0 notify, 2AF1 write); FFF0 wins when both exist.
 void test_known_services_in_order() {
-    const Char c[] = {{0x18F0, 0x2AF0, false, false, true, false},
-                      {0x18F0, 0x2AF1, true, false, false, false},
-                      {0xFFF0, 0xFFF1, false, false, true, false},
-                      {0xFFF0, 0xFFF2, true, false, false, false}};
+    const Char c[] = {{0x18F0, 0x2AF0, false, false, true, false, 0},
+                      {0x18F0, 0x2AF1, true, false, false, false, 0},
+                      {0xFFF0, 0xFFF1, false, false, true, false, 0},
+                      {0xFFF0, 0xFFF2, true, false, false, false, 0}};
     obdble::Pick p = obdble::pick(c, 4);
     TEST_ASSERT_EQUAL_INT(2, p.notify);
     TEST_ASSERT_EQUAL_INT(3, p.write);
@@ -41,17 +41,17 @@ void test_known_services_in_order() {
 
 // An unknown layout: any one service that has both a notify/indicate and a write characteristic.
 void test_unknown_service_with_both() {
-    const Char c[] = {{0x1800, 0x2A00, false, false, false, false},
-                      {0xABCD, 0x0001, false, false, false, true},     // indicate counts
-                      {0xABCD, 0x0002, false, true, false, false}};
+    const Char c[] = {{0x1800, 0x2A00, false, false, false, false, 0},
+                      {0xABCD, 0x0001, false, false, false, true, 0},     // indicate counts
+                      {0xABCD, 0x0002, false, true, false, false, 0}};
     const obdble::Pick p = obdble::pick(c, 3);
     TEST_ASSERT_EQUAL_INT(1, p.notify);
     TEST_ASSERT_EQUAL_INT(2, p.write);
 }
 
 void test_nothing_usable() {
-    const Char c[] = {{0xFFF0, 0xFFF1, false, false, true, false},     // notify only, no write
-                      {0x1234, 0x0001, true, false, false, false}};    // write in another service
+    const Char c[] = {{0xFFF0, 0xFFF1, false, false, true, false, 0},     // notify only, no write
+                      {0x1234, 0x0001, true, false, false, false, 0}};    // write in another service
     const obdble::Pick p = obdble::pick(c, 2);
     TEST_ASSERT_EQUAL_INT(-1, p.notify);
     TEST_ASSERT_EQUAL_INT(-1, p.write);
@@ -99,6 +99,21 @@ void test_serial_services_are_recognised() {
     TEST_ASSERT_FALSE(obdble::serialService(0));
 }
 
+// 128-bit services all read as service 0: the per-service index (group) keeps them apart, so a
+// notify in one and a write in another never make a pair (the Vgate may use a 128-bit service).
+void test_128bit_services_do_not_mix() {
+    const Char c[] = {{0, 0, false, false, true, false, 1},            // service #1: notify only
+                      {0, 0, true, false, false, false, 2},            // service #2: write only
+                      {0, 0, false, false, true, false, 3},            // service #3: both
+                      {0, 0, false, true, false, false, 3}};
+    obdble::Pick p = obdble::pick(c, 2);
+    TEST_ASSERT_EQUAL_INT(-1, p.notify);
+    TEST_ASSERT_EQUAL_INT(-1, p.write);
+    p = obdble::pick(c, 4);
+    TEST_ASSERT_EQUAL_INT(2, p.notify);
+    TEST_ASSERT_EQUAL_INT(3, p.write);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_fff0_clone);
@@ -106,6 +121,7 @@ int main(int, char**) {
     RUN_TEST(test_known_services_in_order);
     RUN_TEST(test_unknown_service_with_both);
     RUN_TEST(test_nothing_usable);
+    RUN_TEST(test_128bit_services_do_not_mix);
     RUN_TEST(test_inbox_keeps_order_across_chunks);
     RUN_TEST(test_inbox_drops_what_does_not_fit_and_clears);
     RUN_TEST(test_serial_services_are_recognised);

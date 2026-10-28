@@ -3,11 +3,12 @@
 
 namespace obdble {
 namespace {
-// The first notify and the first write characteristic of service s; true when it has both.
-bool inService(const Char* c, int n, uint16_t s, Pick* out) {
+// The first notify and the first write characteristic of service s, discovery group g; true when
+// it has both.
+bool inService(const Char* c, int n, uint16_t s, uint8_t g, Pick* out) {
     Pick p;
     for (int i = 0; i < n; ++i) {
-        if (c[i].service != s) continue;
+        if (c[i].service != s || c[i].group != g) continue;
         if (p.notify < 0 && (c[i].notify || c[i].indicate)) p.notify = i;
         if (p.write < 0 && (c[i].write || c[i].writeNoResp)) p.write = i;
     }
@@ -21,9 +22,10 @@ Pick pick(const Char* chars, int n) {
     Pick p;
     if (!chars || n <= 0) return p;
     for (uint16_t s : {(uint16_t)0xFFF0, (uint16_t)0xFFE0, (uint16_t)0x18F0})
-        if (inService(chars, n, s, &p)) return p;
+        for (int i = 0; i < n; ++i)                      // a known 16-bit service, one group at a time
+            if (chars[i].service == s && inService(chars, n, s, chars[i].group, &p)) return p;
     for (int i = 0; i < n; ++i)
-        if (inService(chars, n, chars[i].service, &p)) return p;
+        if (inService(chars, n, chars[i].service, chars[i].group, &p)) return p;
     return Pick{};
 }
 
