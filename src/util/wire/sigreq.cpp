@@ -160,7 +160,7 @@ Verdict Verifier::check(const char* method, const char* path, const Param* param
     if (!synced) return Verdict::NoClock;
     if (!started_) {   // after a boot: nothing from before it (its ring is gone)
         started_ = true;
-        floor_ = now - 1;
+        floor_ = now - BOOT_SLACK_S;
     }
     if (when - now > WINDOW_S || now - when > WINDOW_S || when <= floor_) return Verdict::Stale;
     char msg[MAX_MSG + 1];

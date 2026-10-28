@@ -12,11 +12,15 @@
 // them (+ or %20), don't matter; and no value can pose as another param.
 // A server accepts it when |t - now| <= WINDOW_S and the nonce isn't in its ring of the last RING
 // accepted ones. Requests that fell out of the ring are refused by time: t must be above the
-// newest t that left it (and, after a boot, above the moment of the first check), so the window
-// stays bounded whatever the request rate.
+// newest t that left it (and, after a boot, above the first check's now - BOOT_SLACK_S), so the
+// window stays bounded whatever the request rate.
 namespace sigreq {
 constexpr int64_t WINDOW_S = 120;
 constexpr int RING = 32;
+// After a boot the ring is empty: only t > (the first check's now - this) is accepted. A few seconds
+// for two clocks that round to different seconds; a deck takes longer than that to boot, join and
+// set its clock, so nothing recorded before the reboot gets in.
+constexpr int64_t BOOT_SLACK_S = 5;
 constexpr size_t TAG = 16;          // bytes of the HMAC sent
 constexpr size_t MAX_MSG = 384;     // the signed string; longer requests aren't signed or accepted
 constexpr int MAX_PARAMS = 8;

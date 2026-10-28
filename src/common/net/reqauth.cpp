@@ -42,10 +42,11 @@ bool pass(WebServer& s, const remotegate::Gate& gate, const char* path, const ch
         int64_t now = 0;
         const bool synced = netclock::unixNow(&now);
         const String t = s.arg("t"), n = s.arg("n"), sig = s.arg("sig");
-        const sigreq::Verdict v = tooMany ? sigreq::Verdict::Malformed
-                                          : s_verifier.check(s.method() == HTTP_GET ? "GET" : "POST", path, params,
-                                                             count, s.hasArg("t") ? t.c_str() : nullptr,
-                                                             s.hasArg("n") ? n.c_str() : nullptr, sig.c_str(), synced, now);
+        const char* method = s.method() == HTTP_GET ? "GET" : "POST";
+        const sigreq::Verdict v =
+            tooMany ? sigreq::Verdict::Malformed
+                    : s_verifier.check(method, path, params, count, s.hasArg("t") ? t.c_str() : nullptr,
+                                       s.hasArg("n") ? n.c_str() : nullptr, sig.c_str(), synced, now);
         if (v == sigreq::Verdict::Ok) return true;
         if (v == sigreq::Verdict::NoClock) {
             Serial.printf("[auth] %s signed before the clock is set: refused\n", path);

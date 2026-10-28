@@ -106,7 +106,7 @@ static void test_a_value_cant_pose_as_params() {
 static void test_the_time_window() {
     const Param p[] = {{"on", "1"}};
     sigreq::Verifier v(KEY);
-    // the first check sets the boot floor at its now - 1: start well before the times tried below
+    // the first check sets the boot floor at its now - BOOT_SLACK_S: start well before the times tried below
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/music", p, 1, signOf("/music", p, 1, T - 500, 1), T - 500));
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/music", p, 1, signOf("/music", p, 1, T - 120, 2), T));
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/music", p, 1, signOf("/music", p, 1, T + 120, 3), T));
@@ -180,12 +180,15 @@ static void test_the_floor_is_the_newest_time_let_go() {
     TEST_ASSERT_EQUAL(Verdict::Stale, verify(v, "/state", nullptr, 0, ahead, T + 40));
 }
 
-// After a reboot the ring is empty: what was captured before it is refused by time.
+// After a reboot the ring is empty: what was captured before it is refused by time. A clock a few
+// seconds behind still gets in.
 static void test_nothing_from_before_the_first_check() {
     sigreq::Verifier v(KEY);
-    const Signed before = signOf("/state", nullptr, 0, T - 5, 1);
+    const Signed before = signOf("/state", nullptr, 0, T - sigreq::BOOT_SLACK_S, 1);
+    const Signed behind = signOf("/state", nullptr, 0, T - sigreq::BOOT_SLACK_S + 1, 3);
     TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/state", nullptr, 0, signOf("/state", nullptr, 0, T, 2), T));
     TEST_ASSERT_EQUAL(Verdict::Stale, verify(v, "/state", nullptr, 0, before, T));
+    TEST_ASSERT_EQUAL(Verdict::Ok, verify(v, "/state", nullptr, 0, behind, T));
 }
 
 static void test_sign_refuses() {
