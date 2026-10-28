@@ -12,7 +12,7 @@ struct Book {
     bool hasFull = false;           // false until a fill-up was said: no fill-up, no range
     float litresSinceFull = 0;
     float pricePerL = NAN;          // R$/L, NAN until one was said
-    float recentKmL = NAN;          // kept by the caller from the trip logs
+    float recentKmL = NAN;          // km/L over roughly the last 50 km: see learn()
 };
 
 // A full tank: the burn starts again from 0. A price inside PRICE_MIN..PRICE_MAX replaces the old one;
@@ -20,6 +20,12 @@ struct Book {
 void fillUp(Book* b, float pricePerL);
 // Litres used. NAN and negative amounts are ignored.
 void burn(Book* b, float litres);
+// A driven chunk (a trip, or part of one): km and the litres it burnt. recentKmL follows a km-weighted
+// moving average that approximates "the last LEARN_KM": the chunk weighs km / LEARN_KM, capped at 1,
+// so a 50 km trip replaces the old value and a 5 km hop moves it 10 %. The first chunk sets it.
+// Zero, negative or non-finite km or litres are ignored.
+constexpr float LEARN_KM = 50.0f;
+void learn(Book* b, float km, float litres);
 // Km left: (TANK_L - litresSinceFull) * recentKmL, never below 0. NAN unless hasFull and recentKmL is > 0.
 float rangeKm(const Book& b);
 // What `litres` cost at the book's price. NAN without a price or with NAN litres.
@@ -31,6 +37,8 @@ float costRs(const Book& b, float litres);
 constexpr size_t RECORD_BYTES = 17;
 void encode(const Book& b, uint8_t out[RECORD_BYTES]);
 // False on a wrong length, unknown flag bits, or negative / non-finite litres; *b is then untouched.
+// A price outside PRICE_MIN..PRICE_MAX or non-finite reads as NAN (none), and so does a non-finite or
+// non-positive recentKmL: a bad old record must not show a wrong cost or range.
 bool decode(const uint8_t* in, size_t len, Book* b);
 
 // Siri-dictated text, any case and punctuation, unknown words skipped. A fill-up phrase has "filled",

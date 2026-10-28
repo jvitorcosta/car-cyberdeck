@@ -27,6 +27,7 @@ public:
     float avgKmL() const;                   // NAN until some fuel has been counted
     float kmLeft(float fuelPct, const Car& c) const;   // NAN under MIN_KM or without a fuel level
     float km() const { return km_; }
+    float litres() const { return litres_; }   // burnt so far: what the fuel book is charged at trip end
     static constexpr uint32_t MAX_STEP_MS = 2000;
     static constexpr float MIN_KMH = 3.0f, MIN_KM = 2.0f, CAP = 99.9f, SMOOTH_S = 1.5f;
 private:

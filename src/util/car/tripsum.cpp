@@ -133,9 +133,10 @@ Recharge Trip::recharge() const {
     return r;
 }
 
-// "null" for unknown, else the number with the given decimals.
+// "null" for unknown, else the number with the given decimals. JSON has no inf either, so anything
+// non-finite is "null" (an "inf" would make the whole row unreadable on the PC).
 static void num(char* buf, size_t n, float v, int decimals) {
-    if (std::isnan(v)) snprintf(buf, n, "null");
+    if (!std::isfinite(v)) snprintf(buf, n, "null");
     else snprintf(buf, n, "%.*f", decimals, static_cast<double>(v));
 }
 

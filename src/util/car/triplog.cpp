@@ -1,18 +1,13 @@
 #include "triplog.h"
+#include <cstdio>
 #include <cstring>
 
 namespace triplog {
 
-void Log::open(const char* tripId) {
-    // "/t" + id + ".jsonl" + NUL must fit 24 bytes.
-    constexpr size_t fixed = 2 + 6 + 1;
-    size_t room = sizeof(name_) - fixed;
-    size_t idLen = tripId ? strlen(tripId) : 0;
-    if (idLen > room) idLen = room;
-    name_[0] = '/';
-    name_[1] = 't';
-    if (idLen) memcpy(name_ + 2, tripId, idLen);
-    memcpy(name_ + 2 + idLen, ".jsonl", 7);  // includes the NUL
+void Log::open(uint32_t seq) {
+    // Padded to 6 digits: a deck boots far fewer than a million times, so names sort as numbers do.
+    // At most "/t" + 10 digits + ".jsonl" = 18 chars.
+    snprintf(name_, sizeof name_, "/t%06lu.jsonl", static_cast<unsigned long>(seq));
     open_ = true;
 }
 
@@ -71,7 +66,11 @@ bool Log::cutPartialRow(const char* name, bool* removed) {
     char buf[64];
     while (end > 0) {
         long start = end > (long)sizeof(buf) ? end - (long)sizeof(buf) : 0;
-        size_t got = s_.read(name, start, buf, (size_t)(end - start));
+        const size_t want = (size_t)(end - start);
+        size_t got = s_.read(name, start, buf, want);
+        // A short read is a flash error, not the start of the file: guessing would cut good rows or
+        // remove the whole trip. Leave it for the next boot.
+        if (got != want) return false;
         long found = -1;
         for (size_t k = got; k > 0; k--) {
             if (buf[k - 1] == '\n') {
@@ -85,9 +84,12 @@ bool Log::cutPartialRow(const char* name, bool* removed) {
         }
         end = start;
     }
-    if (cut == 0) *removed = s_.remove(name);
-    else s_.truncate(name, cut);
-    return true;
+    // "Changed" only when the store says it happened.
+    if (cut == 0) {
+        *removed = s_.remove(name);
+        return *removed;
+    }
+    return s_.truncate(name, cut);
 }
 
 void Log::enforceCap() {

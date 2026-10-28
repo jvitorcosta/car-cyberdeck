@@ -17,6 +17,17 @@ void burn(Book* b, float litres) {
     b->litresSinceFull += litres;
 }
 
+void learn(Book* b, float km, float litres) {
+    if (!b || !std::isfinite(km) || !std::isfinite(litres) || !(km > 0) || !(litres > 0)) return;
+    const float kmL = km / litres;
+    if (std::isnan(b->recentKmL)) {
+        b->recentKmL = kmL;
+        return;
+    }
+    const float w = km / LEARN_KM < 1.0f ? km / LEARN_KM : 1.0f;
+    b->recentKmL += w * (kmL - b->recentKmL);
+}
+
 float rangeKm(const Book& b) {
     if (!b.hasFull || !(b.recentKmL > 0)) return NAN;
     float km = (TANK_L - b.litresSinceFull) * b.recentKmL;
@@ -56,8 +67,11 @@ bool decode(const uint8_t* in, size_t len, Book* b) {
     if (!std::isfinite(litres) || litres < 0) return false;
     b->hasFull = in[0] == 1;
     b->litresSinceFull = litres;
-    b->pricePerL = getF(in + 5);
-    b->recentKmL = getF(in + 9);
+    // A bad price or economy is dropped to "unknown" rather than refusing the record: the fill-up and
+    // the litres since are still worth keeping.
+    const float price = getF(in + 5), kmL = getF(in + 9);
+    b->pricePerL = std::isfinite(price) && priceInRange(price) ? price : NAN;
+    b->recentKmL = std::isfinite(kmL) && kmL > 0 ? kmL : NAN;
     return true;
 }
 

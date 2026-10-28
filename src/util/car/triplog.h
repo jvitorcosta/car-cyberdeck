@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 // Trip files that survive a power cut. The car can lose power at any moment, so rows are queued in RAM,
 // appended to a flash file every ~30 s, and at boot any half-written last row is cut away. Storage sits
 // behind a small Store interface (LittleFS on the deck, a RAM store in the tests); no heap is used, so
@@ -11,7 +12,10 @@ struct Store {
     virtual size_t read(const char* name, long at, char* out, size_t n) = 0;
     virtual bool truncate(const char* name, long len) = 0;
     virtual bool remove(const char* name) = 0;
-    virtual int list(char (*names)[24], int max, int skip) = 0; // "/t<id>.jsonl" files, oldest first: up to max names after the first skip; returns how many
+    // The "/t<seq>.jsonl" files in ascending name order (LittleFS lists by name), which is oldest first
+    // only because Log names them by a zero-padded boot sequence: up to max names after the first skip;
+    // returns how many.
+    virtual int list(char (*names)[24], int max, int skip) = 0;
     virtual ~Store() = default;
 };
 
@@ -23,8 +27,9 @@ constexpr int PAGE = 8;  // names fetched per list() call; any number of files i
 class Log {
 public:
     explicit Log(Store& s) : s_(s) {}
-    // Names the file "/t<id>.jsonl"; the id is cut so the whole name fits 24 bytes with its NUL.
-    void open(const char* tripId);
+    // Names the file "/t%06lu.jsonl" from the boot sequence, zero-padded so name order is age order
+    // (the readable trip id stays in each row's "t" key). Any uint32_t fits the 24-byte name.
+    void open(uint32_t seq);
     // Copies the line into RAM until flush(). A line of LINE_BYTES or more is dropped; when the queue is
     // full the oldest queued line is dropped. Both are counted in dropped().
     void queue(const char* line);
@@ -32,7 +37,8 @@ public:
     // and the rest queued. True when the queue is empty afterwards; false (and nothing done) before open().
     bool flush();
     // At boot: in every file whose last byte is not '\n', cut back to just after the last '\n' (a file
-    // left empty is removed). True if any file changed.
+    // left empty is removed). A file that can't be read in full is left alone. True if any file changed
+    // (a truncate or remove the store reported as done).
     bool recover();
     // Removes the oldest files while the total is above CAP_BYTES; never the open file.
     void enforceCap();

@@ -148,6 +148,74 @@ void test_decode_rejects_corrupt_litres() {
     TEST_ASSERT_FALSE(fuelbook::decode(buf, sizeof buf, &r));
 }
 
+// A record from an older build or a bad flash read: a price outside the accepted range or a non-finite
+// one reads as "no price"; a non-finite or non-positive economy reads as "unknown".
+void test_decode_sanitizes_price_and_economy() {
+    fuelbook::Book b;
+    fuelbook::fillUp(&b, 6.49f);
+    uint8_t buf[fuelbook::RECORD_BYTES];
+    fuelbook::Book r;
+    const float badPrices[] = {2.99f, 15.01f, INFINITY, -6.0f};
+    for (float p : badPrices) {
+        b.pricePerL = p;
+        b.recentKmL = 11.0f;
+        fuelbook::encode(b, buf);
+        TEST_ASSERT_TRUE(fuelbook::decode(buf, sizeof buf, &r));
+        TEST_ASSERT_TRUE(std::isnan(r.pricePerL));
+        TEST_ASSERT_EQUAL_FLOAT(11.0f, r.recentKmL);
+    }
+    b.pricePerL = 3.0f;  // the ends are in range
+    fuelbook::encode(b, buf);
+    TEST_ASSERT_TRUE(fuelbook::decode(buf, sizeof buf, &r));
+    TEST_ASSERT_EQUAL_FLOAT(3.0f, r.pricePerL);
+    const float badKmL[] = {0.0f, -4.0f, INFINITY};
+    for (float k : badKmL) {
+        b.pricePerL = 6.49f;
+        b.recentKmL = k;
+        fuelbook::encode(b, buf);
+        TEST_ASSERT_TRUE(fuelbook::decode(buf, sizeof buf, &r));
+        TEST_ASSERT_TRUE(std::isnan(r.recentKmL));
+        TEST_ASSERT_EQUAL_FLOAT(6.49f, r.pricePerL);
+    }
+}
+
+void test_learn_first_chunk_sets_economy() {
+    fuelbook::Book b;
+    fuelbook::learn(&b, 2.0f, 0.2f);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 10.0f, b.recentKmL);
+}
+
+void test_learn_fifty_km_replaces_it() {
+    fuelbook::Book b;
+    b.recentKmL = 10.0f;
+    fuelbook::learn(&b, 50.0f, 2.5f);  // 20 km/L
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 20.0f, b.recentKmL);
+    fuelbook::learn(&b, 120.0f, 10.0f);  // longer than 50 km still weighs 1
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 12.0f, b.recentKmL);
+}
+
+void test_learn_five_km_moves_it_ten_percent() {
+    fuelbook::Book b;
+    b.recentKmL = 10.0f;
+    fuelbook::learn(&b, 5.0f, 0.25f);  // 20 km/L, weight 0.1
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 11.0f, b.recentKmL);
+}
+
+void test_learn_ignores_bad_input() {
+    fuelbook::Book b;
+    b.recentKmL = 10.0f;
+    fuelbook::learn(&b, 0.0f, 1.0f);
+    fuelbook::learn(&b, -5.0f, 1.0f);
+    fuelbook::learn(&b, 5.0f, 0.0f);
+    fuelbook::learn(&b, 5.0f, -1.0f);
+    fuelbook::learn(&b, NAN, 1.0f);
+    fuelbook::learn(&b, 5.0f, NAN);
+    fuelbook::learn(&b, INFINITY, 1.0f);
+    fuelbook::learn(&b, 5.0f, INFINITY);
+    fuelbook::learn(nullptr, 5.0f, 0.5f);
+    TEST_ASSERT_EQUAL_FLOAT(10.0f, b.recentKmL);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_fill_up_means_no_range);
@@ -163,5 +231,10 @@ int main(int, char**) {
     RUN_TEST(test_not_a_fill_phrase);
     RUN_TEST(test_record_roundtrip_and_bad_length);
     RUN_TEST(test_decode_rejects_corrupt_litres);
+    RUN_TEST(test_decode_sanitizes_price_and_economy);
+    RUN_TEST(test_learn_first_chunk_sets_economy);
+    RUN_TEST(test_learn_fifty_km_replaces_it);
+    RUN_TEST(test_learn_five_km_moves_it_ten_percent);
+    RUN_TEST(test_learn_ignores_bad_input);
     return UNITY_END();
 }

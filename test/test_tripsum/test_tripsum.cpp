@@ -175,6 +175,18 @@ void test_json_row_unknowns_are_null() {
     TEST_ASSERT_NOT_NULL(strstr(buf, "\"v\":[null,null,null],\"cool\":null"));
 }
 
+// JSON has no inf: a division gone wrong upstream must still give a parseable row.
+void test_json_row_infinite_is_null() {
+    tripsum::Row r = exampleRow();
+    r.km = INFINITY;
+    r.litres = -INFINITY;
+    char buf[200];
+    TEST_ASSERT_TRUE(tripsum::jsonRow(r, "t1", buf, sizeof(buf)) > 0);
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"km\":null,"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"l\":null,"));
+    TEST_ASSERT_NULL(strstr(buf, "inf"));
+}
+
 void test_json_row_reports_no_fit() {
     char buf[20];
     TEST_ASSERT_EQUAL_UINT32(0, tripsum::jsonRow(exampleRow(), "t1", buf, 20));
@@ -196,6 +208,7 @@ int main(int, char**) {
     RUN_TEST(test_recharge_waits_for_the_engine);
     RUN_TEST(test_json_row_is_one_line_with_fixed_keys);
     RUN_TEST(test_json_row_unknowns_are_null);
+    RUN_TEST(test_json_row_infinite_is_null);
     RUN_TEST(test_json_row_reports_no_fit);
     return UNITY_END();
 }

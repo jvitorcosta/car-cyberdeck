@@ -223,6 +223,21 @@ void test_status_mil_and_count() {
     TEST_ASSERT_EQUAL(3, obd::codeCount(v));
 }
 
+// The City has three ECUs and each answers 0101 on its own line: the lamp is on if any says so, and
+// the stored codes are the sum of every ECU's count.
+void test_status_over_several_ecus() {
+    float v;
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Status, "7E8 06 41 01 02 07 E5 00\r7E9 06 41 01 83 07 E5 00\r", &v));
+    TEST_ASSERT_TRUE(obd::milOn(v));
+    TEST_ASSERT_EQUAL(5, obd::codeCount(v));
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Status, "41 01 01 00 00 00\r41 01 00 00 00 00\r41 01 02 00 00 00\r", &v));
+    TEST_ASSERT_FALSE(obd::milOn(v));
+    TEST_ASSERT_EQUAL(3, obd::codeCount(v));
+    TEST_ASSERT_EQUAL(Reply::Ok, obd::parse(Pid::Status, "41 01 FF 00 00 00\r41 01 7F 00 00 00\r", &v));   // capped
+    TEST_ASSERT_TRUE(obd::milOn(v));
+    TEST_ASSERT_EQUAL(127, obd::codeCount(v));
+}
+
 void test_parse_stored_codes() {
     char codes[4][6];
     TEST_ASSERT_EQUAL(2, obd::parseCodes("43 02 03 01 01 71\r", false, codes, 4));
@@ -310,6 +325,7 @@ int main() {
     RUN_TEST(test_allowed_codes_requests_only);
     RUN_TEST(test_trims_and_module_volts);
     RUN_TEST(test_status_mil_and_count);
+    RUN_TEST(test_status_over_several_ecus);
     RUN_TEST(test_parse_stored_codes);
     RUN_TEST(test_code_letters_and_digits);
     RUN_TEST(test_codes_from_several_ecus_and_noise);

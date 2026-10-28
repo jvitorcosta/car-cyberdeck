@@ -12,7 +12,8 @@ namespace obd {
 // (10); Ethanol: % (52); FuelSys: fuel system 1 status (03; 4 = open loop on deceleration: fuel cut);
 // CoolantX / IntakeX: the extended coolant / intake readings (67 / 68, sensor 1), all the City has.
 // TrimS / TrimL: short / long term fuel trim, % (06 / 07); ModuleV: the ECU's own supply voltage (42);
-// Status (01): the stored-code count, plus 1000 when the check-engine lamp (MIL) is on (milOn, codeCount).
+// Status (01): the stored-code count, plus 1000 when the check-engine lamp (MIL) is on (milOn, codeCount);
+// over every ECU's line: the lamp ORed, the counts summed (capped at 127).
 enum class Pid : uint8_t { Rpm, Speed, Coolant, Load, Intake, Throttle, Battery, PedalD, PedalE, Fuel,
                            Map, Maf, Ethanol, FuelSys, CoolantX, IntakeX, TrimS, TrimL, ModuleV, Status,
                            COUNT };

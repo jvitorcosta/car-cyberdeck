@@ -9,7 +9,7 @@ namespace {
 constexpr float MAX_VOLTS = 20.0f;   // ATRV: a 12 V system reads ~11-15 V
 struct Def { const char* cmd; uint8_t pid; uint8_t bytes; };
 // Order matches Pid. pid/bytes are unused for Battery (ATRV). FuelSys reads system 1 only; Status
-// reads only its first byte (MIL flag and code count).
+// reads only its first byte (MIL flag and code count), from every ECU's line (see parse()).
 constexpr Def DEFS[(int)Pid::COUNT] = {
     {"010C\r", 0x0C, 2}, {"010D\r", 0x0D, 1}, {"0105\r", 0x05, 1}, {"0104\r", 0x04, 1},
     {"010F\r", 0x0F, 1}, {"0111\r", 0x11, 1}, {"ATRV\r", 0, 0},
@@ -136,6 +136,23 @@ Reply parse(Pid p, const char* raw, float* value) {
         return Reply::NoEngine;
     if (contains(raw, "NO DATA")) return Reply::NoData;
     float v;
+    if (p == Pid::Status) {
+        // Each ECU (the City has three) reports its own lamp request and stored codes: the lamp is on
+        // if any ECU asks for it, and the codes are the sum, capped where one byte's count tops out.
+        bool any = false, mil = false;
+        int count = 0;
+        anyLine(raw, [&](const char* line, size_t len) {
+            if (fromLine(line, len, p, &v)) {
+                any = true;
+                mil = mil || milOn(v);
+                count += codeCount(v);
+            }
+            return false;                                // keep reading the other lines
+        });
+        if (!any) return Reply::Error;
+        *value = (float)(count > 127 ? 127 : count) + (mil ? 1000.0f : 0.0f);
+        return Reply::Ok;
+    }
     if (anyLine(raw, [&](const char* line, size_t len) { return fromLine(line, len, p, &v); })) {
         *value = v;
         return Reply::Ok;

@@ -92,6 +92,15 @@ void test_fuel_cut_needs_the_pedal_released() {
     TEST_ASSERT_FALSE(fueleco::fuelCut(NAN, NAN, 1800, 60, 4, true));   // neither: can't tell, no cut
 }
 
+// The trip's litres are what the fuel book burns at trip end, so they must be readable.
+void test_litres_read_back_matches_km_over_kml() {
+    fueleco::Trip t;
+    TEST_ASSERT_FLOAT_WITHIN(0.0001f, 0.0f, t.litres());
+    for (uint32_t ms = 0; ms <= 200000; ms += 250) t.step(ms, 80, 12.3f, false, 30);
+    TEST_ASSERT_GREATER_THAN_FLOAT(0.0f, t.litres());
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, t.km() / t.avgKmL(), t.litres());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_blend_for_e30);
@@ -103,5 +112,6 @@ int main(int, char**) {
     RUN_TEST(test_idle_counts_fuel_not_distance);
     RUN_TEST(test_gap_is_capped_across_the_wrap);
     RUN_TEST(test_fuel_cut_needs_the_pedal_released);
+    RUN_TEST(test_litres_read_back_matches_km_over_kml);
     return UNITY_END();
 }
