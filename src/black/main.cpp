@@ -44,13 +44,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "images/art.h"
 #include "images/walksprite.h"
 #include <esp_system.h>
-#include <esp_task_wdt.h>
-
-// Task watchdog: 30 s instead of the default 5 s. It was raised for SpotifyArduino's spinning
-// response loops (one spun ~11 s on a reset TLS connection: the "unexplained rst:0xc"); that
-// library is gone, but a TLS handshake plus reads can still take 8 + 8 s on a weak hotspot.
-// A genuine hang still reboots, after 30 s.
-static const uint32_t TASK_WDT_S = 30;
+#include "../common/core/watchdog.h"
 
 static const char* resetReason() {
     switch (esp_reset_reason()) {
@@ -136,7 +130,10 @@ void setup() {
     Serial.printf("[boot] reset reason: %s\n", resetReason());
     ota::checkBoot();   // may boot the other app slot (net/ota)
     board::begin();
-    esp_task_wdt_init(TASK_WDT_S, true);   // reconfigures the already-running watchdog
+    // Task watchdog (common/core/watchdog): 90 s, not the default 5 s, for the network task and
+    // this loop (from the end of setup()). It was 30 s on core 0's idle task only, raised for
+    // SpotifyArduino's spinning response loops (the "unexplained rst:0xc"; that library is gone).
+    watchdog::begin();   // reconfigures the already-running watchdog
     mem::installFailHook();
     pinMode(PIN_BL, OUTPUT); digitalWrite(PIN_BL, HIGH);
     shared::begin();
@@ -211,6 +208,9 @@ void setup() {
     bootscene::waitDone();                // the display is ours again
     remote::begin(bootscene::active);
     ota::begin(REMOTE_NAME, bootscene::active);
+    // The UI loop is watched from here (the core feeds it before each loop()); setup()'s waits for
+    // the opening and the WiFi are not.
+    enableLoopWDT();
 }
 
 // Status screen text when Spotify can't be polled: whose fault it is (util/linkstatus).

@@ -3,6 +3,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "../../common/net/http_config.h"
+#include "../../common/core/watchdog.h"
 #include "../../util/common/text.h"
 #include "../../util/common/readguard.h"
 #include "../core/mem.h"
@@ -43,6 +44,7 @@ static lrcstream::Kind request(const String& url, lrcstream::Mode mode, uint32_t
     netcfg::streamed(https);   // plain (non-chunked) body: scan straight from the stream
     if (!https.begin(client, url)) { *rc = -1; return lrcstream::Kind::None; }
     https.addHeader("User-Agent", netcfg::USER_AGENT);
+    watchdog::feed();   // each request is bounded by its own timeouts (common/core/watchdog)
     *rc = https.GET();
     if (*rc != 200) { https.end(); return lrcstream::Kind::None; }
     // Stream straight into the arena (no JSON document: ArduinoJson grew the string by

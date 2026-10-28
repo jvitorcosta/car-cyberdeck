@@ -3,6 +3,7 @@
 #include <HTTPClient.h>
 #include <esp_heap_caps.h>
 #include "../../common/net/http_config.h"
+#include "../../common/core/watchdog.h"
 #include "../../config.h"
 #include "../../util/black/ctxcache.h"
 #include "../../util/common/jsonpath.h"
@@ -90,6 +91,7 @@ static int refreshToken() {
     String body = "grant_type=refresh_token&refresh_token=" + String(SPOTIFY_REFRESH_TOKEN) +
                   "&client_id=" + SPOTIFY_CLIENT_ID +
                   "&client_secret=" + SPOTIFY_CLIENT_SECRET;
+    watchdog::feed();   // each request is bounded by its own timeouts (common/core/watchdog)
     int rc = https.POST(body);
     if (rc < 0) netcfg::certRejected(c, "accounts.spotify.com");
     if (rc == 200) {
@@ -131,6 +133,7 @@ static int apiGet(const char* path, int* retryAfterS = nullptr) {
         if (!s_http.begin(s_api, url)) return -1;
         s_http.addHeader("Authorization", s_auth);
         s_http.collectHeaders(KEYS, 1);
+        watchdog::feed();
         int rc = s_http.GET();
         if (rc < 0 && reused && attempt == 0) {      // the kept connection had gone stale: once more
             s_http.end();

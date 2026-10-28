@@ -88,6 +88,7 @@
 #include "pins.h"
 #include "../common/ui/backlight.h"
 #include "../common/core/embed.h"
+#include "../common/core/watchdog.h"
 #include "ui/gojiraname.h"
 #include "ui/jpfont.h"
 #include "ui/lyricrun.h"
@@ -355,7 +356,9 @@ static TaskHandle_t linkHandle = nullptr;
 
 static void linkTask(void*) {
     uint32_t waitMs = 5000, nextLights = 0, lastPadScan = 0;
+    watchdog::watch();  // a NimBLE wait that never returns reboots the deck (common/core/watchdog)
     for (;;) {
+        watchdog::feed();
         if (ota::active()) {
             NimBLEScan* scan = NimBLEDevice::getScan();
             if (scan->isScanning()) scan->stop();
@@ -371,6 +374,7 @@ static void linkTask(void*) {
             lastPadScan = now;
             xbox.onLoop();  // starts a scan
         }
+        watchdog::feed();  // the controller's connect and discovery: ~62 s at worst
 
         // lost: a light that was up last tick and isn't now (`tx` outlives the link, so it can't tell)
         static bool wasUp[N_CTRL] = {};
@@ -388,6 +392,7 @@ static void linkTask(void*) {
         if (missing && static_cast<int32_t>(now - nextLights) >= 0) {
             bool still = false;
             for (Controller& c : controllers) {
+                watchdog::feed();  // a light's connect and discovery: ~45 s at worst
                 if (!linkUp(c) && !connect(c)) still = true;
             }
             nextLights = millis() + waitMs;
@@ -1339,10 +1344,14 @@ static void waitTap(int* rx, int* ry) {
     int x, y;
     for (uint32_t freeSince = millis(); millis() - freeSince < 150;) {
         if (touch::readRaw(&x, &y)) freeSince = millis();
+        watchdog::feed();  // BOOT's calibration runs on the watched loop and waits on the pen
         delay(5);
     }
     for (;;) {
-        while (!touch::readRaw(&x, &y)) delay(5);
+        while (!touch::readRaw(&x, &y)) {
+            watchdog::feed();
+            delay(5);
+        }
         delay(60);  // let the pen settle
         long sx = 0, sy = 0;
         int n = 0;
@@ -1867,6 +1876,7 @@ static bool weatherPlaced = false;
 static WeatherReading weatherLast;  // with the last try's outcome
 
 static void weatherTry(void*) {
+    watchdog::watch();  // two bounded GETs (httpGet's timeouts and deadline), fed before each
     geoip::Place& place = weatherPlace;
     bool& placed = weatherPlaced;
     WeatherReading& r = weatherLast;
@@ -1875,6 +1885,7 @@ static void weatherTry(void*) {
         Serial.println("[weather] offline");
     } else {
         if (!placed) {
+            watchdog::feed();
             const int rc = weatherGet(geoip::URL);
             placed = rc == 200 && geoip::parse(weatherBody, &place);
             if (placed) Serial.printf("[weather] place %s (%s, %s)\n", place.city, place.lat, place.lon);
@@ -1883,6 +1894,7 @@ static void weatherTry(void*) {
         if (placed) {
             char url[256];
             weather::url(place.lat, place.lon, url, sizeof(url));
+            watchdog::feed();
             const int rc = weatherGet(url);
             weather::Now now;
             if (rc == 200 && weather::parse(weatherBody, &now)) {
@@ -1907,6 +1919,7 @@ static void weatherTry(void*) {
     weatherWait = ok ? WEATHER_EVERY_MS : WEATHER_RETRY_MS;
     weatherDoneAt = millis();
     weatherStackLeft = static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr));
+    watchdog::forget();  // before the task goes: a deleted task can't feed
     weatherBusy = false;  // last: the voice task may start the next try from here on
     vTaskDelete(nullptr);
 }
@@ -2058,7 +2071,9 @@ static void lyricsTask(void*) {
     pollpace::Pace& pace = lyricsPace;
     uint32_t lastPoll = 0;
     uint8_t was = WANT_NONE;  // what was wanted at the last poll
+    watchdog::watch();  // each pass: a few GETs of 1.5 s and an mDNS query of 1.5 s at most
     for (;;) {
+        watchdog::feed();
         musicKeepAlive();
         const uint8_t want = lyricsWant;
         if (want == WANT_NONE || ota::active()) {  // nothing shows it, or an update has the WiFi
@@ -2168,7 +2183,9 @@ static int musicOpen() {
 static void musicTask(void*) {
     int sock = -1;
     uint8_t buf[32];
+    watchdog::watch();  // each pass waits 200 ms at most (the socket's receive timeout)
     for (;;) {
+        watchdog::feed();
         if (!musicWant || !net::isOnline() || ota::active()) {
             if (sock >= 0) {
                 lwip_close(sock);
@@ -2607,8 +2624,11 @@ static void handleStatus() {
 }
 
 static void voiceTask(void*) {
+    // Watched: WebServer's waits are 5 s per request, a WiFi join feeds before each try.
+    watchdog::watch();
     net::connectAny();
     while (!net::isOnline()) {
+        watchdog::feed();
         net::loop();
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -2625,6 +2645,7 @@ static void voiceTask(void*) {
     // (An every-20 s hunt for the hotspot was tried here on 2026-10-22 and removed: the hidden
     // hotspot was rarely seen, and the scans cost the server and the radio.)
     for (;;) {
+        watchdog::feed();
         server->handleClient();
         net::loop();  // rejoins after a drop
         weatherTick();
@@ -2723,6 +2744,9 @@ void setup() {
     Serial.begin(115200);
     Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
     ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
+    // The task watchdog at 90 s (common/core/watchdog), before any task subscribes: the link,
+    // voice, lyrics, music and weather tasks, and this loop from the end of setup().
+    watchdog::begin();
     tft.init();
     backlight::begin();  // PWM, at the day level
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
@@ -2751,6 +2775,7 @@ void setup() {
     xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);
     publish();
     beginVoice();
+    enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
 }
 
 void loop() {

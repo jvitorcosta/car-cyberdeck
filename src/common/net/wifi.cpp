@@ -3,6 +3,7 @@
 #include "remote_config.h"
 #include "ipaddr.h"
 #include "http_config.h"
+#include "../core/watchdog.h"
 #include "../../util/common/hotspotip.h"
 #include "../../util/common/netdiag.h"
 #include "../../util/common/netup.h"
@@ -62,6 +63,7 @@ static void pinHotspotAddress() {
 // Joins network i (tries attempts of CONNECT_TRY_MS each); true when online.
 static bool join(int i, int tries) {
     for (int t = 0; t < tries; ++t) {
+        watchdog::feed();   // each try is bounded (CONNECT_TRY_MS + the pings): common/core/watchdog
         Serial.printf("[wifi] trying %s\n", WIFI_NETWORKS[i].ssid);
         WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);   // DHCP: undo a fixed hotspot address
         WiFi.begin(WIFI_NETWORKS[i].ssid, WIFI_NETWORKS[i].pass);

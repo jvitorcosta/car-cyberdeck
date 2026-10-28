@@ -6,6 +6,7 @@
 #include "../../common/net/wifi.h"
 #include "../../common/net/clock.h"
 #include "../../common/net/ota.h"
+#include "../../common/core/watchdog.h"
 #include "../spotify/client.h"
 #include "../images/art.h"
 #include "../audio/musicsvc.h"
@@ -207,7 +208,11 @@ static bool doStep(netplan::Step step) {
 static void run(void*) {
     uint32_t lastPoll = 0;
     bool first = true;
+    // Watched (common/core/watchdog): a hang here also stops Health, the self-heal below, so the
+    // watchdog's reset is the backstop. Fed each pass, after the WiFi check and before each request.
+    watchdog::watch();
     for (;;) {
+        watchdog::feed();
         if (!s_spotifyReady) {                 // log in once WiFi is up (setup's, or a late hotspot)
             if (net::isOnline() || net::connectAny()) {
                 spclient::begin();
@@ -224,6 +229,7 @@ static void run(void*) {
             continue;
         }
         net::loop();
+        watchdog::feed();   // a reconnect can take ~25 s
         uint32_t now = millis();
         // WiFi down: keep the normal pace (polls fail fast) so Health's 15-minute backstop runs
         // even during an hours-long Retry-After wait.
