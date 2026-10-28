@@ -10,6 +10,8 @@ class WebServer;
 // nothing signed is accepted (the bearer key still works).
 namespace reqauth {
 void begin();
+// HMAC's self-test passed (begin): music mode's signed packets (util/wire/musicwire) are off without it.
+bool hmacOk();
 // True when the request carries the bearer key (gate) or a valid signature for `path`. Else it has
 // answered: 403 with wrongKeyText, or 503 "clock not set" for a signed request before SNTP (a
 // signature can't be checked yet). Logs a refused signature's reason, never the key or the tag.

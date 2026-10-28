@@ -15,6 +15,8 @@ void begin() {
     if (!s_ok) Serial.println("[auth] HMAC self-test FAILED: signed requests off");
 }
 
+bool hmacOk() { return s_ok; }
+
 bool pass(WebServer& s, const remotegate::Gate& gate, const char* path, const char* wrongKeyText) {
     if (s.hasArg("k") && gate.keyOk(s.arg("k").c_str())) return true;
     const char* why = nullptr;   // stays null without a signature: the usual 403, not worth a log line

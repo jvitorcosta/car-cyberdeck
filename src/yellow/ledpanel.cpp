@@ -2185,7 +2185,8 @@ static void lyricsTick() {
 // Its own task (core 1, idle priority, 4 KB), started the first time music mode goes on. While
 // musicWant and online it holds a UDP socket on musicwire::PORT (raw lwip, 200 ms receive timeout),
 // closed again when music mode goes off or an update has the WiFi. It takes packets only from the
-// black deck's address (musicPeer) and publishes the latest PalPkt and its time under musicMux.
+// black deck's address (musicPeer), signed with REMOTE_TOKEN and with a counter above the last one
+// (util/wire/musicwire), and publishes the latest PalPkt and its time under musicMux.
 // musicTick() (loop) reads them at most MUSIC_TICK_MS apart: the palette's main colour snapped to a
 // swatch (musiclights::nearestSwatch) and each light's level (musiclights::level: the owner's under
 // the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (musicFadeTick).
@@ -2218,7 +2219,9 @@ static int musicOpen() {
 
 static void musicTask(void*) {
     int sock = -1;
-    uint8_t buf[32];
+    uint8_t buf[musicwire::PAL_LEN + 8];  // room past a packet: a longer datagram is refused, not cut to fit
+    musicwire::Fresh fresh;               // the black deck's counter must rise (a packet played again is dropped)
+    uint32_t freshPeer = 0;
     watchdog::watch();  // each pass waits 200 ms at most (the socket's receive timeout)
     for (;;) {
         watchdog::feed();
@@ -2248,9 +2251,16 @@ static void musicTask(void*) {
         const int n = lwip_recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromLen);
         if (n <= 0) continue;  // the timeout: look at musicWant again
         const uint32_t peer = musicPeer;
-        if (peer == 0 || from.sin_addr.s_addr != peer) continue;  // not the black deck
+        if (peer == 0 || from.sin_addr.s_addr != peer) continue;  // not the black deck's address
+        if (peer != freshPeer) {  // another black deck (or address): its counter starts over
+            fresh.reset();
+            freshPeer = peer;
+        }
         musicwire::PalPkt p;
-        if (!musicwire::decode(buf, static_cast<size_t>(n), &p)) continue;
+        musicwire::Seq seq;
+        // signed with REMOTE_TOKEN (a spoofed source address isn't enough), and not one heard before
+        if (!reqauth::hmacOk() || !musicwire::decode(buf, static_cast<size_t>(n), REMOTE_TOKEN, &p, &seq)) continue;
+        if (!fresh.accept(seq)) continue;
         const uint32_t now = millis();
         portENTER_CRITICAL(&musicMux);
         musicPub.palOk = true;

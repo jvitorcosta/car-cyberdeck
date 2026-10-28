@@ -4,6 +4,8 @@
 #include <lwip/sockets.h>
 #include "../core/mem.h"
 #include "../../common/net/clock.h"
+#include "../../common/net/remote_config.h"
+#include "../../common/net/reqauth.h"
 #include "../../util/wire/musicwire.h"
 #include "../../util/black/netplan.h"
 #include "../../util/black/songmood.h"
@@ -45,6 +47,10 @@ int openSocket() {
     if (s < 0) Serial.println("[music] no UDP socket");
     return s;
 }
+
+// Each packet's boot id and counter (util/wire/musicwire): random per boot, the counter +1 per
+// packet, so the yellow deck can refuse one played again. The task's only (one runs at a time).
+musicwire::Seq s_seq{};
 
 void sendTo(int sock, uint32_t peer, const uint8_t* p, size_t n) {
     if (sock < 0 || !peer || !n) return;
@@ -111,8 +117,13 @@ void task(void*) {
             const bool changed = !palSent || gen != sentGen || !samePalette(p, sentPal);
             // Nothing before the first settled palette: the yellow deck's lights change once per song.
             if ((settled || palSent) && (changed || now - lastPalSend >= PAL_RESEND_MS)) {
+                if (s_seq.boot == 0) s_seq = {esp_random() | 1u, esp_random() >> 1};   // once per boot
+                ++s_seq.counter;
                 uint8_t pkt[musicwire::PAL_LEN];
-                sendTo(sock, peer, pkt, musicwire::encode(musicwire::PalPkt{gen, p}, pkt, sizeof pkt));
+                // signed with REMOTE_TOKEN; nothing if HMAC's self-test failed (reqauth)
+                if (reqauth::hmacOk())
+                    sendTo(sock, peer, pkt,
+                           musicwire::encode(musicwire::PalPkt{gen, p}, s_seq, REMOTE_TOKEN, pkt, sizeof pkt));
                 if (changed)
                     Serial.printf("[music] song %u: %u,%u,%u cap %u\n", (unsigned)gen, p.c[0].r, p.c[0].g,
                                   p.c[0].b, p.cap);

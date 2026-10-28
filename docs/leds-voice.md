@@ -183,7 +183,12 @@ WiFi, and the deck does the rest.
 - **Black deck**: the yellow deck asks `GET /music?on=1` (signed, like its `/state` polls: it never
   sends the key) every 10 s while the mode is on, `on=0` when it ends; the black deck stops by itself
   30 s after the last ask. `/music` also takes `k=<token>` for a test by hand. Until its clock is set
-  the yellow deck asks nothing (it waits rather than send the key).
+  the yellow deck asks nothing (it waits rather than send the key). The palettes come over UDP
+  (port 4210) signed: each packet carries the black deck's boot id, a counter that rises with every
+  packet and an HMAC tag with `REMOTE_TOKEN` (`src/util/wire/musicwire.h`); the yellow deck drops a
+  packet with a bad tag, from another address, or with a counter not above the last one, so a
+  spoofed or replayed packet can't set the lights. Both decks need this firmware: the old
+  unsigned packet is refused.
   `GET /music/debug?k=<token>` on the black deck shows the palette it last sent, its cap and the
   socket (`&on=1` also keeps it alive).
 

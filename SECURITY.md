@@ -48,6 +48,11 @@ instead, with steps to reproduce and the board and version (first serial line,
   compute an HMAC**; those still put the token in plain-HTTP URLs, and anyone who sniffs one of them
   on the hotspot has it. The responses aren't signed (they carry nothing secret). On the hotspot the
   yellow deck looks the black deck up by mDNS when its fixed address stops answering as the deck.
+- **Music mode's UDP palettes are signed too** (`src/util/wire/musicwire.h`): an 8-byte HMAC tag
+  with `REMOTE_TOKEN`, a random boot id and a counter that must rise, so a spoofed source address
+  or a recorded packet can't set the car's lights. A packet from an *earlier* boot of the black deck
+  is still accepted when it arrives (a new boot id starts the counter over); it can only replay a
+  real song's colours, at the usual levels (never under 40 %).
 
 - Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
   7 bundled root certificates (`src/common/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).

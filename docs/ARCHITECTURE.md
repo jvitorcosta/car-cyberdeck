@@ -129,11 +129,13 @@ are in `src/common/`; `util/x` is `src/util/<group>/x` (groups under Layers); th
   `util/musicwire`) — the network task decides each song's colour (`songmood::choose`: the owner's
   picks, a colour word, the playlist description's #colour tags, else a mood's allowed swatches
   from the playlist's name and description or the genre, the cover's colours choosing among them; at the track change, once the cover is in
-  and once the genre is known; one `[colour]` log line per song). `GET /music?k=<token>&on=1` (the
-  yellow deck, every 10 s) starts or keeps a small task (core 1, 4 KB stack) that sends the song's
+  and once the genre is known; one `[colour]` log line per song). `GET /music?on=1` (the
+  yellow deck, every 10 s, signed: `util/wire/sigreq`) starts or keeps a small task (core 1, 4 KB stack) that sends the song's
   palette (`songmood::lights`: the swatch's screen colour, only the cap follows the time of day;
   a new song's once its cover is in, or 8 s after the track change without one), on change and
-  every 10 s, over UDP to the requester's port 4210. The yellow deck snaps its main colour to one
+  every 10 s, over UDP to the requester's port 4210 (`util/wire/musicwire` v2: a boot id, a rising
+  counter and an 8-byte HMAC tag with `REMOTE_TOKEN`; the yellow deck drops a bad tag or a counter
+  that doesn't rise). The yellow deck snaps its main colour to one
   of the lights' 8 swatches (`util/musiclights`), which gives back exactly the chosen one. `on=0` or 30 s without a keep-alive stops it and closes
   the socket. No mic: the howl plays as usual (`board/s3/mic_es8311` stays in the tree, unused,
   for the voice agent). It starts only with
@@ -141,8 +143,8 @@ are in `src/common/`; `util/x` is `src/util/<group>/x` (groups under Layers); th
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
   `[music]` serial line tells each palette sent for a new song or a change.
 - **Yellow deck** (`ledpanel.cpp`, env `ledpanel`) — the CYD that drives the car's LED lights
-  ([leds-voice.md](leds-voice.md)). Its Menu and karaoke screens poll the S3's `GET /state?k=<token>`
-  (`util/pollpace`) and parses it with `util/{jsonflat,stateparse}`; the S3 builds `/state` in
+  ([leds-voice.md](leds-voice.md)). Its Menu and karaoke screens poll the S3's `GET /state`, signed
+  (`common/net/reqauth`, `util/wire/sigreq`: it never sends the token) (`util/pollpace`) and parses it with `util/{jsonflat,stateparse}`; the S3 builds `/state` in
   `util/statejson` and keeps the trip in `util/tripclock`. The companion screen that read the same
   `/state` (env `cyd_companion`, lyrics and the avatar home) was retired on 2026-10-28; it is in
   git history before that date.
