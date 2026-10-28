@@ -31,7 +31,7 @@ version may come later through CAN sniffing (car-can-lab); it is not part of thi
 - **Instant warnings** on the deck from fixed limits (no cloud needed).
 - **Every trip logged, a minute summary per row**, and uploaded every 5 minutes while there is
   internet (the phone hotspot). Nothing is lost when the power cuts at ignition off: at most the last
-  30 s.
+  ~90 s (the minute being built plus up to 30 s of unflushed rows).
 - **A daily checkup on the PC** that compares the data with learned baselines and writes a summary
   for the owner. Its verdict comes back to the deck and shows on screens A/B.
 - **Trip cost in R$** from the fuel price.

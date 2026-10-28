@@ -3,7 +3,9 @@
 answer() is the whole reply table (pure, host-tested). Run this file as a script and the PC
 advertises as a BLE peripheral named IOS-Vlink (service FFF0, FFF1 notify, FFF2 write) and answers
 each command line with answer() + "\\r>". A small console changes the state live: speed N, rpm N,
-volts X, coolant N, ltft X, code P0301, pending P0420, clear, mil on|off, silent on|off, quit.
+volts X, coolant N, ltft X, code P0301, pending P0420, clear, mil on|off, engine on|off,
+silent on|off, quit. "engine off" is the ignition off (the car answers NO DATA); "silent on" is a lost
+link (the car answers nothing at all, so the deck's 2 s timeout runs).
 Read-only like the firmware: mode 04 (clear codes) and anything unknown answer "?".
 Needs `bless` (pip install -r tools/requirements.txt) only when run as a script.
 """
@@ -15,7 +17,7 @@ CITY_PIDS = [0x01, 0x03, 0x04, 0x06, 0x07, 0x0B, 0x0C, 0x0D, 0x0E, 0x10, 0x11, 0
              0x47, 0x49, 0x4A, 0x4C, 0x52, 0x56, 0x67, 0x68, 0x6C]
 
 DEFAULTS = {"speed": 0, "rpm": 800, "volts": 12.6, "coolant": 90, "ltft": 0.0, "stft": 0.0,
-            "codes": [], "pending": [], "mil": False, "silent": False}
+            "codes": [], "pending": [], "mil": False, "engine": True, "silent": False}
 
 
 def _hex(*b):
@@ -80,7 +82,8 @@ def _mode01(pid, s):
 
 
 def answer(cmd, state):
-    """The ELM327 text for one command (no trailing CR, any case) before the '>' prompt."""
+    """The ELM327 text for one command (no trailing CR, any case) before the '>' prompt, or None
+    when nothing at all is sent (silent: a lost link, not even the prompt)."""
     c = cmd.replace(" ", "").upper()
     s = {**DEFAULTS, **state}
     if c.startswith("AT"):
@@ -92,6 +95,8 @@ def answer(cmd, state):
     mode01 = len(c) == 4 and c.startswith("01")
     if c in ("03", "07") or mode01:
         if s["silent"]:
+            return None
+        if not s["engine"]:
             return "NO DATA"
         if c == "03":
             return _codes(0x43, s["codes"])
@@ -104,9 +109,15 @@ def answer(cmd, state):
     return "?"
 
 
+def reply_bytes(cmd, state):
+    """What the adapter sends back for one command line: the answer and its "\\r>" prompt, or None."""
+    a = answer(cmd, state)
+    return None if a is None else (a + "\r>").encode()
+
+
 def chunks(reply, size=20):
-    """The reply (with its "\r>") as notification-sized slices, in order, like a real adapter."""
-    b = reply.encode()
+    """The reply (with its "\r>", str or bytes) as notification-sized slices, in order, like a real adapter."""
+    b = reply if isinstance(reply, bytes) else reply.encode()
     return [b[i:i + size] for i in range(0, len(b), size)] or [b""]
 
 
@@ -130,10 +141,10 @@ def _console_cmd(line, st):
         elif k == "clear":
             st["codes"].clear()
             st["pending"].clear()
-        elif k in ("mil", "silent"):
+        elif k in ("mil", "engine", "silent"):
             st[k] = arg.lower() == "on"
         else:
-            print("speed|rpm|coolant N, volts|ltft X, code|pending P0301, clear, mil|silent on|off, quit")
+            print("speed|rpm|coolant N, volts|ltft X, code|pending P0301, clear, mil|engine|silent on|off, quit")
     except ValueError:
         print("bad value")
     return True
@@ -158,8 +169,10 @@ def _main():
                 i = buf.index(b"\r")
                 cmd = bytes(buf[:i]).decode("ascii", "ignore")
                 del buf[:i + 1]
-                reply = answer(cmd, st) + "\r>"
+                reply = reply_bytes(cmd, st)
                 print(f"{cmd!r} -> {reply!r}")
+                if reply is None:                         # silent: a lost link sends nothing
+                    continue
                 for part in chunks(reply):                # 20 bytes: the default ATT MTU of 23
                     server.get_characteristic(NOTIFY).value = bytearray(part)
                     server.update_value(SVC, NOTIFY)

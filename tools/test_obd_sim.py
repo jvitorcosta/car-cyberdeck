@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from obd_sim import answer, chunks  # noqa: E402
+from obd_sim import _console_cmd, answer, chunks, reply_bytes  # noqa: E402
 
 
 def test_speed_reply():
@@ -73,11 +73,31 @@ def test_trouble_codes():
     assert answer("07", {}) == "47 00"
 
 
-def test_silent_means_ignition_off():
+def test_silent_means_a_lost_link():
     s = {"silent": True}
-    assert answer("010D", s) == "NO DATA"
-    assert answer("03", s) == "NO DATA"
+    for c in ("010D", "0101", "03", "07"):
+        assert answer(c, s) is None                 # nothing at all: the deck's 2 s timeout runs
+        assert reply_bytes(c, s) is None            # and the BLE loop sends nothing, not even ">"
+    assert answer("ATRV", s) == "12.6V"             # the adapter itself still talks
+
+
+def test_engine_off_means_no_data():
+    s = {"engine": False}
+    for c in ("010D", "0101", "03", "07"):
+        assert answer(c, s) == "NO DATA"
     assert answer("ATRV", s) == "12.6V"
+    assert reply_bytes("010D", s) == b"NO DATA\r>"
+    assert answer("010D", {"engine": True, "speed": 60}) == "41 0D 3C"
+
+
+def test_console_engine_and_silent():
+    st = {"engine": True, "silent": False}
+    assert _console_cmd("engine off", st)
+    assert st["engine"] is False
+    assert _console_cmd("engine on", st)
+    assert st["engine"] is True
+    assert _console_cmd("silent on", st)
+    assert st["silent"] is True
 
 
 def test_chunks_split_long_reply():
