@@ -144,30 +144,6 @@ void test_health_wifi_back_resets_backstop_and_memory_clock() {
     g.onPoll(false, true, false, 800000);                  // WiFi returned: backstop clock cleared
     TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)g.onPoll(false, false, false, 1000000));
 }
-// No hotspot for hours: the WiFi-down restart only helps a wedged WiFi driver, so each one in a row
-// waits longer (15 min, 1 h, then every 4 h); the count survives the restart (quietboot).
-void test_health_wifi_down_restarts_back_off() {
-    TEST_ASSERT_EQUAL_UINT32(900000u, netplan::Health::wifiDownLimitMs(0));
-    TEST_ASSERT_EQUAL_UINT32(3600000u, netplan::Health::wifiDownLimitMs(1));
-    TEST_ASSERT_EQUAL_UINT32(14400000u, netplan::Health::wifiDownLimitMs(2));
-    TEST_ASSERT_EQUAL_UINT32(14400000u, netplan::Health::wifiDownLimitMs(50));
-    netplan::Health h;
-    h.setWifiRestarts(1);                                  // the boot after one such restart
-    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, 1000));
-    TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, false, false, 1000 + 900000));
-    TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, false, false, 1000 + 3599000));
-    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, 1000 + 3600000));
-    TEST_ASSERT_EQUAL_UINT32(1, h.wifiRestarts());
-}
-// WiFi seen again: the next outage starts the ladder over.
-void test_health_wifi_back_clears_the_restart_count() {
-    netplan::Health h;
-    h.setWifiRestarts(2);
-    h.onPoll(false, true, false, 1000);                    // WiFi up (Spotify not answering yet)
-    TEST_ASSERT_EQUAL_UINT32(0, h.wifiRestarts());
-    h.onPoll(false, false, false, 5000);
-    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, 5000 + 900000));
-}
 void test_health_first_call_failing_starts_clock() {
     netplan::Health h;
     TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, true, true, 900000));
@@ -217,6 +193,20 @@ void test_login_refused_only_on_a_4xx_answer() {
     b.onResult(503, 0);
     TEST_ASSERT_FALSE(b.refused());              // an outage
     b.onResult(-1, 0);
+    TEST_ASSERT_FALSE(b.refused());
+}
+// A network blip while a refused login waits out its back-off keeps "Login failed" on screen: the
+// blip says nothing new about the refresh token.
+void test_login_refused_survives_a_network_blip_while_waiting() {
+    netplan::LoginBackoff b;
+    b.onResult(400, 0);
+    b.onResult(-1, 2000);
+    TEST_ASSERT_TRUE(b.refused());
+    TEST_ASSERT_EQUAL_INT(400, b.lastCode());
+    TEST_ASSERT_EQUAL_UINT32(4000, b.waitMs());
+    b.onResult(200, 4000);                       // a token: no wait, nothing refused
+    b.onResult(-1, 5000);                        // a blip with no wait running is just that
+    TEST_ASSERT_EQUAL_INT(-1, b.lastCode());
     TEST_ASSERT_FALSE(b.refused());
 }
 void test_login_backoff_due_survives_millis_wrap() {
@@ -504,13 +494,12 @@ int main(int, char**) {
     RUN_TEST(test_health_wifi_down_backstop_after_15_min);
     RUN_TEST(test_health_wifi_back_resets_backstop_and_memory_clock);
     RUN_TEST(test_health_first_call_failing_starts_clock);
-    RUN_TEST(test_health_wifi_down_restarts_back_off);
-    RUN_TEST(test_health_wifi_back_clears_the_restart_count);
     RUN_TEST(test_stale_after_limit_and_handles_wrap);
     RUN_TEST(test_login_backoff_doubles_up_to_five_minutes);
     RUN_TEST(test_login_backoff_no_answer_neither_grows_nor_clears);
     RUN_TEST(test_login_refused_only_on_a_4xx_answer);
     RUN_TEST(test_login_backoff_due_survives_millis_wrap);
+    RUN_TEST(test_login_refused_survives_a_network_blip_while_waiting);
     RUN_TEST(test_lyrics_retry_after_5s_then_20s_then_gives_up);
     RUN_TEST(test_lyrics_other_results_are_final);
     RUN_TEST(test_lyrics_retry_reset_on_track_change);

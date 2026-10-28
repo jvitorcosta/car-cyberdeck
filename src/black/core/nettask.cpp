@@ -47,25 +47,20 @@ static uint32_t s_t0 = 0;
 
 // The self-heal restart's note (util/quietboot): survives the restart, not a power-on.
 RTC_NOINIT_ATTR static uint32_t s_noteMagic;
-RTC_NOINIT_ATTR static uint32_t s_noteWifiRestarts;
 static bool s_noteRead = false, s_quiet = false;
-static uint32_t s_bootWifiRestarts = 0;   // WiFi-down restarts in a row before this boot
 
 bool quietBoot() {
     if (!s_noteRead) {
         s_noteRead = true;
         const bool sw = esp_reset_reason() == ESP_RST_SW;
         s_quiet = quietboot::quiet(s_noteMagic, sw);
-        s_bootWifiRestarts = quietboot::wifiRestarts(s_noteMagic, s_noteWifiRestarts, sw);
         s_noteMagic = 0;   // read once: an update's restart later on plays the opening again
     }
     return s_quiet;
 }
 
-// Restarts the deck, quietly: the next boot skips the opening (util/quietboot). wifiDown: one more
-// WiFi-down restart in a row (Health waits longer before the next); else the count clears.
-static void selfHealRestart(bool wifiDown) {
-    s_noteWifiRestarts = wifiDown ? s_health.wifiRestarts() + 1 : 0;
+// Restarts the deck, quietly: the next boot skips the opening (util/quietboot).
+static void selfHealRestart() {
     s_noteMagic = quietboot::MAGIC;
     delay(200);
     ESP.restart();
@@ -238,8 +233,6 @@ static void run(void*) {
     // Watched (common/core/watchdog): a hang here also stops Health, the self-heal below, so the
     // watchdog's reset is the backstop. Fed each pass, after the WiFi check and before each request.
     watchdog::watch();
-    quietBoot();   // setup() read it already; the WiFi-down count for Health
-    s_health.setWifiRestarts(s_bootWifiRestarts);
     for (;;) {
         watchdog::feed();
         if (!s_spotifyReady) {                 // log in once WiFi is up (setup's, or a late hotspot)
@@ -286,11 +279,9 @@ static void run(void*) {
             const bool wifiUp = net::isOnline();   // one reading for the decision and the log
             if (s_health.onPoll(ok, wifiUp, starved, now) == netplan::Health::Action::Restart) {
                 mem::log("restart");
-                if (wifiUp) Serial.println("[net] self-heal restart (heap starved, no good poll for 180 s), quietly");
-                else Serial.printf("[net] self-heal restart (WiFi down for %lu min, restart %lu in a row), quietly\n",
-                                   (unsigned long)(netplan::Health::wifiDownLimitMs(s_health.wifiRestarts()) / 60000),
-                                   (unsigned long)(s_health.wifiRestarts() + 1));
-                selfHealRestart(!wifiUp);
+                Serial.printf("[net] self-heal restart (%s), quietly\n",
+                              wifiUp ? "heap starved, no good poll for 180 s" : "WiFi down for 15 min");
+                selfHealRestart();
             }
             // isolated failure: keep last state; a 429 is an answer, shown at once (next poll may be hours away)
             if (!s_link.update(ok, s_st.lastPollCode == 429) && !ok) s_st.status = before;
