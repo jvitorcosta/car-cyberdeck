@@ -28,6 +28,9 @@ enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
 // The Presets page, and the marker on a job that isn't about one zone (/presets, /status, and the
 // /say that applies a preset: no zone param, and its reply must not be read as a look).
 const PRESETS = 3;
+// The marker on the /say that turns music mode on or off: no zone param, and its reply ("Music mode
+// on") isn't a look.
+const MUSIC = 4;
 
 // One light's look as the watch knows it.
 class Look {
@@ -49,6 +52,9 @@ class Deck {
     var presets as Array = [];
     // Each controller's link, [inside, outside]: "on" | "off" | "nolink", "" until the deck answers.
     var links as Array<String> = ["", ""];
+    // The deck's music mode: "on" | "off", "" until /status answers. Any other change sent from here
+    // ends it on the deck, so a reply to one sets it "off" here too.
+    var music as String = "";
 
     private var _queue as Array<Array> = [];  // [path, text or null, zone]
     private var _busy as Boolean = false;
@@ -76,6 +82,11 @@ class Deck {
     // Applies preset n (its number on the deck) via /say. The reply isn't a look; onReply re-syncs instead.
     function applyPreset(n as Number) as Void {
         push(["/say", "preset " + n, PRESETS]);
+    }
+
+    // Music mode on, or off when it is on: the deck's MUSIC MODE button, by voice ("music", "music off").
+    function toggleMusic() as Void {
+        push(["/say", music.equals("on") ? "music off" : "music", MUSIC]);
     }
 
     function look(zone as Number) as Look {
@@ -134,13 +145,22 @@ class Deck {
                 readPresets(text);
             } else if (_path.equals("/status")) {
                 links = [linkOf(text, "inside="), linkOf(text, "outside=")];
-            } else if (_zone == PRESETS) {
-                syncLooks();  // a preset was applied: read the lights it set
-            } else if (_zone == BOTH) {
-                absorb(text, inside);
-                absorb(text, outside);
+                music = linkOf(text, "music=");
+            } else if (_zone == MUSIC) {
+                music = text.find("Music mode on") != null ? "on" : "off";
+                syncLooks();  // what the lights show now
             } else {
-                absorb(text, look(_zone));
+                if (text.find("Sorry") == null && music.equals("on")) {
+                    music = "off";  // the deck ends music mode on any other change
+                }
+                if (_zone == PRESETS) {
+                    syncLooks();  // a preset was applied: read the lights it set
+                } else if (_zone == BOTH) {
+                    absorb(text, inside);
+                    absorb(text, outside);
+                } else {
+                    absorb(text, look(_zone));
+                }
             }
             // for the glance: the last state the deck reported, [colour, pct, lit] per light
             if (!_path.equals("/presets") && !_path.equals("/status")) {

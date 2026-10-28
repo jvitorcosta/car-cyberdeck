@@ -184,6 +184,26 @@ void test_a_command_word_cancels_the_slot() {
     TEST_ASSERT_EQUAL_INT(-1, c.preset);
     TEST_ASSERT_EQUAL_INT(-1, c.level);
 }
+// Music mode, like the MUSIC MODE button: "music" (or "music mode", "música") turns it on, with an
+// off word it turns it off. It is a command of its own: the rest of the phrase (a colour, "on") is
+// not applied with it.
+void test_music_mode() {
+    const struct { const char* text; int music; } cases[] = {
+        {"Music", 1}, {"music mode", 1}, {"turn on music mode", 1}, {"mÃºsica", 1}, {"modo musica", 1},
+        {"music off", 0}, {"Turn off music mode.", 0}, {"desliga o modo mÃºsica", 0}, {"music red off", 0},
+    };
+    for (const auto& k : cases) {
+        const ledvoice::Command c = parsed(k.text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(k.music, c.music, k.text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(-1, c.power, k.text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(-1, c.color, k.text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(-1, c.preset, k.text);
+    }
+    TEST_ASSERT_EQUAL_INT(-1, parsed("purple").music);
+    TEST_ASSERT_EQUAL_INT(-1, parsed("lights off").music);
+    ledvoice::Command c;
+    TEST_ASSERT_FALSE(ledvoice::parse("mode", &c));
+}
 
 int main(int, char**) {
     UNITY_BEGIN();
@@ -211,5 +231,6 @@ int main(int, char**) {
     RUN_TEST(test_level_still_works);
     RUN_TEST(test_favourite_with_filler_before_the_number);
     RUN_TEST(test_a_command_word_cancels_the_slot);
+    RUN_TEST(test_music_mode);
     return UNITY_END();
 }

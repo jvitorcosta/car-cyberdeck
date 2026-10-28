@@ -56,8 +56,9 @@
 // palette's time-of-day cap (never under 40 %). An outside light left off stays off; an inside one
 // off is switched on. The theme follows the swatch. The prompt line shows ">MUSIC", a chip and the
 // swatch's name (">MUSIC: WAITING" before the first palette), or ">MUSIC: NO SIGNAL" when no palette
-// came for 15 s. Any manual change (touch, the Xbox controller, voice, the watch) ends the mode,
-// then applies; turning it off brings back the looks from before. Not kept over a reboot (see
+// came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). Any manual
+// change (touch, the Xbox controller, voice, the watch) ends the mode, then applies; turning it off
+// brings back the looks from before. Not kept over a reboot (see
 // "Music mode" below).
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
 // mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
@@ -2402,6 +2403,13 @@ static void setMusic(bool on, bool restore) {
     drawMessage();
 }
 
+// The Menu's MUSIC MODE item again (its ON / OFF tag), after a change that didn't come from a tap on it.
+static void drawMusicItem() {
+    if (screen != Screen::Menu) return;
+    const int item = M_ITEM0 + deckmenu::MUSIC;
+    drawButton(item, pressedNow(item));
+}
+
 // A manual change (a tap, the Xbox controller, voice, the watch) while music mode is on: the mode
 // ends first (the MUSIC item shows OFF), then the change applies to the pages' looks. True when the
 // lights showed the song: the caller pushes both lights (the one it doesn't change goes back too).
@@ -2410,10 +2418,7 @@ static bool musicYield() {
     const bool drove = musicDriving;
     Serial.println("[music] a manual change ends it");
     setMusic(false, false);
-    if (screen == Screen::Menu) {
-        const int item = M_ITEM0 + deckmenu::MUSIC;
-        drawButton(item, pressedNow(item));
-    }
+    drawMusicItem();
     return drove;
 }
 
@@ -2506,8 +2511,9 @@ static bool updateTick() {
 // ignored); &zone=inside|outside (the Garmin app) acts on that zone's page only.
 // GET /state?k=[&zone=] answers that zone's line (level included) without changing anything.
 // A preset ("rose", "preset 2") is applied to both lights and answered with its line; the rest of
-// that phrase (a colour, a level, the zone) is ignored. GET /presets?k= lists the six presets (one
-// ledpresets::wireLine each), GET /status?k= each light's state.
+// that phrase (a colour, a level, the zone) is ignored. "music" / "music mode" turns music mode on,
+// "music off" off, like the MUSIC MODE button ("Music mode on"). GET /presets?k= lists the six
+// presets (one ledpresets::wireLine each), GET /status?k= each light's state and music mode's.
 // Each of the four takes the bearer ?k= (Siri Shortcuts can't sign) or a signature (common/net/reqauth:
 // the Garmin app signs, so it never sends the key).
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
@@ -2602,6 +2608,16 @@ static void answerVoice(const char (&line)[sizeof(voiceReply)], uint32_t seq) {
 static void applyVoice(const VoiceJob& job) {
     const ledvoice::Command& c = job.c;
     char line[sizeof(voiceReply)];
+    if (c.music >= 0) {  // "music", "music off": the MUSIC MODE button's toggle, both lights
+        if ((c.music == 1) != musicOn) {
+            setMusic(c.music == 1);
+            drawMusicItem();
+        }
+        snprintf(line, sizeof(line), "Music mode %s", musicOn ? "on" : "off");
+        noteUnlinked(line, sizeof(line), BOTH);
+        answerVoice(line, job.seq);
+        return;
+    }
     if (c.preset >= 1 && c.preset <= ledpresets::N) {  // "rose", "preset 2": both lights, whatever zone was asked
         applyPreset(c.preset - 1);
         ledpresets::describe(c.preset, line, sizeof(line));
@@ -2683,13 +2699,14 @@ static void handlePresets() {
     server->send(200, "text/plain", body);
 }
 
-// Each light on, off or out of reach: "inside=on outside=nolink".
+// Each light on, off or out of reach, then music mode and the firmware:
+// "inside=on outside=nolink music=off fw=2.0.0".
 static void handleStatus() {
     if (!reqauth::pass(*server, gate, "/status", "Wrong key")) return;
     const Published p = snapshot();
     char line[96];
     lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
-                       FW_VERSION, line, sizeof(line));
+                       musicWant, FW_VERSION, line, sizeof(line));
     server->send(200, "text/plain", line);
 }
 

@@ -6,7 +6,7 @@ import Toybox.WatchUi;
 
 // The zone pages' buttons:
 //   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE -> PRESETS
-//   START:     that zone's list (colours, Brightness >, Off); on PRESETS the deck's presets as
+//   START:     that zone's list (colours, Brightness >, Off; on BOTH also Music mode); on PRESETS the deck's presets as
 //              bars, START on one applies it                     BACK: leave
 class ZonesDelegate extends WatchUi.BehaviorDelegate {
     private var _deck as Deck;
@@ -42,6 +42,11 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
         }
         menu.addItem(new WatchUi.MenuItem("Brightness", null, :level, {}));
         menu.addItem(new WatchUi.MenuItem("Off", null, "off", {}));
+        if (zone == BOTH) {  // music mode drives both lights: its toggle, with the deck's state
+            var m = _deck.music;
+            menu.addItem(new WatchUi.MenuItem("Music mode", m.equals("on") ? "On" : m.equals("off") ? "Off" : null,
+                                              :music, {}));
+        }
         // start on the zone's current colour (inside's for BOTH; blue for cyan, not in the list)
         var color = _deck.look(zone == BOTH ? INSIDE : zone).color;
         menu.setFocus(color < N_PICK ? color : BLUE_INDEX);
@@ -103,7 +108,7 @@ class PresetMenuDelegate extends WatchUi.Menu2InputDelegate {
 }
 
 // A zone's list: a colour or Off is sent for that zone and returns to the pages; Brightness swaps
-// the list for the level screen (BACK there returns to the pages).
+// the list for the level screen (BACK there returns to the pages); Music mode (BOTH's) toggles it.
 class ZoneMenuDelegate extends WatchUi.Menu2InputDelegate {
     private var _deck as Deck;
     private var _zone as Number;
@@ -120,7 +125,11 @@ class ZoneMenuDelegate extends WatchUi.Menu2InputDelegate {
             WatchUi.switchToView(view, new LevelDelegate(_deck, _zone, view), WatchUi.SLIDE_UP);
             return;
         }
-        _deck.send(item.getId() as String, _zone);
+        if (item.getId() == :music) {
+            _deck.toggleMusic();
+        } else {
+            _deck.send(item.getId() as String, _zone);
+        }
         WatchUi.popView(WatchUi.SLIDE_RIGHT);
     }
 }

@@ -3,12 +3,13 @@
 // the same hotspot as the deck, with &zone=inside|outside unless the zone is Both. Plain http to
 // the hotspot works through Garmin Connect on iOS (tested 2026-10-22).
 //   ZonesView / ZonesDelegate: pages BOTH, INSIDE, OUTSIDE, PRESETS (UP/DOWN); START opens that
-//                              zone's list (ZoneMenuDelegate): colours with a dot, Brightness, Off;
+//                              zone's list (ZoneMenuDelegate): colours with a dot, Brightness, Off
+//                              (and Music mode on BOTH);
 //                              on PRESETS, the deck's named presets as bars, START applies one
 //                              (PresetMenuDelegate)
 //   PresetBar: a preset as a bar, inside and outside filled to their levels; the list's rows
 //   LevelView / LevelDelegate: a zone's brightness, UP/DOWN in 10 % steps
-//   Deck: both lights' state, the presets, the controllers' links + the request queue
+//   Deck: both lights' state, the presets, the controllers' links, music mode + the request queue
 //   HondaGlance: the card in the watch's glance loop (last state the app saw)
 import Toybox.Application;
 import Toybox.Lang;

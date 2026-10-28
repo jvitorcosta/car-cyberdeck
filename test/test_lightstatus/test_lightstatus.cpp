@@ -40,22 +40,16 @@ void test_link_cut_to_buffer() {
     TEST_ASSERT_EQUAL_STRING("OUTSIDE", buf);
 }
 
+// The lights' words, music mode's, then the build's version; the watch reads each "key=" up to the
+// next space, so it gets "nolink" and "on" whatever follows.
 void test_reply() {
-    char buf[40];
-    lightstatus::reply(State::On, State::NoLink, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("inside=on outside=nolink", buf);
-}
-
-// The build's version after the lights' words; the watch reads "inside=" and "outside=" up to the
-// next space, so it still gets "nolink".
-void test_reply_with_the_firmware_version() {
     char buf[96];
-    lightstatus::reply(State::Off, State::NoLink, "1.1.0+226.g41b2b7a", buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("inside=off outside=nolink fw=1.1.0+226.g41b2b7a", buf);
-    lightstatus::reply(State::On, State::On, "", buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("inside=on outside=on", buf);
-    lightstatus::reply(State::On, State::On, nullptr, buf, sizeof buf);
-    TEST_ASSERT_EQUAL_STRING("inside=on outside=on", buf);
+    lightstatus::reply(State::Off, State::NoLink, true, "1.1.0+226.g41b2b7a", buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("inside=off outside=nolink music=on fw=1.1.0+226.g41b2b7a", buf);
+    lightstatus::reply(State::On, State::On, false, "", buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("inside=on outside=on music=off", buf);
+    lightstatus::reply(State::On, State::NoLink, false, nullptr, buf, sizeof buf);
+    TEST_ASSERT_EQUAL_STRING("inside=on outside=nolink music=off", buf);
 }
 
 void test_messages() {
@@ -110,7 +104,6 @@ int main(int, char**) {
     RUN_TEST(test_link);
     RUN_TEST(test_link_cut_to_buffer);
     RUN_TEST(test_reply);
-    RUN_TEST(test_reply_with_the_firmware_version);
     RUN_TEST(test_messages);
     RUN_TEST(test_not_connected_note);
     RUN_TEST(test_is_alert);

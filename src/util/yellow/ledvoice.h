@@ -1,6 +1,6 @@
 #pragma once
-// Spoken lights commands ("purple inside", "dimmer", "lights off", "azul 50%") -> what to change.
-// The text is whatever Siri dictated, English or Portuguese, any case, with punctuation. Words it
+// Spoken lights commands ("purple inside", "dimmer", "lights off", "azul 50%", "music mode") -> what
+// to change. The text is whatever Siri dictated, English or Portuguese, any case, with punctuation. Words it
 // doesn't know are skipped, so "set the lights to purple please" works. PURE, host-tested.
 #include <cctype>
 #include <cstring>
@@ -18,6 +18,7 @@ struct Command {
     int levelStep = 0;   // +1 brighter, -1 dimmer (one 10 % step each)
     int zone = ZONE_NONE;
     int preset = -1;     // preset 1..6 ("rose", "favourite two"), or -1
+    int music = -1;      // music mode: 1 on ("music", "music mode"), 0 off ("music off"), -1 not asked
 };
 
 namespace detail {
@@ -95,6 +96,10 @@ static const Word SLOTS[] = {
 static const Word PRESET_NAMES[] = {
     {"rose", 1}, {"fire", 2}, {"gojira", 3}, {"godzilla", 3}, {"purpura", 4}, {"civic", 5}, {"ocean", 6},
 };
+// Music mode, the MUSIC MODE button's toggle by name: "music" turns it on, with an off word off. The
+// phrase is then that and nothing else ("music red off" only turns the mode off). "mode" / "modo" are
+// filler, like any unknown word.
+static const char* const MUSIC[] = {"music", "musica", "mÃºsica"};
 #define LEDVOICE_N(t) static_cast<int>(sizeof(t) / sizeof(t[0]))
 }  // namespace detail
 
@@ -106,6 +111,7 @@ inline bool parse(const char* text, Command* out) {
     bool armed = false;  // a favourite word was heard and its slot number hasn't come yet
     bool light = false;  // the word before was "light"
     bool blue = false;   // the word before was a blue colour word
+    bool music = false;  // a music word was heard
     char w[24];
     for (const char* p = text; *p;) {
         // a word: letters, digits and UTF-8 bytes (accents); everything else separates
@@ -154,6 +160,11 @@ inline bool parse(const char* text, Command* out) {
             any = true;
             continue;
         }
+        if (among(w, MUSIC, LEDVOICE_N(MUSIC))) {
+            music = true;
+            armed = false;
+            continue;
+        }
         if (lookup(w, FAVS, LEDVOICE_N(FAVS)) >= 0) {
             armed = true;  // not a command by itself: "favourite" alone parses to nothing
             continue;
@@ -173,6 +184,13 @@ inline bool parse(const char* text, Command* out) {
         else continue;  // not a command ("set", "the", "please", or "number" in "favourite number 2"): stays armed
         armed = false;  // a command word means no slot is coming
         any = true;
+    }
+    if (music) {  // a music command only: on, or off with an off word
+        const int on = out->power == 0 ? 0 : 1, zone = out->zone;
+        *out = Command{};
+        out->music = on;
+        out->zone = zone;
+        return true;
     }
     return any;
 }
