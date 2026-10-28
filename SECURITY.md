@@ -35,9 +35,19 @@ instead, with steps to reproduce and the board and version (first serial line,
   password never does (espota answers a challenge with it). Updates are off while `OTA_PASSWORD`
   is empty. Anyone with it, on the deck's network, can flash firmware that reads `src/config.h`
   back out, so make it long and random and don't reuse it. Updates aren't signed.
-- **The yellow deck reads the black deck's `/state` the same way:** it sends `REMOTE_TOKEN` in
-  plain HTTP on the hotspot (about once a second on its karaoke screen, less often on its Menu),
-  so anyone on that network can read the token and the now-playing feed.
+- **Devices sign; only the phone sends the token.** The yellow deck's requests to the black deck
+  (`/state`, `/music`) and the Garmin app's to the yellow deck (`/say`, `/state`, `/presets`,
+  `/status`) carry `t=<unix s>&n=<nonce>&sig=<HMAC-SHA256(REMOTE_TOKEN, method|path|params|t|n),
+  16 bytes>` instead of the token (`src/util/wire/sigreq.h`, checked against RFC 4231 in
+  `test/test_hmac256`). A deck accepts a signature within 2 minutes of its own clock, once (a ring of
+  the last 32 nonces; older times are refused outright), compares it in constant time and never logs
+  it. Someone who takes a deck's hotspot address, or sniffs the hotspot, learns nothing reusable from
+  them. Before a deck's first SNTP answer it can't check a signature (503), and the yellow deck sends
+  nothing to the black deck until its own clock is set: it never falls back to the token. The
+  bearer `?k=` stays accepted on those routes because **Siri Shortcuts and the Home Screen page can't
+  compute an HMAC**; those still put the token in plain-HTTP URLs, and anyone who sniffs one of them
+  on the hotspot has it. The responses aren't signed (they carry nothing secret). On the hotspot the
+  yellow deck looks the black deck up by mDNS when its fixed address stops answering as the deck.
 
 - Requests to Spotify (`api.spotify.com`, `accounts.spotify.com`) verify the server against
   7 bundled root certificates (`src/common/net/ca_bundle.inc`, built by `tools/gen_ca_bundle.py`).

@@ -1,6 +1,8 @@
 import Toybox.Application;
 import Toybox.Communications;
+import Toybox.Cryptography;
 import Toybox.Lang;
+import Toybox.Time;
 import Toybox.WatchUi;
 
 // The deck on the iPhone hotspot (net/wifi pins it there).
@@ -101,14 +103,20 @@ class Deck {
         _path = job[0] as String;
         status = "Sending...";
         WatchUi.requestUpdate();
-        var params = {"k" => DECK_KEY} as Dictionary<Object, Object>;
+        // Signed (Sign.mc), never the key itself: the pairs in name order, as the signature wants them.
+        var pairs = [] as Array<Array<String> >;
         if (job[1] != null) {
-            params["text"] = job[1] as String;
+            pairs.add(["text", job[1] as String]);
         }
         if (_zone == INSIDE) {
-            params["zone"] = "inside";
+            pairs.add(["zone", "inside"]);
         } else if (_zone == OUTSIDE) {
-            params["zone"] = "outside";
+            pairs.add(["zone", "outside"]);
+        }
+        var params = Sign.auth(DECK_KEY, _path, pairs, Time.now().value(), Cryptography.randomBytes(8))
+            as Dictionary<Object, Object>;
+        for (var i = 0; i < pairs.size(); i++) {
+            params[pairs[i][0]] = pairs[i][1];
         }
         Communications.makeWebRequest(DECK_URL + (job[0] as String), params,
             {:method => Communications.HTTP_REQUEST_METHOD_GET,
@@ -146,7 +154,9 @@ class Deck {
             } else if (code == -104 || code == -2) {
                 status = "Phone not connected";  // no Bluetooth link to Garmin Connect
             } else if (code == 403) {
-                status = "Wrong key";            // Secrets.mc doesn't match REMOTE_TOKEN
+                status = "Wrong key";            // Secrets.mc doesn't match REMOTE_TOKEN, or the clocks are 2 min apart
+            } else if (code == 503 && data != null && data.toString().find("clock") != null) {
+                status = "Deck has no clock";   // it can't check a signature before its first SNTP answer
             } else if (code == 503) {
                 status = "Deck busy";
             } else {

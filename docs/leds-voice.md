@@ -22,6 +22,11 @@ deck, the deck changes both lights and answers with one line that Siri speaks ba
   `FW` version types out under the boot's welcome lines.
 - All of them reply in plain text (`text/plain`). A wrong key gets 403 "Wrong key" (on all of them); a phrase with
   nothing to do gets "Sorry, I didn't get a colour or a command".
+- **Signed requests**: instead of `k=`, any of the four takes a signature, `t=<unix s>&n=<16 hex>&sig=<32 hex>`
+  (the first 16 bytes of HMAC-SHA256 with `REMOTE_TOKEN` over `GET|<path>|<params>|<t>|<n>`, params sorted
+  by name and percent-encoded; `src/util/wire/sigreq.h`). The Garmin app signs; Siri Shortcuts can't, so
+  they keep `k=`. A signed request must be within 2 minutes of the deck's clock and is accepted once;
+  before the deck's first SNTP answer it gets 503 "clock not set" (the `k=` still works).
 - Siri sends no zone, so voice always changes both lights; spoken zone words are ignored. The page
   on the deck's screen is left as it is.
 
@@ -175,8 +180,10 @@ WiFi, and the deck does the rest.
   looks. Turning the mode off brings back the looks from before it started. Your looks are never
   saved over while it runs, so a reboot also brings them back.
 - **Watch and `/state`**: while the mode drives the lights they report what the lights show.
-- **Black deck**: the yellow deck asks `GET /music?k=<token>&on=1` every 10 s while the mode is on,
-  `on=0` when it ends; the black deck stops by itself 30 s after the last ask.
+- **Black deck**: the yellow deck asks `GET /music?on=1` (signed, like its `/state` polls: it never
+  sends the key) every 10 s while the mode is on, `on=0` when it ends; the black deck stops by itself
+  30 s after the last ask. `/music` also takes `k=<token>` for a test by hand. Until its clock is set
+  the yellow deck asks nothing (it waits rather than send the key).
   `GET /music/debug?k=<token>` on the black deck shows the palette it last sent, its cap and the
   socket (`&on=1` also keeps it alive).
 
@@ -359,8 +366,12 @@ to be on the hotspot, not home WiFi ("No answer" means it isn't).
 - **Glance**: a card for the watch face's glance loop with both lights' dots and levels, as of
   the last time the app ran (a glance can't make web requests). START on it opens the app.
 - Requests go one at a time from a short queue; every reply is read back into the screen, so it
-  shows what the deck reports. Errors: "No answer", "Phone not connected", "Wrong key".
-- Key: copy `source/Secrets.mc.example` to `source/Secrets.mc` (git-ignored) with REMOTE_TOKEN.
+  shows what the deck reports. Errors: "No answer", "Phone not connected", "Wrong key" (also when the
+  watch's clock is more than 2 minutes off the deck's), "Deck has no clock" (no SNTP answer yet).
+- Key: copy `source/Secrets.mc.example` to `source/Secrets.mc` (git-ignored) with REMOTE_TOKEN. The
+  app signs each request with it (`source/Sign.mc`, `Toybox.Cryptography` HMAC-SHA256, the watch's
+  clock) and never sends it. `monkeyc ... --unit-test` and `monkeydo <prg> fr255 /t` in the simulator
+  run its known-answer tests (`source/SignTest.mc`, the same vectors as `test/test_sigreq`).
 - Build: Connect IQ SDK + a developer key, `monkeyc -d fr255 -f monkey.jungle -o bin/CarLights.prg
   -y <key> -l 2` (the manifest also lists fr255m, fr255s, fr255sm).
 - Install: copy `bin/CarLights.prg` to the watch's `GARMIN/APPS` over USB (if Windows asks about

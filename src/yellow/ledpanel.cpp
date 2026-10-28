@@ -2476,6 +2476,8 @@ static bool updateTick() {
 // A preset ("rose", "preset 2") is applied to both lights and answered with its line; the rest of
 // that phrase (a colour, a level, the zone) is ignored. GET /presets?k= lists the six presets (one
 // ledpresets::wireLine each), GET /status?k= each light's state.
+// Each of the four takes the bearer ?k= (Siri Shortcuts can't sign) or a signature (common/net/reqauth:
+// the Garmin app signs, so it never sends the key).
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
 // the state) and the handler waits for loop()'s reply. Each job carries a sequence number that the
 // reply echoes, so a request that timed out (loop busy, e.g. calibrating) can't answer the next
@@ -2589,7 +2591,7 @@ static void applyVoice(const VoiceJob& job) {
 }
 
 static void handleSay() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/say", "Wrong key")) return;
     const String text = server->arg("text");
     Serial.printf("[voice] \"%s\"\n", text.c_str());
     if (text.length() == 0) { server->send(200, "text/plain", "I didn't hear anything"); return; }  // no text from the Shortcut
@@ -2625,7 +2627,7 @@ static void handleSay() {
 
 // The zone's current look, level always included: the Garmin remote syncs its screen from it.
 static void handleState() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/state", "Wrong key")) return;
     const String zone = server->arg("zone");
     const Target z = zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH;
     const Published p = snapshot();
@@ -2637,7 +2639,7 @@ static void handleState() {
 // The six presets, one wireLine each ("1 ROSE pink 40 pink 100"), joined by \n. A fixed table: no
 // snapshot needed.
 static void handlePresets() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/presets", "Wrong key")) return;
     char body[ledpresets::N * 48] = "";
     size_t len = 0;
     for (int i = 0; i < ledpresets::N && len < sizeof(body); i++) {
@@ -2651,7 +2653,7 @@ static void handlePresets() {
 
 // Each light on, off or out of reach: "inside=on outside=nolink".
 static void handleStatus() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/status", "Wrong key")) return;
     const Published p = snapshot();
     char line[96];
     lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
@@ -2694,7 +2696,7 @@ static void beginVoice() {
         Serial.println("[voice] off (REMOTE_TOKEN empty)");
         return;
     }
-    reqauth::begin();  // HMAC's self-test: the requests to the black deck are signed
+    reqauth::begin();  // HMAC's self-test: the watch's requests and ours to the black deck are signed
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);
