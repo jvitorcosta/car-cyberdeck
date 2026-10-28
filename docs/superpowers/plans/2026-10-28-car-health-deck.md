@@ -468,7 +468,7 @@ def test_supported_scan_matches_city():  # 0100 bits include 0C 0D 10 06 07; exc
 
 **Files:**
 - Create: `src/yellow/obdlink.{h,cpp}` (ported from `feat/obd`'s `src/companion/obdlink.cpp` BLE path)
-- Modify: `platformio.ini` `[env:ledpanel]` build_flags: add `-D CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4`
+- Modify: `platformio.ini` `[env:ledpanel]` build_flags: add `-D CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4`; add `+<util/car/>` to its `build_src_filter`
 - Modify: `src/yellow/ledpanel.cpp`: `linkTask` calls `obdlink::tick(now)` once per pass, after the lights. `setup()` calls `obdlink::start()` after `NimBLEDevice::init`.
 
 **Interfaces:**
@@ -495,7 +495,12 @@ Decisions:
 - **Connecting** happens only inside `linkTask`, so it never races the lights' connects or the pad's scans.
 - **First-time find:** a 4 s scan for an advertised `obdble::serialService` UUID or `obd::looksLikeAdapter(name)`. The address is saved in NVS key `"obd"`.
 - **The ask task** runs `ask()` with a 2 s wait and a resync of late replies (`feat/obd` behaviour). It sends only what `obd::allowed()` passes. It asks codes when `plan.codesDue()`.
-- **Every adapter write** goes through one function that asserts `obd::allowed(cmd)` and refuses anything else.
+- **Every adapter write** goes through one function that asserts `obd::allowed(cmd)` and refuses anything else. Never send ATH1.
+- **First step proves a 4th BLE connection works:** the controller limit in the precompiled sdkconfig may stay 3 whatever `CONFIG_BT_NIMBLE_MAX_CONNECTIONS` says. Connect lights + pad + Vgate and check before building on it.
+- **Watchdog:** the ask task calls `watchdog::watch()` and `watchdog::feed()` each pass (`common/core/watchdog.h`, 90 s); `linkTask` feeds before the OBD connect/discovery and before the first-time scan.
+- **Supported scan:** call `plan.setSupported()` after the scan even when the scan fails (else `codesDue` never fires). Call `Watch::codesRead()` after a good 03/07 read.
+- **Battery:** poll ATRV at least every ~5 s (e.g. twice per slow round), not once per ~22 s round. Step `fueleco` only with fresh values.
+- **GATT service:** record the Vgate's real service (it may be a 128-bit UUID, not FFF0). `obdble::pick` must not pair a notify and a write from different 128-bit services: carry a per-service index.
 
 - [ ] **Step 1: Build**: `pio run -e ledpanel`. Expected: SUCCESS, with no `-Werror` findings.
 - [ ] **Step 2: Bench run against `tools/obd_sim.py`.** Flash: `pio run -e ledpanel -t upload`. The serial log must show:
@@ -523,6 +528,8 @@ Decisions:
 
 **Interfaces:**
 - Consumes: `healthview::check/parked/ParkGate` (Task 6), `obdlink::snapshot` (Task 8), `carhealth::Watch` (Task 2).
+- At boot: restore `carhealth::Memo` from NVS and call `endTrip()` before screen A. The Memo is saved with the 30 s flush, inside the last-trip NVS record ({km, litres, seconds, idleS, avgKmh, costRs} + Memo).
+- Show screen A only once the first codes read and a volts reading are in, or after 20 s (items still unknown show CHECKING).
 - Produces:
   - `static void showCheckOnce()`: called when the link first goes `Live` this power-on. It shows Check for 5 s, then goes back to the Menu. A problem holds it until a tap.
   - Screen D comes and goes from `ParkGate` in `loop()`. Lights/Karaoke/Presets are never interrupted: D shows only from the Menu.
@@ -553,11 +560,16 @@ void test_check_and_parked_are_one_full_screen_tap();   // rect(Check,0) == {0,0
   - the NVS `"fuel"` record.
 - Modify: `src/util/yellow/termlayout.h` only if the band's three figures need new x positions. `test/test_termfont` must still pass.
 - Modify: `docs/BACKLOG.md`: the car-test checklist below.
+- Wave 4 changed `ledvoice.h`, `lightstatus`, `termlayout.h` and `ledpanel.cpp`, and moved the voice docs to `docs/yellow-deck.md`: re-read them first.
 
 **Interfaces:**
 - Consumes: Tasks 2-8.
 - Produces:
   - **Trip id:** `YYYYMMDD-HHMM` from the SNTP clock when synced, else `b<bootCount>`.
+  - **`triplog` use:** `Log::open(uint32_t seq)` with a boot sequence persisted in NVS (key `"tseq"`, +1 each boot); file names `"/t%06lu.jsonl"`. The LittleFS `Store` pages `list(names, max, skip)` in ascending name order (= oldest first), and `append` truncates back to the pre-append size on a short write. `triplog::Log` is a static object, never on a task stack.
+  - **Single sources:** `tripsum` is the only km source. Feed `litres = NAN` for a second where `fueleco` counted nothing. `recentKmL` comes from `fuelbook::learn()` per closed row.
+  - **New-code flags:** keep the last known codes across boots for the row's "new code" flags.
+  - **Voice order:** `/say` keeps accepting `?k=` (Siri can't sign) after `reqauth::pass`, so parse the fill-up phrase after that check and before `ledvoice`.
   - **Log loop:** `tripsum::Trip` fed once a second in `tripTick()`, rows go to `triplog` each minute, `flush()` every 30 s, and `recover()` + `enforceCap()` in `setup()`.
   - **Fuel book:** `fuelbook::burn()` with each second's litres, `recentKmL` = the last 50 km's km/l, saved to NVS when it changes, at most once a minute.
   - **Voice replies:**
