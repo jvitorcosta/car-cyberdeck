@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from obd_sim import answer  # noqa: E402
+from obd_sim import answer, chunks  # noqa: E402
 
 
 def test_speed_reply():
@@ -78,3 +78,15 @@ def test_silent_means_ignition_off():
     assert answer("010D", s) == "NO DATA"
     assert answer("03", s) == "NO DATA"
     assert answer("ATRV", s) == "12.6V"
+
+
+def test_chunks_split_long_reply():
+    reply = answer("03", {"codes": ["P0301", "P0420", "U0100"]}) + "\r>"
+    assert len(reply) == 25
+    parts = chunks(reply)
+    assert [len(p) for p in parts] == [20, 5]
+    assert b"".join(parts) == reply.encode()
+
+
+def test_chunks_short_reply_is_one_slice():
+    assert chunks("OK\r>") == [b"OK\r>"]

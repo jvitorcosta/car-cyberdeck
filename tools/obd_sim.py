@@ -104,6 +104,12 @@ def answer(cmd, state):
     return "?"
 
 
+def chunks(reply, size=20):
+    """The reply (with its "\r>") as notification-sized slices, in order, like a real adapter."""
+    b = reply.encode()
+    return [b[i:i + size] for i in range(0, len(b), size)] or [b""]
+
+
 def _console_cmd(line, st):
     """Applies one console line to the state; returns False to quit."""
     w = line.split()
@@ -152,10 +158,11 @@ def _main():
                 i = buf.index(b"\r")
                 cmd = bytes(buf[:i]).decode("ascii", "ignore")
                 del buf[:i + 1]
-                reply = (answer(cmd, st) + "\r>").encode()
+                reply = answer(cmd, st) + "\r>"
                 print(f"{cmd!r} -> {reply!r}")
-                server.get_characteristic(NOTIFY).value = bytearray(reply)
-                server.update_value(SVC, NOTIFY)
+                for part in chunks(reply):                # 20 bytes: the default ATT MTU of 23
+                    server.get_characteristic(NOTIFY).value = bytearray(part)
+                    server.update_value(SVC, NOTIFY)
 
         server.write_request_func = on_write
         await server.add_new_service(SVC)
