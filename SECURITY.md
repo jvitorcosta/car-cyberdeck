@@ -23,9 +23,10 @@ instead, with steps to reproduce and the board and version (first serial line,
 
 - **The phone remote is plain HTTP on the local network.** Its token travels in the URL and
   the request, readable by anyone on the same WiFi or hotspot. It gates more than a sound
-  effect: on the decks' web servers it guards `GET /state` (now playing, lyrics, the deck's
-  status, network name and trip), `POST /play` (sounds), `POST /trip/reset`, and on the
-  yellow deck `/say`, `/state`, `/presets` and `/status` (the car's lights). The page itself and the Home Screen
+  effect: on the black deck it guards `GET /state` (now playing, lyrics, the deck's status,
+  network name and trip), `POST /play` (sounds), `POST /trip/reset`, `GET /music` (music mode)
+  and `GET /music/debug`; on the yellow deck `/say`, `/state`, `/presets` and `/status` (the
+  car's lights and music mode). The page itself and the Home Screen
   icon are public; they carry no data of their own. The remote is off unless
   `REMOTE_TOKEN` is set; use a long random token and don't reuse it, and only on networks you
   trust (your own hotspot): anyone on the network can reach the web server, and a deliberately
@@ -69,6 +70,12 @@ instead, with steps to reproduce and the board and version (first serial line,
   `[tls] certificate rejected: <host>`: regenerate the bundle and flash again. Certificate
   expiry is not checked (the board has no trusted clock during the handshake).
 - **Lyrics, genres and sprites are fetched without certificate checks** (`setInsecure()`):
-  they are public data and carry no credentials, and a full check costs RAM on the CYD.
+  they are public data and carry no credentials, and a full check would cost RAM.
+- **The yellow deck's weather is plain HTTP**: ip-api.com (where the car is, from the hotspot's
+  public IP) and Open-Meteo. No credentials go out, but ip-api.com and anyone on the path see the
+  approximate location and the lookups.
+- **The LED controllers have no pairing or password**: they take commands from any Bluetooth LE
+  device that connects. While the yellow deck holds their link nobody else can connect (each takes
+  one link at a time); while it doesn't, the controllers' own phone app or anyone nearby can.
 - Album art is downloaded over plain HTTP from Spotify's image CDN (public images, chosen to
   save RAM).
