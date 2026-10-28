@@ -144,6 +144,30 @@ void test_health_wifi_back_resets_backstop_and_memory_clock() {
     g.onPoll(false, true, false, 800000);                  // WiFi returned: backstop clock cleared
     TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)g.onPoll(false, false, false, 1000000));
 }
+// No hotspot for hours: the WiFi-down restart only helps a wedged WiFi driver, so each one in a row
+// waits longer (15 min, 1 h, then every 4 h); the count survives the restart (quietboot).
+void test_health_wifi_down_restarts_back_off() {
+    TEST_ASSERT_EQUAL_UINT32(900000u, netplan::Health::wifiDownLimitMs(0));
+    TEST_ASSERT_EQUAL_UINT32(3600000u, netplan::Health::wifiDownLimitMs(1));
+    TEST_ASSERT_EQUAL_UINT32(14400000u, netplan::Health::wifiDownLimitMs(2));
+    TEST_ASSERT_EQUAL_UINT32(14400000u, netplan::Health::wifiDownLimitMs(50));
+    netplan::Health h;
+    h.setWifiRestarts(1);                                  // the boot after one such restart
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, 1000));
+    TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, false, false, 1000 + 900000));
+    TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, false, false, 1000 + 3599000));
+    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, 1000 + 3600000));
+    TEST_ASSERT_EQUAL_UINT32(1, h.wifiRestarts());
+}
+// WiFi seen again: the next outage starts the ladder over.
+void test_health_wifi_back_clears_the_restart_count() {
+    netplan::Health h;
+    h.setWifiRestarts(2);
+    h.onPoll(false, true, false, 1000);                    // WiFi up (Spotify not answering yet)
+    TEST_ASSERT_EQUAL_UINT32(0, h.wifiRestarts());
+    h.onPoll(false, false, false, 5000);
+    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, 5000 + 900000));
+}
 void test_health_first_call_failing_starts_clock() {
     netplan::Health h;
     TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, true, true, 900000));
@@ -427,6 +451,8 @@ int main(int, char**) {
     RUN_TEST(test_health_wifi_down_backstop_after_15_min);
     RUN_TEST(test_health_wifi_back_resets_backstop_and_memory_clock);
     RUN_TEST(test_health_first_call_failing_starts_clock);
+    RUN_TEST(test_health_wifi_down_restarts_back_off);
+    RUN_TEST(test_health_wifi_back_clears_the_restart_count);
     RUN_TEST(test_stale_after_limit_and_handles_wrap);
     RUN_TEST(test_lyrics_retry_after_5s_then_20s_then_gives_up);
     RUN_TEST(test_lyrics_other_results_are_final);

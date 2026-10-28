@@ -93,15 +93,29 @@ int parseRetryAfter(const char* v);
 //  - restart only on memory evidence (memStarved: failed allocations since the last good poll,
 //    or the largest block below TLS_NEED) after 180 s without a good poll — a dead zone or a
 //    401/429 can't be fixed by rebooting, and must not become a reboot loop;
-//  - WiFi down for 15 min straight -> restart (backstop if the WiFi driver can't come back).
+//  - WiFi down for 15 min straight -> restart (backstop if the WiFi driver can't come back). It
+//    only helps a wedged driver, not a missing hotspot (the phone forgot it, iOS turned it off),
+//    and WiFi retries go on without it (net::loop). So each WiFi-down restart in a row waits
+//    longer: 15 min, then 1 h, then every 4 h (wifiDownLimitMs); the count rides the restart in
+//    RTC memory (util/quietboot, which also makes that boot skip the opening) and clears as soon
+//    as WiFi is up.
 class Health {
 public:
     enum class Action { None, PauseOptional, Restart };
     static constexpr int FAILS_TO_PAUSE = 2;
     static constexpr uint32_t RESTART_AFTER_MS = 180000;
     static constexpr uint32_t WIFI_DOWN_RESTART_MS = 900000;
+    // WiFi down this long -> restart, after `restarts` WiFi-down restarts in a row.
+    static uint32_t wifiDownLimitMs(uint32_t restarts) {
+        return restarts == 0 ? WIFI_DOWN_RESTART_MS : restarts == 1 ? 3600000u : 14400000u;
+    }
+    // At boot: the WiFi-down restarts in a row before it (util/quietboot).
+    void setWifiRestarts(uint32_t n) { wifiRestarts_ = n; }
+    // The count to carry over a WiFi-down restart is this + 1; 0 once WiFi was up.
+    uint32_t wifiRestarts() const { return wifiRestarts_; }
     Action onPoll(bool ok, bool wifiUp, bool memStarved, uint32_t nowMs) {
         if (!started_) { started_ = true; lastOk_ = nowMs; }
+        if (ok || wifiUp) wifiRestarts_ = 0;   // the WiFi works: the next outage starts at 15 min
         if (ok) {
             fails_ = 0; lastOk_ = nowMs; paused_ = false; wifiDown_ = false;
             return Action::None;
@@ -109,7 +123,7 @@ public:
         if (!wifiUp) {
             lastOk_ = nowMs;   // the memory clock only runs while WiFi is up
             if (!wifiDown_) { wifiDown_ = true; downSince_ = nowMs; }
-            return nowMs - downSince_ >= WIFI_DOWN_RESTART_MS ? Action::Restart : Action::None;
+            return nowMs - downSince_ >= wifiDownLimitMs(wifiRestarts_) ? Action::Restart : Action::None;
         }
         if (wifiDown_) { wifiDown_ = false; lastOk_ = nowMs; }   // WiFi back: memory clock restarts
         ++fails_;
@@ -122,6 +136,7 @@ private:
     int fails_ = 0;
     uint32_t lastOk_ = 0;
     uint32_t downSince_ = 0;
+    uint32_t wifiRestarts_ = 0;
     bool started_ = false;
     bool paused_ = false;
     bool wifiDown_ = false;
