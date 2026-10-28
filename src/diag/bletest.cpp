@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include <TFT_eSPI.h>
+#include "../config.h"  // LED_INSIDE_MAC, LED_OUTSIDE_MAC (include/config.example.h)
 
 static TFT_eSPI tft;
 
@@ -16,8 +17,8 @@ struct Controller {
 };
 
 static Controller controllers[] = {
-    {"ELK-BLEDDM (exterior?)", "be:68:93:1d:22:00"},
-    {"MELK-OA25PQ (interior?)", "be:16:b6:00:9b:ff"},
+    {"outside", LED_OUTSIDE_MAC},
+    {"inside", LED_INSIDE_MAC},
 };
 
 static void printHex(const uint8_t* data, size_t len) {

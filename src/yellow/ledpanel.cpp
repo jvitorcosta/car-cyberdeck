@@ -259,10 +259,16 @@ struct Controller {
     volatile bool fresh = false;                         // just connected: needs the current state
 };
 
-// Which is inside and which outside is a guess from signal strength; swap the addresses if wrong.
+// The two controllers' BLE addresses come from src/config.h (include/config.example.h says how to
+// find them). A config.h without them doesn't build; the example's all-zero placeholders build and
+// are named in the boot log (setup).
+#if !defined(LED_INSIDE_MAC) || !defined(LED_OUTSIDE_MAC)
+#error "Set LED_INSIDE_MAC and LED_OUTSIDE_MAC in src/config.h (see include/config.example.h)"
+#endif
+static constexpr const char* NO_MAC = "00:00:00:00:00:00";
 static Controller controllers[] = {
-    {"INSIDE", "be:16:b6:00:9b:ff"},   // MELK-OA25PQ
-    {"OUTSIDE", "be:68:93:1d:22:00"},  // ELK-BLEDDM F8
+    {"INSIDE", LED_INSIDE_MAC},
+    {"OUTSIDE", LED_OUTSIDE_MAC},
 };
 static constexpr int N_CTRL = sizeof(controllers) / sizeof(controllers[0]);
 
@@ -2858,6 +2864,11 @@ void setup() {
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
     xbox.begin();
+    for (const Controller& c : controllers) {
+        if (strcmp(c.addr, NO_MAC) == 0) {
+            Serial.printf("[leds] %s: no address in config.h (LED_%s_MAC)\n", c.label, c.label);
+        }
+    }
     // 8 KB: the Xbox library's connect, discovery and subscribe (std::function, std::string) run on
     // this task too; the [mem] line shows what's left.
     xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);
