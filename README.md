@@ -5,8 +5,8 @@
 **A wild track appeared!** Two ESP32 screens and a Garmin watch app for the car: Spotify as a
 Gen-3 Pokémon battle, and the car's LED lights by touch, voice, gamepad or watch.
 
-[![CI](https://github.com/jvitorcosta/spotify-car-deck/actions/workflows/ci.yml/badge.svg)](https://github.com/jvitorcosta/spotify-car-deck/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/tag/jvitorcosta/spotify-car-deck?label=release&sort=semver)](CHANGELOG.md)
+[![CI](https://github.com/jvitorcosta/car-cyberdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/jvitorcosta/car-cyberdeck/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/tag/jvitorcosta/car-cyberdeck?label=release&sort=semver)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Boards: ESP32 / ESP32-S3](https://img.shields.io/badge/boards-ESP32%20%7C%20ESP32--S3-informational)
 
