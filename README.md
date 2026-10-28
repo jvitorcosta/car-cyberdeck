@@ -97,8 +97,12 @@ You need [PlatformIO Core](https://docs.platformio.org/en/latest/core/installati
    WiFi on its 2.4 GHz band, see [Two decks](#two-decks); or the PC joined to the iPhone
    hotspot with `--upload-port 172.20.10.10`), run
    `pio run -e s3_ota -t upload`. The deck shows the upload's progress (on Green Hill Zone
-   with `data/backdrop.bin`, see Media) and restarts into the new firmware; an interrupted upload never boots. If the new firmware crashes 3 boots in a
-   row before it has run a minute with a good poll, the deck goes back to the previous one
+   with `data/backdrop.bin`, see Media) and restarts into the new firmware; an interrupted upload never boots. Keep the deck powered for about a minute after an
+   update: the new firmware stays pending (`[ota] update pending`) until it has run a minute online
+   (any WiFi, mobile data or not) with its update listener up (`[ota] update confirmed`). If the
+   deck resets before that (a crash, even before `setup()`, or the ignition) the bootloader boots
+   the previous one (`[ota] ... holds an update the bootloader rolled back`); re-send it. After
+   that, 3 crash boots in a row before it has had a good Spotify poll still go back
    (`[ota] rolled back`). Windows may ask to let Python through the firewall the first time:
    espota needs the deck to connect back to the PC. Media changes still go over USB
    (`uploadmedia`), and USB `upload` is always the way back.

@@ -12,6 +12,7 @@ Look lookFor(linkstatus::Kind k) {
     case linkstatus::Kind::NoInternet:   return {status_sprite::PSYDUCK, Bubble::Dots, false};    // puzzled
     case linkstatus::Kind::SpotifyError: return {status_sprite::SLOWPOKE, Bubble::Zzz, false};    // waiting
     case linkstatus::Kind::CertRejected: return {status_sprite::PORYGON, Bubble::Bang, false};    // alarm
+    case linkstatus::Kind::LoginFailed:  return {status_sprite::PORYGON, Bubble::Bang, false};    // the owner must act
     case linkstatus::Kind::Ok:           break;
     }
     return {status_sprite::PIKACHU, Bubble::None, false, idlesprite::count() > 0};   // Sonic waits

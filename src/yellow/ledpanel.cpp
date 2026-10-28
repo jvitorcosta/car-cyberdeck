@@ -88,6 +88,7 @@
 #include "pins.h"
 #include "../common/ui/backlight.h"
 #include "../common/core/embed.h"
+#include "../common/core/watchdog.h"
 #include "ui/gojiraname.h"
 #include "ui/jpfont.h"
 #include "ui/lyricrun.h"
@@ -100,6 +101,7 @@
 #include "../common/net/ipaddr.h"
 #include "../common/net/ota.h"
 #include "../common/net/remote_config.h"
+#include "../common/net/reqauth.h"
 #include "../common/net/wifi.h"
 #include "../util/yellow/bothlook.h"
 #include "../util/yellow/dashtext.h"
@@ -355,7 +357,9 @@ static TaskHandle_t linkHandle = nullptr;
 
 static void linkTask(void*) {
     uint32_t waitMs = 5000, nextLights = 0, lastPadScan = 0;
+    watchdog::watch();  // a NimBLE wait that never returns reboots the deck (common/core/watchdog)
     for (;;) {
+        watchdog::feed();
         if (ota::active()) {
             NimBLEScan* scan = NimBLEDevice::getScan();
             if (scan->isScanning()) scan->stop();
@@ -371,6 +375,7 @@ static void linkTask(void*) {
             lastPadScan = now;
             xbox.onLoop();  // starts a scan
         }
+        watchdog::feed();  // the controller's connect and discovery: ~62 s at worst
 
         // lost: a light that was up last tick and isn't now (`tx` outlives the link, so it can't tell)
         static bool wasUp[N_CTRL] = {};
@@ -388,6 +393,7 @@ static void linkTask(void*) {
         if (missing && static_cast<int32_t>(now - nextLights) >= 0) {
             bool still = false;
             for (Controller& c : controllers) {
+                watchdog::feed();  // a light's connect and discovery: ~45 s at worst
                 if (!linkUp(c) && !connect(c)) still = true;
             }
             nextLights = millis() + waitMs;
@@ -1339,10 +1345,14 @@ static void waitTap(int* rx, int* ry) {
     int x, y;
     for (uint32_t freeSince = millis(); millis() - freeSince < 150;) {
         if (touch::readRaw(&x, &y)) freeSince = millis();
+        watchdog::feed();  // BOOT's calibration runs on the watched loop and waits on the pen
         delay(5);
     }
     for (;;) {
-        while (!touch::readRaw(&x, &y)) delay(5);
+        while (!touch::readRaw(&x, &y)) {
+            watchdog::feed();
+            delay(5);
+        }
         delay(60);  // let the pen settle
         long sx = 0, sy = 0;
         int n = 0;
@@ -1867,6 +1877,7 @@ static bool weatherPlaced = false;
 static WeatherReading weatherLast;  // with the last try's outcome
 
 static void weatherTry(void*) {
+    watchdog::watch();  // two bounded GETs (httpGet's timeouts and deadline), fed before each
     geoip::Place& place = weatherPlace;
     bool& placed = weatherPlaced;
     WeatherReading& r = weatherLast;
@@ -1875,6 +1886,7 @@ static void weatherTry(void*) {
         Serial.println("[weather] offline");
     } else {
         if (!placed) {
+            watchdog::feed();
             const int rc = weatherGet(geoip::URL);
             placed = rc == 200 && geoip::parse(weatherBody, &place);
             if (placed) Serial.printf("[weather] place %s (%s, %s)\n", place.city, place.lat, place.lon);
@@ -1883,6 +1895,7 @@ static void weatherTry(void*) {
         if (placed) {
             char url[256];
             weather::url(place.lat, place.lon, url, sizeof(url));
+            watchdog::feed();
             const int rc = weatherGet(url);
             weather::Now now;
             if (rc == 200 && weather::parse(weatherBody, &now)) {
@@ -1907,6 +1920,7 @@ static void weatherTry(void*) {
     weatherWait = ok ? WEATHER_EVERY_MS : WEATHER_RETRY_MS;
     weatherDoneAt = millis();
     weatherStackLeft = static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr));
+    watchdog::forget();  // before the task goes: a deleted task can't feed
     weatherBusy = false;  // last: the voice task may start the next try from here on
     vTaskDelete(nullptr);
 }
@@ -1973,10 +1987,12 @@ static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches th
 static deckaddr::Keep lyricsAddr;
 static bool lyricsMdns = false;
 
-// Where the black deck is: its fixed address on the hotspot, else its mDNS name on whatever network
-// both are on. False when it can't be found.
+// Where the black deck is: its fixed address on the hotspot (until it stops answering as the deck),
+// else its mDNS name on whatever network both are on. False when it can't be found.
 static bool lyricsHost(char* out, size_t n) {
-    if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()))) {
+    const bool hot =
+        hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask()));
+    if (hot && lyricsAddr.addr() == 0 && lyricsAddr.tryFixed()) {
         snprintf(out, n, "%s", BLACK_DECK_ADDR);
         return true;
     }
@@ -1987,23 +2003,59 @@ static bool lyricsHost(char* out, size_t n) {
         if (!lyricsPace.mayLookup(now)) return false;
         lyricsPace.lookedUp(now);
         const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
-        if (static_cast<uint32_t>(a) == 0) return false;
+        if (static_cast<uint32_t>(a) == 0) {
+            lyricsAddr.lookupFailed();  // on the hotspot: the fixed address again
+            return false;
+        }
         lyricsAddr.found(static_cast<uint32_t>(a));
-        Serial.printf("[lyrics] deck found at %s (mDNS)\n", a.toString().c_str());
+        Serial.printf("[lyrics] deck found at %s (mDNS%s)\n", a.toString().c_str(), hot ? ", off its fixed address" : "");
     }
     snprintf(out, n, "%s", IPAddress(lyricsAddr.addr()).toString().c_str());
     return true;
 }
 
-// GET /state into lyricsBody (cut at MAX_JSON, always terminated); the HTTP status, negative without
-// an answer. Short timeouts: the deck is one hop away, and a missing deck must not hold the polls up.
+// What deckGet returns when it sent nothing: the clock isn't set (or HMAC's self-test failed), so
+// nothing can be signed (the bearer key is never sent). Not a miss: the deck wasn't asked.
+static constexpr int NOT_SIGNED = -1000;
+
+// A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
+// body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
+// peer: the address asked; nonce: the request's n (16 hex). Short timeouts: the deck is one hop
+// away, and a missing deck must not hold the polls up.
+static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
+                   uint32_t* peer = nullptr, char* nonce = nullptr) {
+    if (!net::isOnline()) return -1;
+    char auth[sigreq::AUTH_LEN];
+    if (!reqauth::signGet(path, params, count, auth, sizeof(auth))) {
+        static bool told = false;
+        if (!told) {
+            Serial.println(reqauth::hmacOk() ? "[lyrics] waiting for the clock: requests to the deck are signed"
+                                             : "[lyrics] HMAC self-test failed: nothing is sent to the deck");
+        }
+        told = true;
+        return NOT_SIGNED;
+    }
+    if (nonce) {  // auth is "t=..&n=<16 hex>&sig=.."
+        const char* at = strstr(auth, "&n=");
+        snprintf(nonce, 17, "%.16s", at ? at + 3 : "");
+    }
+    char host[40], query[32] = "", url[160];
+    if (!lyricsHost(host, sizeof(host))) return -1;
+    for (int i = 0; i < count; ++i) {
+        const size_t at = strlen(query);
+        snprintf(query + at, sizeof(query) - at, "%s=%s&", params[i].name, params[i].value);
+    }
+    if (snprintf(url, sizeof(url), "http://%s%s?%s%s", host, path, query, auth) >= static_cast<int>(sizeof(url)))
+        return -1;
+    IPAddress a;
+    if (peer && a.fromString(host)) *peer = static_cast<uint32_t>(a);
+    return net::httpGet(url, 1500, body, bodyLen, body ? 3000 : 0);
+}
+
+// GET /state into lyricsBody (cut at MAX_JSON, always terminated).
 static int lyricsGet() {
     lyricsBody[0] = 0;
-    if (!net::isOnline()) return -1;
-    char host[40], url[128];
-    if (!lyricsHost(host, sizeof(host))) return -1;
-    snprintf(url, sizeof(url), "http://%s/state?k=%s", host, REMOTE_TOKEN);
-    return net::httpGet(url, 1500, lyricsBody, sizeof(lyricsBody), 3000);
+    return deckGet("/state", nullptr, 0, lyricsBody, sizeof(lyricsBody));
 }
 
 // ---- Music mode: the black deck sends the song's palette ----
@@ -2012,23 +2064,35 @@ static int lyricsGet() {
 // but MUSIC_KEEP_MS after a 503 (its low memory: Spotify's TLS needs that heap, so no hurry); on=0 once
 // when it goes. Each ask also records the black deck's address (musicPeer), the one sender the music
 // task takes packets from, and counts toward lyricsAddr's misses like a lyrics poll (a stale mDNS
-// address is looked up again). The log tells each change of answer.
+// address is looked up again). An on=1 answered 200 also proves the black deck's boot id for this
+// request's nonce (util/wire/musicwire::readBoot): the music task takes packets only from that boot
+// (musicBoot). The log tells each change of answer.
 static constexpr uint32_t MUSIC_KEEP_MS = 10000, MUSIC_RETRY_MS = 2000;
 static volatile uint32_t musicPeer = 0;  // IPv4, network order (IPAddress's dword); 0: not asked yet
+static volatile uint32_t musicBoot = 0;  // the black deck's proven boot id; 0: none yet
 
 static int musicAsk(bool on) {
-    if (!net::isOnline()) return -1;
-    char host[40], url[128];
-    if (!lyricsHost(host, sizeof(host))) return -1;
-    IPAddress a;
-    if (a.fromString(host)) musicPeer = static_cast<uint32_t>(a);
-    snprintf(url, sizeof(url), "http://%s/music?k=%s&on=%d", host, REMOTE_TOKEN, on ? 1 : 0);
-    return net::httpGet(url, 1500);  // the status is the answer
+    const sigreq::Param p[] = {{"on", on ? "1" : "0"}};
+    uint32_t peer = 0;
+    char reply[96], nonce[17] = "";
+    const int rc = deckGet("/music", p, 1, reply, sizeof(reply), &peer, nonce);  // the status is the answer
+    if (peer) musicPeer = peer;
+    if (on && rc == 200) {
+        uint32_t boot = 0;
+        if (!musicwire::readBoot(reply, REMOTE_TOKEN, nonce, &boot)) {
+            Serial.println("[music] the deck's reply has no valid boot proof: its packets are ignored");
+        } else if (boot != musicBoot) {
+            musicBoot = boot;
+            Serial.println("[music] the deck's boot id is proven: taking its packets");
+        }
+    }
+    return rc;
 }
 
 static int musicGet(bool on) {
     const int rc = musicAsk(on);
-    lyricsAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
+    // the deck's own answers (200, "stopping" 409, low memory 503); 3 misses in a row: look it up again
+    if (rc != NOT_SIGNED) lyricsAddr.onPoll(rc == 200 || rc == 409 || rc == 503);
     return rc;
 }
 
@@ -2058,7 +2122,9 @@ static void lyricsTask(void*) {
     pollpace::Pace& pace = lyricsPace;
     uint32_t lastPoll = 0;
     uint8_t was = WANT_NONE;  // what was wanted at the last poll
+    watchdog::watch();  // each pass: a few GETs of 1.5 s and an mDNS query of 1.5 s at most
     for (;;) {
+        watchdog::feed();
         musicKeepAlive();
         const uint8_t want = lyricsWant;
         if (want == WANT_NONE || ota::active()) {  // nothing shows it, or an update has the WiFi
@@ -2078,11 +2144,19 @@ static void lyricsTask(void*) {
             lastPoll = now;
             lyricsNudge = false;
             const int rc = lyricsGet();
+            if (rc == NOT_SIGNED) {  // no clock yet: nothing was asked, so nothing is lost either
+                vTaskDelay(pdMS_TO_TICKS(50));
+                continue;
+            }
             const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
-            if (pace.misses() == 0 && !ok) Serial.printf("[lyrics] deck lost (rc=%d)\n", rc);
+            if (pace.misses() == 0 && !ok) {
+                // 403: another REMOTE_TOKEN, or clocks 2 min apart (the black deck's [auth] line says which)
+                Serial.printf("[lyrics] deck lost (rc=%d%s)\n", rc, rc == 403 ? ": wrong key or clock off" : "");
+            }
             if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
             pace.onResult(ok);
-            lyricsAddr.onPoll(rc > 0);  // 3 misses in a row: look the name up again
+            // the deck's own answers (a /state that parses, low memory 503); 3 misses in a row: look it up again
+            lyricsAddr.onPoll(ok || rc == 503);
             const uint32_t at = millis();
             portENTER_CRITICAL(&lyricsMux);
             lyricsPub.wrongKey = rc == 403;
@@ -2134,7 +2208,8 @@ static void lyricsTick() {
 // Its own task (core 1, idle priority, 4 KB), started the first time music mode goes on. While
 // musicWant and online it holds a UDP socket on musicwire::PORT (raw lwip, 200 ms receive timeout),
 // closed again when music mode goes off or an update has the WiFi. It takes packets only from the
-// black deck's address (musicPeer) and publishes the latest PalPkt and its time under musicMux.
+// black deck's address (musicPeer), signed with REMOTE_TOKEN and with a counter above the last one
+// (util/wire/musicwire), and publishes the latest PalPkt and its time under musicMux.
 // musicTick() (loop) reads them at most MUSIC_TICK_MS apart: the palette's main colour snapped to a
 // swatch (musiclights::nearestSwatch) and each light's level (musiclights::level: the owner's under
 // the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (musicFadeTick).
@@ -2167,8 +2242,12 @@ static int musicOpen() {
 
 static void musicTask(void*) {
     int sock = -1;
-    uint8_t buf[32];
+    uint8_t buf[musicwire::PAL_LEN + 8];  // room past a packet: a longer datagram is refused, not cut to fit
+    musicwire::Fresh fresh;               // the black deck's counter must rise (a packet played again is dropped)
+    uint32_t freshPeer = 0;
+    watchdog::watch();  // each pass waits 200 ms at most (the socket's receive timeout)
     for (;;) {
+        watchdog::feed();
         if (!musicWant || !net::isOnline() || ota::active()) {
             if (sock >= 0) {
                 lwip_close(sock);
@@ -2195,9 +2274,16 @@ static void musicTask(void*) {
         const int n = lwip_recvfrom(sock, buf, sizeof(buf), 0, reinterpret_cast<sockaddr*>(&from), &fromLen);
         if (n <= 0) continue;  // the timeout: look at musicWant again
         const uint32_t peer = musicPeer;
-        if (peer == 0 || from.sin_addr.s_addr != peer) continue;  // not the black deck
+        if (peer == 0 || from.sin_addr.s_addr != peer) continue;  // not the black deck's address
+        if (peer != freshPeer) {  // another black deck (or address): its counter starts over
+            fresh.reset();
+            freshPeer = peer;
+        }
         musicwire::PalPkt p;
-        if (!musicwire::decode(buf, static_cast<size_t>(n), &p)) continue;
+        musicwire::Seq seq;
+        // signed with REMOTE_TOKEN (a spoofed source address isn't enough), and not one heard before
+        if (!reqauth::hmacOk() || !musicwire::decode(buf, static_cast<size_t>(n), REMOTE_TOKEN, &p, &seq)) continue;
+        if (!fresh.accept(seq, musicBoot)) continue;  // only the boot the deck proved, counter rising
         const uint32_t now = millis();
         portENTER_CRITICAL(&musicMux);
         musicPub.palOk = true;
@@ -2423,6 +2509,8 @@ static bool updateTick() {
 // A preset ("rose", "preset 2") is applied to both lights and answered with its line; the rest of
 // that phrase (a colour, a level, the zone) is ignored. GET /presets?k= lists the six presets (one
 // ledpresets::wireLine each), GET /status?k= each light's state.
+// Each of the four takes the bearer ?k= (Siri Shortcuts can't sign) or a signature (common/net/reqauth:
+// the Garmin app signs, so it never sends the key).
 // The server runs in its own task; commands go to loop() through a queue (it owns the screen and
 // the state) and the handler waits for loop()'s reply. Each job carries a sequence number that the
 // reply echoes, so a request that timed out (loop busy, e.g. calibrating) can't answer the next
@@ -2536,7 +2624,7 @@ static void applyVoice(const VoiceJob& job) {
 }
 
 static void handleSay() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/say", "Wrong key")) return;
     const String text = server->arg("text");
     Serial.printf("[voice] \"%s\"\n", text.c_str());
     if (text.length() == 0) { server->send(200, "text/plain", "I didn't hear anything"); return; }  // no text from the Shortcut
@@ -2572,7 +2660,7 @@ static void handleSay() {
 
 // The zone's current look, level always included: the Garmin remote syncs its screen from it.
 static void handleState() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/state", "Wrong key")) return;
     const String zone = server->arg("zone");
     const Target z = zone == "inside" ? INSIDE : zone == "outside" ? OUTSIDE : BOTH;
     const Published p = snapshot();
@@ -2584,7 +2672,7 @@ static void handleState() {
 // The six presets, one wireLine each ("1 ROSE pink 40 pink 100"), joined by \n. A fixed table: no
 // snapshot needed.
 static void handlePresets() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/presets", "Wrong key")) return;
     char body[ledpresets::N * 48] = "";
     size_t len = 0;
     for (int i = 0; i < ledpresets::N && len < sizeof(body); i++) {
@@ -2598,7 +2686,7 @@ static void handlePresets() {
 
 // Each light on, off or out of reach: "inside=on outside=nolink".
 static void handleStatus() {
-    if (!gate.keyOk(server->arg("k").c_str())) { server->send(403, "text/plain", "Wrong key"); return; }
+    if (!reqauth::pass(*server, gate, "/status", "Wrong key")) return;
     const Published p = snapshot();
     char line[96];
     lightstatus::reply(lightstatus::of(p.up[0], p.looks[INSIDE].lit), lightstatus::of(p.up[1], p.looks[OUTSIDE].lit),
@@ -2607,8 +2695,11 @@ static void handleStatus() {
 }
 
 static void voiceTask(void*) {
+    // Watched: WebServer's waits are 5 s per request, a WiFi join feeds before each try.
+    watchdog::watch();
     net::connectAny();
     while (!net::isOnline()) {
+        watchdog::feed();
         net::loop();
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -2625,6 +2716,7 @@ static void voiceTask(void*) {
     // (An every-20 s hunt for the hotspot was tried here on 2026-10-22 and removed: the hidden
     // hotspot was rarely seen, and the scans cost the server and the radio.)
     for (;;) {
+        watchdog::feed();
         server->handleClient();
         net::loop();  // rejoins after a drop
         weatherTick();
@@ -2637,6 +2729,7 @@ static void beginVoice() {
         Serial.println("[voice] off (REMOTE_TOKEN empty)");
         return;
     }
+    reqauth::begin();  // HMAC's self-test: the watch's requests and ours to the black deck are signed
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);
@@ -2723,6 +2816,9 @@ void setup() {
     Serial.begin(115200);
     Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
     ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
+    // The task watchdog at 90 s (common/core/watchdog), before any task subscribes: the link,
+    // voice, lyrics, music and weather tasks, and this loop from the end of setup().
+    watchdog::begin();
     tft.init();
     backlight::begin();  // PWM, at the day level
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
@@ -2751,16 +2847,17 @@ void setup() {
     xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);
     publish();
     beginVoice();
+    enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
 }
 
 void loop() {
     // Up bootguard::HEALTHY_MS, online at that moment and the update listener started (when updates
-    // are on; off, online is enough): this firmware has proven itself (net/ota), and can take the
-    // next update. Checked once a second.
+    // are on; off, online is enough; ota::onGoodPoll checks the time and the listener): this
+    // firmware has proven itself (net/ota), and can take the next update. Checked once a second.
     static uint32_t provenAt = 0;
     if (millis() - provenAt >= 1000) {
         provenAt = millis();
-        if (net::isOnline() && (ota::listening() || !ota::enabled())) ota::onGoodPoll();
+        if (net::isOnline()) ota::onGoodPoll();
     }
     // An update over WiFi: its page holds the screen, and nothing below draws or acts meanwhile.
     if (updateTick()) {

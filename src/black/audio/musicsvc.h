@@ -29,4 +29,7 @@ void onChoice(uint32_t gen, const songmood::Choice& c, bool coverIn);
 // GET /music/debug's JSON into out (on, the palette last sent, its cap, the socket, the largest free
 // block now); false if it didn't fit. Any task.
 bool debugJson(char* out, size_t n);
+// This boot's random id, in every packet (util/musicwire); net/remote proves it in the /music reply.
+// Any task.
+uint32_t bootId();
 }

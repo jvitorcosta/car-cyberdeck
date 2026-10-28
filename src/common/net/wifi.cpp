@@ -3,6 +3,7 @@
 #include "remote_config.h"
 #include "ipaddr.h"
 #include "http_config.h"
+#include "../core/watchdog.h"
 #include "../../util/common/hotspotip.h"
 #include "../../util/common/netdiag.h"
 #include "../../util/common/netup.h"
@@ -15,6 +16,15 @@ static int s_index = -1;          // network in use (config.h order; 0 = preferr
 static int s_lastIndex = -1;      // the one before a drop (two tries when it was the preferred)
 constexpr uint32_t CONNECT_TRY_MS = 8000;   // per network in connectAny()
 constexpr uint32_t CHECK_MS = 5000;         // loop(): reconnect check period
+// Failed reconnects wait longer before the next (util/netup Rejoin) on the yellow deck, where the
+// joins take the radio from the lights' BLE. The black deck has no BLE to share it with and
+// rejoins the hotspot as soon as it can (its Health handles a WiFi that never comes back).
+#ifdef YELLOW_DECK
+constexpr bool BACK_OFF = true;
+#else
+constexpr bool BACK_OFF = false;
+#endif
+static netup::Rejoin s_rejoin;
 // Fixed address on the iPhone hotspot (util/hotspotip): 172.20.10.10 for the S3, .11 for the
 // yellow deck, so a Home Screen bookmark of http://172.20.10.10/ keeps working.
 #ifdef YELLOW_DECK
@@ -62,6 +72,7 @@ static void pinHotspotAddress() {
 // Joins network i (tries attempts of CONNECT_TRY_MS each); true when online.
 static bool join(int i, int tries) {
     for (int t = 0; t < tries; ++t) {
+        watchdog::feed();   // each try is bounded (CONNECT_TRY_MS + the pings): common/core/watchdog
         Serial.printf("[wifi] trying %s\n", WIFI_NETWORKS[i].ssid);
         WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);   // DHCP: undo a fixed hotspot address
         WiFi.begin(WIFI_NETWORKS[i].ssid, WIFI_NETWORKS[i].pass);
@@ -85,9 +96,11 @@ static bool join(int i, int tries) {
 bool connectAny() {
     WiFi.mode(WIFI_STA);
     s_index = -1;
-    for (int i = 0; i < WIFI_NETWORK_COUNT; ++i)
-        if (join(i, roam::tries(i, s_lastIndex))) return true;   // the hotspot first
-    return false;
+    bool ok = false;
+    for (int i = 0; i < WIFI_NETWORK_COUNT && !ok; ++i)
+        ok = join(i, roam::tries(i, s_lastIndex));   // the hotspot first
+    s_rejoin.onResult(ok, millis());
+    return ok;
 }
 
 bool switchNetwork() {
@@ -148,9 +161,13 @@ void loop() {
     if (millis() - s_lastCheck < CHECK_MS) return;
     s_lastCheck = millis();
     static netup::Watch watch;
-    if (watch.reconnect(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP())) {
-        Serial.println("[wifi] dropped, reconnecting...");
-        connectAny();
+    if (!watch.reconnect(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP())) {
+        if (isOnline()) s_rejoin.onResult(true, millis());   // back by itself (the driver's own reconnect)
+        return;
     }
+    if (BACK_OFF && !s_rejoin.due(millis())) return;
+    Serial.println("[wifi] dropped, reconnecting...");
+    if (!connectAny() && BACK_OFF)
+        Serial.printf("[wifi] no network, next try in %lus\n", (unsigned long)(s_rejoin.waitMs() / 1000));
 }
 }

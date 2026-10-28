@@ -4,6 +4,8 @@
 #include <lwip/sockets.h>
 #include "../core/mem.h"
 #include "../../common/net/clock.h"
+#include "../../common/net/remote_config.h"
+#include "../../common/net/reqauth.h"
 #include "../../util/wire/musicwire.h"
 #include "../../util/black/netplan.h"
 #include "../../util/black/songmood.h"
@@ -45,6 +47,11 @@ int openSocket() {
     if (s < 0) Serial.println("[music] no UDP socket");
     return s;
 }
+
+// Each packet's boot id and counter (util/wire/musicwire): random per boot (bootId), the counter
+// from a random start, +1 per packet, so the yellow deck can refuse one played again.
+uint32_t s_boot = 0;      // under s_mux (bootId)
+uint32_t s_counter = 0;   // the task's only (one runs at a time); 0: not started
 
 void sendTo(int sock, uint32_t peer, const uint8_t* p, size_t n) {
     if (sock < 0 || !peer || !n) return;
@@ -111,8 +118,13 @@ void task(void*) {
             const bool changed = !palSent || gen != sentGen || !samePalette(p, sentPal);
             // Nothing before the first settled palette: the yellow deck's lights change once per song.
             if ((settled || palSent) && (changed || now - lastPalSend >= PAL_RESEND_MS)) {
+                if (s_counter == 0) s_counter = (esp_random() >> 1) | 1u;   // once per boot
+                const musicwire::Seq seq{bootId(), ++s_counter};
                 uint8_t pkt[musicwire::PAL_LEN];
-                sendTo(sock, peer, pkt, musicwire::encode(musicwire::PalPkt{gen, p}, pkt, sizeof pkt));
+                // signed with REMOTE_TOKEN; nothing if HMAC's self-test failed (reqauth)
+                if (reqauth::hmacOk())
+                    sendTo(sock, peer, pkt,
+                           musicwire::encode(musicwire::PalPkt{gen, p}, seq, REMOTE_TOKEN, pkt, sizeof pkt));
                 if (changed)
                     Serial.printf("[music] song %u: %u,%u,%u cap %u\n", (unsigned)gen, p.c[0].r, p.c[0].g,
                                   p.c[0].b, p.cap);
@@ -219,6 +231,14 @@ bool debugJson(char* out, size_t n) {
         running ? 1 : 0, c[0].r, c[0].g, c[0].b, c[1].r, c[1].g, c[1].b, c[2].r, c[2].g, c[2].b, d.pal.cap,
         d.udp ? 1 : 0, (unsigned)mem::byteLargest());
     return w > 0 && (size_t)w < n;
+}
+
+uint32_t bootId() {
+    portENTER_CRITICAL(&s_mux);
+    if (s_boot == 0) s_boot = esp_random() | 1u;
+    const uint32_t b = s_boot;
+    portEXIT_CRITICAL(&s_mux);
+    return b;
 }
 
 }

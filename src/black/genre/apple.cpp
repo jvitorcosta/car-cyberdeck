@@ -2,6 +2,7 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "../../common/net/http_config.h"
+#include "../../common/core/watchdog.h"
 #include "../../util/black/genre.h"
 #include "../../util/common/text.h"
 #include "../../util/common/readguard.h"
@@ -29,6 +30,7 @@ Result lookup(const char* artist, uint32_t* genreId, int* rc) {
     netcfg::streamed(https);
     if (!https.begin(client, s_url)) { *rc = -1; return Result::Error; }
     https.addHeader("User-Agent", netcfg::USER_AGENT);
+    watchdog::feed();   // the request is bounded by its own timeouts (common/core/watchdog)
     *rc = https.GET();
     if (*rc != 200) { https.end(); return Result::Error; }
     WiFiClient* s = https.getStreamPtr();
