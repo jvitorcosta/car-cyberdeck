@@ -99,7 +99,7 @@ static const Word PRESET_NAMES[] = {
 // Music mode, the MUSIC MODE button's toggle by name: "music" turns it on, with an off word off. The
 // phrase is then that and nothing else ("music red off" only turns the mode off). "mode" / "modo" are
 // filler, like any unknown word.
-static const char* const MUSIC[] = {"music", "musica", "mÃºsica"};
+static const char* const MUSIC[] = {"music", "musica", "música"};
 #define LEDVOICE_N(t) static_cast<int>(sizeof(t) / sizeof(t[0]))
 }  // namespace detail
 

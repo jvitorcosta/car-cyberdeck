@@ -189,8 +189,8 @@ void test_a_command_word_cancels_the_slot() {
 // not applied with it.
 void test_music_mode() {
     const struct { const char* text; int music; } cases[] = {
-        {"Music", 1}, {"music mode", 1}, {"turn on music mode", 1}, {"mÃºsica", 1}, {"modo musica", 1},
-        {"music off", 0}, {"Turn off music mode.", 0}, {"desliga o modo mÃºsica", 0}, {"music red off", 0},
+        {"Music", 1}, {"music mode", 1}, {"turn on music mode", 1}, {"música", 1}, {"Música", 1}, {"modo musica", 1},
+        {"music off", 0}, {"Turn off music mode.", 0}, {"desliga o modo música", 0}, {"music red off", 0},
     };
     for (const auto& k : cases) {
         const ledvoice::Command c = parsed(k.text);
