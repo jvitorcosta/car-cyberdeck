@@ -34,8 +34,43 @@ void test_a_good_check_in_between_resets() {
     TEST_ASSERT_FALSE(w.reconnect(true, 0));
 }
 
+// The yellow deck's reconnects (net::loop): each failed one waits longer before the next, 5 s,
+// 15 s, 30 s, then every 60 s, so joins (scans, the radio away from BLE) don't run back to back.
+void test_rejoin_waits_5_15_30_then_60_s() {
+    netup::Rejoin r;
+    TEST_ASSERT_TRUE(r.due(0));                       // nothing failed yet
+    uint32_t t = 1000;
+    const uint32_t want[] = {5000, 15000, 30000, 60000, 60000};
+    for (uint32_t w : want) {
+        r.onResult(false, t);
+        TEST_ASSERT_EQUAL_UINT32(w, r.waitMs());
+        TEST_ASSERT_FALSE(r.due(t + w - 1));
+        TEST_ASSERT_TRUE(r.due(t + w));
+        t += w + 24000;                               // the next try itself takes ~24 s
+    }
+}
+void test_rejoin_online_resets_the_wait() {
+    netup::Rejoin r;
+    r.onResult(false, 0);
+    r.onResult(false, 5000);
+    r.onResult(true, 30000);
+    TEST_ASSERT_EQUAL_UINT32(0, r.waitMs());
+    TEST_ASSERT_TRUE(r.due(30000));
+    r.onResult(false, 40000);                         // the next drop starts at 5 s again
+    TEST_ASSERT_EQUAL_UINT32(5000, r.waitMs());
+}
+void test_rejoin_due_survives_millis_wrap() {
+    netup::Rejoin r;
+    r.onResult(false, 0xFFFFF000u);
+    TEST_ASSERT_FALSE(r.due(0xFFFFF000u + 4999u));
+    TEST_ASSERT_TRUE(r.due(0xFFFFF000u + 5000u));
+}
+
 int main() {
     UNITY_BEGIN();
+    RUN_TEST(test_rejoin_waits_5_15_30_then_60_s);
+    RUN_TEST(test_rejoin_online_resets_the_wait);
+    RUN_TEST(test_rejoin_due_survives_millis_wrap);
     RUN_TEST(test_connected_without_an_address_is_not_usable);
     RUN_TEST(test_connected_with_an_address_is_usable);
     RUN_TEST(test_not_connected_is_not_usable);

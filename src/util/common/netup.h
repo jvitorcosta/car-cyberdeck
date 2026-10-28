@@ -31,4 +31,25 @@ public:
 private:
     bool noAddr_ = false;
 };
+
+// Reconnect pacing on the yellow deck (net::loop). A reconnect (net::connectAny) is ~16-24 s of
+// joins, each with a full scan, and the radio is shared with the lights' BLE links: run back to
+// back while no network was in range, they kept the radio from BLE nearly all the time. So each
+// failed reconnect waits longer before the next: 5 s, 15 s, 30 s, then every 60 s (at most ~30 %
+// of the radio's time); online again resets it.
+class Rejoin {
+public:
+    static constexpr uint32_t WAITS_MS[] = {5000, 15000, 30000, 60000};
+    static constexpr uint32_t STEPS = sizeof(WAITS_MS) / sizeof(WAITS_MS[0]);
+    bool due(uint32_t nowMs) const { return fails_ == 0 || nowMs - at_ >= waitMs(); }   // wrap-safe
+    void onResult(bool online, uint32_t nowMs) {
+        if (online) { fails_ = 0; return; }
+        if (fails_ < STEPS) ++fails_;
+        at_ = nowMs;
+    }
+    uint32_t waitMs() const { return fails_ == 0 ? 0 : WAITS_MS[fails_ - 1]; }
+
+private:
+    uint32_t fails_ = 0, at_ = 0;
+};
 }
