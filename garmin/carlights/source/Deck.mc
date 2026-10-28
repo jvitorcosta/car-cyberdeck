@@ -8,19 +8,20 @@ import Toybox.WatchUi;
 // The deck on the iPhone hotspot (net/wifi pins it there).
 const DECK_URL = "http://172.20.10.11";
 
-// [label, word sent to the deck, screen colour]: the deck's own screen colours, but purple, which
-// is #8C00FF on the deck and the lights; the watch's 64 colours show it as AA00FF, so that is set here.
+// [label, word sent to the deck, screen colour], in the deck's Lights grid order (ledlook): the deck's
+// own screen colours, but purple, which is #8C00FF on the deck and the lights; the watch's 64 colours
+// show it as AA00FF, so that is set here.
 // Cyan (GOJIRA's, #0082FF on the deck) is last and is 00AAFF here: of the watch's colours the
 // nearest that stays apart from OCEAN's blue (0040FF, shown as 0055FF) and from green. The deck's
 // grid has only the first N_PICK; cyan comes from a preset, so the zone lists don't offer it.
 const COLORS = [
-    ["Purple", "purple", 0xAA00FF], ["Red", "red", 0xFF0000], ["Blue", "blue", 0x0040FF],
-    ["Pink", "pink", 0xFF0090], ["Green", "green", 0x00FF30], ["White", "white", 0xFFFFFF],
-    ["Orange", "orange", 0xFF6A00], ["Yellow", "yellow", 0xFFD400],
+    ["Red", "red", 0xFF0000], ["Orange", "orange", 0xFF6A00], ["Pink", "pink", 0xFF0090],
+    ["Purple", "purple", 0xAA00FF], ["Blue", "blue", 0x0040FF], ["Green", "green", 0x00FF30],
+    ["White", "white", 0xFFFFFF], ["Yellow", "yellow", 0xFFD400],
     ["Cyan", "cyan", 0x00AAFF],
 ];
 const N_PICK = 8;       // the colours a zone's list offers
-const BLUE_INDEX = 2;   // where a zone's list starts when its light is cyan
+const BLUE_INDEX = 4;   // where a zone's list starts when its light is cyan
 
 // Zones, as the deck names them. BOTH changes both lights; its reply describes both.
 enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
@@ -47,7 +48,7 @@ class Deck {
     var outside as Look = new Look();
     var status as String = "";  // "Sending...", "No answer", ...; "" when all is well
     // The deck's fixed presets, in its order: [name, inColor, inPct, inLit, outColor, outPct, outLit, number],
-    // the colours as indices into COLORS (found by word: the deck's order differs). Empty until
+    // the colours as indices into COLORS (found by word). Empty until
     // /presets answers (and if it never does).
     var presets as Array = [];
     // Each controller's link, [inside, outside]: "on" | "off" | "nolink", "" until the deck answers.

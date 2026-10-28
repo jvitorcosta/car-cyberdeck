@@ -6,7 +6,7 @@ import Toybox.WatchUi;
 // The zone pages, all in the "filled" look (see Fill): BOTH shows inside (left) and outside
 // (right) as two columns filled up to their brightness; INSIDE and OUTSIDE fill the whole face.
 // A fourth page shows the deck's named presets as bars (see PresetBar). A controller that isn't
-// linked says "Not connected".
+// linked says "No link" (the yellow deck's NO LINK).
 // Page dots on the right; the status shows while something is being sent or failed.
 class ZonesView extends WatchUi.View {
     var page as Number = BOTH;  // opens on BOTH: every zone is one press away from it
@@ -36,8 +36,8 @@ class ZonesView extends WatchUi.View {
             var busy = _deck.status.length() > 0;
             var inGone = _deck.links[0].equals("nolink");
             var outGone = _deck.links[1].equals("nolink");
-            var note = inGone && outGone ? "Not connected" : inGone ? "Inside not connected"
-                     : outGone ? "Outside not connected" : "";
+            var note = inGone && outGone ? "No link" : inGone ? "Inside: no link"
+                     : outGone ? "Outside: no link" : "";
             pill(dc, cx, 40, "BOTH", Graphics.COLOR_WHITE);
             pill(dc, cx, h - 32, busy ? _deck.status : note.length() > 0 ? note : "START: change",
                  busy || note.length() > 0 ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
@@ -51,7 +51,7 @@ class ZonesView extends WatchUi.View {
             var gone = _deck.links[page - 1].equals("nolink");
             Fill.page(dc, c[2] as Number, l.lit, l.pct, page == INSIDE ? "INSIDE" : "OUTSIDE",
                       l.lit ? c[0] as String : "Off", l.lit ? l.pct + "%" : "",
-                      busy ? _deck.status : gone ? "Not connected" : "START: change", busy || gone);
+                      busy ? _deck.status : gone ? "No link" : "START: change", busy || gone);
         }
 
         // page dots on the right: BOTH, INSIDE, OUTSIDE, PRESETS from top to bottom

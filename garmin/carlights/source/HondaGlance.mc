@@ -10,8 +10,8 @@ import Toybox.WatchUi;
 // Purple is AA00FF: the deck's #8C00FF as the watch's 64 colours show it. COLORS' order (Deck.mc).
 (:glance)
 const GLANCE_COLORS = [
-    ["Purple", 0xAA00FF], ["Red", 0xFF0000], ["Blue", 0x0040FF], ["Pink", 0xFF0090],
-    ["Green", 0x00FF30], ["White", 0xFFFFFF], ["Orange", 0xFF6A00], ["Yellow", 0xFFD400],
+    ["Red", 0xFF0000], ["Orange", 0xFF6A00], ["Pink", 0xFF0090], ["Purple", 0xAA00FF],
+    ["Blue", 0x0040FF], ["Green", 0x00FF30], ["White", 0xFFFFFF], ["Yellow", 0xFFD400],
     ["Cyan", 0x00AAFF],
 ];
 
@@ -35,9 +35,9 @@ class HondaGlance extends WatchUi.GlanceView {
             return;
         }
         var x = dot(dc, 0, h * 3 / 4, inside as Array);
-        x = text(dc, x, h * 3 / 4, inside as Array, "In");
+        x = text(dc, x, h * 3 / 4, inside as Array, "IN");
         x = dot(dc, x + 10, h * 3 / 4, outside as Array);
-        text(dc, x, h * 3 / 4, outside as Array, "Out");
+        text(dc, x, h * 3 / 4, outside as Array, "OUT");
     }
 
     // A small dot in the light's colour (grey when off); returns the x after it.
@@ -51,9 +51,9 @@ class HondaGlance extends WatchUi.GlanceView {
         return x + 18;
     }
 
-    // "In 80%" (or "In off"); returns the x after it.
+    // "IN 80%" (or "IN OFF"), as the yellow deck's lights row says it; returns the x after it.
     private function text(dc as Dc, x as Number, y as Number, l as Array, zone as String) as Number {
-        var s = zone + " " + ((l[2] as Boolean) ? (l[1] as Number) + "%" : "off");
+        var s = zone + " " + ((l[2] as Boolean) ? (l[1] as Number) + "%" : "OFF");
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
         dc.drawText(x, y, Graphics.FONT_GLANCE, s, Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
         return x + dc.getTextWidthInPixels(s, Graphics.FONT_GLANCE);

@@ -171,7 +171,7 @@ void setup() {
     media::begin();
     const media::Blob idle = MEDIA(data_idle_bin, "idle.bin");
     Serial.println(idlesprite::parse(idle.data, idle.size)
-                       ? "[idle] Sonic waits on Nothing playing" : "[idle] none: Pikachu");
+                       ? "[idle] Sonic waits on Waiting for a song" : "[idle] none: Pikachu");
     const media::Blob bkd = MEDIA(data_backdrop_bin, "backdrop.bin");
     Serial.println(backdrop::parse(bkd.data, bkd.size) ? "[ota] update screen: Green Hill Zone"
                                                        : "[ota] update screen: battle box");
@@ -352,7 +352,7 @@ void loop() {
     static idlewait::Clock idle;
     const bool idleNow = idle.update(st.status == PlaybackStatus::Paused,
                                      st.status == PlaybackStatus::Stopped, millis());
-    int mode = 0;   // 0 = deck, 1 = offline, 2 = nothing playing
+    int mode = 0;   // 0 = deck, 1 = offline, 2 = waiting for a song
     if (!net::isOnline() || st.status == PlaybackStatus::Offline ||
         netplan::stale(millis(), st.lastPollOkMs, netplan::staleLimit(idleNow))) mode = 1;   // idle: 10 s polls
     else if (idleNow) mode = 2;

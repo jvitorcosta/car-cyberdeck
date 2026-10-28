@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 // Where the yellow deck finds the black deck. PURE, host-tested.
-// Off the hotspot: by its mDNS name, the address kept through short blips (the new deck's
+// Off the hotspot: by its mDNS name, the address kept through short blips (the black deck's
 // background scan drops about one poll a minute), so the name is looked up again only after MISSES
 // polls in a row without a valid answer (or after a network switch).
 // On the iPhone hotspot: at its fixed address (BLACK_DECK_ADDR) first; after MISSES polls there

@@ -1,4 +1,4 @@
-// Honda City: a Forerunner 255 remote for the old deck's LED panel. It talks to the panel's GET /say
+// Honda City: a Forerunner 255 remote for the yellow deck's car lights. It talks to the panel's GET /say
 // (the Siri shortcut's endpoint) and GET /state through Garmin Connect on the iPhone, which is on
 // the same hotspot as the deck, with &zone=inside|outside unless the zone is Both. Plain http to
 // the hotspot works through Garmin Connect on iOS (tested 2026-10-22).

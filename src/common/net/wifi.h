@@ -13,5 +13,5 @@ String deviceIp();
 // 15 s; takes up to a few seconds, so only the network task calls it, after a failed poll.
 void diagnose(int code, uint32_t sinceOkMs);
 String ssid();                            // connected network, "" when offline
-void savedNetworks(char* out, size_t n);  // "Cecilia, iPhone" from config.h
+void savedNetworks(char* out, size_t n);  // "Home, iPhone" from config.h
 }

@@ -34,7 +34,7 @@ static netplan::TrackGen s_gen;
 static netplan::Work s_work{};
 static netplan::LinkGate s_link;   // "No signal" only after several failed polls in a row
 static netplan::PollBackoff s_backoff;   // Spotify 429: poll less often until it passes
-static netplan::IdlePoll s_idle;         // "Nothing playing": poll every 10 s, not 4 s
+static netplan::IdlePoll s_idle;         // "Waiting for a song...": poll every 10 s, not 4 s
 static netplan::Health s_health;   // pause optional work / restart when polls keep failing
 static netplan::WalkRetry s_walkRetry;       // PNG decoder didn't fit: retry after the polls
 static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB hiccups
