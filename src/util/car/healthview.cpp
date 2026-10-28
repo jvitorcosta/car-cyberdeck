@@ -41,6 +41,9 @@ void voltText(char* o, size_t n, float v) {
     std::snprintf(o, n, "%sV", t);
 }
 
+// Nothing checked yet is "still checking", never "OK": a Note or a Problem is always shown.
+bool unknown(const carhealth::Verdict& v) { return !v.known && v.level == Level::Ok; }
+
 const char* battWord(Level l) { return l == Level::Ok ? "OK" : l == Level::Note ? "NOTE" : "LOW"; }
 const char* engWord(Level l) { return l == Level::Ok ? "OK" : l == Level::Note ? "NOTE" : "CHECK"; }
 }  // namespace
@@ -51,21 +54,31 @@ Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdic
     char buf[96], a[16], b[16], d[24];
 
     voltText(a, sizeof a, volts);
-    std::snprintf(buf, sizeof buf, "BATTERY  %s  %s", a, battWord(batt.level));
-    setLine(&c.battery, roleOf(batt.level), buf);
-    if (batt.level == Level::Ok) {
+    if (unknown(batt)) {
+        setLine(&c.battery, Role::Dim, "BATTERY  CHECKING");
+        setLine(&c.batteryWhy, Role::Dim, "");
+    } else if (batt.level == Level::Ok) {
+        std::snprintf(buf, sizeof buf, "BATTERY  %s  %s", a, battWord(batt.level));
+        setLine(&c.battery, roleOf(batt.level), buf);
         // The deck only powers on with the engine running, so the detail is "is it charging", nothing more.
         if (volts >= 13.0f) std::snprintf(buf, sizeof buf, "CHARGING %s", a);
         else std::snprintf(buf, sizeof buf, "NO ISSUES SEEN");
         setLine(&c.batteryWhy, Role::Mid, buf);
     } else {
+        std::snprintf(buf, sizeof buf, "BATTERY  %s  %s", a, battWord(batt.level));
+        setLine(&c.battery, roleOf(batt.level), buf);
         setLine(&c.batteryWhy, roleOf(batt.level), batt.why);
     }
 
-    std::snprintf(buf, sizeof buf, "ENGINE  %s", engWord(eng.level));
-    setLine(&c.engine, roleOf(eng.level), buf);
-    if (eng.level == Level::Ok) setLine(&c.engineWhy, Role::Mid, "NO FAULTS SEEN");
-    else setLine(&c.engineWhy, roleOf(eng.level), eng.why);
+    if (unknown(eng)) {
+        setLine(&c.engine, Role::Dim, "ENGINE  CHECKING");
+        setLine(&c.engineWhy, Role::Dim, "");
+    } else {
+        std::snprintf(buf, sizeof buf, "ENGINE  %s", engWord(eng.level));
+        setLine(&c.engine, roleOf(eng.level), buf);
+        if (eng.level == Level::Ok) setLine(&c.engineWhy, Role::Mid, "NO FAULTS SEEN");
+        else setLine(&c.engineWhy, roleOf(eng.level), eng.why);
+    }
 
     if (last) {
         kmText(a, sizeof a, last->km);
@@ -91,6 +104,8 @@ Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdic
     } else if (notes > 0) {
         std::snprintf(buf, sizeof buf, ">%d NOTE%s  [TAP FOR DETAILS]", notes, notes == 1 ? "" : "S");
         setLine(&c.status, Role::Mid, buf);
+    } else if (unknown(batt) || unknown(eng)) {
+        setLine(&c.status, Role::Dim, ">CHECKING...");  // all is well only once both were checked
     } else {
         setLine(&c.status, Role::Text, ">ALL SYSTEMS NOMINAL");
     }
@@ -136,10 +151,18 @@ Parked parked(const tripsum::Summary& s, float costRs, float rangeKm, const carh
     std::snprintf(buf, sizeof buf, "AVG %s KM/H  IDLE %s MIN  %s KM LEFT", a, b, c);
     setLine(&p.small, Role::Mid, buf);
 
-    std::snprintf(buf, sizeof buf, "BATTERY %s", battWord(batt.level));
-    setLine(&p.battery, roleOf(batt.level), buf);
-    std::snprintf(buf, sizeof buf, "ENGINE %s", engWord(eng.level));
-    setLine(&p.engine, roleOf(eng.level), buf);
+    if (unknown(batt)) {
+        setLine(&p.battery, Role::Dim, "BATTERY --");
+    } else {
+        std::snprintf(buf, sizeof buf, "BATTERY %s", battWord(batt.level));
+        setLine(&p.battery, roleOf(batt.level), buf);
+    }
+    if (unknown(eng)) {
+        setLine(&p.engine, Role::Dim, "ENGINE --");
+    } else {
+        std::snprintf(buf, sizeof buf, "ENGINE %s", engWord(eng.level));
+        setLine(&p.engine, roleOf(eng.level), buf);
+    }
     setLine(&p.footer, Role::Text, ">SAFE TO SHUT DOWN");
     return p;
 }

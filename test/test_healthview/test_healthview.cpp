@@ -13,9 +13,12 @@ void tearDown() {}
 static Verdict v(Level l, const char* why = "") {
     Verdict r;
     r.level = l;
+    r.known = true;
     std::strncpy(r.why, why, sizeof r.why - 1);
     return r;
 }
+
+static Verdict unknown() { return Verdict{}; }  // nothing read yet
 
 void test_check_all_ok_lines() {
     tripsum::Summary s{18.4f, 1.52f, 12.1f, 34.0f, 1920, 360};
@@ -126,6 +129,42 @@ void test_parkgate_hides_on_move_and_dismiss_holds_until_moving() {
     TEST_ASSERT_TRUE(g.update(0.0f, 2.0f, 77000));
 }
 
+// Nothing read yet is not "OK": the screen says it is still checking, and never claims all is well.
+void test_check_unknown_items_say_checking() {
+    auto c = healthview::check(unknown(), NAN, unknown(), nullptr, NAN, NAN);
+    TEST_ASSERT_EQUAL_STRING("BATTERY  CHECKING", c.battery.text);
+    TEST_ASSERT_EQUAL(Role::Dim, c.battery.role);
+    TEST_ASSERT_EQUAL_STRING("", c.batteryWhy.text);
+    TEST_ASSERT_EQUAL_STRING("ENGINE  CHECKING", c.engine.text);
+    TEST_ASSERT_EQUAL(Role::Dim, c.engine.role);
+    TEST_ASSERT_EQUAL_STRING("", c.engineWhy.text);
+    TEST_ASSERT_EQUAL_STRING(">CHECKING...", c.status.text);
+    TEST_ASSERT_EQUAL(Role::Dim, c.status.role);
+    TEST_ASSERT_FALSE(c.problem);
+}
+
+void test_check_one_known_ok_is_still_checking() {
+    auto c = healthview::check(v(Level::Ok), 13.9f, unknown(), nullptr, NAN, NAN);
+    TEST_ASSERT_EQUAL_STRING("BATTERY  13.9V  OK", c.battery.text);
+    TEST_ASSERT_EQUAL_STRING("CHARGING 13.9V", c.batteryWhy.text);
+    TEST_ASSERT_EQUAL_STRING("ENGINE  CHECKING", c.engine.text);
+    TEST_ASSERT_EQUAL_STRING(">CHECKING...", c.status.text);
+    TEST_ASSERT_EQUAL(Role::Dim, c.status.role);
+    TEST_ASSERT_FALSE(c.problem);
+    auto n = healthview::check(unknown(), NAN, v(Level::Note, "1 PENDING CODE, NOT CONFIRMED"), nullptr, NAN, NAN);
+    TEST_ASSERT_EQUAL_STRING(">1 NOTE  [TAP FOR DETAILS]", n.status.text);
+    TEST_ASSERT_EQUAL_STRING("BATTERY  CHECKING", n.battery.text);
+}
+
+void test_parked_unknown_items_are_dashes() {
+    tripsum::Summary s{18.4f, 1.52f, 12.1f, 34.0f, 1920, 360};
+    auto p = healthview::parked(s, 9.4f, 290.0f, unknown(), unknown());
+    TEST_ASSERT_EQUAL_STRING("BATTERY --", p.battery.text);
+    TEST_ASSERT_EQUAL(Role::Dim, p.battery.role);
+    TEST_ASSERT_EQUAL_STRING("ENGINE --", p.engine.text);
+    TEST_ASSERT_EQUAL(Role::Dim, p.engine.role);
+}
+
 // Worst realistic inputs; exact strings, so a cut-off tail fails (setLine would silently truncate).
 void test_lines_fit_forty_chars() {
     Verdict w = v(Level::Problem, "99 PENDING CODES, NOT CONFIRMED");
@@ -163,5 +202,8 @@ int main(int, char**) {
     RUN_TEST(test_parkgate_needs_five_seconds_and_half_km);
     RUN_TEST(test_parkgate_hides_on_move_and_dismiss_holds_until_moving);
     RUN_TEST(test_lines_fit_forty_chars);
+    RUN_TEST(test_check_unknown_items_say_checking);
+    RUN_TEST(test_check_one_known_ok_is_still_checking);
+    RUN_TEST(test_parked_unknown_items_are_dashes);
     return UNITY_END();
 }

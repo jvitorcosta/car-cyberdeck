@@ -19,8 +19,10 @@ struct Check {
     Line battery, batteryWhy, engine, engineWhy, lastTrip, range, status;
     bool problem;  // any item at Level::Problem
 };
-// Screen A/B. `last` may be null (no trip yet). status: ">ALL SYSTEMS NOMINAL", ">1 NOTE  [TAP FOR DETAILS]"
-// or ">2 ISSUES  [TAP FOR DETAILS]".
+// Screen A/B. `last` may be null (no trip yet). status: ">2 ISSUES  [TAP FOR DETAILS]" when anything is a
+// problem, else ">1 NOTE  [TAP FOR DETAILS]" for notes, else ">ALL SYSTEMS NOMINAL" only when both items
+// are known (Verdict::known); while either is still unknown it is ">CHECKING..." (Dim). An unknown item
+// reads "BATTERY  CHECKING" / "ENGINE  CHECKING" (Dim) with an empty why-line.
 Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdict& eng,
             const tripsum::Summary* last, float lastCostRs, float rangeKm);
 
@@ -30,7 +32,7 @@ struct Band {
 };
 Band band(float tripKm, float kmlNow, float rangeKm, uint32_t seconds, float costRs, float volts, float coolantC);
 
-// Screen D
+// Screen D. An unknown item reads "BATTERY --" / "ENGINE --" (Dim).
 struct Parked {
     Line km, minutes, kml, cost, small, battery, engine, footer;
 };

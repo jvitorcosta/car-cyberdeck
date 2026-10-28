@@ -1,5 +1,6 @@
 #include "carhealth.h"
 #include <cstdio>
+#include <cstring>
 // See carhealth.h. PURE, host-tested.
 namespace carhealth {
 namespace {
@@ -18,14 +19,21 @@ void Watch::feed(const Reading& r) {
     last_ = r;
     haveLast_ = true;
     // Under 12 V only means something while the engine runs (cranking and ignition-only dip lower),
-    // and it has to last: smart charging idles at ~12.3 V, a real fault sits low for a minute.
-    bool low = r.engineRunning && !std::isnan(r.volts) && r.volts < BATT_LOW_V;
-    if (!low) {
+    // and it has to last: smart charging idles at ~12.3 V, a real fault sits low for a minute. A missed
+    // reading (NAN: a Bluetooth hiccup) is not a recovery, so it keeps the state and the timer; only a
+    // good reading or the engine stopping clears it.
+    if (!r.engineRunning) {
         lowActive_ = false;
-    } else if (!lowActive_) {
-        lowActive_ = true;
-        lowSinceMs_ = r.nowMs;
+    } else if (!std::isnan(r.volts)) {
+        if (r.volts >= BATT_LOW_V) {
+            lowActive_ = false;
+        } else if (!lowActive_) {
+            lowActive_ = true;
+            lowSinceMs_ = r.nowMs;
+        }
     }
+    if (!std::isnan(r.volts)) voltsSeen_ = true;
+    if (lowActive_ && r.nowMs - lowSinceMs_ >= BATT_HOLD_MS) battLowSeen_ = true;
     if (r.engineRunning && !std::isnan(r.ltftPct)) {
         ltftSum_ += r.ltftPct;
         ltftN_++;
@@ -34,12 +42,22 @@ void Watch::feed(const Reading& r) {
 
 Verdict Watch::item(Item i) const {
     Verdict v;
-    if (!haveLast_) return v;
     if (i == Item::Battery) {
-        if (lowActive_ && last_.nowMs - lowSinceMs_ >= BATT_HOLD_MS) set(v, Level::Problem, "BATTERY LOW WHILE RUNNING");
+        if (lastBattLow_) set(v, Level::Note, "BATTERY WAS LOW LAST TRIP");  // history: a note, not a fault now
+        if (haveLast_ && lowActive_ && last_.nowMs - lowSinceMs_ >= BATT_HOLD_MS) {
+            Verdict p;
+            set(p, Level::Problem, "BATTERY LOW WHILE RUNNING");
+            worst(v, p);
+        }
+        v.known = voltsSeen_ || lastBattLow_ || v.level != Level::Ok;
         return v;
     }
     if (i != Item::Engine) return v;
+    worst(v, ltftVerdict_);
+    if (!haveLast_) {
+        v.known = codesRead_ || ltftJudged_ || v.level != Level::Ok;
+        return v;
+    }
     char buf[48];
     if (hot(last_)) {
         snprintf(buf, sizeof buf, "ENGINE HOT %dC", static_cast<int>(std::lround(last_.coolantC)));
@@ -63,7 +81,7 @@ Verdict Watch::item(Item i) const {
         set(p, Level::Note, buf);
         worst(v, p);
     }
-    worst(v, ltftVerdict_);
+    v.known = codesRead_ || ltftJudged_ || v.level != Level::Ok;
     return v;
 }
 
@@ -80,8 +98,47 @@ void Watch::endTrip() {
             set(v, a > LTFT_PROBLEM ? Level::Problem : Level::Note, buf);
         }
         ltftVerdict_ = v;
+        ltftJudged_ = true;
     }
     ltftSum_ = 0.0f;
     ltftN_ = 0;
+    lastBattLow_ = battLowSeen_;
+    battLowSeen_ = false;
+}
+
+void Watch::codesRead() { codesRead_ = true; }
+
+Memo Watch::memo() const { return Memo{battLowSeen_, ltftSum_, ltftN_}; }
+
+void Watch::restore(const Memo& m) {
+    battLowSeen_ = m.battLowSeen;
+    ltftSum_ = m.ltftSum;
+    ltftN_ = m.ltftN;
+}
+
+void encode(const Memo& m, uint8_t out[MEMO_BYTES]) {
+    uint32_t f;
+    std::memcpy(&f, &m.ltftSum, 4);
+    out[0] = m.battLowSeen ? 1 : 0;
+    for (int i = 0; i < 4; i++) {
+        out[1 + i] = static_cast<uint8_t>(f >> (8 * i));
+        out[5 + i] = static_cast<uint8_t>(m.ltftN >> (8 * i));
+    }
+}
+
+bool decode(const uint8_t* in, size_t len, Memo* m) {
+    if (!in || !m || len != MEMO_BYTES || in[0] > 1) return false;
+    uint32_t f = 0, n = 0;
+    for (int i = 0; i < 4; i++) {
+        f |= static_cast<uint32_t>(in[1 + i]) << (8 * i);
+        n |= static_cast<uint32_t>(in[5 + i]) << (8 * i);
+    }
+    float sum;
+    std::memcpy(&sum, &f, 4);
+    if (!std::isfinite(sum)) return false;
+    m->battLowSeen = in[0] == 1;
+    m->ltftSum = sum;
+    m->ltftN = n;
+    return true;
 }
 }  // namespace carhealth
