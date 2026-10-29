@@ -36,9 +36,10 @@ Band band(float tripKm, float kmlNow, float rangeKm, uint32_t seconds, float cos
 // Screen C's live warning on the prompt line (the deck draws it in ALERT): ">" and the problem's why.
 // While `critical` (coolant hot or the MIL) the engine's, whatever the speed: the only ones worth a
 // look while driving. Stopped (below 1 km/h; an unknown speed is not a stop) any Problem, the engine's
-// first. Notes never warn. Each distinct text at most once per WARN_EVERY_MS: next() remembers what it
-// returned (it is the caller's to show it), so a lasting problem comes back every two minutes, and a
-// changed one ("ENGINE HOT 110C") at once.
+// first. Notes never warn. Each kind of warning at most once per WARN_EVERY_MS: the kind is the why
+// without its digits ("ENGINE HOT C", "STORED CODES"), so a temperature that climbs 108 -> 109 -> 110
+// is one warning, shown with its current text when it is due again; another kind shows at once.
+// next() remembers what it returned (it is the caller's to show it).
 constexpr uint32_t WARN_EVERY_MS = 120000;
 class Warnings {
 public:
@@ -47,13 +48,13 @@ public:
               char* out, size_t n);
 private:
     struct Shown {
-        char why[sizeof(carhealth::Verdict::why)];
+        char kind[sizeof(carhealth::Verdict::why)];  // the why without its digits
         uint32_t atMs;
         bool used;
     };
-    Shown shown_[4] = {};  // the last few texts and when each was returned; the oldest makes room
-    bool due(const char* why, uint32_t nowMs) const;
-    void mark(const char* why, uint32_t nowMs);
+    Shown shown_[4] = {};  // the last few kinds and when each was returned; the oldest makes room
+    bool due(const char* kind, uint32_t nowMs) const;
+    void mark(const char* kind, uint32_t nowMs);
 };
 
 // Screen D. An unknown item reads "BATTERY --" / "ENGINE --" (Dim).

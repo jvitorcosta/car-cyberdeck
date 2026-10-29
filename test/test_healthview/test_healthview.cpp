@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include "../../src/util/car/healthview.h"
 
@@ -234,8 +235,27 @@ void test_warning_each_at_most_every_two_minutes() {
     TEST_ASSERT_NULL(warn(w, low, hot, true, 0.0f, 5000));
     TEST_ASSERT_NULL(warn(w, low, hot, true, 0.0f, 1000 + healthview::WARN_EVERY_MS - 1));
     TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 108C", warn(w, low, hot, true, 0.0f, 1000 + healthview::WARN_EVERY_MS));
-    // a new text is a new warning, at once
-    TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 110C", warn(w, low, v(Level::Problem, "ENGINE HOT 110C"), true, 0.0f, 130000));
+    TEST_ASSERT_EQUAL_STRING(">BATTERY LOW WHILE RUNNING", warn(w, low, hot, true, 0.0f, 3000 + healthview::WARN_EVERY_MS));
+}
+
+// The kind counts, not the figures in it: a climbing temperature is one warning (its current text when
+// it is due again); another kind shows at once.
+void test_warning_kind_ignores_the_figures() {
+    healthview::Warnings w;
+    const Verdict ok = v(Level::Ok);
+    TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 108C", warn(w, ok, v(Level::Problem, "ENGINE HOT 108C"), true, 60.0f, 1000));
+    for (int c = 109; c <= 115; c++) {  // more values than the memory has slots
+        char why[24];
+        std::snprintf(why, sizeof why, "ENGINE HOT %dC", c);
+        TEST_ASSERT_NULL_MESSAGE(warn(w, ok, v(Level::Problem, why), true, 60.0f, 1000 + 10000 * (c - 108)), why);
+    }
+    TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 110C",
+                             warn(w, ok, v(Level::Problem, "ENGINE HOT 110C"), true, 60.0f, 1000 + healthview::WARN_EVERY_MS));
+    // another kind, at once: the MIL while the hot engine is still inside its 2 minutes
+    healthview::Warnings m;
+    TEST_ASSERT_NOT_NULL(warn(m, ok, v(Level::Problem, "ENGINE HOT 108C"), true, 60.0f, 1000));
+    TEST_ASSERT_EQUAL_STRING(">CHECK ENGINE LIGHT ON", warn(m, ok, v(Level::Problem, "CHECK ENGINE LIGHT ON"), true, 60.0f, 2000));
+    TEST_ASSERT_EQUAL_STRING(">2 STORED CODES", warn(m, ok, v(Level::Problem, "2 STORED CODES"), false, 0.0f, 3000));
 }
 
 int main(int, char**) {
@@ -255,5 +275,6 @@ int main(int, char**) {
     RUN_TEST(test_warning_problem_waits_for_a_stop);
     RUN_TEST(test_warning_notes_never_show);
     RUN_TEST(test_warning_each_at_most_every_two_minutes);
+    RUN_TEST(test_warning_kind_ignores_the_figures);
     return UNITY_END();
 }

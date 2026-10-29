@@ -133,17 +133,25 @@ Band band(float tripKm, float kmlNow, float rangeKm, uint32_t seconds, float cos
     return b;
 }
 
-bool Warnings::due(const char* why, uint32_t nowMs) const {
+// A warning's kind: its why without the digits ("ENGINE HOT 108C" -> "ENGINE HOT C").
+static void kindOf(const char* why, char* out, size_t n) {
+    size_t k = 0;
+    for (const char* p = why; *p && k + 1 < n; ++p)
+        if (*p < '0' || *p > '9') out[k++] = *p;
+    out[k] = 0;
+}
+
+bool Warnings::due(const char* kind, uint32_t nowMs) const {
     for (const Shown& s : shown_)
-        if (s.used && std::strcmp(s.why, why) == 0) return nowMs - s.atMs >= WARN_EVERY_MS;
+        if (s.used && std::strcmp(s.kind, kind) == 0) return nowMs - s.atMs >= WARN_EVERY_MS;
     return true;
 }
 
-void Warnings::mark(const char* why, uint32_t nowMs) {
+void Warnings::mark(const char* kind, uint32_t nowMs) {
     // its own slot, else a free one, else the oldest
     Shown* slot = nullptr;
     for (Shown& s : shown_)
-        if (s.used && std::strcmp(s.why, why) == 0) { slot = &s; break; }
+        if (s.used && std::strcmp(s.kind, kind) == 0) { slot = &s; break; }
     if (!slot)
         for (Shown& s : shown_)
             if (!s.used) { slot = &s; break; }
@@ -152,7 +160,7 @@ void Warnings::mark(const char* why, uint32_t nowMs) {
         for (Shown& s : shown_)
             if (nowMs - s.atMs > nowMs - slot->atMs) slot = &s;
     }
-    std::snprintf(slot->why, sizeof slot->why, "%s", why);
+    std::snprintf(slot->kind, sizeof slot->kind, "%s", kind);
     slot->atMs = nowMs;
     slot->used = true;
 }
@@ -164,8 +172,10 @@ bool Warnings::next(const carhealth::Verdict& batt, const carhealth::Verdict& en
     for (const carhealth::Verdict* v : order) {
         if (v->level != Level::Problem || !v->why[0]) continue;
         if (!stopped && !(critical && v == &eng)) continue;
-        if (!due(v->why, nowMs)) continue;
-        mark(v->why, nowMs);
+        char kind[sizeof v->why];
+        kindOf(v->why, kind, sizeof kind);
+        if (!due(kind, nowMs)) continue;
+        mark(kind, nowMs);
         if (n) std::snprintf(out, n, ">%s", v->why);
         return true;
     }
