@@ -16,19 +16,23 @@ static int s_index = -1;          // network in use (config.h order; 0 = preferr
 static int s_lastIndex = -1;      // the one before a drop (two tries when it was the preferred)
 constexpr uint32_t CONNECT_TRY_MS = 8000;   // per network in connectAny()
 constexpr uint32_t CHECK_MS = 5000;         // loop(): reconnect check period
-// Failed reconnects wait longer before the next (util/netup Rejoin) on the yellow deck, where the
-// joins take the radio from the lights' BLE. The black deck has no BLE to share it with and
-// rejoins the hotspot as soon as it can (its Health handles a WiFi that never comes back).
-#ifdef YELLOW_DECK
+// Failed reconnects wait longer before the next (util/netup Rejoin) on the yellow deck and the OBD
+// deck, where the joins take the radio from BLE (the lights, the OBD adapter). The black deck has no
+// BLE to share it with and rejoins the hotspot as soon as it can (its Health handles a WiFi that
+// never comes back).
+#if defined(YELLOW_DECK) || defined(OBD_DECK)
 constexpr bool BACK_OFF = true;
 #else
 constexpr bool BACK_OFF = false;
 #endif
 static netup::Rejoin s_rejoin;
 // Fixed address on the iPhone hotspot (util/hotspotip): 172.20.10.10 for the S3, .11 for the
-// yellow deck, so a Home Screen bookmark of http://172.20.10.10/ keeps working.
+// yellow deck, .12 for the OBD deck, so a Home Screen bookmark of http://172.20.10.10/ keeps
+// working and the OBD deck never takes the S3's address.
 #ifdef YELLOW_DECK
 constexpr uint8_t HOTSPOT_OCTET = YELLOW_HOTSPOT_OCTET;
+#elif defined(OBD_DECK)
+constexpr uint8_t HOTSPOT_OCTET = OBD_HOTSPOT_OCTET;
 #else
 constexpr uint8_t HOTSPOT_OCTET = DECK_HOTSPOT_OCTET;
 #endif

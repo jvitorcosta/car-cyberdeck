@@ -81,6 +81,53 @@ Open items, not scheduled. Newest decisions first within each section.
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
 
+## OBD deck: first flash
+
+The OBD deck (`src/obd`, env `obddeck`) is built and host-tested but has never run on a board
+(none was plugged in on 2026-10-29). On its first board, over USB, never the yellow deck's or the
+black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the monitor.
+
+- **Boot log**: `[boot] obddeck v...`, `[car] LittleFS ... bytes used` (the first boot formats the
+  partition), `[car] boot 1, last trip none, fuel book empty`, `[obd] BLE up, 3 connections
+  allowed`, `[wifi] connected ...` (on the hotspot `[wifi] fixed hotspot address 172.20.10.12`),
+  `[clock] SNTP started`, `[ota] listening`, `[net] on: http://.../car`. A second boot says
+  `boot 2`.
+- **No adapter**: `[obd] no adapter: next try in 5 s`, then 10, 20, 40, 60 s and 60 s from then on;
+  the black deck (`V-CYBERDECK`) and the lights are seen but never connected.
+- **`/car`**: a signed request answers 200 with the JSON (`"v":1`, `"seq"` rising each second,
+  `"link"` 0); the same with `?k=<REMOTE_TOKEN>` and no signature answers 403; before SNTP a signed
+  one answers 503 "clock not set". Sign from the PC with `util/wire/sigreq`'s scheme (or wait for
+  Task 10's yellow-deck client).
+- **`/fill`**: signed `GET /fill?p=6.49` answers `ok 6.49`; after a reboot `/car` still shows
+  `"price":6.49` (the fuel book in NVS).
+- **Staying up**: `[car]` every 10 s and `[mem]` every minute for 10 min, no `TG1WDT` / task
+  watchdog reset, no `[ota] rolled back`; after a minute online `[ota] this firmware is good`. Note
+  the heap and each task's stack left in `[mem]`.
+- **Update over WiFi**: `pio run -e obddeck_ota -t upload` from a PC on the hotspot.
+
+## Car-health: waiting on the adapter
+
+The OBD link (now on the OBD deck) has never met an adapter: the Vgate hasn't arrived and
+`tools/obd_sim.py` can't run its BLE side on the Windows PC. From the yellow-deck attempt (Task 8,
+2026-10-28, parked): a 4th BLE connection on the yellow deck is not safe (the precompiled framework
+reserves the controller's DRAM for 3; a build with 4 crash-looped), which is why the OBD link moved
+to its own board. That attempt measured ~7-8 KB of heap for obdlink.
+
+To check on the OBD deck when the Vgate arrives (or against a sim on a spare ESP32):
+- `[obd] gatt ...` lines: record the Vgate's real service (16-bit FFF0 or a 128-bit UUID);
+  `obdble::pick` keeps 128-bit services apart by their discovery index.
+- `[obd] connected <name>`, then `[obd] supported: ...` and `[obd] codes N ...` /
+  `[obd] pending N ...` once the car answers (the codes wait for a live reply).
+- Values follow the car within ~2 s (speed, RPM) and the battery at least every ~5 s with the engine
+  running (`[car]` line).
+- A stored code shows as `[obd] codes 1 P0301` (sim: `code P0301`; within 5 min or at reconnect).
+- With the adapter gone: `[obd] <name>: disconnected`, then the backoff 5, 10, 20, 40, 60 s; with a
+  working adapter that drops, back at once.
+- After a reboot the remembered adapter connects first (`(remembered)`, NVS `obd`/`bleaddr`).
+- `[mem]` with the adapter connected vs the no-adapter level; the `obd-ask` stack's live use.
+- A trip: `/t<seq>.jsonl` gets a row a minute (30 s flushes); a power cut mid-row is trimmed at the
+  next boot (`[car] log: cut a partial row`), and screen A's last trip / range follow.
+
 ## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
 
 The OBD gauge cluster, kept for later on the branch `feat/obd` (pushed to GitHub as a backup on

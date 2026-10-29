@@ -25,6 +25,9 @@
 // finds the black deck at BLACK_DECK_ADDR.
 #define DECK_HOTSPOT_OCTET 10
 #define YELLOW_HOTSPOT_OCTET 11
+// The OBD deck (-D OBD_DECK, src/obd): 172.20.10.12 on the hotspot, cardeck-obd.local by mDNS.
+#define OBD_HOTSPOT_OCTET 12
+#define OBD_MDNS_NAME "cardeck-obd"
 #ifndef BLACK_DECK_ADDR
 #ifdef COMPANION_DECK
 #define BLACK_DECK_ADDR COMPANION_DECK   // its name in a config.h from before 2026-10-28

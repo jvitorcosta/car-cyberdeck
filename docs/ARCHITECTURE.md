@@ -2,8 +2,9 @@
 
 CarDeck is three programs that meet on the phone's hotspot: the **black deck** (ESP32-S3, env
 `s3`, `src/black/`), the **yellow deck** (ESP32 CYD, env `ledpanel`, `src/yellow/`) and the
-**Honda City** watch app (`garmin/carlights/`). Code both decks build lives in `src/common/` and
-`src/util/`. See [HISTORY.md](HISTORY.md) for why it is built this way.
+**Honda City** watch app (`garmin/carlights/`). A fourth, the **OBD deck** (a plain ESP32, env
+`obddeck`, `src/obd/`), reads the car for the health check (being built on `feat/car-health`).
+Code the decks share lives in `src/common/` and `src/util/`. See [HISTORY.md](HISTORY.md) for why it is built this way.
 
 ```
 Spotify, LRCLIB, iTunes, PokéAPI (HTTPS)        ip-api.com, Open-Meteo (HTTP)
@@ -201,6 +202,32 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 - **Flash**: `min_spiffs.csv`, two 1.9 MB app slots for updates over WiFi; NVS keeps the touch
   calibration (`touch`), the looks and the trip (`leds`) and the Xbox controller's bond.
 
+## OBD deck
+
+A generic ESP32 with no screen (`src/obd/`, env `obddeck`) that owns everything that reads the car:
+the yellow deck can't hold a 4th BLE connection on this framework, so the adapter got its own board.
+It answers the yellow deck over the hotspot and never writes to the car.
+
+| Task | Core | What it does |
+|---|---|---|
+| `loop()` | 1 | once a second: a trip sample from the fresh readings (`util/car/tripsum`), the health `Watch` (`carhealth`), the fuel burnt (`fuelbook`), a closed minute to the trip log (`triplog` on LittleFS, `obd/carfs`), then the `/car` snapshot (`carwire`); every 30 s the log flush and the NVS records; the `[car]` line every 10 s |
+| `obd-link` | 0 | finds and connects the ELM327 over BLE (NimBLE 2, `util/car/obdble`): the remembered address first, then a 4 s scan; 5 s apart, doubling to 60 s while none answers |
+| `obd-ask` | 0 | while connected: the adapter's setup, the supported-PID scan, the PIDs in `obdplan`'s order, `ATRV` at least every 4 s, 03 / 07 every 5 min (`obdplan`); fuel from the air (`fueleco`), stepped only with fresh values |
+| `net` | 1, idle | joins WiFi (`net/wifi`), mDNS `cardeck-obd`, SNTP, the update listener, then the web server: `/car`, `/fill` |
+| `ota` | 0 | the update listener (`net/ota`) |
+
+- **Read-only**: every write to the adapter goes through `obd::allowed()` (mode 01, 03, 07 and the
+  adapter's setup; never mode 04) and `ATH1` is refused too. Devices that serve the ELK lights'
+  FFF0 service are never taken for the adapter (their MACs from `config.h`, `ELK` / `MELK` names).
+- **NVS**: `obd` holds the adapter (`bleaddr`, `bletype`, `blename`); `car` holds the boot sequence
+  (`tseq`, which names the trip file `/t<seq>.jsonl`), the last trip with the health memo (`last`,
+  so a trip cut by the ignition is judged at the next boot), the fuel book (`fuel`) and the last
+  trouble-code counts (`codes`, so a code is "new" against the last read).
+- **Flash**: `min_spiffs.csv`; the data partition holds the trip log (LittleFS, at most 96 KB of
+  trips, oldest dropped first; a row cut by a power cut is trimmed at boot).
+- **Snapshot**: `checkReady` once a 03 / 07 read and a battery reading are in, or 20 s after the
+  link went live; `seq` +1 per snapshot (once a second).
+
 ## Between the devices
 
 | From → to | What | Contract |
@@ -210,6 +237,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 | black → yellow | UDP port 4210: the song's palette (v2: boot id, rising counter, 8-byte HMAC tag) | `util/wire/musicwire`, `util/wire/songpalette`; the colour is `util/black/songmood`'s |
 | watch → yellow | `GET /say`, `/state`, `/presets`, `/status` (signed) | replies from `util/lightstatus`, `util/ledpresets` (wire lines), `util/ledvoice` |
 | Siri → yellow | `GET /say?k=<REMOTE_TOKEN>&text=...` | bearer key, plain HTTP |
+| yellow → OBD | `GET /car` (signed only, no `k=`): the car snapshot; `GET /fill?p=6.49` (or no `p`; signed only): a full tank, answers `ok <price>` | `util/car/carwire`; `fuelbook::fillUp`; `remotegate::Accept::SignedOnly` |
 | phone → black | the page `/?k=`, then `/state` and `POST /play` with `k=` | bearer key, plain HTTP |
 
 - **Signing** (`util/wire/sigreq`, `util/wire/hmac256`, `common/net/reqauth`; on the watch
@@ -218,8 +246,9 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   once (a ring of the last 32 nonces). Devices never send the key. **The bearer `k=` is still
   accepted** on the same routes, because Siri Shortcuts and the Home Screen page can't compute an
   HMAC. Details and limits: [SECURITY.md](../SECURITY.md).
-- **Addresses**: on the iPhone hotspot the black deck pins `172.20.10.10` and the yellow deck
-  `172.20.10.11` (`util/hotspotip`); elsewhere `cardeck.local` and `cardeck-leds.local`.
+- **Addresses**: on the iPhone hotspot the black deck pins `172.20.10.10`, the yellow deck
+  `172.20.10.11` and the OBD deck `172.20.10.12` (`util/hotspotip`); elsewhere `cardeck.local`,
+  `cardeck-leds.local` and `cardeck-obd.local`.
 - **Versions**: both decks report their build (`util/version`, from `tools/version.py`): the
   black deck in `/state`'s `"fw"`, the yellow deck in `/status`'s `fw=`. A protocol change means
   updating every device together, and a major version.
@@ -251,7 +280,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 ## Layout
 
-- `src/black/`, `src/yellow/` — each deck's own code. Each env compiles only its deck's folder,
+- `src/black/`, `src/yellow/`, `src/obd/` — each deck's own code. Each env compiles only its deck's folder,
   `src/common/` (`net/`, `ui/backlight`, `board/board.h`, `core/embed.h`, `core/watchdog.h`) and its
   util groups (allow-list `build_src_filter` in `platformio.ini`), so a call into the other deck's
   code fails to link. `src/diag/` holds the standalone checks, one env each (`hwcheck`,
@@ -264,6 +293,8 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   - `wire/` (the contracts between the decks): hmac256, lyricstatus, musicwire, sigreq,
     songpalette, statejson, stateparse
   - `lights/` (the LED domain, both decks): hue, ledlook, musiclights, tripclock
+  - `car/` (the car health check: the OBD deck; carwire and healthview also the yellow deck):
+    carhealth, carwire, fuelbook, fueleco, healthview, obd, obdble, obdplan, triplog, tripsum
   - `common/` (both decks): bootguard, daynight, hotspotip, jsonflat, jsonpath, netdiag, netup,
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
