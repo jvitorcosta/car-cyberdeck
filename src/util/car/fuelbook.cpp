@@ -1,4 +1,5 @@
 #include "fuelbook.h"
+#include <cstdio>
 #include <cstring>
 
 namespace fuelbook {
@@ -120,6 +121,41 @@ bool parsePhrase(const char* text, float* price, bool* priceOk) {
     if (price) *price = p;
     if (priceOk) *priceOk = ok;
     return true;
+}
+
+bool priceParam(float price, bool priceOk, char* out, size_t n) {
+    if (n) out[0] = 0;
+    if (!priceOk || std::isnan(price) || !n) return false;
+    std::snprintf(out, n, "%.2f", static_cast<double>(price));
+    return true;
+}
+
+void fillReply(const char* answer, float heard, bool priceOk, char* out, size_t n) {
+    if (!n) return;
+    char num[16] = "";
+    bool notPrice = false;
+    if (answer && !std::strncmp(answer, "ok ", 3)) {
+        if (std::strcmp(answer + 3, "none") != 0) {
+            std::snprintf(out, n, "Full tank noted, %.12s per litre.", answer + 3);
+            return;
+        }
+        if (!priceOk && !std::isnan(heard)) {
+            // up to two decimals as said: 649, 2.5, 15.01
+            std::snprintf(num, sizeof num, "%.2f", static_cast<double>(heard));
+            char* end = num + std::strlen(num);
+            while (end > num && end[-1] == '0') *--end = 0;
+            if (end > num && end[-1] == '.') *--end = 0;
+            notPrice = true;
+        }
+    } else if (answer && !std::strncmp(answer, "refused ", 8)) {
+        std::snprintf(num, sizeof num, "%.12s", answer + 8);
+        notPrice = true;
+    } else {
+        std::snprintf(out, n, "I can't reach the car module.");
+        return;
+    }
+    if (notPrice) std::snprintf(out, n, "Full tank noted. I heard %s, that's not a price.", num);
+    else std::snprintf(out, n, "Full tank noted.");
 }
 
 }  // namespace fuelbook

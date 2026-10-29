@@ -6,8 +6,10 @@
 //           car's panel and CarPlay don't show: the trip and the lights. The header line
 //           (CYBERDECK // HONDA CITY TOURING 2022); the clock big with the date under it ("FRI 23
 //           OCT"), and right of it the outside temperature big and the sky in words (see "Weather"
-//           below), "HI 32 LO 26  MANAUS" right-aligned under them; the trip: TRIP, its time big and
-//           the distance right ("12.4 KM", "-- KM" in DIM while no speed source feeds it); both lights
+//           below), "HI 32 LO 26  MANAUS" right-aligned under them; the trip, from the OBD deck's
+//           snapshot (see "Car health"): "12.4 KM", "11.8 KM/L" and "296 KM LEFT", and under them
+//           "0:16  R$ 6,30  14.1V  90C" (the time is the deck's own; "--" for all the rest while no
+//           fresh snapshot comes); both lights
 //           on one row, "IN [chip] ROSE 40%" | "OUT [chip] YELLOW 100%" (OFF, or -- NO LINK when the
 //           deck has no link to it); the prompt line: a message, music mode's line, or just ">",
 //           with a block cursor (blinking while a message shows); and at the bottom the three
@@ -109,6 +111,7 @@
 #include "../common/net/remote_config.h"
 #include "../common/net/reqauth.h"
 #include "../common/net/wifi.h"
+#include "../util/car/fuelbook.h"
 #include "../util/car/healthview.h"
 #include "../util/yellow/bothlook.h"
 #include "../util/yellow/dashtext.h"
@@ -547,9 +550,10 @@ static int textMarked(const char* s, int x, int y, Face f, uint8_t datum) {
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
 static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night, theme)); }
-// A terminal message's colour: ALERT for a problem (a lost link, the wrong key), else TEXT.
+// A terminal message's colour: ALERT for a problem (a lost link, the wrong key, a car warning: alert),
+// else TEXT.
 static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
-static uint16_t msgInk(const char* m) { return pal(isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
+static uint16_t msgInk(const char* m, bool alert) { return pal(alert || isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
 
 // A real colour (a chip), dimmed with the palette at night.
 static uint16_t tint(uint32_t rgb) { return c565(termpal::tile(rgb, night)); }
@@ -770,12 +774,14 @@ static char message[32] = "";  // "" when none
 static_assert(sizeof(message) <= MARKED_RUN, "a message holding GOJIRA's mark is drawn whole (textMarked)");
 static uint32_t messageAt = 0;
 static uint32_t messageMs = MESSAGE_MS;
+static bool messageAlert = false;  // drawn in ALERT whatever it says (the car's warnings)
 
 // Sets the message; the caller redraws what shows it (drawMessage, or drawStatus on Lights).
-static void setMessage(const char* m, uint32_t ms = MESSAGE_MS) {
+static void setMessage(const char* m, uint32_t ms = MESSAGE_MS, bool alert = false) {
     snprintf(message, sizeof(message), "%s", m);
     messageAt = millis();
     messageMs = ms;
+    messageAlert = alert;
 }
 
 // Lights: the line under the tabs, just the link state ("LINK 2/2" in TEXT; "OUTSIDE: NO LINK",
@@ -790,7 +796,7 @@ static void drawStatus() {
     char line[24];
     const bool down = lightstatus::link(linkUp(controllers[0]), linkUp(controllers[1]), line, sizeof(line));
     clearBg(r);
-    tft.setTextColor(message[0] ? msgInk(message) : pal(down ? termpal::ALERT : termpal::TEXT));
+    tft.setTextColor(message[0] ? msgInk(message, messageAlert) : pal(down ? termpal::ALERT : termpal::TEXT));
     text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
 }
 
@@ -891,25 +897,51 @@ static void drawWeather() {
 }
 
 // The trip meter: time since the first loop() pass (the car started the deck), kilometres once a
-// speed feeds it. The trip band shows it; tripTick() redraws the band when its text would change
-// (every minute, or every 0.1 km).
+// speed feeds it (the OBD deck's, see carTick). The trip band shows its time; its NVS record is the
+// boot's ">LAST TRIP".
 static tripmeter::Meter tripMeter;
 
-// The trip band, cleared between its rules and drawn again: TRIP (SMALL, MID), the time (BIG, TEXT)
-// after it and the distance right-aligned (BODY, MID: "12.4 KM"; "-- KM" in DIM while no speed source
-// has fed the meter), on one baseline. Digits and capitals: no accent rises past BIG's ascent.
+// The OBD deck's last snapshot, as loop() took it (carTick; seqAt 0: none yet). Fresh while its seq
+// changed within carlink::STALE_MS: an older one is no data.
+static carlink::Reading car;
+static bool carFresh(uint32_t now) { return car.seqAt != 0 && now - car.seqAt < carlink::STALE_MS; }
+
+// The trip band's texts now (healthview::band): the snapshot's trip km, km/L now, range, R$ so far,
+// volts and coolant while it is fresh, "--" for each without; the time is the trip meter's.
+static healthview::Band tripBandNow() {
+    const uint32_t seconds = tripMeter.trip().seconds;
+    if (!carFresh(millis())) return healthview::band(NAN, NAN, NAN, seconds, NAN, NAN, NAN);
+    const carwire::Snapshot& c = car.snap;
+    return healthview::band(c.trip.km, c.kmlNow, c.rangeKm, seconds, c.tripCostRs, c.volts, c.coolantC);
+}
+static healthview::Band tripBandShown;  // what the band shows (drawTripBand keeps it)
+
+static bool sameBand(const healthview::Band& a, const healthview::Band& b) {
+    return !strcmp(a.trip, b.trip) && !strcmp(a.kmlNow, b.kmlNow) && !strcmp(a.range, b.range) && !strcmp(a.small, b.small);
+}
+
+// The trip band, cleared between its rules and drawn again (termlayout): the trip km left, km/L now
+// from BAND_KML_X, the range right-aligned (TITLE, TEXT; DIM while "--"), and under them the time,
+// R$, volts and coolant (SMALL, MID). Digits, capitals and "$ , . / :": nothing rises past the
+// faces' ASCII ascent or sinks past their descent (test_termfont).
 static void drawTripBand() {
-    const tripmeter::Trip t = tripMeter.trip();
-    char hm[16], dist[16];
-    tripmeter::elapsed(t, hm, sizeof(hm));
-    tripmeter::distance(t, dist, sizeof(dist));
+    const healthview::Band b = tripBandNow();
+    tripBandShown = b;
     clearBg(RULE_X0, CLOCK_RULE_Y + 1, RULE_X1 - RULE_X0, TRIP_RULE_Y - CLOCK_RULE_Y - 1);
+    auto figure = [](const char* t, int x, uint8_t datum) {
+        tft.setTextColor(pal(strncmp(t, "--", 2) == 0 ? termpal::DIM : termpal::TEXT));
+        text(t, x, BAND_FIG_BASE, Face::TITLE, datum);
+    };
+    figure(b.trip, DASH_X, BL_DATUM);
+    figure(b.kmlNow, BAND_KML_X, BL_DATUM);
+    figure(b.range, DASH_RIGHT, BR_DATUM);
     tft.setTextColor(pal(termpal::MID));
-    text(TRIP_LABEL, DASH_X, TRIP_BASE, Face::SMALL, BL_DATUM);
-    if (!t.hasDistance) tft.setTextColor(pal(termpal::DIM));
-    text(dist, DASH_RIGHT, TRIP_BASE, Face::BODY, BR_DATUM);
-    tft.setTextColor(pal(termpal::TEXT));
-    text(hm, tripTimeX(), TRIP_BASE, Face::BIG, BL_DATUM);
+    text(b.small, DASH_X, BAND_SMALL_BASE, Face::SMALL, BL_DATUM);
+}
+
+// On the Menu, the trip band when its texts changed (a new snapshot, a stale one, a new minute).
+static void updateTripBand() {
+    if (screen == Screen::Menu && !sameBand(tripBandNow(), tripBandShown)) drawTripBand();
 }
 
 // The lights row, cleared between its rules and drawn again: INSIDE left of a vertical MID rule,
@@ -986,7 +1018,7 @@ static void drawPrompt() {
     const int top = LIGHTS_RULE_Y + 1;
     clearBg(RULE_X0, top, RULE_X1 - RULE_X0, deckmenu::PROMPT_BAND.y + deckmenu::PROMPT_BAND.h - top);
     if (message[0]) {
-        tft.setTextColor(msgInk(message));
+        tft.setTextColor(msgInk(message, messageAlert));
         placeCursor(DASH_X + text(message, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
         return;
     }
@@ -1521,10 +1553,9 @@ static constexpr uint32_t TRIP_FRESH_MS = 3000;     // a reading older than this
 static uint8_t tripSaved[tripmeter::RECORD_BYTES];
 static bool tripSavedValid = false;
 
-// The OBD link will call this with each speed reading (km/h). It may run on another core, so it
-// only stores the latest reading; tripTick() on the loop task integrates it once a second (the
-// Meter isn't thread-safe). Nothing calls it yet and no speed is faked, so the trip band shows "-- KM".
-static void tripSpeed(uint16_t kmh) __attribute__((unused));
+// carTick() calls this with each fresh snapshot's speed (km/h), so the meter's record (the boot's
+// ">LAST TRIP") has the distance too. It only stores the latest reading; tripTick() integrates it once
+// a second (the Meter isn't thread-safe). No speed is faked: without an OBD deck it has no distance.
 static void tripSpeed(uint16_t kmh) {
     // The speed first, then the time that makes it count: 32-bit and 16-bit writes are atomic on the
     // ESP32, so loop() sees the old pair or the new speed with either time. A new speed with the old
@@ -1566,14 +1597,7 @@ static void tripTick() {
     tripIntegratedAt = checkedAt;
     tripMeter.setSeconds(tripClock.seconds(now));
     const tripmeter::Trip t = tripMeter.trip();
-    // the line shows minutes and tenths of a km: redraw only when one of them moved
-    static bool shown = false;
-    static tripmeter::Trip on;
-    if (!shown || t.seconds / 60 != on.seconds / 60 || t.meters / 100 != on.meters / 100 || t.hasDistance != on.hasDistance) {
-        shown = true;
-        on = t;
-        if (screen == Screen::Menu) drawTripBand();
-    }
+    updateTripBand();  // its minute, or a snapshot gone stale
     static uint32_t savedAt = 0;
     if (!savedAt) savedAt = now ? now : 1;
     if (now - savedAt >= 60000) {
@@ -2255,11 +2279,13 @@ static void lyricsTick() {
 //           carlink::STALE_MS) is an unknown speed, so it never counts as stopped. It hides when the
 //           car moves.
 // A tap anywhere, or the Xbox controller's A or B, goes back to the Menu (on D: ParkGate::dismiss()).
+// On the Menu and Lights a fresh snapshot can also bring a warning (healthview::Warnings: critical
+// while moving, any problem when stopped, each at most once per 2 minutes) as the message, in ALERT;
+// never over A, B or D. Each fresh snapshot's speed feeds the trip meter, and its figures the band.
 // The texts are healthview's (all caps, <= 39 chars: a BODY line is 311 px, a SMALL one 272), laid
 // out as the brainstorm's mockups; colours by role. Without an OBD deck nothing here ever shows.
 // Test hook: -D HEALTH_TEST=a|b|d draws from a canned snapshot instead of the OBD deck's (a: all OK,
 // b: a battery problem, d: parked after a trip); see docs/ARCHITECTURE.md "Test hooks".
-static carlink::Reading car;  // loop()'s copy of the last snapshot (seqAt 0: none yet)
 static constexpr uint32_t CHECK_MS = 5000;
 static bool checkDone = false;  // A / B has shown this power-on
 static uint32_t checkAt = 0;    // millis() it showed
@@ -2272,8 +2298,6 @@ static constexpr int HC_BATT_Y = 30, HC_BATT_WHY_Y = 50, HC_ENG_Y = 74, HC_ENG_W
 static constexpr int HC_LAST_Y = 124, HC_RANGE_Y = 144, HC_RULE2_Y = 166, HC_STATUS_Y = 180, HC_WHY_X = DASH_X + 8;
 static constexpr int HP_ROW1_Y = 32, HP_ROW2_Y = 72, HP_SMALL_Y = 108, HP_RULE1_Y = 126, HP_ITEMS_Y = 136;
 static constexpr int HP_RULE2_Y = 158, HP_FOOTER_Y = 172, HP_COL2_X = 168;
-
-static bool carFresh(uint32_t now) { return car.seqAt != 0 && now - car.seqAt < carlink::STALE_MS; }
 
 static healthview::Check carCheck() {
     const carwire::Snapshot& s = car.snap;
@@ -2482,6 +2506,20 @@ static bool healthTestTake(carlink::Reading* r) {
 
 // In loop(): takes a new snapshot, then shows, keeps or leaves Check and Parked (see above). Only the
 // lines a new snapshot changed are redrawn, each in its own band (no whole-screen flash).
+static healthview::Warnings carWarnings;
+
+// A due warning as the message (Menu's prompt line, Lights' STATUS line), in ALERT. Not on Karaoke,
+// which has no message line: it waits (next() only counts a warning it hands out).
+static void carWarn(uint32_t now) {
+    if (screen != Screen::Menu && !onLights()) return;
+    char m[sizeof(message)];
+    const carwire::Snapshot& c = car.snap;
+    if (!carWarnings.next(c.battery, c.engine, c.critical, c.kmh, now, m, sizeof(m))) return;
+    Serial.printf("[car] warning: %s\n", m);
+    setMessage(m, MESSAGE_MS, true);
+    drawMessage();
+}
+
 static void carTick() {
 #ifdef HEALTH_TEST
     const bool got = healthTestTake(&car);
@@ -2490,6 +2528,11 @@ static void carTick() {
 #endif
     const uint32_t now = millis();
     const bool fresh = carFresh(now);
+    if (got && fresh) {
+        const float kmh = car.snap.kmh;
+        if (kmh >= 0.0f) tripSpeed(static_cast<uint16_t>(kmh < 300.0f ? kmh + 0.5f : 300.0f));  // NAN: no reading
+        updateTripBand();
+    }
     if (!checkDone && fresh && car.snap.checkReady && screen == Screen::Menu) {
         checkDone = true;
         checkAt = now;
@@ -2505,15 +2548,17 @@ static void carTick() {
         }
         return;
     }
-    if (car.seqAt == 0 || (screen != Screen::Menu && screen != Screen::Parked)) return;
-    const bool parked = parkGate.update(fresh ? car.snap.kmh : NAN, car.snap.trip.km, now);
-    if (parked && screen == Screen::Menu) show(Screen::Parked);
-    else if (!parked && screen == Screen::Parked) {
-        Serial.println("[car] moving: trip complete hidden");
-        show(Screen::Menu);
-    } else if (got && screen == Screen::Parked) {
-        drawHealthLines(carParked(), parkedShown, PARKED_SLOTS, false);
+    if (car.seqAt != 0 && (screen == Screen::Menu || screen == Screen::Parked)) {
+        const bool parked = parkGate.update(fresh ? car.snap.kmh : NAN, car.snap.trip.km, now);
+        if (parked && screen == Screen::Menu) show(Screen::Parked);
+        else if (!parked && screen == Screen::Parked) {
+            Serial.println("[car] moving: trip complete hidden");
+            show(Screen::Menu);
+        } else if (got && screen == Screen::Parked) {
+            drawHealthLines(carParked(), parkedShown, PARKED_SLOTS, false);
+        }
     }
+    if (got && fresh) carWarn(now);  // after D's turn: a stop that shows D shows no warning over it
 }
 
 // ---- Music mode: the song's colour on both lights ----
@@ -2950,11 +2995,33 @@ static void applyVoice(const VoiceJob& job) {
     answerVoice(line, job.seq);
 }
 
+// A fill-up phrase ("filled up at 6.49", "tanque cheio", util/car/fuelbook::parsePhrase): the fuel
+// book lives on the OBD deck, so it goes there as a signed GET /fill (p only with a price inside
+// 3.00-15.00 R$/L; a full tank all the same with none or another), and its answer becomes the reply
+// (fuelbook::fillReply: "Full tank noted, 6.49 per litre.", "... I heard 649, that's not a price.",
+// "I can't reach the car module."). At most ~2 s on this task; the watchdog is fed around it.
+static void sayFill(float price, bool priceOk) {
+    char p[12], answer[32], line[64];
+    const bool withP = fuelbook::priceParam(price, priceOk, p, sizeof(p));
+    watchdog::feed();
+    const bool ok = carlink::fill(withP ? p : nullptr, answer, sizeof(answer));
+    watchdog::feed();
+    fuelbook::fillReply(ok ? answer : nullptr, price, priceOk, line, sizeof(line));
+    Serial.printf("[voice] fill-up (p=%s): %s -> %s\n", withP ? p : "none", ok ? answer : "no answer", line);
+    server->send(200, "text/plain", line);
+}
+
 static void handleSay() {
     if (!reqauth::pass(*server, gate, "/say", "Wrong key")) return;
     const String text = server->arg("text");
     Serial.printf("[voice] \"%s\"\n", text.c_str());
     if (text.length() == 0) { server->send(200, "text/plain", "I didn't hear anything"); return; }  // no text from the Shortcut
+    float price = NAN;
+    bool priceOk = true;
+    if (fuelbook::parsePhrase(text.c_str(), &price, &priceOk)) {  // before the lights: "fill" is no colour
+        sayFill(price, priceOk);
+        return;
+    }
     VoiceJob job;
     if (!ledvoice::parse(text.c_str(), &job.c)) { server->send(200, "text/plain", "Sorry, I didn't get a colour or a command"); return; }
     static uint32_t nextSeq = 0;

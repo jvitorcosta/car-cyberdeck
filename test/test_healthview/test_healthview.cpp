@@ -192,6 +192,52 @@ void test_lines_fit_forty_chars() {
     TEST_ASSERT_EQUAL_STRING("AVG 199 KM/H  IDLE 999 MIN  -- KM LEFT", q.small.text);
 }
 
+// Screen C's live warning: critical (engine hot, MIL) while moving; any problem once stopped; notes never.
+static const char* warn(healthview::Warnings& w, const Verdict& b, const Verdict& e, bool critical, float kmh, uint32_t now) {
+    static char out[40];
+    out[0] = 'x';
+    out[1] = 0;
+    return w.next(b, e, critical, kmh, now, out, sizeof out) ? out : nullptr;
+}
+
+void test_warning_critical_shows_while_moving() {
+    healthview::Warnings w;
+    const char* m = warn(w, v(Level::Ok), v(Level::Problem, "ENGINE HOT 108C"), true, 60.0f, 1000);
+    TEST_ASSERT_NOT_NULL(m);
+    TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 108C", m);
+    TEST_ASSERT_NOT_NULL(warn(w, v(Level::Ok), v(Level::Problem, "CHECK ENGINE LIGHT ON"), true, NAN, 1000));  // speed unknown
+}
+
+void test_warning_problem_waits_for_a_stop() {
+    healthview::Warnings w;
+    const Verdict low = v(Level::Problem, "BATTERY LOW WHILE RUNNING");
+    TEST_ASSERT_NULL(warn(w, low, v(Level::Ok), false, 40.0f, 1000));
+    TEST_ASSERT_NULL(warn(w, low, v(Level::Ok), false, 1.0f, 2000));  // 1 km/h is still moving
+    TEST_ASSERT_NULL(warn(w, low, v(Level::Ok), false, NAN, 3000));   // an unknown speed isn't a stop
+    const char* m = warn(w, low, v(Level::Ok), false, 0.5f, 4000);
+    TEST_ASSERT_NOT_NULL(m);
+    TEST_ASSERT_EQUAL_STRING(">BATTERY LOW WHILE RUNNING", m);
+}
+
+void test_warning_notes_never_show() {
+    healthview::Warnings w;
+    TEST_ASSERT_NULL(warn(w, v(Level::Note, "BATTERY WAS LOW LAST TRIP"), v(Level::Note, "1 PENDING CODE, NOT CONFIRMED"),
+                          false, 0.0f, 1000));
+    TEST_ASSERT_NULL(warn(w, v(Level::Ok), v(Level::Ok), false, 0.0f, 1000));
+}
+
+void test_warning_each_at_most_every_two_minutes() {
+    healthview::Warnings w;
+    const Verdict low = v(Level::Problem, "BATTERY LOW WHILE RUNNING"), hot = v(Level::Problem, "ENGINE HOT 108C");
+    TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 108C", warn(w, low, hot, true, 0.0f, 1000));  // the engine first
+    TEST_ASSERT_EQUAL_STRING(">BATTERY LOW WHILE RUNNING", warn(w, low, hot, true, 0.0f, 3000));
+    TEST_ASSERT_NULL(warn(w, low, hot, true, 0.0f, 5000));
+    TEST_ASSERT_NULL(warn(w, low, hot, true, 0.0f, 1000 + healthview::WARN_EVERY_MS - 1));
+    TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 108C", warn(w, low, hot, true, 0.0f, 1000 + healthview::WARN_EVERY_MS));
+    // a new text is a new warning, at once
+    TEST_ASSERT_EQUAL_STRING(">ENGINE HOT 110C", warn(w, low, v(Level::Problem, "ENGINE HOT 110C"), true, 0.0f, 130000));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_check_all_ok_lines);
@@ -205,5 +251,9 @@ int main(int, char**) {
     RUN_TEST(test_check_unknown_items_say_checking);
     RUN_TEST(test_check_one_known_ok_is_still_checking);
     RUN_TEST(test_parked_unknown_items_are_dashes);
+    RUN_TEST(test_warning_critical_shows_while_moving);
+    RUN_TEST(test_warning_problem_waits_for_a_stop);
+    RUN_TEST(test_warning_notes_never_show);
+    RUN_TEST(test_warning_each_at_most_every_two_minutes);
     return UNITY_END();
 }

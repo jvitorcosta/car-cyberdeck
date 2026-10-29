@@ -148,6 +148,28 @@ To check on the OBD deck when the Vgate arrives (or against a sim on a spare ESP
 - A trip: `/t<seq>.jsonl` gets a row a minute (30 s flushes); a power cut mid-row is trimmed at the
   next boot (`[car] log: cut a partial row`), and screen A's last trip / range follow.
 
+## Car test (car-health, the owner)
+
+With both decks in the car, the Vgate in the port, the hotspot on:
+1. The OBD deck connects to the Vgate within 30 s of the start.
+2. Screen A appears with real volts.
+3. km matches the car's trip meter within 2 %.
+4. km/l is within 10 % of the car's display.
+5. Screen D appears at a stop.
+6. Voice fill-up at the pump works.
+7. The LEDs, the pad and KARAOKE keep working.
+8. A one-week log on the OBD deck shows no row gaps beyond link drops.
+
+Before the car, from a PC that can reach the yellow deck (the home router isolates them; the
+hotspot doesn't), with no OBD deck on: `/say?text=filled%20up%20at%206.49&k=<REMOTE_TOKEN>` must
+answer `I can't reach the car module.` at once (not checked on 2026-10-29: the PC couldn't reach the
+deck). With the OBD deck: `filled up at 6.49` -> `Full tank noted, 6.49 per litre.`, `filled up at
+649` -> `Full tank noted. I heard 649, that's not a price.`, `full tank` -> `Full tank noted.`, and
+the OBD deck's log says `[car] fill-up from ...` each time.
+
+Also by eye on the yellow deck's Menu: the trip band's three figures and the small line under them
+(spacing, nothing past 316 px), and a warning in red on the prompt line (a hot engine, or the MIL).
+
 ## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
 
 The OBD gauge cluster, kept for later on the branch `feat/obd` (pushed to GitHub as a backup on

@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include "carhealth.h"
 #include "tripsum.h"
@@ -31,6 +32,29 @@ struct Band {
     char trip[12], kmlNow[12], range[16], small[40];
 };
 Band band(float tripKm, float kmlNow, float rangeKm, uint32_t seconds, float costRs, float volts, float coolantC);
+
+// Screen C's live warning on the prompt line (the deck draws it in ALERT): ">" and the problem's why.
+// While `critical` (coolant hot or the MIL) the engine's, whatever the speed: the only ones worth a
+// look while driving. Stopped (below 1 km/h; an unknown speed is not a stop) any Problem, the engine's
+// first. Notes never warn. Each distinct text at most once per WARN_EVERY_MS: next() remembers what it
+// returned (it is the caller's to show it), so a lasting problem comes back every two minutes, and a
+// changed one ("ENGINE HOT 110C") at once.
+constexpr uint32_t WARN_EVERY_MS = 120000;
+class Warnings {
+public:
+    // True with the warning in out (cut to n bytes) when one is due now.
+    bool next(const carhealth::Verdict& batt, const carhealth::Verdict& eng, bool critical, float kmh, uint32_t nowMs,
+              char* out, size_t n);
+private:
+    struct Shown {
+        char why[sizeof(carhealth::Verdict::why)];
+        uint32_t atMs;
+        bool used;
+    };
+    Shown shown_[4] = {};  // the last few texts and when each was returned; the oldest makes room
+    bool due(const char* why, uint32_t nowMs) const;
+    void mark(const char* why, uint32_t nowMs);
+};
 
 // Screen D. An unknown item reads "BATTERY --" / "ENGINE --" (Dim).
 struct Parked {

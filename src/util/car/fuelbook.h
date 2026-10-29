@@ -46,4 +46,16 @@ bool decode(const uint8_t* in, size_t len, Book* b);
 // number in the text ('.' or ',' decimal, up to two decimals); *price = NAN when none was said, and
 // *priceOk = false when one was said outside PRICE_MIN..PRICE_MAX ("649"). Returns false for any other text.
 bool parsePhrase(const char* text, float* price, bool* priceOk);
+
+// The yellow deck forwards a fill-up phrase as GET /fill: p is the price as "6.49", sent only when one
+// was heard inside the range (priceOk and not NAN). False (out "") when there is no p to send.
+bool priceParam(float price, bool priceOk, char* out, size_t n);
+// The spoken reply to the phrase, from the OBD deck's /fill answer (nullptr: no answer):
+//   "ok 6.49"     -> "Full tank noted, 6.49 per litre."
+//   "ok none"     -> "Full tank noted.", or, when a price was heard outside the range (`heard` not NAN,
+//                    !priceOk), "Full tank noted. I heard 649, that's not a price." (up to two
+//                    decimals, no trailing zeros)
+//   "refused 649" -> "Full tank noted. I heard 649, that's not a price." (the number it sent back)
+//   anything else -> "I can't reach the car module."
+void fillReply(const char* answer, float heard, bool priceOk, char* out, size_t n);
 }

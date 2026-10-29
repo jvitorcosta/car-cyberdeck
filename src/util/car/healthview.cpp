@@ -133,6 +133,45 @@ Band band(float tripKm, float kmlNow, float rangeKm, uint32_t seconds, float cos
     return b;
 }
 
+bool Warnings::due(const char* why, uint32_t nowMs) const {
+    for (const Shown& s : shown_)
+        if (s.used && std::strcmp(s.why, why) == 0) return nowMs - s.atMs >= WARN_EVERY_MS;
+    return true;
+}
+
+void Warnings::mark(const char* why, uint32_t nowMs) {
+    // its own slot, else a free one, else the oldest
+    Shown* slot = nullptr;
+    for (Shown& s : shown_)
+        if (s.used && std::strcmp(s.why, why) == 0) { slot = &s; break; }
+    if (!slot)
+        for (Shown& s : shown_)
+            if (!s.used) { slot = &s; break; }
+    if (!slot) {
+        slot = &shown_[0];
+        for (Shown& s : shown_)
+            if (nowMs - s.atMs > nowMs - slot->atMs) slot = &s;
+    }
+    std::snprintf(slot->why, sizeof slot->why, "%s", why);
+    slot->atMs = nowMs;
+    slot->used = true;
+}
+
+bool Warnings::next(const carhealth::Verdict& batt, const carhealth::Verdict& eng, bool critical, float kmh,
+                    uint32_t nowMs, char* out, size_t n) {
+    const bool stopped = kmh < 1.0f;  // NAN: false
+    const carhealth::Verdict* order[] = {&eng, &batt};
+    for (const carhealth::Verdict* v : order) {
+        if (v->level != Level::Problem || !v->why[0]) continue;
+        if (!stopped && !(critical && v == &eng)) continue;
+        if (!due(v->why, nowMs)) continue;
+        mark(v->why, nowMs);
+        if (n) std::snprintf(out, n, ">%s", v->why);
+        return true;
+    }
+    return false;
+}
+
 Parked parked(const tripsum::Summary& s, float costRs, float rangeKm, const carhealth::Verdict& batt,
               const carhealth::Verdict& eng) {
     Parked p{};

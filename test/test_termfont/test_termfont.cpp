@@ -14,6 +14,7 @@
 #include "../../src/util/yellow/otapage.h"
 #include "../../src/util/yellow/tripmeter.h"
 #include "../../src/util/common/version.h"
+#include "../../src/util/car/healthview.h"
 #include "../../src/util/yellow/weather.h"
 
 using termfont::Face;
@@ -262,34 +263,31 @@ void test_dash_hilo_row_fits() {
     TEST_ASSERT_FALSE(hiLoFits("HI -10 LO -20  ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGH"));  // what it guards
 }
 
-// The trip band: "TRIP" (SMALL), the time (BIG) after it, the distance (BODY) right-aligned, all on
-// TRIP_BASE, the caps centred between the clock band's rule and the band's own.
+// The trip band (the driving screen's three figures, util/car/healthview::band): the trip km left,
+// km/L now from BAND_KML_X, the range right-aligned (TITLE, on BAND_FIG_BASE), and under them the
+// small line (SMALL, on BAND_SMALL_BASE: the time, R$, volts, coolant). The widest texts band() can
+// write keep the margin between them; both lines stay between the clock band's rule and the band's
+// own, the figures' caps as far from the rule above as the small line's from the rule below (+-1).
 void test_dash_trip_band_fits() {
-    tripmeter::Trip t;
-    t.seconds = 99 * 3600 + 59 * 60;
-    t.meters = 999900;
-    t.hasDistance = true;
-    char hm[16], dist[16];
-    tripmeter::elapsed(t, hm, sizeof(hm));
-    tripmeter::distance(t, dist, sizeof(dist));
-    TEST_ASSERT_EQUAL_STRING("99:59", hm);
-    TEST_ASSERT_EQUAL_STRING("999.9 KM", dist);
-    TEST_ASSERT_TRUE(tripTimeX() >= DASH_X + termfont::width(Face::SMALL, TRIP_LABEL) + MARGIN);
-    // the longest time (hours aren't capped: 999:59 too) clears the longest distance and "-- KM"
-    for (const char* tm : {static_cast<const char*>(hm), "999:59"}) {
-        for (const char* d : {static_cast<const char*>(dist), "-- KM", "0.0 KM"}) {
-            fitsRight(Face::BODY, d, DASH_RIGHT, tripTimeX() + termfont::width(Face::BIG, tm));
-        }
+    const healthview::Band wide = healthview::band(9999.0f, 99.9f, 9999.0f, 999U * 3600U + 59U * 60U, 999.99f, 99.9f, 999.0f);
+    TEST_ASSERT_EQUAL_STRING("9999 KM", wide.trip);
+    TEST_ASSERT_EQUAL_STRING("9999 KM LEFT", wide.range);
+    TEST_ASSERT_EQUAL_STRING("999:59  R$ 999,99  99.9V  999C", wide.small);
+    const healthview::Band none = healthview::band(NAN, NAN, NAN, 0, NAN, NAN, NAN);
+    for (const healthview::Band* b : {&wide, &none}) {
+        const int tripEnd = DASH_X + termfont::width(Face::TITLE, b->trip);
+        TEST_ASSERT_TRUE_MESSAGE(BAND_KML_X >= tripEnd + MARGIN, b->trip);
+        fitsRight(Face::TITLE, b->range, DASH_RIGHT, BAND_KML_X + termfont::width(Face::TITLE, b->kmlNow));
+        TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::width(Face::SMALL, b->small) <= DASH_RIGHT, b->small);
     }
-    // rows: BIG is the tallest face on the baseline; the band starts on the clock band's rule, its
-    // own rule starts the lights band
-    const Rows big = fromBase(Face::BIG, TRIP_BASE);
-    TEST_ASSERT_TRUE(fromBase(Face::BODY, TRIP_BASE).top >= big.top && fromBase(Face::SMALL, TRIP_BASE).top >= big.top);
-    between(CLOCK_RULE_Y, big, TRIP_RULE_Y, "trip");
+    const Rows fig = fromBase(Face::TITLE, BAND_FIG_BASE), small = fromBase(Face::SMALL, BAND_SMALL_BASE);
+    between(CLOCK_RULE_Y, fig, TRIP_RULE_Y, "trip figures");
+    between(CLOCK_RULE_Y, small, TRIP_RULE_Y, "trip small line");
+    above(fig, small, "figures over the small line");
     TEST_ASSERT_EQUAL_INT(deckmenu::TRIP_BAND.y, CLOCK_RULE_Y);
     TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, TRIP_RULE_Y);
-    const int gapTop = (TRIP_BASE - termfont::capHeight(Face::BIG)) - (CLOCK_RULE_Y + 1);
-    const int gapBottom = TRIP_RULE_Y - TRIP_BASE;
+    const int gapTop = (BAND_FIG_BASE - termfont::capHeight(Face::TITLE)) - (CLOCK_RULE_Y + 1);
+    const int gapBottom = TRIP_RULE_Y - BAND_SMALL_BASE;
     TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
 }
 
@@ -349,7 +347,10 @@ void test_dash_prompt_fits() {
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", last);
     for (const char* m : {static_cast<const char*>(last), PROMPT_IDLE, ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED",
                           ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">WRONG KEY", ">LYRICS: NO SIGNAL", ">NOTHING PLAYING",
-                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
+                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL,
+                          // the car's warnings (healthview::Warnings: ">" and a problem's why)
+                          ">BATTERY LOW WHILE RUNNING", ">CHECK ENGINE LIGHT ON", ">FUEL TRIM +25% THIS TRIP",
+                          ">ENGINE HOT 130C", ">12 STORED CODES"}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
     const deckmenu::Rect& band = deckmenu::PROMPT_BAND;

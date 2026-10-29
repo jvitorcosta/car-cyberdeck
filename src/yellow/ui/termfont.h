@@ -22,12 +22,12 @@ struct Font {                   // = GFXfont
     uint8_t yAdvance;           // line height
 };
 
-// SMALL 17 px: the boot lines, the dashboard's header, date, weather words, HI / LO, TRIP and
-// prompt line (messages, music mode's line), the LYRICS item's LIVE tag, the Lights status line;
-// BODY 19 px: buttons and the Menu items, tabs, < BACK, the dashboard's lights row and trip
-// distance, the Lights colour and preset names, the Lyrics screen's song row, the next lyric;
-// TITLE 24 px: the Lights level %, [-] / [+]; BIG 36 px: the clock, the temperature, the trip's
-// time, the lyric line.
+// SMALL 17 px: the boot lines, the dashboard's header, date, weather words, HI / LO, the trip's
+// small line and the prompt line (messages, music mode's line), the LYRICS item's LIVE tag, the
+// Lights status line; BODY 19 px: buttons and the Menu items, tabs, < BACK, the dashboard's lights
+// row, the Lights colour and preset names, the Lyrics screen's song row, the next lyric; TITLE 24 px:
+// the Lights level %, [-] / [+], the trip's three figures; BIG 36 px: the clock, the temperature,
+// the lyric line.
 // VT323 is drawn on a pixel grid and breaks up below 17 px. At 24 and 36 px every stroke is an even
 // 2 / 3 px; 17 and 19 px are off its grid and keep some uneven stems (a 1 px stem next to a 2 px
 // one), the smallest sizes that still read cleanly: judged on the device.

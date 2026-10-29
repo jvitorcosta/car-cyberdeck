@@ -216,6 +216,35 @@ void test_learn_ignores_bad_input() {
     TEST_ASSERT_EQUAL_FLOAT(10.0f, b.recentKmL);
 }
 
+// The voice reply to a fill-up phrase, from the OBD deck's /fill answer.
+static const char* reply(const char* answer, float heard, bool priceOk) {
+    static char out[64];
+    fuelbook::fillReply(answer, heard, priceOk, out, sizeof out);
+    return out;
+}
+
+void test_fill_reply_wording() {
+    TEST_ASSERT_EQUAL_STRING("Full tank noted, 6.49 per litre.", reply("ok 6.49", 6.49f, true));
+    TEST_ASSERT_EQUAL_STRING("Full tank noted.", reply("ok none", NAN, true));
+    TEST_ASSERT_EQUAL_STRING("Full tank noted. I heard 649, that's not a price.", reply("ok none", 649.0f, false));
+    TEST_ASSERT_EQUAL_STRING("Full tank noted. I heard 2.5, that's not a price.", reply("ok none", 2.5f, false));
+    TEST_ASSERT_EQUAL_STRING("Full tank noted. I heard 15.01, that's not a price.", reply("ok none", 15.01f, false));
+    TEST_ASSERT_EQUAL_STRING("Full tank noted. I heard 649, that's not a price.", reply("refused 649", 6.49f, true));
+    TEST_ASSERT_EQUAL_STRING("I can't reach the car module.", reply(nullptr, 6.49f, true));
+    TEST_ASSERT_EQUAL_STRING("I can't reach the car module.", reply("", NAN, true));
+    TEST_ASSERT_EQUAL_STRING("I can't reach the car module.", reply("Wrong key", NAN, true));
+}
+
+void test_price_param() {
+    char p[12];
+    TEST_ASSERT_TRUE(fuelbook::priceParam(6.49f, true, p, sizeof p));
+    TEST_ASSERT_EQUAL_STRING("6.49", p);
+    TEST_ASSERT_TRUE(fuelbook::priceParam(6.0f, true, p, sizeof p));
+    TEST_ASSERT_EQUAL_STRING("6.00", p);
+    TEST_ASSERT_FALSE(fuelbook::priceParam(649.0f, false, p, sizeof p));  // out of range: no p
+    TEST_ASSERT_FALSE(fuelbook::priceParam(NAN, true, p, sizeof p));      // none said: no p
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_fill_up_means_no_range);
@@ -236,5 +265,7 @@ int main(int, char**) {
     RUN_TEST(test_learn_fifty_km_replaces_it);
     RUN_TEST(test_learn_five_km_moves_it_ten_percent);
     RUN_TEST(test_learn_ignores_bad_input);
+    RUN_TEST(test_fill_reply_wording);
+    RUN_TEST(test_price_param);
     return UNITY_END();
 }

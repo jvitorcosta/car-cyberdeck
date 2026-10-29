@@ -27,6 +27,7 @@ TaskHandle_t handle = nullptr;
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 Reading pub;                 // guarded by mux
 volatile bool fresh = false;  // a snapshot was published since the last take
+char goodHost[40] = "";       // guarded by mux: where the last good /car answer came from ("": none yet)
 bool (*mdnsUp)() = nullptr;
 
 deckaddr::Keep addr;  // only the task touches these
@@ -62,11 +63,13 @@ bool host(char* out, size_t n) {
 
 constexpr int NOT_SIGNED = -1000;  // nothing sent: no clock yet (or HMAC's self-test failed)
 
-// A signed GET /car into body: the HTTP status, negative without an answer, or NOT_SIGNED.
-int get(char* body, size_t n) {
+// A signed GET /car into body: the HTTP status, negative without an answer, or NOT_SIGNED. The
+// address asked into h ("" when none).
+int get(char* body, size_t n, char (&h)[40]) {
+    h[0] = 0;
     char auth[sigreq::AUTH_LEN];
     if (!reqauth::signGet("/car", nullptr, 0, auth, sizeof(auth))) return NOT_SIGNED;
-    char h[40], url[160];
+    char url[160];
     if (!host(h, sizeof(h))) return -1;
     if (snprintf(url, sizeof(url), "http://%s/car?%s", h, auth) >= static_cast<int>(sizeof(url))) return -1;
     body[0] = 0;
@@ -87,7 +90,8 @@ void task(void*) {
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
-        const int rc = get(body, sizeof(body));
+        char h[40];
+        const int rc = get(body, sizeof(body), h);
         if (rc == NOT_SIGNED) {  // no clock yet: nothing was asked, so nothing is missed either
             nextAt = now + BACKOFF_MS[0];
             continue;
@@ -104,6 +108,7 @@ void task(void*) {
             portENTER_CRITICAL(&mux);
             pub.snap = s;
             pub.seqAt = seqAt;
+            memcpy(goodHost, h, sizeof(goodHost));
             portEXIT_CRITICAL(&mux);
             fresh = true;
             misses = 0;
@@ -134,6 +139,24 @@ bool take(Reading* out) {
     *out = pub;
     portEXIT_CRITICAL(&mux);
     return true;
+}
+
+bool fill(const char* price, char* reply, size_t n) {
+    if (n) reply[0] = 0;
+    char h[sizeof(goodHost)];
+    portENTER_CRITICAL(&mux);
+    memcpy(h, goodHost, sizeof(h));
+    portEXIT_CRITICAL(&mux);
+    if (!h[0] || !net::isOnline()) return false;
+    const sigreq::Param p[] = {{"p", price}};
+    const int count = price ? 1 : 0;
+    char auth[sigreq::AUTH_LEN], url[160];
+    if (!reqauth::signGet("/fill", p, count, auth, sizeof(auth))) return false;
+    const int len = price ? snprintf(url, sizeof(url), "http://%s/fill?p=%s&%s", h, price, auth)
+                          : snprintf(url, sizeof(url), "http://%s/fill?%s", h, auth);
+    if (len >= static_cast<int>(sizeof(url))) return false;
+    // the OBD deck is one hop away: 0.6 s to connect and per wait for its head, 0.8 s for the body
+    return net::httpGet(url, 600, reply, n, 800) == 200 && reply[0];
 }
 
 unsigned stackLeft() { return handle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(handle)) : 0u; }

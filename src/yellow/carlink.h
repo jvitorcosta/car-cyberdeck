@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include "../util/car/carwire.h"
 // The yellow deck's client of the OBD deck: a task (core 1, idle priority, like the lyrics) that
@@ -21,6 +22,11 @@ constexpr uint32_t STALE_MS = 3000;
 void begin(bool (*mdnsUp)());
 // The latest reading into *out; false when nothing new came since the last take.
 bool take(Reading* out);
+// A full tank, from the voice fill-up: a signed GET /fill (?p=6.49 when price isn't null) to the
+// address the OBD deck's last good /car answer came from, about 2 s at most; its 200 body ("ok 6.49",
+// "ok none", "refused 649") into reply. False when it didn't answer 200, or hasn't answered a /car
+// this power-on (no address yet), or nothing could be signed. From the voice task (blocks it).
+bool fill(const char* price, char* reply, size_t n);
 // The task's least stack to spare (the [mem] line); 0 before begin().
 unsigned stackLeft();
 }  // namespace carlink
