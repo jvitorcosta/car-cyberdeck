@@ -23,9 +23,12 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
-- **Wave 4 on the decks and the watch**: "music" / "music off" by Siri; the watch's Music mode
-  item (On / Off, then the lights follow); `/status` says `music=`; the colour lists in the deck's
-  order; "Cyan" in Siri's reply to "gojira" and on the watch.
+- **Wave 4, the rest**: music by voice, the watch's Music mode item and "Cyan" were confirmed in
+  the car (2026-10-28). Still unchecked: `/status` says `music=`, and the colour lists follow the
+  deck's order.
+- **`blescan` / `bletest` on NimBLE 2** (#31, only compiled): `blescan` lists the LED controllers
+  with their addresses; `bletest` connects to both and cycles the colours. Flash `ledpanel` back
+  afterwards; no flash erase should be needed any more.
 - **A cut update, by eye** (both decks): stop the PC's upload mid-way. Yellow: `>UPDATE FAILED`
   for ~3 s, then the screen that was showing, with the lights, lyrics and weather carrying on;
   also see the `>UPDATING` page on a normal update. Black: grey rail and "Update failed" for ~3 s,
@@ -54,13 +57,15 @@ Open items, not scheduled. Newest decisions first within each section.
 ## Code health
 
 - **Split `src/yellow/ledpanel.cpp`** (~3 000 lines): the link task, the web server, the lyrics
-  and music tasks and the weather are each a candidate file under `src/yellow/`.
-- **`blescan` / `bletest` don't link**: NimBLE 1.4.3 (their `lib_deps`) and a NimBLE 2 both end up
-  in the link (`multiple definition of NimBLEClient::serviceDiscoveredCB`), likely NimBLE 2 coming
-  in as `lib/xboxpad`'s dependency. Try `lib_ignore = xboxpad` on them, or move them to NimBLE 2.
-- **Port the parked branches to the new layout**: `feat/obd` and `feat/voice-agent` predate the
-  2026-10-28 reorganisation (`src/black`, `src/yellow`, `src/util/<group>`); rebase them with the
-  path table in `docs/superpowers/README.md`.
+  and music tasks and the weather are each a candidate file under `src/yellow/`. Wait until the car
+  health work (`feat/car-health`, which adds screens to this file) is merged.
+- **`feat/obd`** predates the 2026-10-28 reorganisation and ran on the retired companion. Its OBD
+  core moves to the yellow deck in `feat/car-health` (`src/util/car/`); retire the branch once that
+  merges. (`feat/voice-agent` is already on the new layout.)
+- **CI doesn't build the diagnostics**: only `ledpanel` and `s3` are in the firmware matrix, so
+  `blescan` / `bletest` stopped linking without anyone noticing. Add `blescan`, `bletest`,
+  `xboxtest`, `ps3test` and `hwcheck` / `hwcheck_s3` (and the mic envs once the voice agent merges),
+  or a weekly job that builds them.
 
 ## Investigate
 
@@ -205,12 +210,30 @@ The OBD gauge cluster, kept for later on the branch `feat/obd` (pushed to GitHub
   the yellow deck. Bluetooth Classic for OBD leaves ~29 KB of heap, so the lights' BLE on the same
   ESP32 is unlikely to fit. Decide on a third board (or a BLE adapter for the yellow deck) before
   returning.
-- **To return:** rebase onto main (see "Port the parked branches" above). Drop `d079b62` (main's
-  own Spotify client made it obsolete) and the copies of fixes main already has (`6af77a8`,
-  `d34c366`); `1d44c44` (self-heal) isn't needed on the S3. The car checks still to do are in the
-  branch's own BACKLOG.
+- **Returning as car health** (2026-10-28): `feat/car-health` copies the OBD core into
+  `src/util/car/` and runs a BLE adapter on the yellow deck beside the lights. The rest of this
+  branch (the companion's screens, `d079b62`, the fix copies) stays behind; retire the branch once
+  car health merges. The car checks still to do are in the branch's own BACKLOG.
 - **Trip reset**: the S3 still has `POST /trip/reset` (`net/remote`, `util/tripclock`), which only
   the retired companion used. Keep it or remove it when the OBD work returns.
+
+## Parked: voice agent (`feat/voice-agent`, local)
+
+Portuguese voice commands for the black deck through a cloud agent (spec
+`docs/superpowers/specs/2026-10-23-voice-agent-design.md` on the branch). Rebased onto the new layout on
+2026-10-29: 36 commits, not pushed; the old head is tagged `backup/voice-agent-pre-reorg`.
+
+- **Mic:** the onboard ES8311 mic is too weak inside the shell; waiting on an external I2S mic
+  (INMP441), then re-run the 10-clip recording and the speech-to-text bench.
+- **Untested since the rebase:** the mic functions now go through main's shared audio port (the
+  beep, live gain / ADC volume / ALC changes).
+- **Bearer key:** the `micrec_s3` recorder serves its clips with `?k=` and
+  `tools/micrec_pull.py` sends it. Sign those requests like the decks' (`util/wire/sigreq`), or
+  accept it for a bench-only tool.
+- **Old paths:** the spec and the two plans still name pre-reorganisation paths
+  (`docs/superpowers/README.md` maps them).
+- **Live steps still owed:** the API key, the Spotify `--agent` token, the slow-path smoke test and
+  the eval baselines.
 
 ## Parked: PS3 controller (2026-10-22, waiting on a battery)
 

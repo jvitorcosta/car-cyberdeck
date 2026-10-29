@@ -123,8 +123,6 @@ colours, backlight and audio.
 3. **Flash once over USB:** `pio run -e ledpanel -t upload`. This also writes the two-slot
    partition table; after that, updates go over WiFi from a PC on the hotspot:
    `pio run -e ledpanel_ota -t upload` (keep the deck powered for a minute after, as above).
-   To run `blescan` or `bletest` again later, erase the flash first (`pio run -e blescan -t
-   erase`): they use NimBLE 1.4 and boot-loop on the bonds the deck's NimBLE 2 leaves.
 4. **Calibrate the touch:** on the first boot the deck asks you to tap five crosses with the
    pen. To redo it later, hold **BOOT** at power-up or for 2 s at any time.
 5. **Pair an Xbox controller** (optional; Series X|S or One model 1708 and later): hold its pair

@@ -377,5 +377,3 @@ without it). The deck joins WiFi only with `REMOTE_TOKEN` set, so it needs both.
 - At home the deck may join home WiFi instead of the hotspot (the iPhone only shows its hotspot
   while the Personal Hotspot screen is open), and then the iPhone can't reach it: open that screen
   and restart the deck. It stays on the network it joined; in the car only the hotspot exists.
-- Going from `ledpanel` back to the `blescan` or `bletest` diagnostics needs a flash erase first:
-  they use NimBLE 1.4 and boot-loop on the bonds NimBLE 2 leaves in NVS.
