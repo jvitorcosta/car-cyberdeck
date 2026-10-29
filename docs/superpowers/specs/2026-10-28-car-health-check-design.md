@@ -136,7 +136,7 @@ on the deck stays **English** like the rest of CYBERDECK (owner's convention for
   - Status line: `>ALL SYSTEMS NOMINAL`.
 - **B · Start check with a problem.** Same layout, only the failing item in red, plus up to three
   lines in plain words: what changed and what to do ("Charging lower than usual for 5 trips. Have
-  the battery and alternator checked."). Stays until tapped. The status line reads `>1 ISSUE [TAP FOR DETAILS]`.
+  the battery and alternator checked."). Stays until tapped. The status line reads `>1 ISSUE  [TAP TO CLOSE]` (notes: `>1 NOTE`, no tap: they leave after 5 s).
 - **C · Driving (the dashboard).** Today's layout B, with the trip row replaced by three big figures:
   - TRIP km, km/l NOW, RANGE km;
   - a small line under them: time, R$ so far, BATT V and ENG °C.

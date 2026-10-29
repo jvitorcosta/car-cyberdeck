@@ -101,10 +101,10 @@ Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdic
     const int notes = (batt.level == Level::Note ? 1 : 0) + (eng.level == Level::Note ? 1 : 0);
     c.problem = problems > 0;
     if (problems > 0) {
-        std::snprintf(buf, sizeof buf, ">%d ISSUE%s  [TAP FOR DETAILS]", problems, problems == 1 ? "" : "S");
+        std::snprintf(buf, sizeof buf, ">%d ISSUE%s  [TAP TO CLOSE]", problems, problems == 1 ? "" : "S");
         setLine(&c.status, Role::Alert, buf);
     } else if (notes > 0) {
-        std::snprintf(buf, sizeof buf, ">%d NOTE%s  [TAP FOR DETAILS]", notes, notes == 1 ? "" : "S");
+        std::snprintf(buf, sizeof buf, ">%d NOTE%s", notes, notes == 1 ? "" : "S");
         setLine(&c.status, Role::Mid, buf);
     } else if (unknown(batt) || unknown(eng)) {
         setLine(&c.status, Role::Dim, ">CHECKING...");  // all is well only once both were checked

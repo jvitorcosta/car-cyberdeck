@@ -45,11 +45,11 @@ void test_check_problem_marks_only_that_item() {
     TEST_ASSERT_EQUAL_STRING("UNDER 12V FOR A MINUTE", c.batteryWhy.text);
     TEST_ASSERT_EQUAL(Role::Alert, c.batteryWhy.role);
     TEST_ASSERT_EQUAL(Role::Text, c.engine.role);
-    TEST_ASSERT_EQUAL_STRING(">1 ISSUE  [TAP FOR DETAILS]", c.status.text);
+    TEST_ASSERT_EQUAL_STRING(">1 ISSUE  [TAP TO CLOSE]", c.status.text);
     TEST_ASSERT_EQUAL(Role::Alert, c.status.role);
     TEST_ASSERT_TRUE(c.problem);
     auto two = healthview::check(v(Level::Problem, "X"), 11.0f, v(Level::Problem, "Y"), nullptr, NAN, NAN);
-    TEST_ASSERT_EQUAL_STRING(">2 ISSUES  [TAP FOR DETAILS]", two.status.text);
+    TEST_ASSERT_EQUAL_STRING(">2 ISSUES  [TAP TO CLOSE]", two.status.text);
     TEST_ASSERT_EQUAL_STRING("ENGINE  CHECK", two.engine.text);
 }
 
@@ -57,9 +57,12 @@ void test_check_note_is_not_a_problem() {
     auto c = healthview::check(v(Level::Ok), 13.9f, v(Level::Note, "FUEL TRIM HIGH"), nullptr, NAN, NAN);
     TEST_ASSERT_EQUAL_STRING("ENGINE  NOTE", c.engine.text);
     TEST_ASSERT_EQUAL(Role::Mid, c.engine.role);
-    TEST_ASSERT_EQUAL_STRING(">1 NOTE  [TAP FOR DETAILS]", c.status.text);
+    TEST_ASSERT_EQUAL_STRING(">1 NOTE", c.status.text);
     TEST_ASSERT_EQUAL(Role::Mid, c.status.role);
     TEST_ASSERT_FALSE(c.problem);
+    // Notes leave by themselves after 5 s: no tap hint.
+    auto two = healthview::check(v(Level::Note, "WAS LOW"), 12.4f, v(Level::Note, "FUEL TRIM HIGH"), nullptr, NAN, NAN);
+    TEST_ASSERT_EQUAL_STRING(">2 NOTES", two.status.text);
 }
 
 void test_band_dashes_for_unknown() {
@@ -153,7 +156,7 @@ void test_check_one_known_ok_is_still_checking() {
     TEST_ASSERT_EQUAL(Role::Dim, c.status.role);
     TEST_ASSERT_FALSE(c.problem);
     auto n = healthview::check(unknown(), NAN, v(Level::Note, "1 PENDING CODE, NOT CONFIRMED"), nullptr, NAN, NAN);
-    TEST_ASSERT_EQUAL_STRING(">1 NOTE  [TAP FOR DETAILS]", n.status.text);
+    TEST_ASSERT_EQUAL_STRING(">1 NOTE", n.status.text);
     TEST_ASSERT_EQUAL_STRING("BATTERY  CHECKING", n.battery.text);
 }
 
@@ -176,7 +179,7 @@ void test_lines_fit_forty_chars() {
     TEST_ASSERT_EQUAL_STRING("ENGINE  CHECK", c.engine.text);
     TEST_ASSERT_EQUAL_STRING("LAST TRIP 1000 KM  99.9 KM/L  R$ 999,99", c.lastTrip.text);
     TEST_ASSERT_EQUAL_STRING("RANGE ~999 KM", c.range.text);
-    TEST_ASSERT_EQUAL_STRING(">2 ISSUES  [TAP FOR DETAILS]", c.status.text);
+    TEST_ASSERT_EQUAL_STRING(">2 ISSUES  [TAP TO CLOSE]", c.status.text);
     auto p = healthview::parked(s, 999.99f, 999.0f, w, w);
     TEST_ASSERT_EQUAL_STRING("1000 KM", p.km.text);
     TEST_ASSERT_EQUAL_STRING("999 MIN", p.minutes.text);
@@ -258,6 +261,16 @@ void test_warning_kind_ignores_the_figures() {
     TEST_ASSERT_EQUAL_STRING(">2 STORED CODES", warn(m, ok, v(Level::Problem, "2 STORED CODES"), false, 0.0f, 3000));
 }
 
+// A yellow reboot mid-drive: the check would pop up while moving. It shows only below 3 km/h, and
+// an unknown speed is no stop.
+void test_check_shows_only_when_still() {
+    TEST_ASSERT_TRUE(healthview::checkMayShow(0.0f));
+    TEST_ASSERT_TRUE(healthview::checkMayShow(2.9f));
+    TEST_ASSERT_FALSE(healthview::checkMayShow(3.0f));
+    TEST_ASSERT_FALSE(healthview::checkMayShow(40.0f));
+    TEST_ASSERT_FALSE(healthview::checkMayShow(NAN));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_check_all_ok_lines);
@@ -276,5 +289,6 @@ int main(int, char**) {
     RUN_TEST(test_warning_notes_never_show);
     RUN_TEST(test_warning_each_at_most_every_two_minutes);
     RUN_TEST(test_warning_kind_ignores_the_figures);
+    RUN_TEST(test_check_shows_only_when_still);
     return UNITY_END();
 }
