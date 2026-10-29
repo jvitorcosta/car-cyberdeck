@@ -1,4 +1,4 @@
-"""Pulls the car mic test clips from the recorder firmware (src/micrec_s3.cpp) to the PC.
+"""Pulls the car mic test clips from the recorder firmware (src/diag/micrec_s3.cpp) to the PC.
 
     python tools/micrec_pull.py <host> <REMOTE_TOKEN> [--out micrec/<YYYY-MM-DD>]
 

@@ -9,4 +9,9 @@ bool setVolume(uint8_t reg32);      // DAC volume: 0xBF = 0 dB, 0.5 dB steps
 // The ADC side, after begin(): analog mic + PGA on, gain (0..7 = 0..42 dB in 6 dB steps), ADC
 // volume (0xBF = 0 dB, 0.5 dB steps), HPF and DC cancel. Leaves the DAC as it is.
 bool enableMic(uint8_t gain, uint8_t adcVol);
+// The mic's knobs one at a time, after enableMic (the mic diag firmwares turn them live).
+bool setMicGain(uint8_t gain);      // PGA, 0..7 = 0..42 dB in 6 dB steps
+bool setAdcVolume(uint8_t reg17);   // 0xBF = 0 dB, 0.5 dB steps (0xEF = +24 dB)
+// Automatic level control (reg 0x18-0x19, from the ES8311 register map; untested on the deck).
+bool setAlc(bool on);
 }

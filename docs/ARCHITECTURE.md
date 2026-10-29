@@ -160,8 +160,8 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   counter and an 8-byte HMAC tag with `REMOTE_TOKEN`; the yellow deck drops a bad tag or a counter
   that doesn't rise). The yellow deck snaps its main colour to one
   of the lights' 8 swatches (`util/musiclights`), which gives back exactly the chosen one. `on=0` or 30 s without a keep-alive stops it and closes
-  the socket. No mic: the howl plays as usual (`board/s3/mic_es8311` stays in the tree, unused,
-  for the voice agent). It starts only with
+  the socket. No mic: the howl plays as usual (`board/s3/mic_es8311` stays in the tree for the voice
+  agent; only its mic checks `diag/micrec_s3` and `diag/micmeter_s3` use it now). It starts only with
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
   `[music]` serial line tells each palette sent for a new song or a change.
@@ -255,7 +255,8 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   `src/common/` (`net/`, `ui/backlight`, `board/board.h`, `core/embed.h`, `core/watchdog.h`) and its
   util groups (allow-list `build_src_filter` in `platformio.ini`), so a call into the other deck's
   code fails to link. `src/diag/` holds the standalone checks, one env each (`hwcheck`,
-  `hwcheck_s3`, `blescan`, `bletest`, `xboxtest`, `ps3test`).
+  `hwcheck_s3`, `blescan`, `bletest`, `xboxtest`, `ps3test`, and the voice agent's mic checks
+  `micrec_s3`, `micmeter_s3`, with the S3 touch driver only they use, `diag/touch_ft6336`).
 - `src/black/board/s3/` — everything board-specific on the black deck (display bus, audio path,
   backlight); pins in `include/pins.h`.
 - `src/util/` has no Arduino dependency, so it builds and tests on a PC; `src/util/`,

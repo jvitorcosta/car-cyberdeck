@@ -11,11 +11,11 @@
 #include <cmath>
 #include "../common/board/board.h"
 #include "../black/board/s3/mic_es8311.h"
-#include "../black/board/s3/touch_ft6336.h"
+#include "touch_ft6336.h"
 #include "pins.h"
 
 static TFT_eSPI s_tft;
-static constexpr int RATE = 16000;
+static constexpr int RATE = mic::RATE;
 static constexpr int WINDOW_MS = 100;
 static constexpr int HISTORY = 30;   // 3 s of 100 ms windows
 static const uint8_t ADC_STEPS[] = {0xBF, 0xD7, 0xEF};   // 0, +12, +24 dB
@@ -87,7 +87,7 @@ void setup() {
     ledcSetup(0, 5000, 8);
     ledcAttachPin(PIN_BL, 0);
     ledcWrite(0, 255);
-    if (!mic::begin(RATE)) {
+    if (!mic::begin()) {
         s_tft.drawString("mic falhou", 10, 100, 4);
         return;
     }

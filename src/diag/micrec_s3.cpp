@@ -17,10 +17,12 @@
 #include <cmath>
 #include "../common/board/board.h"
 #include "../black/board/s3/mic_es8311.h"
-#include "../black/board/s3/touch_ft6336.h"
+#include "touch_ft6336.h"
 #include "../config.h"
 #include "pins.h"
 #include "../util/black/micrec.h"
+
+static_assert(micrec::RATE == mic::RATE, "clips are recorded at the mic's rate");
 
 static TFT_eSPI s_tft;
 static WebServer s_server(80);
@@ -362,7 +364,7 @@ void setup() {
     s_take = (int16_t*)ps_malloc((size_t)micrec::MAX_SAMPLES * sizeof(int16_t));
     Serial.printf("[micrec] PSRAM buffer %s (%u KB)\n", s_clips && s_take ? "ok" : "FAILED",
                   (unsigned)(micrec::SLOTS * micrec::MAX_SAMPLES * 2 / 1024));
-    if (!s_clips || !s_take || !mic::begin(micrec::RATE)) {
+    if (!s_clips || !s_take || !mic::begin()) {
         s_tft.fillScreen(TFT_BLACK);
         s_tft.drawString("mic ou PSRAM falhou", 10, 100, 4);
         return;

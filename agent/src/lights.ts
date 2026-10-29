@@ -2,7 +2,7 @@ import type { LightAction } from "./protocol.js";
 
 export interface SayQuery { zone?: "inside" | "outside"; text: string; }
 
-// Words understood by the deck's parser (src/util/ledvoice.h).
+// Words understood by the deck's parser (src/util/yellow/ledvoice.h).
 export function toSayQuery(a: LightAction): SayQuery | null {
   if (a.kind === "undo") return null;
   const zone = a.zone === "both" ? {} : { zone: a.zone };

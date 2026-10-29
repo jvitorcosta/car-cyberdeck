@@ -73,4 +73,13 @@ bool enableMic(uint8_t gain, uint8_t adcVol) {
            wr(0x17, adcVol) && wr(0x1B, 0x0A) && wr(0x1C, 0x6A);    // volume, HPF, DC cancel
 }
 
+bool setMicGain(uint8_t gain) { return wr(0x16, gain > 7 ? 7 : gain); }
+
+bool setAdcVolume(uint8_t reg17) { return wr(0x17, reg17); }
+
+bool setAlc(bool on) {
+    // 0x18: ALC on (bit 7) + window size; 0x19: max level (high nibble) / min level (low nibble).
+    return wr(0x18, on ? 0x87 : 0x00) && wr(0x19, 0xFB);
+}
+
 }
