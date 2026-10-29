@@ -1,6 +1,7 @@
 // The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
 // red only for problems, amber at night, faint scanlines, all caps) that drives the car's two
-// ELK-family LED controllers. Three screens, laid out by util/deckmenu:
+// ELK-family LED controllers. Three screens (and the two car-health ones, see "Car health"), laid
+// out by util/deckmenu:
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands, for what the
 //           car's panel and CarPlay don't show: the trip and the lights. The header line
 //           (CYBERDECK // HONDA CITY TOURING 2022); the clock big with the date under it ("FRI 23
@@ -71,6 +72,9 @@
 // in a row before new firmware has proven itself boot the previous one (util/bootguard).
 // Over USB (the first time, or to recover):
 //   pio run -e ledpanel -t upload
+// The car's health (from the OBD deck, src/obd, over WiFi: yellow/carlink): ">PRE-FLIGHT CHECK" once
+// per power-on, ">TRIP COMPLETE" when the car stands after a trip (see "Car health" below); -D
+// HEALTH_TEST=a|b|d draws them from a canned snapshot. Without an OBD deck neither ever shows.
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
@@ -97,6 +101,7 @@
 #include "ui/termfont.h"
 #include "ui/termlayout.h"
 #include "touch.h"
+#include "carlink.h"
 #include "../common/net/clock.h"
 #include "../common/net/httpget.h"
 #include "../common/net/ipaddr.h"
@@ -104,6 +109,7 @@
 #include "../common/net/remote_config.h"
 #include "../common/net/reqauth.h"
 #include "../common/net/wifi.h"
+#include "../util/car/healthview.h"
 #include "../util/yellow/bothlook.h"
 #include "../util/yellow/dashtext.h"
 #include "../util/common/daynight.h"
@@ -178,6 +184,11 @@ using deckmenu::P_PRE0;
 static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Menu
 // Lights on any of its tabs (Presets is its PRESETS tab).
 static bool onLights() { return screen == Screen::Lights || screen == Screen::Presets; }
+// The car-health screens (see "Car health" below): no buttons, a tap anywhere goes back to the Menu.
+static bool onHealth() { return screen == Screen::Check || screen == Screen::Parked; }
+static void drawHealth();
+static void drawHealthClock();
+static void leaveHealth();
 // The palette: every colour goes through termpal with this flag, so night mode only flips it and
 // redraws.
 static bool night = false;
@@ -434,6 +445,7 @@ static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Karaoke) return K_BACK;
     if (screen == Screen::Presets) return P_PRE0;
+    if (onHealth()) return -1;  // A or B dismiss it (handlePad); nothing to point at
     return L_TILE0 + ledlook::gridSwatch(cur().swatch);
 }
 
@@ -689,7 +701,7 @@ static void drawTab(const Rect& r, const char* s, bool pressed, bool current) {
 
 static void drawButtonBody(int id, bool pressed) {
     const Rect r = deckmenu::rect(screen, id);
-    if (r.w <= 0) return;
+    if (r.w <= 0 || onHealth()) return;  // the health screens' tap is the whole screen, not drawn
     if (screen == Screen::Menu) {
         static_assert(N_MENU_ITEMS == deckmenu::N_ITEMS, "a label per Menu item");
         bool dim = false;
@@ -1078,7 +1090,7 @@ static bool drawLooks() {
 // the 2 px gap around the button, apart from the lit colour's bar inside it. Off: the gap's
 // scanlined bg again (the caller redraws the button, and with it any rule the ring crossed).
 static void drawFocus(int id, bool on) {
-    if (id < 0 || screen == Screen::Menu) return;
+    if (id < 0 || screen == Screen::Menu || onHealth()) return;
     const Rect r = deckmenu::rect(screen, id);
     if (on) {
         tft.drawRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, pal(termpal::TEXT));
@@ -1318,6 +1330,10 @@ static void drawKaraokeBody(bool all) {
 // Redraws the current screen in the current palette.
 static void drawAll() {
     clearBg(0, 0, tft.width(), tft.height());
+    if (onHealth()) {
+        drawHealth();
+        return;
+    }
     if (screen != Screen::Menu) drawTabRule(0, tft.width());
     for (int id = 0; id < deckmenu::count(screen); id++) {
         if (built(id)) drawButton(id);
@@ -1704,6 +1720,10 @@ static void setMusic(bool on, bool restore = true);
 
 // One settled tap on a button of the current screen.
 static void press(int id) {
+    if (onHealth()) {
+        leaveHealth();
+        return;
+    }
     if (onLights()) {
         pressLights(id);
         return;
@@ -1824,6 +1844,10 @@ static void handlePad() {
     };
     const bool a = edge(n.btnA, pA), b = edge(n.btnB, pB), x = edge(n.btnX, pX), y = edge(n.btnY, pY);
     const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
+    if (onHealth()) {  // A or B: back to the Menu, as a tap
+        if (a || b) leaveHealth();
+        return;
+    }
     const Screen was = screen;
     if (a) padPress(focus);
     if (screen != was) return;  // A changed the screen: the other buttons wait for their next press
@@ -1991,7 +2015,17 @@ static volatile uint8_t lyricsWant = WANT_NONE;  // what the screen shown needs;
 static pollpace::Pace lyricsPace;                 // only the lyrics task touches it (and lyricsHost)
 static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches these three
 static deckaddr::Keep lyricsAddr;
-static bool lyricsMdns = false;
+
+// The deck's mDNS (its name, and the lookups of the other decks), started by the first task that
+// looks a deck up: the lyrics task or the car task (yellow/carlink), so under a lock. True once up.
+static SemaphoreHandle_t mdnsLock = nullptr;  // made in beginVoice, before either task starts
+static bool mdnsUp() {
+    static bool up = false;
+    xSemaphoreTake(mdnsLock, portMAX_DELAY);
+    if (!up) up = MDNS.begin(LEDS_MDNS_NAME);
+    xSemaphoreGive(mdnsLock);
+    return up;
+}
 
 // Where the black deck is: its fixed address on the hotspot (until it stops answering as the deck),
 // else its mDNS name on whatever network both are on. False when it can't be found.
@@ -2002,7 +2036,7 @@ static bool lyricsHost(char* out, size_t n) {
         snprintf(out, n, "%s", BLACK_DECK_ADDR);
         return true;
     }
-    if (!lyricsMdns) lyricsMdns = MDNS.begin(LEDS_MDNS_NAME);
+    mdnsUp();
     if (lyricsAddr.addr() == 0) {
         // each failed lookup holds the task for up to 1.5 s: while the deck stays away, not every poll
         const uint32_t now = millis();
@@ -2208,6 +2242,217 @@ static void lyricsTick() {
     if (!fresh && millis() - drawnAt < KARAOKE_TICK_MS) return;
     drawnAt = millis();
     drawKaraokeBody(false);
+}
+
+// ---- Car health: the OBD deck's snapshot, the pre-flight check (A / B) and trip complete (D) ----
+// yellow/carlink polls the OBD deck's GET /car; carTick() (loop) takes each snapshot and decides:
+//   Check (A / B, ">PRE-FLIGHT CHECK"): once per power-on, the first time a fresh snapshot has
+//           checkReady while the Menu shows (it never covers Lights, Presets or Karaoke: it waits
+//           for the Menu). Back to the Menu after CHECK_MS, unless an item is a problem (B): then it
+//           holds until a tap.
+//   Parked (D, ">TRIP COMPLETE"): healthview::ParkGate, fed from the snapshot's speed and trip km
+//           while the Menu or D shows (D comes only from the Menu); a stale snapshot (no new seq for
+//           carlink::STALE_MS) is an unknown speed, so it never counts as stopped. It hides when the
+//           car moves.
+// A tap anywhere, or the Xbox controller's A or B, goes back to the Menu (on D: ParkGate::dismiss()).
+// The texts are healthview's (all caps, <= 39 chars: a BODY line is 311 px, a SMALL one 272), laid
+// out as the brainstorm's mockups; colours by role. Without an OBD deck nothing here ever shows.
+// Test hook: -D HEALTH_TEST=a|b|d draws from a canned snapshot instead of the OBD deck's (a: all OK,
+// b: a battery problem, d: parked after a trip); see docs/ARCHITECTURE.md "Test hooks".
+static carlink::Reading car;  // loop()'s copy of the last snapshot (seqAt 0: none yet)
+static constexpr uint32_t CHECK_MS = 5000;
+static bool checkDone = false;  // A / B has shown this power-on
+static uint32_t checkAt = 0;    // millis() it showed
+static healthview::ParkGate parkGate;
+static healthview::Check checkShown;    // what the screen shows (drawHealth keeps them)
+static healthview::Parked parkedShown;
+
+// Layout (caps tops): the dashboard's header row and rule, then the rows below.
+static constexpr int HC_BATT_Y = 30, HC_BATT_WHY_Y = 50, HC_ENG_Y = 74, HC_ENG_WHY_Y = 94, HC_RULE1_Y = 114;
+static constexpr int HC_LAST_Y = 124, HC_RANGE_Y = 144, HC_RULE2_Y = 166, HC_STATUS_Y = 180, HC_WHY_X = DASH_X + 8;
+static constexpr int HP_ROW1_Y = 32, HP_ROW2_Y = 72, HP_SMALL_Y = 108, HP_RULE1_Y = 126, HP_ITEMS_Y = 136;
+static constexpr int HP_RULE2_Y = 158, HP_FOOTER_Y = 172, HP_COL2_X = 168;
+
+static bool carFresh(uint32_t now) { return car.seqAt != 0 && now - car.seqAt < carlink::STALE_MS; }
+
+static healthview::Check carCheck() {
+    const carwire::Snapshot& s = car.snap;
+    return healthview::check(s.battery, s.volts, s.engine, s.hasLast ? &s.last : nullptr, s.lastCostRs, s.rangeKm);
+}
+static healthview::Parked carParked() {
+    const carwire::Snapshot& s = car.snap;
+    return healthview::parked(s.trip, s.tripCostRs, s.rangeKm, s.battery, s.engine);
+}
+
+static uint16_t roleInk(healthview::Role r) {
+    switch (r) {
+    case healthview::Role::Mid: return pal(termpal::MID);
+    case healthview::Role::Dim: return pal(termpal::DIM);
+    case healthview::Role::Alert: return pal(termpal::ALERT);
+    default: return pal(termpal::TEXT);
+    }
+}
+
+// A line in its role's colour; returns the pen's travel.
+static int healthLine(const healthview::Line& l, int x, int y, Face f) {
+    tft.setTextColor(roleInk(l.role));
+    return text(l.text, x, y, f, TL_DATUM);
+}
+
+// A big figure: the number BIG, its unit after it in BODY (MID), on one baseline ("18.4 KM").
+static void healthFigure(const healthview::Line& l, int x, int y) {
+    const char* unit = strchr(l.text, ' ');
+    if (!unit) {
+        healthLine(l, x, y, Face::BIG);
+        return;
+    }
+    char num[sizeof(l.text)];
+    snprintf(num, sizeof(num), "%.*s", static_cast<int>(unit - l.text), l.text);
+    const int base = y + termfont::capHeight(Face::BIG);
+    tft.setTextColor(roleInk(l.role));
+    const int w = text(num, x, base, Face::BIG, BL_DATUM);
+    tft.setTextColor(pal(termpal::MID));
+    text(unit, x + w, base, Face::BODY, BL_DATUM);
+}
+
+// The status line's block cursor, after its text (steady: the screen is read, not typed into).
+static void healthCursor(int x, int y, Face f) {
+    tft.fillRect(x + termfont::cell(f) / 2, y, termfont::cell(f), termfont::capHeight(f), pal(termpal::TEXT));
+}
+
+// The header's clock, right (DIM; nothing before the clock synced), cleared first.
+static void drawHealthClock() {
+    clearBg(DASH_SPLIT, 0, RULE_X1 - DASH_SPLIT, HEADER_RULE_Y);
+    if (clockMin < 0) return;
+    char s[16];
+    snprintf(s, sizeof(s), "%02d:%02d", clockMin / 60, clockMin % 60);
+    tft.setTextColor(pal(termpal::DIM));
+    text(s, DASH_RIGHT, DASH_TITLE_Y, Face::SMALL, TR_DATUM);
+}
+
+// The whole Check or Parked screen, from the snapshot (drawAll has cleared it).
+static void drawHealth() {
+    tft.setTextColor(pal(termpal::MID));
+    text(screen == Screen::Check ? ">PRE-FLIGHT CHECK" : ">TRIP COMPLETE", DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    drawHealthClock();
+    drawRule(HEADER_RULE_Y);
+    if (screen == Screen::Check) {
+        const healthview::Check c = carCheck();
+        checkShown = c;
+        healthLine(c.battery, DASH_X, HC_BATT_Y, Face::BODY);
+        healthLine(c.batteryWhy, HC_WHY_X, HC_BATT_WHY_Y, Face::SMALL);
+        healthLine(c.engine, DASH_X, HC_ENG_Y, Face::BODY);
+        healthLine(c.engineWhy, HC_WHY_X, HC_ENG_WHY_Y, Face::SMALL);
+        drawRule(HC_RULE1_Y);
+        healthLine(c.lastTrip, DASH_X, HC_LAST_Y, Face::SMALL);
+        healthLine(c.range, DASH_X, HC_RANGE_Y, Face::BODY);
+        drawRule(HC_RULE2_Y);
+        healthCursor(DASH_X + healthLine(c.status, DASH_X, HC_STATUS_Y, Face::BODY), HC_STATUS_Y, Face::BODY);
+        Serial.printf("[car] drew screen %s: %s\n", c.problem ? "B" : "A", c.status.text);
+        return;
+    }
+    const healthview::Parked p = carParked();
+    parkedShown = p;
+    healthFigure(p.km, DASH_X, HP_ROW1_Y);
+    healthFigure(p.minutes, HP_COL2_X, HP_ROW1_Y);
+    healthFigure(p.kml, DASH_X, HP_ROW2_Y);
+    healthLine(p.cost, HP_COL2_X, HP_ROW2_Y, Face::BIG);  // "R$ 9,40": one figure
+    healthLine(p.small, DASH_X, HP_SMALL_Y, Face::SMALL);
+    drawRule(HP_RULE1_Y);
+    healthLine(p.battery, DASH_X, HP_ITEMS_Y, Face::BODY);
+    healthLine(p.engine, HP_COL2_X, HP_ITEMS_Y, Face::BODY);
+    drawRule(HP_RULE2_Y);
+    healthCursor(DASH_X + healthLine(p.footer, DASH_X, HP_FOOTER_Y, Face::BODY), HP_FOOTER_Y, Face::BODY);
+    Serial.printf("[car] drew screen D: %s, %s\n", p.km.text, p.minutes.text);
+}
+
+static bool sameLine(const healthview::Line& a, const healthview::Line& b) {
+    return a.role == b.role && strcmp(a.text, b.text) == 0;
+}
+static bool sameCheck(const healthview::Check& a, const healthview::Check& b) {
+    return sameLine(a.battery, b.battery) && sameLine(a.batteryWhy, b.batteryWhy) && sameLine(a.engine, b.engine) &&
+           sameLine(a.engineWhy, b.engineWhy) && sameLine(a.lastTrip, b.lastTrip) && sameLine(a.range, b.range) &&
+           sameLine(a.status, b.status);
+}
+static bool sameParked(const healthview::Parked& a, const healthview::Parked& b) {
+    return sameLine(a.km, b.km) && sameLine(a.minutes, b.minutes) && sameLine(a.kml, b.kml) && sameLine(a.cost, b.cost) &&
+           sameLine(a.small, b.small) && sameLine(a.battery, b.battery) && sameLine(a.engine, b.engine) &&
+           sameLine(a.footer, b.footer);
+}
+
+// A tap, A or B on Check or Parked: back to the Menu; D stays away until the car has moved.
+static void leaveHealth() {
+    Serial.printf("[car] %s dismissed\n", screen == Screen::Parked ? "trip complete" : "check");
+    if (screen == Screen::Parked) parkGate.dismiss();
+    show(Screen::Menu);
+}
+
+#ifdef HEALTH_TEST
+#define HEALTH_STR2(x) #x
+#define HEALTH_STR(x) HEALTH_STR2(x)
+// The canned snapshot for HEALTH_TEST (a, b or d), the mockups' figures; a new seq every second, so
+// it is always fresh. a / b: driving (no D), checkReady; d: stood still after an 18.4 km trip, no
+// check (so D shows 5 s after the Menu).
+static bool healthTestTake(carlink::Reading* r) {
+    static uint32_t seq = 0, at = 0;
+    const uint32_t now = millis();
+    if (seq && now - at < 1000) return false;
+    at = now;
+    const char which = HEALTH_STR(HEALTH_TEST)[0];
+    carwire::Snapshot s;
+    s.link = carwire::Link::Live;
+    s.checkReady = which != 'd';
+    s.kmh = which == 'd' ? 0.0f : 40.0f;
+    s.volts = which == 'b' ? 11.9f : 14.1f;
+    s.coolantC = 90.0f;
+    s.battery.known = s.engine.known = true;
+    if (which == 'b') {
+        s.battery.level = carhealth::Level::Problem;
+        snprintf(s.battery.why, sizeof(s.battery.why), "BATTERY LOW WHILE RUNNING");
+    }
+    s.trip = which == 'd' ? tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60} : tripsum::Summary{};
+    s.tripCostRs = which == 'd' ? 9.40f : 0.0f;
+    s.hasLast = true;
+    s.last = tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60};
+    s.lastCostRs = 9.40f;
+    s.rangeKm = which == 'd' ? 290.0f : 310.0f;
+    s.seq = ++seq;
+    r->snap = s;
+    r->seqAt = now ? now : 1;
+    return true;
+}
+#endif
+
+// In loop(): takes a new snapshot, then shows, keeps or leaves Check and Parked (see above). A screen's
+// text is redrawn only when a snapshot changed it.
+static void carTick() {
+#ifdef HEALTH_TEST
+    const bool got = healthTestTake(&car);
+#else
+    const bool got = carlink::take(&car);
+#endif
+    const uint32_t now = millis();
+    const bool fresh = carFresh(now);
+    if (!checkDone && fresh && car.snap.checkReady && screen == Screen::Menu) {
+        checkDone = true;
+        checkAt = now;
+        show(Screen::Check);
+        return;
+    }
+    if (screen == Screen::Check) {
+        if (!checkShown.problem && now - checkAt >= CHECK_MS) {
+            Serial.println("[car] check: back to the Menu");
+            show(Screen::Menu);
+        } else if (got && !sameCheck(carCheck(), checkShown)) drawAll();
+        return;
+    }
+    if (car.seqAt == 0 || (screen != Screen::Menu && screen != Screen::Parked)) return;
+    const bool parked = parkGate.update(fresh ? car.snap.kmh : NAN, car.snap.trip.km, now);
+    if (parked && screen == Screen::Menu) show(Screen::Parked);
+    else if (!parked && screen == Screen::Parked) {
+        Serial.println("[car] moving: trip complete hidden");
+        show(Screen::Menu);
+    } else if (got && screen == Screen::Parked && !sameParked(carParked(), parkedShown)) drawAll();
 }
 
 // ---- Music mode: the song's colour on both lights ----
@@ -2729,6 +2974,9 @@ static void voiceTask(void*) {
     netclock::begin();  // SNTP, for night mode and the Menu's clock
     weatherTick();  // the first try
     beginLyrics();
+#ifndef HEALTH_TEST  // the test draws from a canned snapshot (carTick)
+    carlink::begin(mdnsUp);
+#endif
     ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (off without OTA_PASSWORD; WiFi itself needs REMOTE_TOKEN)
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
@@ -2752,6 +3000,7 @@ static void beginVoice() {
         return;
     }
     reqauth::begin();  // HMAC's self-test: the watch's requests and ours to the black deck are signed
+    mdnsLock = xSemaphoreCreateMutex();
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);
@@ -2800,6 +3049,7 @@ static void updateDayNight() {
         clockMonth = month;
         clockDay = day;
         if (want == night && screen == Screen::Menu) drawClock();
+        if (want == night && onHealth()) drawHealthClock();
     }
     if (want == night) return;
     night = want;
@@ -2839,7 +3089,7 @@ void setup() {
     Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
     ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
     // The task watchdog at 90 s (common/core/watchdog), before any task subscribes: the link,
-    // voice, lyrics, music and weather tasks, and this loop from the end of setup().
+    // voice, lyrics, car, music and weather tasks, and this loop from the end of setup().
     watchdog::begin();
     tft.init();
     backlight::begin();  // PWM, at the day level
@@ -2928,20 +3178,21 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, ota %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, car %u, ota %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       static_cast<unsigned>(weatherStackLeft),  // the last try's (each ends with it)
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
                       musicHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(musicHandle)) : 0u,
-                      ota::stackLeft(),
+                      carlink::stackLeft(), ota::stackLeft(),
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
 
     handlePad();
     takeWeather();
     lyricsTick();
+    carTick();
     musicTick();
     musicFadeTick();
     updateDayNight();

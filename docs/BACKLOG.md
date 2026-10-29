@@ -43,6 +43,11 @@ Open items, not scheduled. Newest decisions first within each section.
   home).
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
+- **Car-health screens, by eye** (yellow deck, built 2026-10-29, only the serial log seen): look at
+  screens A, B and D with `-D HEALTH_TEST=a|b|d` and compare with the mockups (the brainstorm's
+  health moments A, B, D): spacing, colours (B's battery lines in ALERT), nothing past 316 px. A
+  shows for 5 s after the boot (RESET to see it again); B holds until a tap; D comes 5 s after the
+  Menu. Then with the OBD deck: A on a real power-on, D after a real stop.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
