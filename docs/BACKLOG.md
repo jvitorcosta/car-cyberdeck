@@ -87,22 +87,34 @@ The OBD deck (`src/obd`, env `obddeck`) is built and host-tested but has never r
 (none was plugged in on 2026-10-29). On its first board, over USB, never the yellow deck's or the
 black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the monitor.
 
-- **Boot log**: `[boot] obddeck v...`, `[car] LittleFS ... bytes used` (the first boot formats the
-  partition), `[car] boot 1, last trip none, fuel book empty`, `[obd] BLE up, 3 connections
-  allowed`, `[wifi] connected ...` (on the hotspot `[wifi] fixed hotspot address 172.20.10.12`),
+- **Boot log**: `[boot] obddeck v...`, `[car] LittleFS ... bytes used, mounted in N ms`,
+  `[car] boot 1, last trip none, fuel book empty`, `[obd] BLE up, 3 connections allowed`,
+  `[wifi] connected ...` (on the hotspot `[wifi] fixed hotspot address 172.20.10.12`),
   `[clock] SNTP started`, `[ota] listening`, `[net] on: http://.../car`. A second boot says
   `boot 2`.
+- **First-boot format**: the first boot formats the data partition; note the `mounted in N ms`
+  of the first boot against the second (the format must stay well under the 90 s watchdog; it
+  runs in setup(), before the loop watchdog starts).
+- **BLE with the roles compiled out**: NimBLE runs central + observer only on esp32dev
+  (peripheral and broadcaster off in `platformio.ini`): the 4 s scan logs `[obd] seen ...` lines
+  for nearby devices (a phone, the black deck's `V-CYBERDECK`), and a connect attempt to a
+  scanned candidate gets as far as `connect failed` / `no serial service` without a crash.
 - **No adapter**: `[obd] no adapter: next try in 5 s`, then 10, 20, 40, 60 s and 60 s from then on;
-  the black deck (`V-CYBERDECK`) and the lights are seen but never connected.
+  the black deck (`V-CYBERDECK`) is seen but never connected (its name isn't an adapter's), and
+  the lights never appear in the log (they're filtered out before the `seen` line).
 - **`/car`**: a signed request answers 200 with the JSON (`"v":1`, `"seq"` rising each second,
   `"link"` 0); the same with `?k=<REMOTE_TOKEN>` and no signature answers 403; before SNTP a signed
   one answers 503 "clock not set". Sign from the PC with `util/wire/sigreq`'s scheme (or wait for
   Task 10's yellow-deck client).
 - **`/fill`**: signed `GET /fill?p=6.49` answers `ok 6.49`; after a reboot `/car` still shows
-  `"price":6.49` (the fuel book in NVS).
+  `"price":6.49` (the fuel book in NVS). Then signed `GET /fill?p=20` answers `refused 20` and
+  `/car` still shows `"price":6.49`; `GET /fill` with no `p` answers `ok none`.
 - **Staying up**: `[car]` every 10 s and `[mem]` every minute for 10 min, no `TG1WDT` / task
-  watchdog reset, no `[ota] rolled back`; after a minute online `[ota] this firmware is good`. Note
-  the heap and each task's stack left in `[mem]`.
+  watchdog reset, no `[ota] rolled back`; after a minute online `[ota] this firmware is good`.
+- **Memory** (`[mem]` after 10 min with WiFi, NimBLE and the server all up, no adapter):
+  - stack left in `net`, `obd-link` and `obd-ask`: each must stay above 1 KB (pass floor); note
+    the numbers (each task has 6 KB);
+  - the minimum free heap (`min`): note it as the no-adapter baseline for the adapter checks below.
 - **Update over WiFi**: `pio run -e obddeck_ota -t upload` from a PC on the hotspot.
 
 ## Car-health: waiting on the adapter
@@ -124,6 +136,9 @@ To check on the OBD deck when the Vgate arrives (or against a sim on a spare ESP
 - With the adapter gone: `[obd] <name>: disconnected`, then the backoff 5, 10, 20, 40, 60 s; with a
   working adapter that drops, back at once.
 - After a reboot the remembered adapter connects first (`(remembered)`, NVS `obd`/`bleaddr`).
+- The Vgate's advertised name: `[obd] seen "<name>" ... dBm` must be one `obd::looksLikeAdapter`
+  takes (a name it doesn't take is never tried; only a nameless serial device is); a nearby serial gadget
+  that fails the setup shows `skipped for 10 min` and the next round tries another device.
 - `[mem]` with the adapter connected vs the no-adapter level; the `obd-ask` stack's live use.
 - A trip: `/t<seq>.jsonl` gets a row a minute (30 s flushes); a power cut mid-row is trimmed at the
   next boot (`[car] log: cut a partial row`), and screen A's last trip / range follow.

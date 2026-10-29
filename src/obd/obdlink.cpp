@@ -16,6 +16,7 @@
 #include "../common/net/ota.h"
 #include "../util/car/fueleco.h"
 #include "../util/car/obdble.h"
+#include "../util/car/obdpick.h"
 
 namespace obdlink {
 namespace {
@@ -182,43 +183,52 @@ uint16_t uuid16(const NimBLEUUID& u) {
 #define LED_OUTSIDE_MAC ""
 #endif
 
-// Never the car's lights: their ELK / MELK controllers serve FFF0 too, so ATZ could be written to one
-// (the yellow deck owns them; their MACs in config.h, their names by prefix for any other set), nor
-// anything this deck already holds a client for.
-bool notAnAdapter(const NimBLEAddress& a, const std::string& name) {
+// One of the car's lights by MAC (config.h; the yellow deck owns them). Their names (ELK / MELK)
+// are obdpick's to refuse.
+bool lightMac(const NimBLEAddress& a) {
     const std::string s = a.toString();
-    return strcasecmp(s.c_str(), LED_INSIDE_MAC) == 0 || strcasecmp(s.c_str(), LED_OUTSIDE_MAC) == 0 ||
-           strncasecmp(name.c_str(), "ELK", 3) == 0 || strncasecmp(name.c_str(), "MELK", 4) == 0 ||
-           NimBLEDevice::getClientByPeerAddress(a) != nullptr;
+    return strcasecmp(s.c_str(), LED_INSIDE_MAC) == 0 || strcasecmp(s.c_str(), LED_OUTSIDE_MAC) == 0;
 }
 
-// A 4 s active scan (names often come in the scan response) for an adapter-like name or a clone's
-// serial service advertised; logs every named or serial-service device seen. The results are freed
-// after (the deck's only scan).
+obdpick::Recent s_failed;                          // addresses that failed the connect or the setup (link task)
+bool s_fromScan = false;                           // s_addr came from findAdapter, not NVS
+
+// A 4 s active scan (names often come in the scan response); logs every named or serial-service
+// device seen (never the lights), then obdpick weighs the whole list: an adapter-like name first,
+// a nameless serial device only without one, recent failures skipped. The results are freed after
+// (the deck's only scan).
 bool findAdapter() {
+    constexpr int MAX_SEEN = 16;
+    static char names[MAX_SEEN][32];               // link task only: off its stack
+    static NimBLEAddress addrs[MAX_SEEN];
+    obdpick::Candidate cands[MAX_SEEN];
+    int n = 0;
     NimBLEScan* scan = NimBLEDevice::getScan();
     scan->setActiveScan(true);
     const NimBLEScanResults found = scan->getResults(SCAN_MS, false);
-    bool match = false;
-    for (int i = 0; i < found.getCount() && !match; ++i) {
+    for (int i = 0; i < found.getCount() && n < MAX_SEEN; ++i) {
         const NimBLEAdvertisedDevice* d = found.getDevice(static_cast<uint32_t>(i));
-        if (!d) continue;
+        if (!d || NimBLEDevice::getClientByPeerAddress(d->getAddress()) != nullptr) continue;
         const std::string nm = d->getName();
-        if (notAnAdapter(d->getAddress(), nm)) continue;
         bool serial = false;
         for (int k = 0; k < static_cast<int>(d->getServiceUUIDCount()); ++k)
             serial = serial || obdble::serialService(uuid16(d->getServiceUUID(static_cast<uint8_t>(k))));
         if (nm.empty() && !serial) continue;
-        Serial.printf("[obd] seen \"%s\" %s%s\n", nm.c_str(), d->getAddress().toString().c_str(),
-                      serial ? " (serial service)" : "");
-        match = obd::looksLikeAdapter(nm.c_str()) || serial;
-        if (match) {
-            s_addr = d->getAddress();
-            strlcpy(s_name, nm.empty() ? "OBD (no name)" : nm.c_str(), sizeof s_name);
-        }
+        const bool light = lightMac(d->getAddress()) || obdpick::isLight(nm.c_str());
+        if (light) continue;                       // never logged, never a candidate
+        Serial.printf("[obd] seen \"%s\" %s %d dBm%s\n", nm.c_str(), d->getAddress().toString().c_str(),
+                      d->getRSSI(), serial ? " (serial service)" : "");
+        strlcpy(names[n], nm.c_str(), sizeof names[n]);
+        addrs[n] = d->getAddress();
+        cands[n] = {static_cast<uint64_t>(d->getAddress()), names[n], d->getRSSI(), serial, false};
+        ++n;
     }
     scan->clearResults();                          // after the last use of `found`'s devices
-    return match;
+    const int k = obdpick::pick(cands, n, s_failed, millis());
+    if (k < 0) return false;
+    s_addr = addrs[k];
+    strlcpy(s_name, names[k][0] ? names[k] : "OBD (no name)", sizeof s_name);
+    return true;
 }
 
 // Connects, finds the serial characteristics (logged with their services' UUIDs, 128-bit ones
@@ -491,6 +501,10 @@ void tick(uint32_t nowMs) {
         closeLink();
         s_conn.store(DOWN);
         Serial.printf("[obd] %s: disconnected\n", s_name);
+        if (!wasReady && s_fromScan) {             // a scanned device that never answered the setup
+            s_failed.failed(static_cast<uint64_t>(s_addr), millis());
+            Serial.printf("[obd] %s skipped for %u min\n", s_name, static_cast<unsigned>(obdpick::SKIP_MS / 60000));
+        }
         if (wasReady) {                            // a working adapter dropped: back at once
             waitMs = WAIT_MIN_MS;
             nextMs = millis();
@@ -502,6 +516,7 @@ void tick(uint32_t nowMs) {
     }
     if (static_cast<int32_t>(nowMs - nextMs) < 0) return;
     bool up = false;
+    s_fromScan = false;                            // the remembered adapter is never skipped
     if (remembered()) {
         setLink(Link::Connecting);
         Serial.printf("[obd] connecting to %s %s (remembered)\n", s_name, s_addr.toString().c_str());
@@ -512,10 +527,15 @@ void tick(uint32_t nowMs) {
         setLink(Link::Off);
         watchdog::feed();                          // the scan: SCAN_MS
         if (findAdapter()) {
+            s_fromScan = true;
             setLink(Link::Connecting);
             Serial.printf("[obd] connecting to %s %s\n", s_name, s_addr.toString().c_str());
             up = openLink();
-            if (!up) closeLink();
+            if (!up) {
+                closeLink();
+                s_failed.failed(static_cast<uint64_t>(s_addr), millis());   // try someone else next round
+                Serial.printf("[obd] %s skipped for %u min\n", s_name, static_cast<unsigned>(obdpick::SKIP_MS / 60000));
+            }
         }
     }
     if (up) {

@@ -3,7 +3,7 @@
 // power-on's trip, the trip log on its own flash and the fuel book (carstate), and serves them to the
 // yellow deck over the phone hotspot:
 //   GET /car            the snapshot (util/car/carwire), polled by the yellow deck every second
-//   GET /fill[?p=6.49]  a full tank, from the yellow deck's voice fill-up; answers "ok <price>"
+//   GET /fill[?p=6.49]  a full tank, from the yellow deck's voice fill-up (replies at handleFill)
 // Both take a valid signature only (common/net/reqauth, util/wire/sigreq): no ?k= between decks.
 // On the hotspot it pins 172.20.10.12 and answers to cardeck-obd.local (common/net/wifi, mDNS).
 // Updates over WiFi (obddeck_ota) with the decks' boot guard and rollback (common/net/ota); the task
@@ -43,21 +43,27 @@ static void handleCar() {
 }
 
 // p: the price per litre, when the yellow deck heard one ("6.49"); anything that isn't a number
-// counts as none said, and fuelbook keeps the old price for one outside 3.00-15.00.
+// counts as none said. The full tank is noted in every case; the reply (200, text/plain) says what
+// became of the price:
+//   "ok 6.49"      the price was taken
+//   "ok none"      no price said: the old one stays
+//   "refused 649"  a price outside 3.00-15.00 R$/L (what was sent, as sent): the old one stays
 static void handleFill() {
     if (!reqauth::pass(*server, gate, "/fill", "Wrong key")) return;
     float price = NAN;
-    if (server->hasArg("p")) {
-        const String p = server->arg("p");
+    const String p = server->hasArg("p") ? server->arg("p") : String();
+    if (p.length()) {
         char* end = nullptr;
         const float v = strtof(p.c_str(), &end);
         if (end && end != p.c_str() && *end == '\0') price = v;
     }
-    char now[16];
-    carstate::fill(price, now, sizeof now);
-    Serial.printf("[car] fill-up from %s: price now %s\n", server->client().remoteIP().toString().c_str(), now);
-    char reply[24];
-    snprintf(reply, sizeof reply, "ok %s", now);
+    char reply[32];
+    switch (carstate::fill(price)) {
+        case carstate::Fill::Taken: snprintf(reply, sizeof reply, "ok %.2f", static_cast<double>(price)); break;
+        case carstate::Fill::NoPrice: snprintf(reply, sizeof reply, "ok none"); break;
+        case carstate::Fill::Refused: snprintf(reply, sizeof reply, "refused %.12s", p.c_str()); break;
+    }
+    Serial.printf("[car] fill-up from %s: %s\n", server->client().remoteIP().toString().c_str(), reply);
     server->send(200, "text/plain", reply);
 }
 

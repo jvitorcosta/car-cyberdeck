@@ -37,12 +37,13 @@ bool tripSeq(const char* base, uint32_t* seq) {
 }  // namespace
 
 bool begin() {
+    const uint32_t t0 = millis();                  // the first boot formats: its time is logged
     if (!LittleFS.begin(true, MOUNT, 4, "spiffs")) {
         Serial.println("[car] LittleFS mount failed: no trip log this boot");
         return false;
     }
-    Serial.printf("[car] LittleFS %u of %u bytes used\n", static_cast<unsigned>(usedBytes()),
-                  static_cast<unsigned>(totalBytes()));
+    Serial.printf("[car] LittleFS %u of %u bytes used, mounted in %lu ms\n", static_cast<unsigned>(usedBytes()),
+                  static_cast<unsigned>(totalBytes()), static_cast<unsigned long>(millis() - t0));
     return true;
 }
 

@@ -308,12 +308,12 @@ size_t carJson(char* out, size_t n) {
     return s_jsonLen;
 }
 
-void fill(float pricePerL, char* priceOut, size_t n) {
+Fill fill(float pricePerL) {
     Lock lock;
-    fuelbook::fillUp(&s_book, pricePerL);
+    fuelbook::fillUp(&s_book, pricePerL);          // the full tank is noted whatever the price
     saveFuelLocked();
-    if (std::isnan(s_book.pricePerL)) snprintf(priceOut, n, "none");
-    else snprintf(priceOut, n, "%.2f", static_cast<double>(s_book.pricePerL));
+    if (std::isnan(pricePerL)) return Fill::NoPrice;
+    return pricePerL >= fuelbook::PRICE_MIN && pricePerL <= fuelbook::PRICE_MAX ? Fill::Taken : Fill::Refused;
 }
 
 void logLine() {

@@ -217,8 +217,11 @@ It answers the yellow deck over the hotspot and never writes to the car.
 | `ota` | 0 | the update listener (`net/ota`) |
 
 - **Read-only**: every write to the adapter goes through `obd::allowed()` (mode 01, 03, 07 and the
-  adapter's setup; never mode 04) and `ATH1` is refused too. Devices that serve the ELK lights'
-  FFF0 service are never taken for the adapter (their MACs from `config.h`, `ELK` / `MELK` names).
+  adapter's setup; never mode 04) and `ATH1` is refused too.
+- **Which device** (`util/car/obdpick`): the whole scan is weighed. An adapter-like name wins
+  (strongest signal), a nameless serial-service device only when no name matched; a scanned
+  device that failed the connect or the setup is skipped for 10 min (the last 4 kept). The lights
+  (their MACs from `config.h`, `ELK` / `MELK` names; their controllers serve FFF0 too) never.
 - **NVS**: `obd` holds the adapter (`bleaddr`, `bletype`, `blename`); `car` holds the boot sequence
   (`tseq`, which names the trip file `/t<seq>.jsonl`), the last trip with the health memo (`last`,
   so a trip cut by the ignition is judged at the next boot), the fuel book (`fuel`) and the last
@@ -237,7 +240,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
 | black → yellow | UDP port 4210: the song's palette (v2: boot id, rising counter, 8-byte HMAC tag) | `util/wire/musicwire`, `util/wire/songpalette`; the colour is `util/black/songmood`'s |
 | watch → yellow | `GET /say`, `/state`, `/presets`, `/status` (signed) | replies from `util/lightstatus`, `util/ledpresets` (wire lines), `util/ledvoice` |
 | Siri → yellow | `GET /say?k=<REMOTE_TOKEN>&text=...` | bearer key, plain HTTP |
-| yellow → OBD | `GET /car` (signed only, no `k=`): the car snapshot; `GET /fill?p=6.49` (or no `p`; signed only): a full tank, answers `ok <price>` | `util/car/carwire`; `fuelbook::fillUp`; `remotegate::Accept::SignedOnly` |
+| yellow → OBD | `GET /car` (signed only, no `k=`): the car snapshot; `GET /fill?p=6.49` (or no `p`; signed only): a full tank, noted whatever the price; answers `ok 6.49` (price taken), `ok none` (none said, the old one stays) or `refused <p as sent>` (outside 3.00-15.00 R$/L, the old one stays) | `util/car/carwire`; `fuelbook::fillUp`; `remotegate::Accept::SignedOnly` |
 | phone → black | the page `/?k=`, then `/state` and `POST /play` with `k=` | bearer key, plain HTTP |
 
 - **Signing** (`util/wire/sigreq`, `util/wire/hmac256`, `common/net/reqauth`; on the watch
@@ -294,7 +297,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
     songpalette, statejson, stateparse
   - `lights/` (the LED domain, both decks): hue, ledlook, musiclights, tripclock
   - `car/` (the car health check: the OBD deck; carwire and healthview also the yellow deck):
-    carhealth, carwire, fuelbook, fueleco, healthview, obd, obdble, obdplan, triplog, tripsum
+    carhealth, carwire, fuelbook, fueleco, healthview, obd, obdble, obdpick, obdplan, triplog, tripsum
   - `common/` (both decks): bootguard, daynight, hotspotip, jsonflat, jsonpath, netdiag, netup,
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+

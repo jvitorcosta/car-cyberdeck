@@ -19,9 +19,11 @@ void second();
 void checkpoint();
 // The latest snapshot as carwire JSON (GET /car). Returns its length (0: none yet).
 size_t carJson(char* out, size_t n);
-// GET /fill: a full tank, at pricePerL when it's inside fuelbook's range (NAN: none said). Saved to
-// NVS at once. Writes the book's price after it ("6.49", or "none") to priceOut.
-void fill(float pricePerL, char* priceOut, size_t n);
+// GET /fill: a full tank, saved to NVS at once. Taken: pricePerL is the new price; NoPrice: none said
+// (NAN), the old price stays; Refused: one said outside fuelbook's PRICE_MIN..PRICE_MAX, the old price
+// stays (the tank is still noted as full).
+enum class Fill { Taken, NoPrice, Refused };
+Fill fill(float pricePerL);
 // The [car] line (every 10 s).
 void logLine();
 }
