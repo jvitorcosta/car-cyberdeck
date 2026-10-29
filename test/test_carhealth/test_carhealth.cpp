@@ -306,6 +306,24 @@ void test_known_needs_a_reading_or_a_codes_read() {
     TEST_ASSERT_EQUAL(Level::Ok, w.item(Item::Engine).level);
 }
 
+// A power-on that never moved still has to keep a low battery or the trim samples it saw: the deck
+// saves the Memo whenever it holds something, km or not.
+void test_memo_worth_saving() {
+    TEST_ASSERT_FALSE(worthSaving(Memo{false, 0.0f, 0u}));
+    TEST_ASSERT_TRUE(worthSaving(Memo{true, 0.0f, 0u}));
+    TEST_ASSERT_TRUE(worthSaving(Memo{false, 3.0f, 2u}));
+    Watch w;
+    Reading r;
+    r.nowMs = 0;
+    r.engineRunning = true;
+    r.volts = 11.5f;
+    for (uint32_t t = 0; t <= BATT_HOLD_MS + 1000; t += 1000) {
+        r.nowMs = t;
+        w.feed(r);
+    }
+    TEST_ASSERT_TRUE(worthSaving(w.memo()));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_battery_low_needs_sixty_seconds_running);
@@ -330,5 +348,6 @@ int main(int, char**) {
     RUN_TEST(test_live_pending_beats_restored_ltft_note);
     RUN_TEST(test_restored_low_battery_is_a_note);
     RUN_TEST(test_known_needs_a_reading_or_a_codes_read);
+    RUN_TEST(test_memo_worth_saving);
     return UNITY_END();
 }

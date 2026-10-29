@@ -40,6 +40,9 @@ constexpr size_t MEMO_BYTES = 9;  // NVS: flags u8 (bit 0 battLowSeen), ltftSum 
 void encode(const Memo& m, uint8_t out[MEMO_BYTES]);
 // False on a wrong length, unknown flag bits or a non-finite sum; *m is then untouched.
 bool decode(const uint8_t* in, size_t len, Memo* m);
+// The Memo holds something the next boot must judge (a low battery, fuel-trim samples): worth saving
+// even when the car never moved.
+inline bool worthSaving(const Memo& m) { return m.battLowSeen || m.ltftN > 0; }
 
 constexpr float BATT_LOW_V = 12.0f;
 constexpr uint32_t BATT_HOLD_MS = 60000;

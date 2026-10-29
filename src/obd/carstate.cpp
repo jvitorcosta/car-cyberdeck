@@ -162,7 +162,7 @@ void begin() {
     carhealth::Memo memo{};
     bool memoOk = false;
     if (loadBytes(p, "last", last, sizeof last) && decodeLast(last, &s_last, &s_lastCost, &memo, &memoOk)) {
-        s_hasLast = true;
+        s_hasLast = s_last.km > 0.0f;              // 0 km: only a Memo, saved before any trip was
         memcpy(s_savedLast, last, sizeof last);
         s_lastSaved = true;
         if (memoOk) s_watch.restore(memo);
@@ -286,16 +286,22 @@ void checkpoint() {
         if (!ok) Serial.printf("[car] log write failed, %d rows queued\n", s_log.queued());
     }
     // The last-trip record once this power-on is a trip (the car moved): a deck that only sat in the
-    // driveway keeps the previous one.
+    // driveway keeps the previous one. Its Memo all the same when it holds something (a low battery
+    // while the engine idled): saved beside the previous trip's figures, unchanged.
     const tripsum::Summary sum = s_trip.summary();
-    if (sum.km > 0.0f) {
-        float cost;
-        {
-            Lock lock;
-            cost = fuelbook::costRs(s_book, sum.litres);
-        }
+    const carhealth::Memo memo = s_watch.memo();
+    if (sum.km > 0.0f || carhealth::worthSaving(memo)) {
         uint8_t rec[LAST_BYTES];
-        encodeLast(sum, cost, s_watch.memo(), rec);
+        if (sum.km > 0.0f) {
+            float cost;
+            {
+                Lock lock;
+                cost = fuelbook::costRs(s_book, sum.litres);
+            }
+            encodeLast(sum, cost, memo, rec);
+        } else {
+            encodeLast(s_last, s_lastCost, memo, rec);
+        }
         if (!s_lastSaved || memcmp(rec, s_savedLast, sizeof rec) != 0) {
             Preferences p;
             if (p.begin("car", false)) {
