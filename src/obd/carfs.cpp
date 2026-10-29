@@ -13,8 +13,8 @@
 namespace carfs {
 namespace {
 constexpr const char* MOUNT = "/littlefs";
-// More trip files than this can't fit under triplog::CAP_BYTES (a file holds at least one ~200-byte
-// row); past it list() keeps the oldest, which enforceCap() removes first anyway.
+// Far more trip files than triplog::MAX_FILES (or the partition's 32 blocks) allow; past it list()
+// keeps the oldest, which enforceCap() removes first anyway.
 constexpr int MAX_FILES = 512;
 uint32_t s_seq[MAX_FILES];   // list()'s scratch: the loop task's only
 
@@ -49,6 +49,9 @@ bool begin() {
 
 size_t usedBytes() { return LittleFS.usedBytes(); }
 size_t totalBytes() { return LittleFS.totalBytes(); }
+
+long Store::usedBytes() { return static_cast<long>(carfs::usedBytes()); }
+long Store::totalBytes() { return static_cast<long>(carfs::totalBytes()); }
 
 bool Store::append(const char* name, const char* data, size_t n) {
     char path[48];

@@ -31,6 +31,13 @@ void Log::queue(const char* line) {
 
 bool Log::flush() {
     if (!open_) return false;
+    if (flushQueue()) return true;
+    // Most likely a full partition: drop the oldest trips and try once more. Nothing dropped, nothing
+    // gained: the rows stay queued for the next checkpoint.
+    return enforceCap() > 0 && flushQueue();
+}
+
+bool Log::flushQueue() {
     while (count_ > 0) {
         if (!s_.append(name_, lines_[head_], lens_[head_])) return false;
         head_ = (head_ + 1) % QUEUE_LINES;
@@ -57,7 +64,12 @@ bool Log::recover() {
 
 bool Log::cutPartialRow(const char* name, bool* removed) {
     long sz = s_.size(name);
-    if (sz <= 0) return false;
+    if (sz < 0) return false;
+    if (sz == 0) {  // a power cut before the first row: no data, but a directory entry all the same
+        if (open_ && strcmp(name, name_) == 0) return false;
+        *removed = s_.remove(name);
+        return *removed;
+    }
     char last = 0;
     if (s_.read(name, sz - 1, &last, 1) != 1 || last == '\n') return false;
     // Walk back in chunks to the last '\n'; keep everything up to and including it.
@@ -92,21 +104,28 @@ bool Log::cutPartialRow(const char* name, bool* removed) {
     return s_.truncate(name, cut);
 }
 
-void Log::enforceCap() {
+int Log::enforceCap() {
     char names[PAGE][24];
-    long total = 0;
+    long bytes = 0;
+    int files = 0;
     for (int skip = 0;;) {
         int n = s_.list(names, PAGE, skip);
         if (n <= 0) break;
         for (int i = 0; i < n; i++) {
             long sz = s_.size(names[i]);
-            if (sz > 0) total += sz;
+            if (sz > 0) bytes += sz;
         }
+        files += n;
         skip += n;
     }
+    const long total = s_.totalBytes();
+    auto over = [&]() {
+        if (bytes > CAP_BYTES || files > MAX_FILES) return true;
+        return total > 0 && s_.usedBytes() * 100 > total * USED_PCT;
+    };
     // Oldest first; a file we keep (the open one, or one that won't go) stays in the listing, so skip it.
-    int skip = 0;
-    while (total > CAP_BYTES) {
+    int skip = 0, removed = 0;
+    while (over()) {
         if (s_.list(names, 1, skip) < 1) break;
         if (open_ && strcmp(names[0], name_) == 0) {
             skip++;
@@ -114,11 +133,15 @@ void Log::enforceCap() {
         }
         long sz = s_.size(names[0]);
         if (s_.remove(names[0])) {
-            if (sz > 0) total -= sz;
+            if (sz > 0) bytes -= sz;
+            files--;
+            removed++;
         } else {
             skip++;
         }
     }
+    capRemoved_ += removed;
+    return removed;
 }
 
 }  // namespace triplog

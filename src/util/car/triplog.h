@@ -16,10 +16,19 @@ struct Store {
     // only because Log names them by a zero-padded boot sequence: up to max names after the first skip;
     // returns how many.
     virtual int list(char (*names)[24], int max, int skip) = 0;
+    // The partition as the file system counts it (whole blocks, its own included); totalBytes() <= 0
+    // means unknown, and then only the byte and file caps apply.
+    virtual long usedBytes() = 0;
+    virtual long totalBytes() = 0;
     virtual ~Store() = default;
 };
 
 constexpr long CAP_BYTES = 96 * 1024;
+// LittleFS gives each file of a few rows whole 4 KB blocks and every power-on is a file, so on the
+// deck's 128 KB partition the bytes in the files say little: short boots fill it long before
+// CAP_BYTES. These two caps follow what the flash really holds.
+constexpr int MAX_FILES = 20;
+constexpr int USED_PCT = 70;
 constexpr int QUEUE_LINES = 8;
 constexpr size_t LINE_BYTES = 256;  // a line must be shorter than this (its NUL included)
 constexpr int PAGE = 8;  // names fetched per list() call; any number of files is walked page by page
@@ -34,18 +43,22 @@ public:
     // full the oldest queued line is dropped. Both are counted in dropped().
     void queue(const char* line);
     // Appends the queued lines in order, one append each. Stops at the first failure and keeps that line
-    // and the rest queued. True when the queue is empty afterwards; false (and nothing done) before open().
+    // and the rest queued; a failure that enforceCap() can make room for (it removed a file) is tried
+    // once more. True when the queue is empty afterwards; false (and nothing done) before open().
     bool flush();
     // At boot: in every file whose last byte is not '\n', cut back to just after the last '\n' (a file
-    // left empty is removed). A file that can't be read in full is left alone. True if any file changed
-    // (a truncate or remove the store reported as done).
+    // left empty is removed, and so is one found empty). A file that can't be read in full is left
+    // alone. True if any file changed (a truncate or remove the store reported as done).
     bool recover();
-    // Removes the oldest files while the total is above CAP_BYTES; never the open file.
-    void enforceCap();
+    // Removes the oldest files while the files hold more than CAP_BYTES, there are more than MAX_FILES
+    // of them, or the store is more than USED_PCT % full; never the open file. Returns how many went.
+    int enforceCap();
     int queued() const { return count_; }
     int dropped() const { return dropped_; }
+    int capRemoved() const { return capRemoved_; }  // files enforceCap() removed since boot
 private:
     bool cutPartialRow(const char* name, bool* removed);
+    bool flushQueue();
     Store& s_;
     char name_[24] = {0};
     bool open_ = false;
@@ -54,5 +67,6 @@ private:
     int head_ = 0;   // oldest queued line
     int count_ = 0;
     int dropped_ = 0;
+    int capRemoved_ = 0;
 };
 }

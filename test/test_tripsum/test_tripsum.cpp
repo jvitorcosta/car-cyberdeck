@@ -43,13 +43,27 @@ void test_sixty_seconds_at_sixty_kmh_is_one_km_row() {
 
 void test_stale_reading_adds_no_distance() {
     tripsum::Trip t;
-    run(t, 0, 60, 60.0f, 2000.0f, NAN, false, 0.01f);
+    run(t, 0, 30, 60.0f, 2000.0f);                          // half a minute live...
+    run(t, 31000, 29, 60.0f, 2000.0f, NAN, false, 0.01f);   // ...then the link goes stale
+    TEST_ASSERT_TRUE(t.rowReady());
     const tripsum::Row r = t.takeRow();
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, r.km);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f, r.km);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, r.litres);
-    TEST_ASSERT_TRUE(std::isnan(r.avgKmh));
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, t.summary().km);
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 60.0f, r.avgKmh);
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 0.5f, t.summary().km);
     TEST_ASSERT_EQUAL_UINT32(60, t.summary().seconds);  // time still passes
+}
+
+// The deck on the bench with no adapter: minutes pass with no live reading at all, and they are
+// not rows (a log of nulls). The minutes keep their numbers, so a later row says when it was.
+void test_minute_without_a_fresh_sample_is_no_row() {
+    tripsum::Trip t;
+    run(t, 0, 60, NAN, NAN, NAN, false);
+    TEST_ASSERT_FALSE(t.rowReady());
+    TEST_ASSERT_EQUAL_UINT32(60, t.summary().seconds);
+    run(t, 61000, 59, 30.0f, 1500.0f);
+    TEST_ASSERT_TRUE(t.rowReady());
+    TEST_ASSERT_EQUAL_UINT16(1, t.takeRow().minute);
 }
 
 void test_stalled_loop_step_counts_three_seconds() {
@@ -198,6 +212,7 @@ int main(int, char**) {
     RUN_TEST(test_stale_reading_adds_no_distance);
     RUN_TEST(test_stalled_loop_step_counts_three_seconds);
     RUN_TEST(test_second_minute_is_numbered_and_latest_row_wins);
+    RUN_TEST(test_minute_without_a_fresh_sample_is_no_row);
     RUN_TEST(test_idle_counts_engine_on_and_stopped);
     RUN_TEST(test_engine_off_is_not_idle);
     RUN_TEST(test_row_voltage_and_flags);

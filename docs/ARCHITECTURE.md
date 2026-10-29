@@ -236,8 +236,9 @@ It answers the yellow deck over the hotspot and never writes to the car.
   (`tseq`, which names the trip file `/t<seq>.jsonl`), the last trip with the health memo (`last`,
   so a trip cut by the ignition is judged at the next boot), the fuel book (`fuel`) and the last
   trouble-code counts (`codes`, so a code is "new" against the last read).
-- **Flash**: `min_spiffs.csv`; the data partition holds the trip log (LittleFS, at most 96 KB of
-  trips, oldest dropped first; a row cut by a power cut is trimmed at boot).
+- **Flash**: `min_spiffs.csv`; the 128 KB data partition (32 blocks of 4 KB) holds the trip log
+  (LittleFS: at most 96 KB of trips, 20 files and 70 % of the blocks, oldest dropped first, at boot
+  and when a write fails; a row cut by a power cut is trimmed at boot, an empty file removed).
 - **Snapshot**: `checkReady` once a 03 / 07 read and a battery reading are in, or 20 s after the
   link went live; `seq` +1 per snapshot (once a second).
 

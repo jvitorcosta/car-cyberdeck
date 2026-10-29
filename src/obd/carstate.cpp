@@ -183,7 +183,10 @@ void begin() {
     // boot's file.
     if (carfs::begin()) {
         if (s_log.recover()) Serial.println("[car] log: cut a partial row left by a power cut");
-        s_log.enforceCap();
+        const int gone = s_log.enforceCap();
+        if (gone)
+            Serial.printf("[car] log: dropped the %d oldest trip file(s), %u of %u bytes used\n", gone,
+                          static_cast<unsigned>(carfs::usedBytes()), static_cast<unsigned>(carfs::totalBytes()));
         s_log.open(s_bootSeq);
         s_logOk = true;
     }
@@ -273,7 +276,15 @@ void second() {
 }
 
 void checkpoint() {
-    if (s_logOk && !s_log.flush()) Serial.printf("[car] log write failed, %d rows queued\n", s_log.queued());
+    if (s_logOk) {
+        const int gone = s_log.capRemoved();
+        const bool ok = s_log.flush();             // a failure drops the oldest trips and tries again
+        if (s_log.capRemoved() != gone)
+            Serial.printf("[car] log: write failed, dropped the %d oldest trip file(s), %u of %u bytes used\n",
+                          s_log.capRemoved() - gone, static_cast<unsigned>(carfs::usedBytes()),
+                          static_cast<unsigned>(carfs::totalBytes()));
+        if (!ok) Serial.printf("[car] log write failed, %d rows queued\n", s_log.queued());
+    }
     // The last-trip record once this power-on is a trip (the car moved): a deck that only sat in the
     // driveway keeps the previous one.
     const tripsum::Summary sum = s_trip.summary();

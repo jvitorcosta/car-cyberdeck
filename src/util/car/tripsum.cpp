@@ -28,6 +28,7 @@ void Trip::add(const Sample& s) {
     cur_.ms += dt;
 
     if (s.fresh) {
+        cur_.freshN++;
         const bool kmhKnown = !std::isnan(s.kmh);
         if (kmhKnown) {
             const double km = static_cast<double>(s.kmh) * dt / 3600000.0;
@@ -89,6 +90,11 @@ void Trip::add(const Sample& s) {
 }
 
 void Trip::closeRow() {
+    if (!cur_.freshN) {  // a minute of nothing read: a row of nulls would only fill the flash
+        nextMinute_++;
+        cur_ = Acc{};
+        return;
+    }
     Row r{};
     r.minute = nextMinute_++;
     r.km = static_cast<float>(cur_.km);

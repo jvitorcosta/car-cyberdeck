@@ -15,6 +15,8 @@ struct RamStore : triplog::Store {
     int failAppends = 0;  // the next N appends fail
     int readsLeft = -1;   // >= 0: after that many good reads, every read comes back short
     bool failTruncate = false, failRemove = false;
+    long total = 1024 * 1024;  // the partition; the cap tests use the deck's 128 KB
+    int failAppendsWhileOver = 0;  // appends fail while usedBytes() > this (0: never)
     std::string* find(const char* name) {
         for (auto& f : files) if (f.first == name) return &f.second;
         return nullptr;
@@ -25,6 +27,7 @@ struct RamStore : triplog::Store {
     }
     bool append(const char* name, const char* data, size_t n) override {
         if (failAppends > 0) { failAppends--; return false; }
+        if (failAppendsWhileOver > 0 && usedBytes() > failAppendsWhileOver) return false;
         std::string* s = find(name);
         if (!s) { files.push_back({name, ""}); s = &files.back().second; }
         s->append(data, n);
@@ -56,6 +59,13 @@ struct RamStore : triplog::Store {
             if (files[i].first == name) { files.erase(files.begin() + (long)i); return true; }
         return false;
     }
+    // LittleFS: a file of 3+ rows takes whole 4 KB blocks; the file system itself keeps 2.
+    long usedBytes() override {
+        long blocks = 2;
+        for (auto& f : files) blocks += ((long)f.second.size() + 4095) / 4096;
+        return blocks * 4096;
+    }
+    long totalBytes() override { return total; }
     int list(char (*names)[24], int max, int skip) override {
         std::vector<std::string> sorted;
         for (auto& f : files) sorted.push_back(f.first);
@@ -292,6 +302,101 @@ void test_cap_sums_every_page_and_drops_oldest_first() {
     TEST_ASSERT_EQUAL_STRING("/t000006.jsonl", st.files[0].first.c_str());
 }
 
+// The deck's 128 KB partition: a short trip is a few hundred bytes of rows but a whole 4 KB block.
+void test_cap_keeps_real_usage_under_70_percent() {
+    RamStore st;
+    st.total = 128 * 1024;
+    char nm[24];
+    for (int i = 1; i <= 18; i++) {
+        snprintf(nm, sizeof(nm), "/t%06d.jsonl", i);
+        st.put(nm, std::string(499, 'a') + "\n");
+    }
+    triplog::Log log(st);
+    log.open(18);
+    TEST_ASSERT_EQUAL_INT(0, log.enforceCap());   // 20 blocks of 32: 62 %
+    snprintf(nm, sizeof(nm), "/t%06d.jsonl", 19);
+    st.put(nm, std::string(5000, 'b'));          // 2 blocks: 22 of 32 is 69 %, still under
+    TEST_ASSERT_EQUAL_INT(0, log.enforceCap());
+    snprintf(nm, sizeof(nm), "/t%06d.jsonl", 20);
+    st.put(nm, std::string(5000, 'c'));          // 24 of 32: 75 %
+    TEST_ASSERT_EQUAL_INT(2, log.enforceCap());   // two one-block trips go
+    TEST_ASSERT_TRUE(st.usedBytes() * 10 <= st.totalBytes() * 7);
+    TEST_ASSERT_NULL(st.find("/t000001.jsonl"));
+    TEST_ASSERT_NULL(st.find("/t000002.jsonl"));
+    TEST_ASSERT_NOT_NULL(st.find("/t000003.jsonl"));
+    TEST_ASSERT_NOT_NULL(st.find("/t000018.jsonl"));
+}
+
+void test_cap_keeps_at_most_20_files() {
+    RamStore st;
+    char nm[24];
+    for (int i = 1; i <= 25; i++) {
+        snprintf(nm, sizeof(nm), "/t%06d.jsonl", i);
+        st.put(nm, "{}\n");
+    }
+    triplog::Log log(st);
+    log.open(25);
+    TEST_ASSERT_EQUAL_INT(5, log.enforceCap());
+    TEST_ASSERT_EQUAL_INT(triplog::MAX_FILES, (int)st.files.size());
+    TEST_ASSERT_NULL(st.find("/t000005.jsonl"));
+    TEST_ASSERT_NOT_NULL(st.find("/t000006.jsonl"));
+}
+
+// The open file is never removed, even when it alone keeps usage high: the loop must still end.
+void test_usage_cap_stops_at_the_open_file() {
+    RamStore st;
+    st.total = 128 * 1024;
+    st.put("/t000001.jsonl", std::string(400, 'a') + "\n");
+    st.put("/t000002.jsonl", std::string(110 * 1024, 'b') + "\n");
+    triplog::Log log(st);
+    log.open(2);
+    TEST_ASSERT_EQUAL_INT(1, log.enforceCap());
+    TEST_ASSERT_NULL(st.find("/t000001.jsonl"));
+    TEST_ASSERT_NOT_NULL(st.find("/t000002.jsonl"));
+}
+
+// A full partition: the failed flush makes room (oldest trips) and tries once more.
+void test_failed_flush_makes_room_and_retries() {
+    RamStore st;
+    st.total = 128 * 1024;
+    char nm[24];
+    for (int i = 1; i <= 26; i++) {
+        snprintf(nm, sizeof(nm), "/t%06d.jsonl", i);
+        st.put(nm, std::string(99, 'a') + "\n");     // boot-time cap not run: 28 of 32 blocks
+    }
+    st.failAppendsWhileOver = 28 * 4096 - 1;
+    triplog::Log log(st);
+    log.open(27);
+    log.queue("x\n");
+    TEST_ASSERT_TRUE(log.flush());
+    TEST_ASSERT_EQUAL_INT(0, log.queued());
+    TEST_ASSERT_EQUAL_STRING("x\n", st.find("/t000027.jsonl")->c_str());
+    TEST_ASSERT_NULL(st.find("/t000001.jsonl"));
+}
+
+// Nothing to drop: the failure stands and the rows stay queued.
+void test_failed_flush_with_nothing_to_drop_keeps_the_queue() {
+    RamStore st;
+    triplog::Log log(st);
+    log.open(1);
+    log.queue("x\n");
+    st.failAppends = 5;
+    TEST_ASSERT_FALSE(log.flush());
+    TEST_ASSERT_EQUAL_INT(1, log.queued());
+}
+
+// A file the power cut left empty still holds a directory entry: recover() removes it.
+void test_recover_reaps_empty_files() {
+    RamStore st;
+    st.put("/t000001.jsonl", "");
+    st.put("/t000002.jsonl", "{}\n");
+    triplog::Log log(st);
+    TEST_ASSERT_TRUE(log.recover());
+    TEST_ASSERT_NULL(st.find("/t000001.jsonl"));
+    TEST_ASSERT_NOT_NULL(st.find("/t000002.jsonl"));
+    TEST_ASSERT_FALSE(log.recover());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_flush_appends_queued_lines);
@@ -310,5 +415,11 @@ int main(int, char**) {
     RUN_TEST(test_failed_truncate_or_remove_is_not_a_change);
     RUN_TEST(test_many_files_are_all_recovered_and_capped);
     RUN_TEST(test_cap_sums_every_page_and_drops_oldest_first);
+    RUN_TEST(test_cap_keeps_real_usage_under_70_percent);
+    RUN_TEST(test_cap_keeps_at_most_20_files);
+    RUN_TEST(test_usage_cap_stops_at_the_open_file);
+    RUN_TEST(test_failed_flush_makes_room_and_retries);
+    RUN_TEST(test_failed_flush_with_nothing_to_drop_keeps_the_queue);
+    RUN_TEST(test_recover_reaps_empty_files);
     return UNITY_END();
 }

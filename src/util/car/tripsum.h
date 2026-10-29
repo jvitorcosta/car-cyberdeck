@@ -36,7 +36,9 @@ public:
     // The code flags (Row::flags bits) seen now; they are kept in the minute that is running.
     void orFlags(uint8_t f) { cur_.flags = static_cast<uint8_t>(cur_.flags | f); }
     bool rowReady() const { return ready_; }
-    Row takeRow();  // the last closed minute; if several closed before a take, only the latest
+    // The last closed minute; if several closed before a take, only the latest. A minute without one
+    // fresh sample (no adapter, link down) closes without a row but still takes its minute number.
+    Row takeRow();
     Summary summary() const;
     Recharge recharge() const;
 
@@ -45,6 +47,7 @@ private:
         uint32_t ms = 0;
         double km = 0, litres = 0, kmhSum = 0, rpmSum = 0, vSum = 0, tsSum = 0, tlSum = 0;
         uint32_t kmhN = 0, rpmN = 0, vN = 0, tsN = 0, tlN = 0, idleMs = 0;
+        uint32_t freshN = 0;  // fresh samples: none, and the minute is no row
         float maxKmh = 0, vMin = 0, vMax = 0, coolMax = 0;
         bool hasMax = false, hasV = false, hasCool = false;
         uint8_t flags = 0;
