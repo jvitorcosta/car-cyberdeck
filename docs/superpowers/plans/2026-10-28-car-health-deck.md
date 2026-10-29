@@ -2,12 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** On the yellow deck, read the City over the Vgate BLE adapter and show the agreed screens A-D, with instant warnings, a local per-minute trip log, and fuel (voice fill-up, R$, range). This covers spec phases 1 and 2.
+**Goal:** Read the City over the Vgate BLE adapter on a third deck (the OBD deck) and show the agreed screens A-D on the yellow deck, with instant warnings, a per-minute trip log, and fuel (voice fill-up, R$, range). This covers spec phases 1 and 2.
 
-**Architecture:**
-- **Pure, host-tested modules** in a new group `src/util/car/`: ported from `feat/obd` plus new ones for health, the trip summary, fuel and screen texts.
-- **One firmware module**, `src/yellow/obdlink.{h,cpp}`, runs the adapter on NimBLE 2.5.1 beside the LED controllers and the Xbox pad.
-- **`src/yellow/ledpanel.cpp`** gains two screens (Check, Parked), a new trip band, warnings on the prompt line and a fill-up voice command.
+**Architecture** (updated 2026-10-29; see "Architecture change" before Task 8):
+- **Pure, host-tested modules** in a new group `src/util/car/`: ported from `feat/obd` plus new ones for health, the trip summary, fuel, screen texts and the `/car` snapshot format.
+- **The OBD deck** (`src/obd/`, env `obddeck`) runs the adapter on NimBLE 2.5.1 (its only BLE link) and keeps health, the trip log and the fuel book; it serves `GET /car` and `GET /fill`, signed.
+- **`src/yellow/ledpanel.cpp`** polls `/car` and gains two screens (Check, Parked), a new trip band, warnings on the prompt line and a fill-up voice command it forwards.
 - **Out of scope here:** upload (spec phase 3) and the PC checkup (phase 4) get their own plans. This plan fixes the trip-log row format they will consume.
 
 **Tech Stack:**
@@ -464,141 +464,168 @@ def test_supported_scan_matches_city():  # 0100 bits include 0C 0D 10 06 07; exc
 
 ---
 
-### Task 8: `obdlink` on the yellow deck (NimBLE 2)
+### Architecture change (2026-10-29)
+
+The first Task 8 showed the yellow deck can't safely hold a 4th BLE connection (the prebuilt
+framework sizes the BT controller for 3; a 4-connection build crash-looped). The owner chose a third
+deck, the **OBD deck** (spec "Architecture update"). Tasks 8-11 below replace the old 8-10:
+- the OBD deck (env `obddeck`) reads the car and keeps health, the trip log and the fuel book;
+- the yellow deck polls it over the hotspot (`GET /car`, signed) and shows screens A-D, the band and
+  warnings, and forwards a spoken fill-up (`GET /fill`, signed).
+
+The parked first attempt (yellow-deck `obdlink`, its `ledpanel.cpp` wiring and BACKLOG notes) is a
+patch in the plan workspace (`wip-yellow-obd/`): Task 9 reuses its `obdlink.{h,cpp}` almost as is.
+
+---
+
+### Task 8: `carwire`: the `/car` snapshot format
 
 **Files:**
-- Create: `src/yellow/obdlink.{h,cpp}` (ported from `feat/obd`'s `src/companion/obdlink.cpp` BLE path)
-- Modify: `platformio.ini` `[env:ledpanel]` build_flags: add `-D CONFIG_BT_NIMBLE_MAX_CONNECTIONS=4`; add `+<util/car/>` to its `build_src_filter`
-- Modify: `src/yellow/ledpanel.cpp`: `linkTask` calls `obdlink::tick(now)` once per pass, after the lights. `setup()` calls `obdlink::start()` after `NimBLEDevice::init`.
+- Create: `src/util/car/carwire.{h,cpp}`, `test/test_carwire/test_carwire.cpp`
 
 **Interfaces:**
-- Consumes: `obd`, `obdble`, `obdplan`, `fueleco` (Task 1).
+- Consumes: `carhealth::Verdict`/`Level` (Task 2), `tripsum::Summary` (Task 3).
 - Produces:
 
 ```cpp
-namespace obdlink {
-struct View {
-    obdplan::Link link; uint32_t nowMs;
-    float value[(int)obd::Pid::COUNT]; bool have[(int)obd::Pid::COUNT]; uint32_t atMs[(int)obd::Pid::COUNT];
-    int stored, pending; char codes[4][6]; bool mil;
-    float litresTotal;        // fueleco since power-on
+namespace carwire {
+enum class Link : uint8_t { Off, Connecting, NoEngine, Live };   // obdplan::Link's values
+struct Snapshot {
+    Link link = Link::Off;
+    bool checkReady = false;          // first codes read + a volts reading are in, or 20 s passed
+    float kmh = NAN, rpm = NAN, volts = NAN, coolantC = NAN, kmlNow = NAN;
+    carhealth::Verdict battery{}, engine{};          // level, known, why
+    tripsum::Summary trip{};          // this power-on so far
+    float tripCostRs = NAN;
+    bool hasLast = false; tripsum::Summary last{}; float lastCostRs = NAN;
+    float rangeKm = NAN, pricePerL = NAN;
+    bool critical = false;            // carhealth::Watch::critical()
+    uint32_t seq = 0;                 // +1 per snapshot: the yellow deck spots a stale reply
 };
-void start();                 // creates the ask task (core 0, stack 6 KB); no-op without NimBLE
-void tick(uint32_t nowMs);    // from linkTask: find/connect/reconnect with the lights' 5 s..60 s backoff;
-                              // skipped while ota::active()
-void snapshot(View& out);     // under a mutex, from loop()
-float fresh(const View& v, obd::Pid p, uint32_t nowMs);   // value if fresh (obdplan::staleAfterMs), else NAN
+constexpr size_t MAX_JSON = 768;
+size_t encode(const Snapshot& s, char* out, size_t n);   // 0 if it doesn't fit; NAN/inf -> null
+bool decode(const char* json, Snapshot* s);              // false on junk or a missing "v":1; unknown keys ignored
 }
 ```
 
-Decisions:
-- **Connecting** happens only inside `linkTask`, so it never races the lights' connects or the pad's scans.
-- **First-time find:** a 4 s scan for an advertised `obdble::serialService` UUID or `obd::looksLikeAdapter(name)`. The address is saved in NVS key `"obd"`.
-- **The ask task** runs `ask()` with a 2 s wait and a resync of late replies (`feat/obd` behaviour). It sends only what `obd::allowed()` passes. It asks codes when `plan.codesDue()`.
-- **Every adapter write** goes through one function that asserts `obd::allowed(cmd)` and refuses anything else. Never send ATH1.
-- **First step proves a 4th BLE connection works:** the controller limit in the precompiled sdkconfig may stay 3 whatever `CONFIG_BT_NIMBLE_MAX_CONNECTIONS` says. Connect lights + pad + Vgate and check before building on it.
-- **Watchdog:** the ask task calls `watchdog::watch()` and `watchdog::feed()` each pass (`common/core/watchdog.h`, 90 s); `linkTask` feeds before the OBD connect/discovery and before the first-time scan.
-- **Supported scan:** call `plan.setSupported()` after the scan even when the scan fails (else `codesDue` never fires). Call `Watch::codesRead()` after a good 03/07 read.
-- **Battery:** poll ATRV at least every ~5 s (e.g. twice per slow round), not once per ~22 s round. Step `fueleco` only with fresh values.
-- **GATT service:** record the Vgate's real service (it may be a 128-bit UUID, not FFF0). `obdble::pick` must not pair a notify and a write from different 128-bit services: carry a per-service index.
+- JSON is flat and short-keyed, with a version: `{"v":1,"seq":..,"link":"live","ready":1,"kmh":..,...}`. The `why` strings are escaped.
+- Use `util/common/jsonflat` / `jsonpath` for decoding if they fit (read their headers), else a small parser here.
 
-- [ ] **Step 1: Build**: `pio run -e ledpanel`. Expected: SUCCESS, with no `-Werror` findings.
-- [ ] **Step 2: Bench run against `tools/obd_sim.py`.** Flash: `pio run -e ledpanel -t upload`. The serial log must show:
-  - `[obd] connected IOS-Vlink`, then the supported scan;
-  - values within 2 s of changing `speed`/`volts` in the sim console;
-  - `[obd] codes 1 P0301` after `code P0301` (within 5 min, or at reconnect).
-- [ ] **Step 3: Bench run without the sim (Review Focus 1).** Stop the sim and reboot the deck. Then:
-  - the LEDs connect and the pad pairs;
-  - `/say?text=purple` works;
-  - KARAOKE polls;
-  - the log shows the OBD backoff growing to 60 s, and no task watchdog.
-- [ ] **Step 4: Heap capture.** With both lights, the pad and the sim connected, `[mem]` must not fall below the level logged without the sim minus 40 KB. Record the numbers in `docs/BACKLOG.md`.
-- [ ] **Step 5: Commit**: `feat(leds): OBD over BLE on the yellow deck beside the lights and the pad`
+- [ ] **Step 1: Write the failing tests**: a full round trip (every field, NANs included); the `why` text with quotes and backslashes survives; `encode` reports no fit; `decode` rejects junk, a wrong version and a truncated body; unknown keys are ignored; the worst-case snapshot fits `MAX_JSON`.
+- [ ] **Step 2: Run, see them fail.** `tools\ntest.ps1 test\test_carwire\test_carwire.cpp src\util\car\carwire.cpp`
+- [ ] **Step 3: Implement.**
+- [ ] **Step 4: Run, see them pass; then `tools\run_tests.ps1`.**
+- [ ] **Step 5: Commit**: `feat(car): the /car snapshot format`
 
 ---
 
-### Task 9: Screens A/B (Check) and D (Parked)
+### Task 9: The OBD deck firmware (`obddeck`)
 
 **Files:**
-- Modify: `src/util/yellow/deckmenu.{h,cpp}`:
-  - `enum class Screen` gains `Check, Parked`.
-  - `rect(Screen::Check|Parked, 0)` is the full screen `{0,0,320,240}`; every other id is `{0,0,0,0}`.
-- Modify: `test/test_deckmenu/test_deckmenu.cpp`
-- Modify: `src/yellow/ledpanel.cpp`: `drawCheck()`, `drawParked()`, `show()` for both, taps, Xbox A/B dismiss them.
+- Create: `src/obd/main.cpp` (setup/loop), `src/obd/obdlink.{h,cpp}` (from `wip-yellow-obd/`, any `ledpanel`-isms removed), `src/obd/carfs.{h,cpp}` (the LittleFS `triplog::Store`)
+- Modify: `platformio.ini`: new `[env:obddeck]` (`board = esp32dev`, NimBLE-Arduino 2.5.1 with the default 3 connections, `min_spiffs.csv`, `build_src_filter = -<*> +<obd/> +<common/> +<util/car/> +<util/common/> +<util/wire/>` or whatever `common/` needs) and `[env:obddeck_ota]` (espota to `cardeck-obd.local`, `tools/ota_auth.py`), mirroring `ledpanel` / `ledpanel_ota`.
+- Modify: `docs/ARCHITECTURE.md` (a short "OBD deck" section) and `docs/BACKLOG.md` ("Car-health: waiting on the adapter" checks, from the parked patch, plus the OBD deck's first flash).
 
-**Interfaces:**
-- Consumes: `healthview::check/parked/ParkGate` (Task 6), `obdlink::snapshot` (Task 8), `carhealth::Watch` (Task 2).
-- At boot: restore `carhealth::Memo` from NVS and call `endTrip()` before screen A. The Memo is saved with the 30 s flush, inside the last-trip NVS record ({km, litres, seconds, idleS, avgKmh, costRs} + Memo).
-- Show screen A only once the first codes read and a volts reading are in, or after 20 s (items still unknown show CHECKING).
-- Produces:
-  - `static void showCheckOnce()`: called when the link first goes `Live` this power-on. It shows Check for 5 s, then goes back to the Menu. A problem holds it until a tap.
-  - Screen D comes and goes from `ParkGate` in `loop()`. Lights/Karaoke/Presets are never interrupted: D shows only from the Menu.
+**What it does:**
+- **WiFi** like the yellow deck (`common/net/wifi`, the same networks, mDNS `cardeck-obd`), SNTP clock, OTA (`common/net/ota`), boot guard, watchdog (`common/core/watchdog.h`: loop + every task).
+- **The OBD link** (`obdlink`) with every rule from the parked attempt and the branch reviews:
+  - connect from one place, backoff 5→60 s;
+  - every write through `obd::allowed()`, never ATH1;
+  - `setSupported()` after the scan even on failure;
+  - ATRV at least every ~5 s;
+  - `fueleco` stepped only with fresh values;
+  - `obdble` pairing within one service;
+  - the address in NVS (`bleaddr`/`bletype`/`blename`).
+- **Each second**: a `tripsum::Sample` from the fresh values (litres = NAN when fueleco counted nothing), `carhealth::Watch::feed()`, `fuelbook::burn()`; `Watch::codesRead()` after a good 03/07 read.
+- **Each minute**: the closed row to `triplog`, `fuelbook::learn()` with it.
+- **Every 30 s**: `triplog::flush()`; the last-trip NVS record (`{km, litres, seconds, idleS, avgKmh, costRs}` + the `carhealth::Memo`) and the fuel book (`fuelbook::encode`) when they changed.
+- **Boot**:
+  - boot sequence `tseq` +1;
+  - `triplog` `recover()` + `enforceCap()`, then `open(seq)`;
+  - restore the Memo and call `endTrip()`;
+  - load the last trip and the fuel book.
+- **`GET /car`**: `carwire::encode` of the latest snapshot. **`GET /fill`**: `p` optional → `fuelbook::fillUp`, NVS saved at once. Both require a valid signature (`common/net/reqauth`); no bearer key between decks.
+- **The LittleFS `Store`**:
+  - `list(names, max, skip)` in ascending name order (= oldest first);
+  - `append` truncates back to the pre-append size on a short write;
+  - `triplog::Log` is a static object.
+- **Serial log lines**: `[obd] …`, `[car] …` (a one-line snapshot every 10 s), `[mem] …`.
 
-- [ ] **Step 1: Write the failing deckmenu tests**
-
-```cpp
-void test_check_and_parked_are_one_full_screen_tap();   // rect(Check,0) == {0,0,320,240}; rect(Check,1).w == 0
-```
-
-- [ ] **Step 2: Run, see it fail; implement; run, see it pass.** `tools\ntest.ps1 test\test_deckmenu\test_deckmenu.cpp src\util\yellow\deckmenu.cpp`
-- [ ] **Step 3: Draw both screens** from the `healthview` lines, using `text()` with SMALL/BODY/BIG and `pal()` for the roles, following the mockups. A `-D HEALTH_TEST=<a|b|d>` hook draws each with canned values, without a car (add it to `docs/ARCHITECTURE.md` "Test hooks").
-- [ ] **Step 4: Check on the deck.** `pio run -e ledpanel -t upload` with `PLATFORMIO_BUILD_FLAGS="-D HEALTH_TEST=a"`, then `b`, then `d`. Photograph each, compare with the mockups, and fix any text that runs past 316 px.
-- [ ] **Step 5: Bench run.** With the sim: boot → A for 5 s → Menu. Set `speed 0` after > 0.5 km → D after 5 s. `speed 20` → back to the Menu. `volts 11.8` for 60 s at `rpm 800` → the next boot shows B.
-- [ ] **Step 6: Commit**: `feat(leds): pre-flight check and trip-complete screens`
+- [ ] **Step 1: Build** `pio run -e obddeck` → SUCCESS, no `-Werror` findings; `pio run -e ledpanel` still builds.
+- [ ] **Step 2: Host suites** `tools\run_tests.ps1` → all pass.
+- [ ] **Step 3: On a board, if one is plugged in** (never the yellow deck's COM13 or the black deck's COM12; the owner names the port): flash it, check the boot log, `/car` answering a signed request, the OBD backoff to 60 s with no adapter, no watchdog reset. Otherwise write these as "first flash" checks in `docs/BACKLOG.md`.
+- [ ] **Step 4: Commit**: `feat(obd): the OBD deck reads the car, keeps health, the trip log and the fuel book`
 
 ---
 
-### Task 10: Dashboard band, warnings, voice fill-up and the trip log
+### Task 10: Yellow deck: the `/car` client and screens A/B and D
+
+**Files:**
+- Modify: `src/util/yellow/deckmenu.{h,cpp}` + `test/test_deckmenu`: `Screen::Check`, `Screen::Parked`, one full-screen tap rect each (`{0,0,320,240}`), every other id `{0,0,0,0}`.
+- Modify: `src/yellow/ledpanel.cpp`: a car task (like the lyrics task: signed `GET /car` every 1 s while it answers, backing off to 10 s while it doesn't; `watchdog::watch()`/`feed()`), `drawCheck()`, `drawParked()`, `show()` for both, taps and Xbox A/B dismiss them.
+- Modify: `platformio.ini` `[env:ledpanel]`: `+<util/car/>` in `build_src_filter` (healthview, carwire and what they include). No NimBLE change.
+- Modify: `src/util/yellow/deckaddr.h` only if the OBD deck's address needs the same fixed-then-mDNS lookup the black deck has.
+
+**Interfaces:**
+- Consumes: `carwire::decode` (Task 8), `healthview::check/parked/ParkGate` (Task 6).
+- **Screen A**:
+  - shown once per power-on, when a snapshot first has `checkReady`;
+  - after 5 s it goes back to the Menu, unless something is a problem: then it holds until a tap;
+  - it never interrupts Lights/Karaoke/Presets.
+- **Screen D**:
+  - `ParkGate` fed from the snapshot's `kmh` and trip km, only from the Menu;
+  - `dismiss()` only while D shows;
+  - a stale snapshot (no new `seq` for 3 s) counts as "not stopped".
+- **No OBD deck**: nothing changes from today's behaviour (Review Focus 1).
+
+- [ ] **Step 1: Failing deckmenu test** `test_check_and_parked_are_one_full_screen_tap`; run, fail; implement; run, pass.
+- [ ] **Step 2: Draw both screens** from the `healthview` lines (SMALL/BODY/BIG, `pal()` roles) following the mockups, with a `-D HEALTH_TEST=<a|b|d>` hook that draws each from a canned snapshot (add it to `docs/ARCHITECTURE.md` "Test hooks").
+- [ ] **Step 3: On the yellow deck (COM13)**: flash with `HEALTH_TEST=a`, `b`, `d` in turn; read the serial log, and ask the owner to look at each screen (or photograph it) and compare with the mockups; fix any text past 316 px. Then flash the normal build and check that with no OBD deck nothing changes and the car task backs off.
+- [ ] **Step 4: Commit**: `feat(leds): pre-flight check and trip-complete screens from the OBD deck`
+
+---
+
+### Task 11: Yellow deck: band, warnings and the voice fill-up
 
 **Files:**
 - Modify: `src/yellow/ledpanel.cpp`:
-  - `drawTripBand()` draws `healthview::band`;
-  - `tripTick()` gets its speed from the snapshot, replacing the unused `tripSpeed()` hook;
-  - warnings go to the prompt line via `setMessage(..., MESSAGE_MS)` with ALERT;
-  - `handleSay()` tries `fuelbook::parsePhrase` before `ledvoice`;
-  - the LittleFS `triplog::Store`;
-  - the NVS `"fuel"` record.
-- Modify: `src/util/yellow/termlayout.h` only if the band's three figures need new x positions. `test/test_termfont` must still pass.
-- Modify: `docs/BACKLOG.md`: the car-test checklist below.
-- Wave 4 changed `ledvoice.h`, `lightstatus`, `termlayout.h` and `ledpanel.cpp`, and moved the voice docs to `docs/yellow-deck.md`: re-read them first.
+  - `drawTripBand()` draws `healthview::band` from the snapshot (`--` with no OBD deck);
+  - the trip meter's distance comes from the snapshot when one is fresh;
+  - warnings go to the prompt line: `setMessage(..., MESSAGE_MS)` with ALERT, only for `critical` while moving, any problem when stopped;
+  - `handleSay()`: after `reqauth::pass`, `fuelbook::parsePhrase` before `ledvoice`. A fill-up phrase is forwarded as a signed `GET /fill` (with `p` when a valid price was heard) and answered with the replies below.
+- Modify: `src/util/yellow/termlayout.h` only if the band needs new x positions (`test_termfont` must pass).
+- Modify: `docs/BACKLOG.md` (car-test checklist) and `docs/yellow-deck.md` (the fill-up phrase).
+- Wave 4 changed `ledvoice.h`, `lightstatus`, `termlayout.h` and `ledpanel.cpp`: re-read them first.
 
-**Interfaces:**
-- Consumes: Tasks 2-8.
-- Produces:
-  - **Trip id:** `YYYYMMDD-HHMM` from the SNTP clock when synced, else `b<bootCount>`.
-  - **`triplog` use:** `Log::open(uint32_t seq)` with a boot sequence persisted in NVS (key `"tseq"`, +1 each boot); file names `"/t%06lu.jsonl"`. The LittleFS `Store` pages `list(names, max, skip)` in ascending name order (= oldest first), and `append` truncates back to the pre-append size on a short write. `triplog::Log` is a static object, never on a task stack.
-  - **Single sources:** `tripsum` is the only km source. Feed `litres = NAN` for a second where `fueleco` counted nothing. `recentKmL` comes from `fuelbook::learn()` per closed row.
-  - **New-code flags:** keep the last known codes across boots for the row's "new code" flags.
-  - **Voice order:** `/say` keeps accepting `?k=` (Siri can't sign) after `reqauth::pass`, so parse the fill-up phrase after that check and before `ledvoice`.
-  - **Log loop:** `tripsum::Trip` fed once a second in `tripTick()`, rows go to `triplog` each minute, `flush()` every 30 s, and `recover()` + `enforceCap()` in `setup()`.
-  - **Fuel book:** `fuelbook::burn()` with each second's litres, `recentKmL` = the last 50 km's km/l, saved to NVS when it changes, at most once a minute.
-  - **Voice replies:**
-    - `"Full tank noted, 6.49 per litre."`
-    - `"Full tank noted. I heard 649, that's not a price."`
-    - `"Full tank noted."` when no price was said.
+**Voice replies:**
+- `"Full tank noted, 6.49 per litre."`
+- `"Full tank noted. I heard 649, that's not a price."`
+- `"Full tank noted."` (no price said)
+- `"I can't reach the car module."` (the OBD deck didn't answer)
 
-- [ ] **Step 1: Build** `pio run -e ledpanel`. Expected: SUCCESS.
-- [ ] **Step 2: Run all host suites** `tools\run_tests.ps1`. Expected: all PASS (termfont included).
-- [ ] **Step 3: Bench run with the sim.**
-  - The band shows km rising, km/l and `-- KM LEFT`.
-  - `curl "http://<deck>/say?text=filled%20up%20at%206.49&k=<REMOTE_TOKEN>"` → the voice reply above, and RANGE turns into a number once km/l is known.
-  - `coolant 106` → red `>ENGINE HOT` on the prompt line.
-  - Power-cycle the deck mid-minute → the log file has only whole rows (dump it over serial with a `-D HEALTH_TEST=dump` hook).
-- [ ] **Step 4: Write the car-test checklist** into `docs/BACKLOG.md`:
-  1. The Vgate on the Y splitter beside the tracker connects within 30 s of the start.
+- [ ] **Step 1: Build** `pio run -e ledpanel` and `pio run -e obddeck` → SUCCESS; `tools\run_tests.ps1` → all pass.
+- [ ] **Step 2: On the yellow deck (COM13)**:
+  - the band shows `--` with no OBD deck;
+  - `/say?text=filled%20up%20at%206.49&k=…` answers "I can't reach the car module.";
+  - the lights, voice and KARAOKE behave as before.
+
+  (If the owner can reach the deck from the PC; otherwise list it in BACKLOG.)
+- [ ] **Step 3: Car-test checklist** in `docs/BACKLOG.md`:
+  1. The OBD deck connects to the Vgate within 30 s of the start.
   2. Screen A appears with real volts.
   3. km matches the car's trip meter within 2 %.
   4. km/l is within 10 % of the car's display.
   5. Screen D appears at a stop.
   6. Voice fill-up at the pump works.
-  7. The LEDs, the pad and KARAOKE all keep working during the drive.
-  8. A one-week log shows no row gaps beyond link drops.
-- [ ] **Step 5: Commit**: `feat(leds): trip band with km/l and range, warnings, voice fill-up and the trip log`
+  7. The LEDs, the pad and KARAOKE keep working.
+  8. A one-week log on the OBD deck shows no row gaps beyond link drops.
+- [ ] **Step 4: Commit**: `feat(leds): trip band, warnings and the voice fill-up via the OBD deck`
 
 ---
 
 ## After this plan
 
-- **Owner's car test** (checklist in `docs/BACKLOG.md`), then the merge decision.
-- **Plan 2:** upload (yellow → S3 over the hotspot LAN → private `city-telemetry` repo), using the `tripsum::jsonRow` format fixed here.
+- **First flash of the OBD deck** and the **owner's car test** (checklists in `docs/BACKLOG.md`), then the merge decision.
+- **Plan 2:** upload from the OBD deck (it holds the log) to the private `city-telemetry` repo, using the `tripsum::jsonRow` format fixed here.
 - **Plan 3:** `tools/car_checkup.py`, the daily routine, and `checkup.json` back to screens A/B.
+- **Later:** always-on OBD deck from pin 16 = the battery logger (resting voltage, crank dip, parked drain).

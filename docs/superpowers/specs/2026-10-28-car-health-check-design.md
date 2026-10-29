@@ -98,6 +98,29 @@ version may come later through CAN sniffing (car-can-lab); it is not part of thi
   - red reserved for problems.
 - Tank 44 L; the pump gasoline is E30. Ethanol % from PID 52 when it reads sanely, else 30.
 
+## Architecture update (2026-10-29): a third deck reads the car
+
+Task 8 showed the yellow deck can't safely hold a 4th BLE connection: the prebuilt framework sizes
+the BT controller for 3, and a 4-connection build crash-looped. The owner chose a **third deck**
+(the "OBD deck"), a separate ESP32 that owns everything that reads the car. The yellow deck keeps
+its lights and pad untouched and only shows the screens.
+
+- **OBD deck** (new env `obddeck`, a generic ESP32, its only BLE link is the Vgate): the OBD link,
+  `carhealth`, `tripsum`, the trip log on its own flash (`triplog`), the fuel book (`fuelbook`) and
+  the power-cut memo. For now it is powered like the other decks (on with the ignition); always-on
+  power from pin 16 is the "Later" battery logger.
+- **Yellow deck:** screens A-D (`healthview`), the trip band, warnings on the prompt line, voice.
+- **Between them**, over the phone hotspot, signed like the decks' other requests (wave 3's
+  `reqauth`/`sigreq`; no `?k=` between decks):
+  - `GET /car` on the OBD deck, polled by the yellow deck every second: a small JSON snapshot (link
+    state, live figures, both verdicts, the current trip, the last trip, range, price). Its format
+    is a pure, host-tested module (`util/car/carwire`).
+  - `GET /fill?p=6.49` (or no `p`): the yellow deck forwards a recognised fill-up phrase from Siri's
+    `/say`; the fuel book lives on the OBD deck.
+- **No OBD deck reachable:** the yellow deck behaves exactly as today; the band shows `--` and
+  screen A never shows.
+- **Upload (plan 2)** now starts from the OBD deck, which holds the log.
+
 ## Screens
 
 Mockups from the brainstorm (320x240, VT323, the current theme colour, red only for problems). Text
