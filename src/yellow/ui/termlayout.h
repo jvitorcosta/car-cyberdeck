@@ -63,8 +63,10 @@ constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, HILO_BASE = 86, CLOCK_RUL
 // the trip (util/car/healthview::band): three figures (TITLE, on BAND_FIG_BASE), the trip km from
 // DASH_X, km/L now from BAND_KML_X, the range right-aligned; under them the small line (SMALL, on
 // BAND_SMALL_BASE: the time, R$, volts, coolant) from DASH_X. The figures' caps sit as far under the
-// clock band's rule as the small line's above the band's own (+-1).
-constexpr int BAND_FIG_BASE = 113, BAND_KML_X = 92, BAND_SMALL_BASE = 130, TRIP_RULE_Y = 135;
+// clock band's rule as the small line's above the band's own (+-1). Each part is redrawn alone in its
+// own box (only what changed, so nothing flashes while driving): the figures' rows split at BAND_KML_X
+// and BAND_RANGE_X (trip | km/L | range), the small line's rows across.
+constexpr int BAND_FIG_BASE = 113, BAND_KML_X = 92, BAND_RANGE_X = 187, BAND_SMALL_BASE = 130, TRIP_RULE_Y = 135;
 // the lights on one row (BODY, on LIGHT_ROW_BASE, the caps centred between the rules): INSIDE left of
 // a vertical MID rule at LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: its label, a chip
 // of its colour as tall as the caps (LIGHT_CHIP_W wide) LIGHT_GAP after it, and LIGHT_GAP after that

@@ -278,6 +278,9 @@ void test_dash_trip_band_fits() {
         const int tripEnd = DASH_X + termfont::width(Face::TITLE, b->trip);
         TEST_ASSERT_TRUE_MESSAGE(BAND_KML_X >= tripEnd + MARGIN, b->trip);
         fitsRight(Face::TITLE, b->range, DASH_RIGHT, BAND_KML_X + termfont::width(Face::TITLE, b->kmlNow));
+        // each figure's ink inside its own box (the boxes split at BAND_KML_X and BAND_RANGE_X)
+        TEST_ASSERT_TRUE_MESSAGE(BAND_KML_X + termfont::width(Face::TITLE, b->kmlNow) < BAND_RANGE_X, b->kmlNow);
+        TEST_ASSERT_TRUE_MESSAGE(DASH_RIGHT - termfont::width(Face::TITLE, b->range) > BAND_RANGE_X, b->range);
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::width(Face::SMALL, b->small) <= DASH_RIGHT, b->small);
     }
     const Rows fig = fromBase(Face::TITLE, BAND_FIG_BASE), small = fromBase(Face::SMALL, BAND_SMALL_BASE);

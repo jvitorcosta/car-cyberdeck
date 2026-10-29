@@ -76,7 +76,7 @@
 //   pio run -e ledpanel -t upload
 // The car's health (from the OBD deck, src/obd, over WiFi: yellow/carlink): ">PRE-FLIGHT CHECK" once
 // per power-on, ">TRIP COMPLETE" when the car stands after a trip (see "Car health" below); -D
-// HEALTH_TEST=a|b|d draws them from a canned snapshot. Without an OBD deck neither ever shows.
+// HEALTH_TEST=a|b|c|d draws them from a canned snapshot. Without an OBD deck neither ever shows.
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
@@ -914,34 +914,64 @@ static healthview::Band tripBandNow() {
     const carwire::Snapshot& c = car.snap;
     return healthview::band(c.trip.km, c.kmlNow, c.rangeKm, seconds, c.tripCostRs, c.volts, c.coolantC);
 }
-static healthview::Band tripBandShown;  // what the band shows (drawTripBand keeps it)
+static healthview::Band tripBandShown;  // what the band shows (drawTripBand / updateTripBand keep it)
 
-static bool sameBand(const healthview::Band& a, const healthview::Band& b) {
-    return !strcmp(a.trip, b.trip) && !strcmp(a.kmlNow, b.kmlNow) && !strcmp(a.range, b.range) && !strcmp(a.small, b.small);
+// The band's four parts (termlayout): the trip km left, km/L now from BAND_KML_X, the range right-
+// aligned (TITLE, TEXT; DIM while "--"), and under them the time, R$, volts and coolant (SMALL, MID).
+// Each has its own box, from its ink's top row (ASCII ascent) to its last (descent): the figures'
+// rows split at BAND_KML_X and BAND_RANGE_X, the small line's rows across; no box touches another or
+// a rule. Digits, capitals and "$ , . / :": nothing leaves its box (test_termfont).
+enum BandPart { BP_TRIP, BP_KML, BP_RANGE, BP_SMALL, BP_N };
+static const char* const BAND_PART_NAMES[BP_N] = {"trip", "kml", "range", "small"};
+
+static const char* bandText(const healthview::Band& b, int part) {
+    switch (part) {
+    case BP_TRIP: return b.trip;
+    case BP_KML: return b.kmlNow;
+    case BP_RANGE: return b.range;
+    default: return b.small;
+    }
 }
 
-// The trip band, cleared between its rules and drawn again (termlayout): the trip km left, km/L now
-// from BAND_KML_X, the range right-aligned (TITLE, TEXT; DIM while "--"), and under them the time,
-// R$, volts and coolant (SMALL, MID). Digits, capitals and "$ , . / :": nothing rises past the
-// faces' ASCII ascent or sinks past their descent (test_termfont).
+// One part, its box cleared and its text drawn again.
+static void drawBandPart(const healthview::Band& b, int part) {
+    const char* t = bandText(b, part);
+    if (part == BP_SMALL) {
+        const int top = BAND_SMALL_BASE - termfont::ascent(Face::SMALL);
+        clearBg(RULE_X0, top, RULE_X1 - RULE_X0, BAND_SMALL_BASE + termfont::descent(Face::SMALL) - top);
+        tft.setTextColor(pal(termpal::MID));
+        text(t, DASH_X, BAND_SMALL_BASE, Face::SMALL, BL_DATUM);
+        return;
+    }
+    static constexpr int X0[] = {RULE_X0, BAND_KML_X, BAND_RANGE_X}, X1[] = {BAND_KML_X, BAND_RANGE_X, RULE_X1};
+    const int top = BAND_FIG_BASE - termfont::ascent(Face::TITLE);
+    clearBg(X0[part], top, X1[part] - X0[part], BAND_FIG_BASE + termfont::descent(Face::TITLE) - top);
+    tft.setTextColor(pal(strncmp(t, "--", 2) == 0 ? termpal::DIM : termpal::TEXT));
+    if (part == BP_RANGE) text(t, DASH_RIGHT, BAND_FIG_BASE, Face::TITLE, BR_DATUM);
+    else text(t, part == BP_TRIP ? DASH_X : BAND_KML_X, BAND_FIG_BASE, Face::TITLE, BL_DATUM);
+}
+
+// The whole trip band, cleared between its rules and drawn again (a repaint of the Menu).
 static void drawTripBand() {
-    const healthview::Band b = tripBandNow();
-    tripBandShown = b;
+    tripBandShown = tripBandNow();
     clearBg(RULE_X0, CLOCK_RULE_Y + 1, RULE_X1 - RULE_X0, TRIP_RULE_Y - CLOCK_RULE_Y - 1);
-    auto figure = [](const char* t, int x, uint8_t datum) {
-        tft.setTextColor(pal(strncmp(t, "--", 2) == 0 ? termpal::DIM : termpal::TEXT));
-        text(t, x, BAND_FIG_BASE, Face::TITLE, datum);
-    };
-    figure(b.trip, DASH_X, BL_DATUM);
-    figure(b.kmlNow, BAND_KML_X, BL_DATUM);
-    figure(b.range, DASH_RIGHT, BR_DATUM);
-    tft.setTextColor(pal(termpal::MID));
-    text(b.small, DASH_X, BAND_SMALL_BASE, Face::SMALL, BL_DATUM);
+    for (int i = 0; i < BP_N; i++) drawBandPart(tripBandShown, i);
 }
 
-// On the Menu, the trip band when its texts changed (a new snapshot, a stale one, a new minute).
+// On the Menu, only the parts whose text changed (a new snapshot, a stale one, a new minute): while
+// driving km/L moves almost every second, and a whole-band redraw would flash. "[car] band: kml".
 static void updateTripBand() {
-    if (screen == Screen::Menu && !sameBand(tripBandNow(), tripBandShown)) drawTripBand();
+    if (screen != Screen::Menu) return;
+    const healthview::Band b = tripBandNow();
+    char parts[32] = "";
+    for (int i = 0; i < BP_N; i++) {
+        if (!strcmp(bandText(b, i), bandText(tripBandShown, i))) continue;
+        drawBandPart(b, i);
+        const size_t at = strlen(parts);
+        snprintf(parts + at, sizeof(parts) - at, "%s%s", at ? " " : "", BAND_PART_NAMES[i]);
+    }
+    tripBandShown = b;
+    if (parts[0]) Serial.printf("[car] band: %s\n", parts);
 }
 
 // The lights row, cleared between its rules and drawn again: INSIDE left of a vertical MID rule,
@@ -2284,8 +2314,8 @@ static void lyricsTick() {
 // never over A, B or D. Each fresh snapshot's speed feeds the trip meter, and its figures the band.
 // The texts are healthview's (all caps, <= 39 chars: a BODY line is 311 px, a SMALL one 272), laid
 // out as the brainstorm's mockups; colours by role. Without an OBD deck nothing here ever shows.
-// Test hook: -D HEALTH_TEST=a|b|d draws from a canned snapshot instead of the OBD deck's (a: all OK,
-// b: a battery problem, d: parked after a trip); see docs/ARCHITECTURE.md "Test hooks".
+// Test hook: -D HEALTH_TEST=a|b|c|d draws from a canned snapshot instead of the OBD deck's (a: all OK,
+// b: a battery problem, c: driving with km/L stepping, d: parked after a trip); see docs/ARCHITECTURE.md "Test hooks".
 static constexpr uint32_t CHECK_MS = 5000;
 static bool checkDone = false;  // A / B has shown this power-on
 static uint32_t checkAt = 0;    // millis() it showed
@@ -2470,9 +2500,10 @@ static void leaveHealth() {
 #ifdef HEALTH_TEST
 #define HEALTH_STR2(x) #x
 #define HEALTH_STR(x) HEALTH_STR2(x)
-// The canned snapshot for HEALTH_TEST (a, b or d), the mockups' figures; a new seq every second, so
+// The canned snapshot for HEALTH_TEST (a, b, c or d), the mockups' figures; a new seq every second, so
 // it is always fresh (b and d: volts that change every second). a / b: driving (no D), checkReady; d: stood still after an 18.4 km trip, no
-// check (so D shows 5 s after the Menu).
+// check (so D shows 5 s after the Menu); c: driving on the Menu (no check, no D), km/L stepping every
+// second and the trip km every ~10 s, so the band's partial redraws show in the log ("[car] band: kml").
 static bool healthTestTake(carlink::Reading* r) {
     static uint32_t seq = 0, at = 0;
     const uint32_t now = millis();
@@ -2481,7 +2512,7 @@ static bool healthTestTake(carlink::Reading* r) {
     const char which = HEALTH_STR(HEALTH_TEST)[0];
     carwire::Snapshot s;
     s.link = carwire::Link::Live;
-    s.checkReady = which != 'd';
+    s.checkReady = which != 'd' && which != 'c';
     s.kmh = which == 'd' ? 0.0f : 40.0f;
     // b / d: the volts step every second (11.8 / 11.9), so the line redraws show in the log
     s.volts = which == 'a' ? 14.1f : (seq % 2 ? 11.8f : 11.9f);
@@ -2492,6 +2523,12 @@ static bool healthTestTake(carlink::Reading* r) {
         snprintf(s.battery.why, sizeof(s.battery.why), "BATTERY LOW WHILE RUNNING");
     }
     s.trip = which == 'd' ? tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60} : tripsum::Summary{};
+    if (which == 'c') {
+        s.volts = 14.1f;
+        s.kmlNow = 10.0f + static_cast<float>(seq % 5) * 0.7f;
+        s.trip.km = 3.0f + static_cast<float>(seq) * 0.011f;
+        s.tripCostRs = 2.5f;
+    }
     s.tripCostRs = which == 'd' ? (seq % 2 ? 9.40f : 9.41f) : 0.0f;  // d: the cost line changes too
     s.hasLast = true;
     s.last = tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60};
