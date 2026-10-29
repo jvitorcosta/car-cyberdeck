@@ -49,13 +49,11 @@ Open items, not scheduled. Newest decisions first within each section.
 ## Code health
 
 - **Split `src/yellow/ledpanel.cpp`** (~3 000 lines): the link task, the web server, the lyrics
-  and music tasks and the weather are each a candidate file under `src/yellow/`.
-- **`blescan` / `bletest` don't link**: NimBLE 1.4.3 (their `lib_deps`) and a NimBLE 2 both end up
-  in the link (`multiple definition of NimBLEClient::serviceDiscoveredCB`), likely NimBLE 2 coming
-  in as `lib/xboxpad`'s dependency. Try `lib_ignore = xboxpad` on them, or move them to NimBLE 2.
-- **Port the parked branches to the new layout**: `feat/obd` and `feat/voice-agent` predate the
-  2026-10-28 reorganisation (`src/black`, `src/yellow`, `src/util/<group>`); rebase them with the
-  path table in `docs/superpowers/README.md`.
+  and music tasks and the weather are each a candidate file under `src/yellow/`. Wait until the car
+  health work (`feat/car-health`, which adds screens to this file) is merged.
+- **`feat/obd`** predates the 2026-10-28 reorganisation and ran on the retired companion. Its OBD
+  core moves to the yellow deck in `feat/car-health` (`src/util/car/`); retire the branch once that
+  merges. (`feat/voice-agent` is already on the new layout.)
 
 ## Investigate
 
