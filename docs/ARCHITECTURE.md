@@ -177,7 +177,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 |---|---|---|
 | `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the Xbox controller's input, the screens (Menu, Lights, Karaoke, the car-health Check and Parked: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, night mode and the theme (`util/termpal`), saves to NVS |
 | `leds-link` | 0 | connects the two LED controllers (NimBLE 2; service FFF0, characteristic FFF3; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing; scans for the Xbox controller every 15 s while none is connected |
-| `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply; a fill-up phrase (`fuelbook::parsePhrase`) goes instead to the OBD deck's `/fill` (`carlink::fill`, ~2 s at most) and its answer is the reply |
+| `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply; a fill-up phrase (`fuelbook::parsePhrase`) goes instead to the OBD deck's `/fill` (`carlink::fill`, ~2-3 s at most) and its answer is the reply |
 | `lyrics` | 1, idle | polls the black deck's `/state` (every second on the Lyrics page, every 5 s on the main screen, slower after ten misses: `util/pollpace`), parses it (`util/stateparse`), and keeps music mode alive (`GET /music?on=1` every 10 s) |
 | `music` | 1, idle | while music mode is on: a UDP socket on port 4210 that takes the black deck's signed palettes (`util/wire/musicwire`) |
 | `car` | 1, idle | polls the OBD deck's `/car` (signed; `yellow/carlink`, `util/car/carwire`): every second while it answers, backing off 2, 5, then 10 s while it doesn't; at `172.20.10.12` on the hotspot, by mDNS (`cardeck-obd`) elsewhere (`util/deckaddr`) |
@@ -225,6 +225,9 @@ It answers the yellow deck over the hotspot and never writes to the car.
 | `net` | 1, idle | joins WiFi (`net/wifi`), mDNS `cardeck-obd`, SNTP, the update listener, then the web server: `/car`, `/fill` |
 | `ota` | 0 | the update listener (`net/ota`) |
 
+- **`REMOTE_TOKEN` empty**: nothing could sign a request, so the deck starts no `net` task: no
+  WiFi, no `/car` and `/fill`, no updates over WiFi (`[net] off (REMOTE_TOKEN empty)`). It still
+  reads the car and logs the trips; updates go over USB only.
 - **Read-only**: every write to the adapter goes through `obd::allowed()` (mode 01, 03, 07 and the
   adapter's setup; never mode 04) and `ATH1` is refused too.
 - **Which device** (`util/car/obdpick`): the whole scan is weighed. An adapter-like name wins

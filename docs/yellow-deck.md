@@ -57,7 +57,7 @@ labels. Every colour clears a contrast on black of at least 4.5:1 by day and 3:1
     figures, the trip `12.4 KM`, `11.8 KM/L` now and the range `296 KM LEFT`, and under them
     `0:16  R$ 6,30  14.1V  90C` (the time since the deck started, R$ so far, battery, coolant).
     Without the OBD deck (or with no new snapshot for 3 s) the figures read a dim `--` and the
-    small line only has the time;
+    small line `0:16  R$ --  --V  --C` (the time, dashes for the rest);
   - both lights on one row: `IN`, a chip of its colour, its name and level (`ROSE 40%`) on the
     left, `OUT` the same on the right; `OFF` (dim) for a light that is off, `-- NO LINK` (red)
     when the deck has no link to it;
@@ -311,7 +311,7 @@ one outside 3.00-15.00 R$/L: the tank is noted full all the same) and answers:
 | "filled up at 6.49" | `Full tank noted, 6.49 per litre.` |
 | "filled up at 649" | `Full tank noted. I heard 649, that's not a price.` |
 | "full tank" | `Full tank noted.` |
-| any, OBD deck not answering (~2 s) | `I can't reach the car module.` |
+| any, OBD deck not answering (~2-3 s) | `I can't reach the car module.` |
 
 A colour also turns the lights on. "light" only counts right before "blue" ("light off" is just
 off), so "turn the light blue" means cyan, and "lights blue" means blue.

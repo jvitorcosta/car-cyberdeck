@@ -108,7 +108,7 @@ black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the m
   the black deck (`V-CYBERDECK`) is seen but never connected (its name isn't an adapter's), and
   the lights never appear in the log (they're filtered out before the `seen` line).
 - **`/car`**: a signed request answers 200 with the JSON (`"v":1`, `"seq"` rising each second,
-  `"link"` 0); the same with `?k=<REMOTE_TOKEN>` and no signature answers 403; before SNTP a signed
+  `"link":"off"` with no adapter); the same with `?k=<REMOTE_TOKEN>` and no signature answers 403; before SNTP a signed
   one answers 503 "clock not set". Sign from the PC with `util/wire/sigreq`'s scheme (or wait for
   Task 10's yellow-deck client).
 - **`/fill`**: signed `GET /fill?p=6.49` answers `ok 6.49`; after a reboot `/car` still shows
@@ -120,7 +120,29 @@ black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the m
   - stack left in `net`, `obd-link` and `obd-ask`: each must stay above 1 KB (pass floor); note
     the numbers (each task has 6 KB);
   - the minimum free heap (`min`): note it as the no-adapter baseline for the adapter checks below.
+- **Power cut mid-row** (`::truncate` on esp_littlefs, never run on a board): pull the power
+  within a few seconds of a `[car]` line after a minute or more (or append a partial line by hand
+  from a test build), boot again: `[car] log: cut a partial row left by a power cut`, and the file
+  ends at its last whole row (`truncate()` returning 0 is what LittleFS on this core must do).
+- **Usage cap** (the 128 KB partition, 32 blocks): boot it 20+ times for a minute or two each
+  (each power-on is a file, a whole block): from the 21st file, or past 70 % of the blocks, the
+  boot logs `[car] log: dropped the N oldest trip file(s), U of T bytes used` and the oldest
+  `/t<seq>.jsonl` are gone; U stays at or under 70 % of T, and rows keep being written.
 - **Update over WiFi**: `pio run -e obddeck_ota -t upload` from a PC on the hotspot.
+
+## Both decks on the hotspot, 30 min, OBD deck without adapter
+
+Before the car: the yellow deck and the OBD deck on the hotspot together for 30 min, no Vgate.
+- Yellow `[mem]`: the minimum free heap stays above 78 KB with the car task polling `/car`; note
+  the car task's stack left (`carlink::stackLeft`).
+- No `TG1WDT` / task watchdog reset on either deck, no `[ota] rolled back`.
+- The lights and the pad answer as fast as without the OBD deck while it is polled (a colour from
+  the pad, a preset, a `/say`).
+- The `/say` fill-up end to end: `filled up at 6.49` -> `Full tank noted, 6.49 per litre.`;
+  `filled up at 649` (the OBD deck answers `refused 649`) -> `Full tank noted. I heard 649, that's
+  not a price.`; `full tank` (`ok none`) -> `Full tank noted.`; the OBD deck logs each.
+- The trip band on the Menu: `0.0 KM`, dashes for km/L and the range, and the small line
+  `0:16  R$ --  --V  --C` style (the time, dashes for the rest).
 
 ## Car-health: waiting on the adapter
 
