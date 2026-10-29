@@ -27,10 +27,10 @@ struct Out {
     }
     void real(const char* k, float v, int decimals) {
         key(k);
-        if (!std::isfinite(v)) { lit("null"); return; }
         char t[24];
-        int w = snprintf(t, sizeof(t), "%.*f", decimals, static_cast<double>(v));
-        if (w < 0 || static_cast<size_t>(w) >= sizeof(t)) { over = true; return; }
+        const int w = std::isfinite(v) ? snprintf(t, sizeof(t), "%.*f", decimals, static_cast<double>(v)) : -1;
+        // Unknown, or too wide for its field (a glitch reading 1e30): null, and the reply still goes out.
+        if (w < 0 || w > REAL_CHARS) { lit("null"); return; }
         raw(t, static_cast<size_t>(w));
     }
     void uint(const char* k, uint32_t v) {

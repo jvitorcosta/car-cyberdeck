@@ -25,8 +25,10 @@ struct Snapshot {
     bool critical = false;  // carhealth::Watch::critical()
     uint32_t seq = 0;       // +1 per snapshot: the yellow deck spots a stale reply
 };
-constexpr size_t MAX_JSON = 768;
-// NUL-terminated JSON in out; returns its length, or 0 if it doesn't fit in n. NAN/inf go out as null.
+constexpr size_t MAX_JSON = 768;  // every real at REAL_CHARS still fits (test_widest_reals_fit_max_json)
+constexpr int REAL_CHARS = 12;    // a real printed wider than this goes out as null
+// NUL-terminated JSON in out; returns its length, or 0 if it doesn't fit in n. NAN/inf, and a finite
+// value wider than REAL_CHARS, go out as null.
 size_t encode(const Snapshot& s, char* out, size_t n);
 // False on junk, a cut-off body or a missing/other "v"; *s is then untouched.
 bool decode(const char* json, Snapshot* s);

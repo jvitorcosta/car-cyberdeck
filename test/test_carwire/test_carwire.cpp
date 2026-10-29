@@ -235,11 +235,53 @@ void test_worst_case_fits_max_json() {
     TEST_ASSERT_EQUAL_STRING(a.engine.why, b.engine.why);
 }
 
+// A finite figure too wide for its field (a sensor glitch, a fuel book gone wild) is null; the rest
+// of the reply still goes out. Before, one such value failed the whole reply.
+void test_too_wide_finite_value_is_null_not_a_failed_reply() {
+    Snapshot a = full();
+    a.kmh = 1e30f;
+    a.rangeKm = -1000000000.0f;  // "-1000000000.0": 13 chars, one too many
+    a.tripCostRs = 3.4e38f;
+    char buf[carwire::MAX_JSON];
+    TEST_ASSERT_GREATER_THAN(0, carwire::encode(a, buf, sizeof(buf)));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"kmh\":null"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"range\":null"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"tcost\":null"));
+    Snapshot b;
+    TEST_ASSERT_TRUE(carwire::decode(buf, &b));
+    TEST_ASSERT_TRUE(std::isnan(b.kmh));
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 13.84f, b.volts);
+}
+
+// Every real at its widest (REAL_CHARS) still fits MAX_JSON, so no figure can fail the reply.
+void test_widest_reals_fit_max_json() {
+    Snapshot a = full();
+    for (int i = 0; i < 47; i++) {
+        a.battery.why[i] = (i % 2) ? '"' : '\\';
+        a.engine.why[i] = (i % 2) ? '\\' : '"';
+    }
+    a.battery.why[47] = a.engine.why[47] = 0;
+    const float d1 = -100000000.0f, d2 = -10000000.0f, d3 = -1000000.0f;  // 12 chars at 1, 2, 3 decimals
+    a.kmh = a.rpm = a.coolantC = a.kmlNow = a.rangeKm = d1;
+    a.volts = a.tripCostRs = a.lastCostRs = a.pricePerL = d2;
+    a.trip = {d2, d3, d1, d1, 4294967295u, 4294967295u};
+    a.last = a.trip;
+    a.seq = 4294967295u;
+    a.link = carwire::Link::Connecting;
+    char buf[carwire::MAX_JSON];
+    const size_t len = carwire::encode(a, buf, sizeof(buf));
+    TEST_ASSERT_GREATER_THAN(0, len);
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"kmh\":-100000000.0"));
+    TEST_ASSERT_NOT_NULL(strstr(buf, "\"tl\":-1000000.000"));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_full_round_trip);
     RUN_TEST(test_nans_round_trip_as_null);
     RUN_TEST(test_infinity_goes_out_as_null);
+    RUN_TEST(test_too_wide_finite_value_is_null_not_a_failed_reply);
+    RUN_TEST(test_widest_reals_fit_max_json);
     RUN_TEST(test_link_names);
     RUN_TEST(test_why_with_quotes_and_backslashes_survives);
     RUN_TEST(test_encode_reports_no_fit);
