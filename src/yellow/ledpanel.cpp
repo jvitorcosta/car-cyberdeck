@@ -2302,8 +2302,9 @@ static void lyricsTick() {
 // yellow/carlink polls the OBD deck's GET /car; carTick() (loop) takes each snapshot and decides:
 //   Check (A / B, ">PRE-FLIGHT CHECK"): once per power-on, the first time a fresh snapshot has
 //           checkReady while the Menu shows (it never covers Lights, Presets or Karaoke: it waits
-//           for the Menu). Back to the Menu after CHECK_MS, unless an item is a problem (B): then it
-//           holds until a tap.
+//           for the Menu), and only with the car still (healthview::checkMayShow: a yellow reboot
+//           mid-drive skips it for this power-on). Back to the Menu after CHECK_MS, unless an item
+//           is a problem (B): then it holds until a tap.
 //   Parked (D, ">TRIP COMPLETE"): healthview::ParkGate, fed from the snapshot's speed and trip km
 //           while the Menu or D shows (D comes only from the Menu); a stale snapshot (no new seq for
 //           carlink::STALE_MS) is an unknown speed, so it never counts as stopped. It hides when the
@@ -2501,7 +2502,8 @@ static void leaveHealth() {
 #define HEALTH_STR2(x) #x
 #define HEALTH_STR(x) HEALTH_STR2(x)
 // The canned snapshot for HEALTH_TEST (a, b, c or d), the mockups' figures; a new seq every second, so
-// it is always fresh (b and d: volts that change every second). a / b: driving (no D), checkReady; d: stood still after an 18.4 km trip, no
+// it is always fresh (b and d: volts that change every second). a / b: stood still before any trip
+// (0 km: no D), checkReady; d: stood still after an 18.4 km trip, no
 // check (so D shows 5 s after the Menu); c: driving on the Menu (no check, no D), km/L stepping every
 // second and the trip km every ~10 s, so the band's partial redraws show in the log ("[car] band: kml").
 static bool healthTestTake(carlink::Reading* r) {
@@ -2513,7 +2515,7 @@ static bool healthTestTake(carlink::Reading* r) {
     carwire::Snapshot s;
     s.link = carwire::Link::Live;
     s.checkReady = which != 'd' && which != 'c';
-    s.kmh = which == 'd' ? 0.0f : 40.0f;
+    s.kmh = which == 'c' ? 40.0f : 0.0f;     // A / B show only below 3 km/h
     // b / d: the volts step every second (11.8 / 11.9), so the line redraws show in the log
     s.volts = which == 'a' ? 14.1f : (seq % 2 ? 11.8f : 11.9f);
     s.coolantC = 90.0f;
@@ -2527,9 +2529,9 @@ static bool healthTestTake(carlink::Reading* r) {
         s.volts = 14.1f;
         s.kmlNow = 10.0f + static_cast<float>(seq % 5) * 0.7f;
         s.trip.km = 3.0f + static_cast<float>(seq) * 0.011f;
-        s.tripCostRs = 2.5f;
     }
-    s.tripCostRs = which == 'd' ? (seq % 2 ? 9.40f : 9.41f) : 0.0f;  // d: the cost line changes too
+    // d: the cost line changes too; c: a cost on the band
+    s.tripCostRs = which == 'd' ? (seq % 2 ? 9.40f : 9.41f) : which == 'c' ? 2.5f : 0.0f;
     s.hasLast = true;
     s.last = tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60};
     s.lastCostRs = 9.40f;
@@ -2572,9 +2574,12 @@ static void carTick() {
     }
     if (!checkDone && fresh && car.snap.checkReady && screen == Screen::Menu) {
         checkDone = true;
-        checkAt = now;
-        show(Screen::Check);
-        return;
+        if (healthview::checkMayShow(car.snap.kmh)) {
+            checkAt = now;
+            show(Screen::Check);
+            return;
+        }
+        Serial.println("[car] check: moving, skipped this power-on");
     }
     if (screen == Screen::Check) {
         if (!checkShown.problem && now - checkAt >= CHECK_MS) {
