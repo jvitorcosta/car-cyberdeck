@@ -2330,54 +2330,110 @@ static void drawHealthClock() {
     text(s, DASH_RIGHT, DASH_TITLE_Y, Face::SMALL, TR_DATUM);
 }
 
-// The whole Check or Parked screen, from the snapshot (drawAll has cleared it).
-static void drawHealth() {
-    tft.setTextColor(pal(termpal::MID));
-    text(screen == Screen::Check ? ">PRE-FLIGHT CHECK" : ">TRIP COMPLETE", DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
-    drawHealthClock();
-    drawRule(HEADER_RULE_Y);
-    if (screen == Screen::Check) {
-        const healthview::Check c = carCheck();
-        checkShown = c;
-        healthLine(c.battery, DASH_X, HC_BATT_Y, Face::BODY);
-        healthLine(c.batteryWhy, HC_WHY_X, HC_BATT_WHY_Y, Face::SMALL);
-        healthLine(c.engine, DASH_X, HC_ENG_Y, Face::BODY);
-        healthLine(c.engineWhy, HC_WHY_X, HC_ENG_WHY_Y, Face::SMALL);
-        drawRule(HC_RULE1_Y);
-        healthLine(c.lastTrip, DASH_X, HC_LAST_Y, Face::SMALL);
-        healthLine(c.range, DASH_X, HC_RANGE_Y, Face::BODY);
-        drawRule(HC_RULE2_Y);
-        healthCursor(DASH_X + healthLine(c.status, DASH_X, HC_STATUS_Y, Face::BODY), HC_STATUS_Y, Face::BODY);
-        Serial.printf("[car] drew screen %s: %s\n", c.problem ? "B" : "A", c.status.text);
-        return;
+// Where each of a screen's lines goes, in the order healthLines() lists them: its pen (caps top), the
+// right end of its band, its face and how it is drawn. A line's band is the rows its ink can reach
+// (termfont's ascent / descent: healthview's texts are ASCII, no accented capitals) between x and
+// right; no two bands share a row, and none reaches a rule, so a changed line is cleared and drawn
+// again alone.
+enum class HowDrawn : uint8_t { Line, Figure, Cursor };  // Cursor: a line, then the block cursor
+struct HealthSlot {
+    const char* name;  // for the log
+    int x, y, right;
+    Face face;
+    HowDrawn how;
+};
+static constexpr int N_CHECK_LINES = 7, N_PARKED_LINES = 8;
+static const HealthSlot CHECK_SLOTS[N_CHECK_LINES] = {
+    {"battery", DASH_X, HC_BATT_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"batteryWhy", HC_WHY_X, HC_BATT_WHY_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"engine", DASH_X, HC_ENG_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"engineWhy", HC_WHY_X, HC_ENG_WHY_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"lastTrip", DASH_X, HC_LAST_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"range", DASH_X, HC_RANGE_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"status", DASH_X, HC_STATUS_Y, RULE_X1, Face::BODY, HowDrawn::Cursor},
+};
+static const HealthSlot PARKED_SLOTS[N_PARKED_LINES] = {
+    {"km", DASH_X, HP_ROW1_Y, HP_COL2_X, Face::BIG, HowDrawn::Figure},
+    {"minutes", HP_COL2_X, HP_ROW1_Y, RULE_X1, Face::BIG, HowDrawn::Figure},
+    {"kml", DASH_X, HP_ROW2_Y, HP_COL2_X, Face::BIG, HowDrawn::Figure},
+    {"cost", HP_COL2_X, HP_ROW2_Y, RULE_X1, Face::BIG, HowDrawn::Line},  // "R$ 9,40": one figure
+    {"small", DASH_X, HP_SMALL_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"battery", DASH_X, HP_ITEMS_Y, HP_COL2_X, Face::BODY, HowDrawn::Line},
+    {"engine", HP_COL2_X, HP_ITEMS_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"footer", DASH_X, HP_FOOTER_Y, RULE_X1, Face::BODY, HowDrawn::Cursor},
+};
+static void healthLines(const healthview::Check& c, const healthview::Line* out[N_CHECK_LINES]) {
+    const healthview::Line* l[N_CHECK_LINES] = {&c.battery, &c.batteryWhy, &c.engine, &c.engineWhy,
+                                                &c.lastTrip, &c.range, &c.status};
+    for (int i = 0; i < N_CHECK_LINES; i++) out[i] = l[i];
+}
+static void healthLines(const healthview::Parked& p, const healthview::Line* out[N_PARKED_LINES]) {
+    const healthview::Line* l[N_PARKED_LINES] = {&p.km, &p.minutes, &p.kml, &p.cost, &p.small, &p.battery, &p.engine, &p.footer};
+    for (int i = 0; i < N_PARKED_LINES; i++) out[i] = l[i];
+}
+
+// One line in its slot; `clear`: its band first (a redraw; after drawAll's clear it is clean).
+static void drawHealthSlot(const HealthSlot& sl, const healthview::Line& l, bool clear) {
+    if (clear) {
+        const int base = sl.y + termfont::capHeight(sl.face), x0 = sl.x < RULE_X0 ? RULE_X0 : sl.x;
+        const int top = base - termfont::ascent(sl.face);
+        clearBg(x0, top, sl.right - x0, base + termfont::descent(sl.face) - top);
     }
-    const healthview::Parked p = carParked();
-    parkedShown = p;
-    healthFigure(p.km, DASH_X, HP_ROW1_Y);
-    healthFigure(p.minutes, HP_COL2_X, HP_ROW1_Y);
-    healthFigure(p.kml, DASH_X, HP_ROW2_Y);
-    healthLine(p.cost, HP_COL2_X, HP_ROW2_Y, Face::BIG);  // "R$ 9,40": one figure
-    healthLine(p.small, DASH_X, HP_SMALL_Y, Face::SMALL);
-    drawRule(HP_RULE1_Y);
-    healthLine(p.battery, DASH_X, HP_ITEMS_Y, Face::BODY);
-    healthLine(p.engine, HP_COL2_X, HP_ITEMS_Y, Face::BODY);
-    drawRule(HP_RULE2_Y);
-    healthCursor(DASH_X + healthLine(p.footer, DASH_X, HP_FOOTER_Y, Face::BODY), HP_FOOTER_Y, Face::BODY);
-    Serial.printf("[car] drew screen D: %s, %s\n", p.km.text, p.minutes.text);
+    if (sl.how == HowDrawn::Figure) healthFigure(l, sl.x, sl.y);
+    else if (sl.how == HowDrawn::Cursor) healthCursor(sl.x + healthLine(l, sl.x, sl.y, sl.face), sl.y, sl.face);
+    else healthLine(l, sl.x, sl.y, sl.face);
 }
 
 static bool sameLine(const healthview::Line& a, const healthview::Line& b) {
     return a.role == b.role && strcmp(a.text, b.text) == 0;
 }
-static bool sameCheck(const healthview::Check& a, const healthview::Check& b) {
-    return sameLine(a.battery, b.battery) && sameLine(a.batteryWhy, b.batteryWhy) && sameLine(a.engine, b.engine) &&
-           sameLine(a.engineWhy, b.engineWhy) && sameLine(a.lastTrip, b.lastTrip) && sameLine(a.range, b.range) &&
-           sameLine(a.status, b.status);
+
+// The lines of `now` that differ from `shown`, cleared and drawn again (all of them when `all`), and
+// `shown` taken up; one log line names those redrawn. Returns how many were drawn.
+template <typename Screenful, int N>
+static int drawHealthLines(const Screenful& now, Screenful& shown, const HealthSlot (&slots)[N], bool all) {
+    const healthview::Line *a[N], *b[N];
+    healthLines(now, a);
+    healthLines(shown, b);
+    char names[96] = "";
+    int n = 0;
+    for (int i = 0; i < N; i++) {
+        if (!all && sameLine(*a[i], *b[i])) continue;
+        drawHealthSlot(slots[i], *a[i], !all);
+        n++;
+        if (!all) {
+            const size_t at = strlen(names);
+            snprintf(names + at, sizeof(names) - at, " %s", slots[i].name);
+        }
+    }
+    shown = now;
+    if (!all && n) Serial.printf("[car] redraw:%s\n", names);
+    return n;
 }
-static bool sameParked(const healthview::Parked& a, const healthview::Parked& b) {
-    return sameLine(a.km, b.km) && sameLine(a.minutes, b.minutes) && sameLine(a.kml, b.kml) && sameLine(a.cost, b.cost) &&
-           sameLine(a.small, b.small) && sameLine(a.battery, b.battery) && sameLine(a.engine, b.engine) &&
-           sameLine(a.footer, b.footer);
+
+static uint32_t healthFullDraws = 0;  // whole-screen draws of Check / Parked since boot (the log)
+
+// The whole Check or Parked screen, from the snapshot (drawAll has cleared it): on entry, a night or
+// theme change, a recalibration.
+static void drawHealth() {
+    tft.setTextColor(pal(termpal::MID));
+    text(screen == Screen::Check ? ">PRE-FLIGHT CHECK" : ">TRIP COMPLETE", DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    drawHealthClock();
+    drawRule(HEADER_RULE_Y);
+    healthFullDraws++;
+    if (screen == Screen::Check) {
+        drawRule(HC_RULE1_Y);
+        drawRule(HC_RULE2_Y);
+        drawHealthLines(carCheck(), checkShown, CHECK_SLOTS, true);
+        Serial.printf("[car] drew screen %s: %s (full draw %lu)\n", checkShown.problem ? "B" : "A", checkShown.status.text,
+                      static_cast<unsigned long>(healthFullDraws));
+        return;
+    }
+    drawRule(HP_RULE1_Y);
+    drawRule(HP_RULE2_Y);
+    drawHealthLines(carParked(), parkedShown, PARKED_SLOTS, true);
+    Serial.printf("[car] drew screen D: %s, %s (full draw %lu)\n", parkedShown.km.text, parkedShown.minutes.text,
+                  static_cast<unsigned long>(healthFullDraws));
 }
 
 // A tap, A or B on Check or Parked: back to the Menu; D stays away until the car has moved.
@@ -2391,7 +2447,7 @@ static void leaveHealth() {
 #define HEALTH_STR2(x) #x
 #define HEALTH_STR(x) HEALTH_STR2(x)
 // The canned snapshot for HEALTH_TEST (a, b or d), the mockups' figures; a new seq every second, so
-// it is always fresh. a / b: driving (no D), checkReady; d: stood still after an 18.4 km trip, no
+// it is always fresh (b and d: volts that change every second). a / b: driving (no D), checkReady; d: stood still after an 18.4 km trip, no
 // check (so D shows 5 s after the Menu).
 static bool healthTestTake(carlink::Reading* r) {
     static uint32_t seq = 0, at = 0;
@@ -2403,7 +2459,8 @@ static bool healthTestTake(carlink::Reading* r) {
     s.link = carwire::Link::Live;
     s.checkReady = which != 'd';
     s.kmh = which == 'd' ? 0.0f : 40.0f;
-    s.volts = which == 'b' ? 11.9f : 14.1f;
+    // b / d: the volts step every second (11.8 / 11.9), so the line redraws show in the log
+    s.volts = which == 'a' ? 14.1f : (seq % 2 ? 11.8f : 11.9f);
     s.coolantC = 90.0f;
     s.battery.known = s.engine.known = true;
     if (which == 'b') {
@@ -2411,7 +2468,7 @@ static bool healthTestTake(carlink::Reading* r) {
         snprintf(s.battery.why, sizeof(s.battery.why), "BATTERY LOW WHILE RUNNING");
     }
     s.trip = which == 'd' ? tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60} : tripsum::Summary{};
-    s.tripCostRs = which == 'd' ? 9.40f : 0.0f;
+    s.tripCostRs = which == 'd' ? (seq % 2 ? 9.40f : 9.41f) : 0.0f;  // d: the cost line changes too
     s.hasLast = true;
     s.last = tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60};
     s.lastCostRs = 9.40f;
@@ -2423,8 +2480,8 @@ static bool healthTestTake(carlink::Reading* r) {
 }
 #endif
 
-// In loop(): takes a new snapshot, then shows, keeps or leaves Check and Parked (see above). A screen's
-// text is redrawn only when a snapshot changed it.
+// In loop(): takes a new snapshot, then shows, keeps or leaves Check and Parked (see above). Only the
+// lines a new snapshot changed are redrawn, each in its own band (no whole-screen flash).
 static void carTick() {
 #ifdef HEALTH_TEST
     const bool got = healthTestTake(&car);
@@ -2443,7 +2500,9 @@ static void carTick() {
         if (!checkShown.problem && now - checkAt >= CHECK_MS) {
             Serial.println("[car] check: back to the Menu");
             show(Screen::Menu);
-        } else if (got && !sameCheck(carCheck(), checkShown)) drawAll();
+        } else if (got) {
+            drawHealthLines(carCheck(), checkShown, CHECK_SLOTS, false);  // only the lines that changed
+        }
         return;
     }
     if (car.seqAt == 0 || (screen != Screen::Menu && screen != Screen::Parked)) return;
@@ -2452,7 +2511,9 @@ static void carTick() {
     else if (!parked && screen == Screen::Parked) {
         Serial.println("[car] moving: trip complete hidden");
         show(Screen::Menu);
-    } else if (got && screen == Screen::Parked && !sameParked(carParked(), parkedShown)) drawAll();
+    } else if (got && screen == Screen::Parked) {
+        drawHealthLines(carParked(), parkedShown, PARKED_SLOTS, false);
+    }
 }
 
 // ---- Music mode: the song's colour on both lights ----
