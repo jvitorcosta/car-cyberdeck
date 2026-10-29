@@ -190,8 +190,17 @@ bool lightMac(const NimBLEAddress& a) {
     return strcasecmp(s.c_str(), LED_INSIDE_MAC) == 0 || strcasecmp(s.c_str(), LED_OUTSIDE_MAC) == 0;
 }
 
-obdpick::Recent s_failed;                          // addresses that failed the connect or the setup (link task)
+obdpick::Recent s_failed;                          // scanned devices that failed (link task)
 bool s_fromScan = false;                           // s_addr came from findAdapter, not NVS
+char s_advName[32] = "";                           // the scanned device's advertised name ("" if none)
+
+// A scanned device that failed: into the skip ring when obdpick::skipAfter says so (an adapter-like
+// name only after a failed setup; a nameless fallback after either). The remembered one never.
+void failedFromScan(obdpick::Failure f) {
+    if (!s_fromScan || !obdpick::skipAfter(s_advName, f)) return;
+    s_failed.failed(static_cast<uint64_t>(s_addr), millis());
+    Serial.printf("[obd] %s skipped for %u min\n", s_name, static_cast<unsigned>(obdpick::SKIP_MS / 60000));
+}
 
 // A 4 s active scan (names often come in the scan response); logs every named or serial-service
 // device seen (never the lights), then obdpick weighs the whole list: an adapter-like name first,
@@ -227,6 +236,7 @@ bool findAdapter() {
     const int k = obdpick::pick(cands, n, s_failed, millis());
     if (k < 0) return false;
     s_addr = addrs[k];
+    strlcpy(s_advName, names[k], sizeof s_advName);
     strlcpy(s_name, names[k][0] ? names[k] : "OBD (no name)", sizeof s_name);
     return true;
 }
@@ -501,10 +511,7 @@ void tick(uint32_t nowMs) {
         closeLink();
         s_conn.store(DOWN);
         Serial.printf("[obd] %s: disconnected\n", s_name);
-        if (!wasReady && s_fromScan) {             // a scanned device that never answered the setup
-            s_failed.failed(static_cast<uint64_t>(s_addr), millis());
-            Serial.printf("[obd] %s skipped for %u min\n", s_name, static_cast<unsigned>(obdpick::SKIP_MS / 60000));
-        }
+        if (!wasReady) failedFromScan(obdpick::Failure::Setup);   // connected, never answered as an ELM327
         if (wasReady) {                            // a working adapter dropped: back at once
             waitMs = WAIT_MIN_MS;
             nextMs = millis();
@@ -533,8 +540,7 @@ void tick(uint32_t nowMs) {
             up = openLink();
             if (!up) {
                 closeLink();
-                s_failed.failed(static_cast<uint64_t>(s_addr), millis());   // try someone else next round
-                Serial.printf("[obd] %s skipped for %u min\n", s_name, static_cast<unsigned>(obdpick::SKIP_MS / 60000));
+                failedFromScan(obdpick::Failure::Connect);
             }
         }
     }

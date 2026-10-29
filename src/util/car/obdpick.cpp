@@ -41,4 +41,9 @@ int pick(const Candidate* c, int n, const Recent& recent, uint32_t nowMs) {
     }
     return byName >= 0 ? byName : nameless;
 }
+
+bool skipAfter(const char* advertisedName, Failure f) {
+    const bool adapterName = advertisedName && advertisedName[0] && obd::looksLikeAdapter(advertisedName);
+    return !adapterName || f == Failure::Setup;
+}
 }  // namespace obdpick

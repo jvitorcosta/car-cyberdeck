@@ -220,7 +220,8 @@ It answers the yellow deck over the hotspot and never writes to the car.
   adapter's setup; never mode 04) and `ATH1` is refused too.
 - **Which device** (`util/car/obdpick`): the whole scan is weighed. An adapter-like name wins
   (strongest signal), a nameless serial-service device only when no name matched; a scanned
-  device that failed the connect or the setup is skipped for 10 min (the last 4 kept). The lights
+  device that failed is skipped for 10 min (the last 4 kept): one with an adapter-like name only
+  after a failed setup (a missed connect is retried next round), a nameless one after either. The lights
   (their MACs from `config.h`, `ELK` / `MELK` names; their controllers serve FFF0 too) never.
 - **NVS**: `obd` holds the adapter (`bleaddr`, `bletype`, `blename`); `car` holds the boot sequence
   (`tseq`, which names the trip file `/t<seq>.jsonl`), the last trip with the health memo (`last`,

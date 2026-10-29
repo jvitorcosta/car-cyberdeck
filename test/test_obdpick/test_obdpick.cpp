@@ -89,8 +89,24 @@ void test_nothing_to_pick() {
     TEST_ASSERT_EQUAL_INT(-1, obdpick::pick(c, 1, r, 0));
 }
 
+void test_an_adapter_name_is_skipped_only_after_a_failed_setup() {
+    // A first-time Vgate that misses one connect is tried again next round; one that connects but
+    // doesn't answer as an ELM327 is skipped.
+    TEST_ASSERT_FALSE(obdpick::skipAfter("OBDII", obdpick::Failure::Connect));
+    TEST_ASSERT_TRUE(obdpick::skipAfter("OBDII", obdpick::Failure::Setup));
+    TEST_ASSERT_FALSE(obdpick::skipAfter("vLinker MC-IOS", obdpick::Failure::Connect));
+}
+
+void test_a_nameless_fallback_is_skipped_after_either_failure() {
+    TEST_ASSERT_TRUE(obdpick::skipAfter("", obdpick::Failure::Connect));
+    TEST_ASSERT_TRUE(obdpick::skipAfter("", obdpick::Failure::Setup));
+    TEST_ASSERT_TRUE(obdpick::skipAfter(nullptr, obdpick::Failure::Connect));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_an_adapter_name_is_skipped_only_after_a_failed_setup);
+    RUN_TEST(test_a_nameless_fallback_is_skipped_after_either_failure);
     RUN_TEST(test_name_match_beats_an_earlier_serial_gadget);
     RUN_TEST(test_best_rssi_among_name_matches);
     RUN_TEST(test_nameless_serial_fallback_only_without_a_name_match);
