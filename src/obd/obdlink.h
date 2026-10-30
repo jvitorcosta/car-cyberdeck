@@ -5,8 +5,7 @@
 // The OBD deck's link to the ELM327 adapter (the Vgate) over Bluetooth Low Energy (NimBLE 2), its only
 // BLE link. Two tasks on core 0: the link task finds and connects the adapter (the one place that
 // connects, with a 5 s..60 s backoff); once connected, the ask task sets the adapter up and asks the
-// car's values in obdplan's order, read-only: every write goes through obd::allowed(), and ATH1 is
-// refused too. Ported from the parked yellow-deck attempt (feat/obd's BLE path, NimBLE 2.5.1).
+// car's values in obdplan's order, read-only: every write goes through obd::allowed(). Ported from the parked yellow-deck attempt (feat/obd's BLE path, NimBLE 2.5.1).
 // Spec: docs/superpowers/specs/2026-10-28-car-health-check-design.md ("Architecture update")
 namespace obdlink {
 struct View {

@@ -119,10 +119,9 @@ void rxClear() {
 bool linkUp() { return s_conn.load() == UP && s_client && s_client->isConnected() && s_tx; }
 
 // The only write to the adapter. obd::allowed() gates it, so nothing but mode 01, 03 / 07 and the
-// adapter's own setup can ever reach the car; ATH1 is refused too (headers on would break parse()'s
-// view of the replies, and nothing here needs them).
+// adapter's own setup can ever reach the car.
 bool send(const char* cmd) {
-    if (!obd::allowed(cmd) || strcmp(cmd, "ATH1\r") == 0) {
+    if (!obd::allowed(cmd)) {
         Serial.printf("[obd] BLOCKED %.*s\n", (int)strcspn(cmd ? cmd : "", "\r"), cmd ? cmd : "");
         return false;
     }

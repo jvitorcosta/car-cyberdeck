@@ -279,8 +279,7 @@ bool allowed(const char* cmd) {
         return true;
     }
     if (n == 2 && cmd[0] == '0' && (cmd[1] == '3' || cmd[1] == '7')) return true;   // read trouble codes
-    static const char* const SETUP[] = {"ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATH1", "ATSP0", "ATRV",
-                                        "ATI", "ATDPN"};
+    static const char* const SETUP[] = {"ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATSP0", "ATRV", "ATI", "ATDPN"};
     for (const char* s : SETUP)
         if (strlen(s) == n && strncmp(cmd, s, n) == 0) return true;
     return false;

@@ -42,9 +42,9 @@ const char* codesRequest(bool pending);
 int parseCodes(const char* raw, bool pending, char (*out)[6], int max);
 // The only gate to the car: true for exactly a mode 01 request ("01" + two upper-case hex digits),
 // "03" or "07" (read the stored / pending trouble codes), or one of the adapter's own setup
-// commands (ATZ, ATE0, ATL0, ATS0, ATH0, ATH1, ATSP0, ATRV, ATI, ATDPN), each ending in exactly
-// one '\r'. Anything else (mode 04 above all), any other mode, header or monitor command, lower
-// case, spacing or a second command, is false.
+// commands (ATZ, ATE0, ATL0, ATS0, ATH0, ATSP0, ATRV, ATI, ATDPN), each ending in exactly one '\r'. Anything
+// else (mode 04 above all), any other mode, header or monitor command, ATH1 (headers on would break
+// parse()'s anchors), lower case, spacing or a second command, is false.
 bool allowed(const char* cmd);
 // The adapter's answer to one of its setup commands is a real one: ATZ's banner ("ELM...", or
 // "OK" on some clones), "OK" for the rest. A cut-off banner or a "?" is not.

@@ -109,13 +109,13 @@ void test_adapter_names() {
 void test_every_command_the_code_sends_is_allowed() {
     for (int i = 0; i < (int)Pid::COUNT; ++i) TEST_ASSERT_TRUE(obd::allowed(obd::request((Pid)i)));
     const char* setup[] = {"03\r", "07\r", "ATZ\r", "ATE0\r", "ATL0\r", "ATS0\r", "ATSP0\r", "ATRV\r", "ATI\r", "ATDPN\r",
-                           "ATH0\r", "ATH1\r", "0100\r", "0120\r", "0140\r", "0160\r"};
+                           "ATH0\r", "0100\r", "0120\r", "0140\r", "0160\r"};
     for (const char* c : setup) TEST_ASSERT_TRUE_MESSAGE(obd::allowed(c), c);
 }
 
 void test_writes_and_other_modes_are_refused() {
     const char* bad[] = {"04\r", "0400\r", "0300\r", "0700\r", "05\r", "0A\r", "0200\r", "0800\r", "0902\r", "2F0101\r",
-                         "3B01\r", "2201\r", "2101\r", "ATSH7E0\r", "ATMA\r", "ATCRA7E8\r", "ATCSM0\r",
+                         "3B01\r", "2201\r", "2101\r", "ATH1\r", "ATSH7E0\r", "ATMA\r", "ATCRA7E8\r", "ATCSM0\r",
                          "ATBD\r", "ATPP0CSV01\r", "ATWS\r", "", nullptr};
     for (const char* c : bad) TEST_ASSERT_FALSE_MESSAGE(obd::allowed(c), c ? c : "null");
 }
