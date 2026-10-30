@@ -115,7 +115,8 @@ uint32_t staleAfterMs(Pid p) { return isFast(p) ? STALE_FAST_MS : STALE_SLOW_MS;
 
 bool batteryWarn(float volts, bool engineRunning) { return volts < (engineRunning ? 12.0f : 12.2f); }
 bool coolantWarn(float c) { return c > 105.0f; }
-bool rpmWarn(float rpm, float redline) { return rpm >= 0.85f * redline; }
+// 85 % as 17/20: 0.85f isn't exact, and a 32-bit x86 build keeps the excess past the boundary
+bool rpmWarn(float rpm, float redline) { return rpm * 20.0f >= redline * 17.0f; }
 
 float frac(float v, float lo, float hi) {
     if (!(hi > lo)) return 0.0f;
