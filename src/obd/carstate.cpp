@@ -21,6 +21,16 @@ static_assert(static_cast<int>(carwire::Link::Live) == static_cast<int>(obdplan:
                   static_cast<int>(carwire::Link::Connecting) == static_cast<int>(obdplan::Link::Connecting),
               "carwire::Link mirrors obdplan::Link");
 
+// A bench build (obddeck_bench) leaves a real deck's records alone: its own NVS namespace, and no
+// trip log on flash (the log's cap could drop real trips, and simulated rows must never be uploaded).
+#ifdef OBD_BENCH
+constexpr bool BENCH = true;
+constexpr const char* NVS_NAME = "carsim";
+#else
+constexpr bool BENCH = false;
+constexpr const char* NVS_NAME = "car";
+#endif
+
 constexpr uint32_t CHECK_AFTER_LIVE_MS = 20000;   // the check is ready this long after Live anyway
 
 // NVS "last": km, litres (f32), seconds, idleS (u32), avgKmh, costRs (f32), then the carhealth Memo;
@@ -102,7 +112,7 @@ void saveFuelLocked() {
     fuelbook::encode(s_book, rec);
     if (s_fuelSaved && memcmp(rec, s_savedFuel, sizeof rec) == 0) return;
     Preferences p;
-    if (!p.begin("car", false)) return;
+    if (!p.begin(NVS_NAME, false)) return;
     if (p.putBytes("fuel", rec, sizeof rec) == sizeof rec) {
         memcpy(s_savedFuel, rec, sizeof rec);
         s_fuelSaved = true;
@@ -115,7 +125,7 @@ void saveCodes(int stored, int pending) {
     s_knownPending = pending;
     const uint8_t rec[2] = {static_cast<uint8_t>(stored), static_cast<uint8_t>(pending)};
     Preferences p;
-    if (!p.begin("car", false)) return;
+    if (!p.begin(NVS_NAME, false)) return;
     p.putBytes("codes", rec, sizeof rec);
     p.end();
 }
@@ -153,7 +163,7 @@ const char* levelName(const carhealth::Verdict& v) {
 void begin() {
     s_lock = xSemaphoreCreateMutex();
     Preferences p;
-    p.begin("car", false);                         // read-write: creates it, no NOT_FOUND log
+    p.begin(NVS_NAME, false);                         // read-write: creates it, no NOT_FOUND log
     s_bootSeq = (p.isKey("tseq") ? p.getUInt("tseq", 0) : 0) + 1;
     p.putUInt("tseq", s_bootSeq);
     // The last power-on's trip: shown as "last trip", and its Memo judged now (the power cut came
@@ -181,7 +191,7 @@ void begin() {
     p.end();
     // The trip log: a row cut by the last power cut goes, the oldest trips go past the cap, then this
     // boot's file.
-    if (carfs::begin()) {
+    if (!BENCH && carfs::begin()) {
         if (s_log.recover()) Serial.println("[car] log: cut a partial row left by a power cut");
         const int gone = s_log.enforceCap();
         if (gone)
@@ -263,6 +273,7 @@ void second() {
     s.last = s_last;
     s.lastCostRs = s_lastCost;
     s.critical = s_watch.critical();
+    s.sim = BENCH;
     Lock lock;
     fuelbook::burn(&s_book, litres);
     if (rowDone) fuelbook::learn(&s_book, row.km, row.litres);
@@ -304,7 +315,7 @@ void checkpoint() {
         }
         if (!s_lastSaved || memcmp(rec, s_savedLast, sizeof rec) != 0) {
             Preferences p;
-            if (p.begin("car", false)) {
+            if (p.begin(NVS_NAME, false)) {
                 if (p.putBytes("last", rec, sizeof rec) == sizeof rec) {
                     memcpy(s_savedLast, rec, sizeof rec);
                     s_lastSaved = true;

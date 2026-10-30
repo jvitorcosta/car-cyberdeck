@@ -50,7 +50,9 @@ Open items, not scheduled. Newest decisions first within each section.
   screens A, B and D with `-D HEALTH_TEST=a|b|d` and compare with the mockups (the brainstorm's
   health moments A, B, D): spacing, colours (B's battery lines in ALERT), nothing past 316 px. A
   shows for 5 s after the boot (RESET to see it again); B holds until a tap; D comes 5 s after the
-  Menu. Then with the OBD deck: A on a real power-on, D after a real stop.
+  Menu. Then with the OBD deck: A on a real power-on, D after a real stop. Each screen can be saved
+  as a PNG over USB with `python tools/deck_shot.py <port> <out.png>` (never run on the deck yet:
+  check it reads the panel back, that the colours match, and that about 30 s without touch is fine).
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
@@ -135,6 +137,14 @@ black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the m
   `/t<seq>.jsonl` are gone; U stays at or under 70 % of T, and rows keep being written.
 - **Update over WiFi**: `pio run -e obddeck_ota -t upload` from a PC on the hotspot.
 
+## OBD deck bench build (`obddeck_bench`, never in the car)
+
+A simulated 10 min drive (`util/car/benchdrive`) in place of the adapter, on a real board: start-up,
+stops for screen D, an overheat at 4:00, a low battery from 7:20, a stored code and the MIL from
+8:50. `/car` says `"sim":1`, and the yellow deck writes SIM on the check, the trip summary and the
+band's small line. Its NVS namespace is `carsim` and it keeps no trip log, so a real deck's records
+stay; the trip log is therefore only tested by the normal build. Reflash `obddeck` before the car.
+
 ## Both decks on the hotspot, 30 min, OBD deck without adapter
 
 Before the car: the yellow deck and the OBD deck on the hotspot together for 30 min, no Vgate.
@@ -156,6 +166,11 @@ The OBD link (now on the OBD deck) has never met an adapter: the Vgate hasn't ar
 2026-10-28, parked): a 4th BLE connection on the yellow deck is not safe (the precompiled framework
 reserves the controller's DRAM for 3; a build with 4 crash-looped), which is why the OBD link moved
 to its own board. That attempt measured ~7-8 KB of heap for obdlink.
+
+First, from the PC: `python tools/obd_probe.py` to find it, then `python tools/obd_probe.py <name>`
+in the car with the ignition on: its GATT layout, each reply, and ATRV beside PID 42. Check both
+voltages against a multimeter: the battery warnings trust ATRV, and another maker's adapter read
+28.3 V and 11.8 V on one car.
 
 To check on the OBD deck when the Vgate arrives (or against a sim on a spare ESP32):
 - `[obd] gatt ...` lines: record the Vgate's real service (16-bit FFF0 or a 128-bit UUID);

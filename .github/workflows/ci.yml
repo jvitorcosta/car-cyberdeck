@@ -34,7 +34,7 @@ jobs:
             part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
           # the OBD deck (no hardware check of its own: a plain ESP32 with nothing attached)
           - board: obddeck
-            envs: -e obddeck
+            envs: -e obddeck -e obddeck_bench
             part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
     steps:
       - uses: actions/checkout@v4

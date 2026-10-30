@@ -912,7 +912,13 @@ static healthview::Band tripBandNow() {
     const uint32_t seconds = tripMeter.trip().seconds;
     if (!carFresh(millis())) return healthview::band(NAN, NAN, NAN, seconds, NAN, NAN, NAN);
     const carwire::Snapshot& c = car.snap;
-    return healthview::band(c.trip.km, c.kmlNow, c.rangeKm, seconds, c.tripCostRs, c.volts, c.coolantC);
+    healthview::Band b = healthview::band(c.trip.km, c.kmlNow, c.rangeKm, seconds, c.tripCostRs, c.volts, c.coolantC);
+    if (c.sim) {  // a bench drive never passes for the car
+        memmove(b.small + 4, b.small, sizeof(b.small) - 5);
+        memcpy(b.small, "SIM ", 4);
+        b.small[sizeof(b.small) - 1] = 0;
+    }
+    return b;
 }
 static healthview::Band tripBandShown;  // what the band shows (drawTripBand / updateTripBand keep it)
 
@@ -2472,7 +2478,10 @@ static uint32_t healthFullDraws = 0;  // whole-screen draws of Check / Parked si
 // theme change, a recalibration.
 static void drawHealth() {
     tft.setTextColor(pal(termpal::MID));
-    text(screen == Screen::Check ? ">PRE-FLIGHT CHECK" : ">TRIP COMPLETE", DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    const bool sim = car.snap.sim;
+    const char* title = screen == Screen::Check ? (sim ? ">PRE-FLIGHT CHECK  SIM" : ">PRE-FLIGHT CHECK")
+                                                : (sim ? ">TRIP COMPLETE  SIM" : ">TRIP COMPLETE");
+    text(title, DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
     drawHealthClock();
     drawRule(HEADER_RULE_Y);
     healthFullDraws++;
@@ -3297,7 +3306,44 @@ void setup() {
     enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
 }
 
+// "SHOT\n" on the serial port sends the panel to the PC (tools/deck_shot.py): "SHOT 320 240", a line
+// "R<yyy> <hex RGB565>" per row, "SHOT END". Each row is one write, so a log line from another task
+// lands between rows, never inside one. About 30 s at 115200, in the loop: touch and drawing wait
+// (the 90 s watchdog doesn't mind), the lights' link and the servers keep running.
+static void shotTick() {
+    static const char WORD[] = "SHOT\n";
+    static uint8_t matched = 0;
+    bool go = false;
+    while (Serial.available()) {
+        const char c = static_cast<char>(Serial.read());
+        if (c == '\r') continue;
+        matched = c == WORD[matched] ? matched + 1 : (c == WORD[0] ? 1 : 0);
+        if (WORD[matched] == 0) {
+            matched = 0;
+            go = true;
+        }
+    }
+    if (!go) return;
+    static const char HEX_DIGITS[] = "0123456789abcdef";
+    static uint8_t rgb[320 * 3];
+    static char row[6 + 320 * 4 + 2];
+    Serial.println("SHOT 320 240");
+    for (int y = 0; y < 240; y++) {
+        tft.readRectRGB(0, y, 320, 1, rgb);
+        int n = snprintf(row, sizeof row, "R%03d ", y);
+        for (int x = 0; x < 320; x++) {
+            const uint8_t* p = rgb + x * 3;
+            const unsigned v = ((p[0] & 0xF8U) << 8) | ((p[1] & 0xFCU) << 3) | (p[2] >> 3);
+            for (int s = 12; s >= 0; s -= 4) row[n++] = HEX_DIGITS[(v >> s) & 15U];
+        }
+        row[n++] = '\n';
+        Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
+    }
+    Serial.println("SHOT END");
+}
+
 void loop() {
+    shotTick();
     // Up bootguard::HEALTHY_MS, online at that moment and the update listener started (when updates
     // are on; off, online is enough; ota::onGoodPoll checks the time and the listener): this
     // firmware has proven itself (net/ota), and can take the next update. Checked once a second.

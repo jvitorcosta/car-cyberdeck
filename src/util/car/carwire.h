@@ -23,6 +23,7 @@ struct Snapshot {
     float lastCostRs = NAN;
     float rangeKm = NAN, pricePerL = NAN;
     bool critical = false;  // carhealth::Watch::critical()
+    bool sim = false;       // a bench build's simulated drive (obddeck_bench), never the car
     uint32_t seq = 0;       // +1 per snapshot: the yellow deck spots a stale reply
 };
 constexpr size_t MAX_JSON = 768;  // every real at REAL_CHARS still fits (test_widest_reals_fit_max_json)

@@ -254,6 +254,20 @@ void test_too_wide_finite_value_is_null_not_a_failed_reply() {
 }
 
 // Every real at its widest (REAL_CHARS) still fits MAX_JSON, so no figure can fail the reply.
+void test_sim_flag_round_trips_and_defaults_off() {
+    carwire::Snapshot a{};
+    a.sim = true;
+    char json[carwire::MAX_JSON];
+    TEST_ASSERT_TRUE(carwire::encode(a, json, sizeof json) > 0);
+    carwire::Snapshot b{};
+    TEST_ASSERT_TRUE(carwire::decode(json, &b));
+    TEST_ASSERT_TRUE(b.sim);
+    carwire::Snapshot old{};
+    old.sim = true;
+    TEST_ASSERT_TRUE(carwire::decode("{\"v\":1,\"seq\":3}", &old));   // a deck without the key
+    TEST_ASSERT_FALSE(old.sim);
+}
+
 void test_widest_reals_fit_max_json() {
     Snapshot a = full();
     for (int i = 0; i < 47; i++) {
@@ -282,6 +296,7 @@ int main() {
     RUN_TEST(test_infinity_goes_out_as_null);
     RUN_TEST(test_too_wide_finite_value_is_null_not_a_failed_reply);
     RUN_TEST(test_widest_reals_fit_max_json);
+    RUN_TEST(test_sim_flag_round_trips_and_defaults_off);
     RUN_TEST(test_link_names);
     RUN_TEST(test_why_with_quotes_and_backslashes_survives);
     RUN_TEST(test_encode_reports_no_fit);

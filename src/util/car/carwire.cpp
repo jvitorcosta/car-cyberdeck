@@ -157,6 +157,7 @@ size_t encode(const Snapshot& s, char* out, size_t n) {
     o.real("range", s.rangeKm, 1);
     o.real("price", s.pricePerL, 2);
     o.uint("crit", s.critical ? 1u : 0u);
+    o.uint("sim", s.sim ? 1u : 0u);
     o.lit("}");
     if (o.over) {
         out[0] = '\0';
@@ -197,7 +198,7 @@ bool decode(const char* json, Snapshot* s) {
         !getReal(json, "tcost", &t.tripCostRs) || !getFlag(json, "last", &t.hasLast) ||
         !getSummary(json, "lkm", "ll", "lkml", "lavg", "ls", "lidle", &t.last) ||
         !getReal(json, "lcost", &t.lastCostRs) || !getReal(json, "range", &t.rangeKm) ||
-        !getReal(json, "price", &t.pricePerL) || !getFlag(json, "crit", &t.critical))
+        !getReal(json, "price", &t.pricePerL) || !getFlag(json, "crit", &t.critical) || !getFlag(json, "sim", &t.sim))
         return false;
     *s = t;
     return true;

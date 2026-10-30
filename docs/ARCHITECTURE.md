@@ -228,8 +228,11 @@ It answers the yellow deck over the hotspot and never writes to the car.
 - **`REMOTE_TOKEN` empty**: nothing could sign a request, so the deck starts no `net` task: no
   WiFi, no `/car` and `/fill`, no updates over WiFi (`[net] off (REMOTE_TOKEN empty)`). It still
   reads the car and logs the trips; updates go over USB only.
+- **Bench build** (`obddeck_bench`): `obd/benchlink.cpp` stands in for `obdlink` with a simulated
+  drive (`util/car/benchdrive`). `/car` carries `"sim":1` and the yellow deck marks it SIM; NVS is
+  `carsim` and there's no trip log, so a real deck's records stay.
 - **Read-only**: every write to the adapter goes through `obd::allowed()` (mode 01, 03, 07 and the
-  adapter's setup; never mode 04) and `ATH1` is refused too.
+  adapter's setup; never mode 04 or `ATH1`).
 - **Which device** (`util/car/obdpick`): the whole scan is weighed. An adapter-like name wins
   (strongest signal), a nameless serial-service device only when no name matched; a scanned
   device that failed is skipped for 10 min (the last 4 kept): one with an adapter-like name only
