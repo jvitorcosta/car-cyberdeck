@@ -60,12 +60,12 @@ Open items, not scheduled. Newest decisions first within each section.
   and music tasks and the weather are each a candidate file under `src/yellow/`. Wait until the car
   health work (`feat/car-health`, which adds screens to this file) is merged.
 - **`feat/obd`** predates the 2026-10-28 reorganisation and ran on the retired companion. Its OBD
-  core moves to the yellow deck in `feat/car-health` (`src/util/car/`); retire the branch once that
+  core moves to the OBD deck in `feat/car-health` (`src/util/car/`); retire the branch once that
   merges. (`feat/voice-agent` is already on the new layout.)
-- **CI doesn't build the diagnostics**: only `ledpanel` and `s3` are in the firmware matrix, so
-  `blescan` / `bletest` stopped linking without anyone noticing. Add `blescan`, `bletest`,
-  `xboxtest`, `ps3test` and `hwcheck` / `hwcheck_s3` (and the mic envs once the voice agent merges),
-  or a weekly job that builds them.
+- **CI doesn't build the diagnostics**: the firmware matrix has `s3`, `ledpanel`, `obddeck`,
+  `hwcheck` and `hwcheck_s3`, so `blescan` / `bletest` stopped linking without anyone noticing. Add
+  `blescan`, `bletest`, `xboxtest` and `ps3test` (and the mic envs once the voice agent merges), or
+  a weekly job that builds them.
 
 ## Investigate
 
@@ -196,6 +196,40 @@ the OBD deck's log says `[car] fill-up from ...` each time.
 
 Also by eye on the yellow deck's Menu: the trip band's three figures and the small line under them
 (spacing, nothing past 316 px), and a warning in red on the prompt line (a hot engine, or the MIL).
+
+## Car-health polish (deferred minors, reviews of 2026-10-28/29)
+
+Behaviour, to watch in the car test:
+- Trip and fuel book litres can disagree while the speed reading is stale.
+- `session()` can use an rpm that isn't fresh just after a reconnect.
+- A warning replaces the message on the prompt line, and screen A wipes the Menu message.
+- Screen A waits for the next Menu if the car turns ready on another screen, so it can show late
+  after a long Lights session (a deliberate choice).
+- `carhealth::hot()` ignores whether the engine runs (heat soak); the deck only runs with the
+  engine on, so low risk. A NAN reading of the volts resets the 60 s hold.
+
+Small code gaps:
+- `/fill` accepts `nan` and `inf` (`strtof`; only the reply is affected); `carwire::getReal` accepts
+  them too, plus hex.
+- `triplog`: a partial append plus a retry leaves a partial row mid-file; `read()` returning 0 in
+  `recover()` can remove a good file; `truncate` and `remove` results are ignored; long ids can
+  collide after the cut.
+- `obd::parse` answers NoData if "NO DATA" appears anywhere, before the multi-ECU status walk;
+  `anchored()` refuses a headered first frame (fails safe, the deck runs ATH0).
+- `healthview`: `-` as the unknown check; the band truncates minutes where the parked screen rounds;
+  sub-zero coolant shows `--C`. The line clear assumes ASCII (an accented reason would leave its top
+  pixels behind).
+- The yellow deck logs host-not-found as rc=-1, like a timeout.
+- `obd_sim.py`: EOFError on a closed stdin, console values unvalidated.
+
+Tests missing:
+- `tripsum`: a link drop mid-trip, `coolMax`, the trim averages, flag bits 1-2.
+- `carhealth`: 12.0 V, LTFT exactly 10/20, LTFT with the engine off, `endTrip` with no samples, MIL
+  plus stored codes.
+- `fuelbook`: "abastecido", a lone "full" / "tanque", a failed decode leaves the book untouched.
+- `healthview`: `ParkGate` wrap and NAN trip km; the small-line fit test has no margin.
+- `carwire`: `level` over 2 and `flag` over 1 refused. `carfs`: `tripSeq` and the sort.
+- `obd_sim.py`: the console, the 0120/0140/0160 masks.
 
 ## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
 
