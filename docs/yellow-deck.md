@@ -9,7 +9,7 @@ lyrics, and in music mode gives the lights each song's colour.
 - [On the deck](#on-the-deck)
 - [Presets](#presets)
 - [Music mode: song colours](#music-mode-song-colours)
-- [Night mode and themes](#night-mode)
+- [Theme: the inside light's colour](#theme-the-inside-lights-colour)
 - [Voice and HTTP](#voice-and-http), [Siri Shortcuts](#siri-shortcuts)
 - [From the watch](#from-the-watch)
 - [Updates over WiFi](#updates-over-wifi)
@@ -42,8 +42,8 @@ hotspot.
 The deck boots by typing the welcome (`WELCOME TO CYBERDECK`, about half a second) and its firmware
 version (`FW 2.0.0`), then shows the **main screen**. The look is "Seegson" (Alien: Isolation):
 pale green on black, one hue at three brightnesses, and red kept for problems only (`-- NO LINK`,
-`>OFFLINE`, `>WRONG KEY`; a deeper red at night). Every screen has faint scanlines and all-caps
-labels. Every colour clears a contrast on black of at least 4.5:1 by day and 3:1 at night (WCAG;
+`>OFFLINE`, `>WRONG KEY`). Every screen has faint scanlines and all-caps
+labels. Every colour clears a contrast on black of at least 4.5:1 (WCAG;
 `src/util/yellow/termpal.h` lists each one's figure).
 
 - **Main screen**, top to bottom; it puts first what the car's panel and CarPlay don't show:
@@ -236,28 +236,21 @@ The time of day changes only the brightness, never the colour. The black deck's 
 line per song with what it knew and which rule decided:
 `[colour] "Popular" | The Weeknd | Popular | "blinded by the lights 🌃" | genre R&B | cover FF0800 FF9000 | playlist mood neon | -> Red cap 100`.
 
-## Night mode
-
-From **18:00 to 06:00** local time (`TIMEZONE`), once the deck has the time over WiFi, the screen
-goes to an amber palette and the backlight to about a third. It changes only the screen, never
-the lights. Without WiFi there is no clock, so the deck stays in day mode. To check it without
-waiting for evening, build with the `NIGHT_TEST` hook, then clear it:
-
-```
-$env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
-Remove-Item Env:PLATFORMIO_BUILD_FLAGS
-```
-
-### Theme: the inside light's colour
+## Theme: the inside light's colour
 
 While the **INSIDE** light is on and linked, the terminal (main screen, Lights, Lyrics; not the
 boot typing or the touch calibration) takes that light's colour: the same three brightnesses in
-its hue, by day and darker at night. Blue and purple are lighter shades so the text reads; white
-is a pale grey-white by day and the usual amber at night. Problems stay red, except on the red,
+its hue. Blue and purple are lighter shades so the text reads; white is a soft grey-white, held
+back so it doesn't glare. Problems stay red, except on the red,
 orange and pink themes, where they show in white. The colour tiles and chips keep their real
 colours. Cyan takes blue's theme. With the inside light off or out of reach the screen goes back
-to green / amber. `-D THEME_TEST=<0..7>` (red, orange, pink, purple, blue, green, white, yellow)
-forces a theme the same way as `NIGHT_TEST`.
+to green. To see a theme without the car's lights, build with `THEME_TEST` (0..7: red, orange,
+pink, purple, blue, green, white, yellow), then clear it:
+
+```
+$env:PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6"; pio run -e ledpanel -t upload
+Remove-Item Env:PLATFORMIO_BUILD_FLAGS
+```
 
 ## Voice and HTTP
 

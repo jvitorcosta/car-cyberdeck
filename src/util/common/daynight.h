@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 // Night mode schedule: 18:00-06:00 local time. Pure: net/clock turns the SNTP time into a
-// local minute of the day; the result drives the palette and the backlight in main.cpp.
+// local minute of the day; the result drives the black deck's palette and backlight.
 namespace daynight {
 constexpr int NIGHT_START = 18 * 60;          // 18:00
 constexpr int NIGHT_END   = 6 * 60;           // 06:00

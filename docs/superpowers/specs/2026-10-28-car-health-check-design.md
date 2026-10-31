@@ -92,7 +92,6 @@ version may come later through CAN sniffing (car-can-lab); it is not part of thi
   - the trip meter (`util/yellow/tripmeter`, NVS record, ">LAST TRIP" for 6 s at boot);
   - voice `/say` (Siri Shortcut "Honda", English);
   - the HI/LO message row;
-  - night orange 18:00-06:00;
   - themes that follow the inside light;
   - VT323 at 17/19/24/36 px;
   - red reserved for problems.
@@ -274,7 +273,7 @@ about most.
 
 - Encodings, flash layout, exact PID scheduling, and retry/backoff.
 - How the 4th NimBLE connection shares airtime and heap with the LED controllers and the pad.
-  Measure it, and keep `-D` test hooks like the existing `NIGHT_TEST`/`THEME_TEST`.
+  Measure it, and keep `-D` test hooks like the existing `THEME_TEST`.
 - Pixel layout within the agreed screens, and the exact wording of the plain-language lines.
 - Host tests for every pure piece, as in the rest of `src/util`.
 

@@ -6,7 +6,7 @@ Open items, not scheduled. Newest decisions first within each section.
 
 - **Yellow deck** (the CYD as the car's light panel): the car LEDs over BLE by touch, voice, Xbox
   controller and the watch (#13, tested in the car 2026-10-22); the CYBERDECK dashboard, presets,
-  LYRICS, weather, trip, themes and night mode (#18, tested in the car 2026-10-24: "works great");
+  LYRICS, weather, trip and themes (#18, tested in the car 2026-10-24: "works great");
   Japanese lyrics (#21).
 - **Updates over WiFi** on both decks (#9, #19; the yellow deck's first OTA went through on
   2026-10-24 and kept its touch calibration), with their own `OTA_PASSWORD` (#25) and the
@@ -293,9 +293,9 @@ it is one or the other.
 
 ## Accepted as is
 
-- **No auto-dim from the light sensor** (decided 2026-10-07): the backlight is full by day and
-  about a third at night on both decks (by the clock, 18:00-06:00), never from the CYD's light
-  sensor (GPIO 34).
+- **No auto-dim from the light sensor** (decided 2026-10-07): the yellow deck's backlight is always
+  full and the black deck's is about a third at night (by the clock, 18:00-06:00), never from the
+  CYD's light sensor (GPIO 34).
 - **Decks stay on the network they joined** (tried 2026-10-14 and 2026-10-22, removed both
   times): scanning for the hotspot from home WiFi paused the S3's network task, and the iPhone
   hides its hotspot unless its settings screen is open, so the scan rarely saw it. Restarting the

@@ -73,7 +73,7 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   Pokémon-style status messages (`ui/lyricmsg`) when there is no line to show.
 - **Genre badge** (`genre/apple`, `util/genre`, `util/genrebadge`) — Apple artist genre, cached
   per artist, mapped to Gen-3 style badges.
-- **Night mode** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
+- **Night mode, black deck** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
   (SNTP; `TIMEZONE` in `src/config.h`, daylight saving included): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
 - **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
   16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task that frees the
@@ -337,12 +337,11 @@ It answers the yellow deck over the hotspot and never writes to the car.
 ## Test hooks
 
 Build flags that are never set in `platformio.ini`; add one for a desk check, then clear it
-(`$env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"`, then `Remove-Item Env:PLATFORMIO_BUILD_FLAGS`).
+(`$env:PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6"`, then `Remove-Item Env:PLATFORMIO_BUILD_FLAGS`).
 
 | Flag | Deck (env) | What it does |
 |---|---|---|
 | `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) | black (`s3`) | Forces that boot opening (`main.cpp`, `util/intropick`). |
 | `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
-| `-D NIGHT_TEST` | yellow (`ledpanel`) | Night mode whatever the time (`ledpanel.cpp`). |
 | `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |
 | `-D HEALTH_TEST=<a\|b\|c\|d>` | yellow (`ledpanel`) | Draws the car-health screens from a canned snapshot instead of the OBD deck's: `a` the pre-flight check, all OK (back to the Menu after 5 s), `b` the check with a battery problem (held until a tap), `c` driving on the Menu, km/L stepping every second (the trip band redraws only that figure: `[car] band: kml`), `d` trip complete (5 s after the Menu shows). The log says `[car] drew screen A/B/D` (`ledpanel.cpp`). |

@@ -1,5 +1,5 @@
 // The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
-// red only for problems, amber at night, faint scanlines, all caps) that drives the car's two
+// red only for problems, faint scanlines, all caps) that drives the car's two
 // ELK-family LED controllers. Three screens (and the two car-health ones, see "Car health"), laid
 // out by util/deckmenu:
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands, for what the
@@ -46,13 +46,10 @@
 // Lights and Karaoke; none is drawn while no controller is connected), A presses, B goes back to the
 // Menu; on Lights X is the next page, and on the look pages Y on/off, LB / RB - / + (see "Xbox
 // controller input" below).
-// Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
-// palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
-// there is no WiFi, no clock, and the deck stays in day mode.
 // Theme: while the INSIDE light is on and linked, the terminal (Menu, Lights, Karaoke; not the boot
-// typing or the calibration) takes that light's colour, termpal's three levels of it, day and night
-// (white turns to the amber at night; problems show in white on the red, orange and pink themes).
-// The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
+// typing or the calibration) takes that light's colour, termpal's three levels of it
+// (problems show in white on the red, orange and pink themes).
+// The light off or unreachable: the green again. The colour tiles and chips stay real.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
 // (util/musiclights), steady, fading to the next song's over ~3 s, each at the owner's level under the
@@ -63,11 +60,10 @@
 // change (touch, the Xbox controller, voice, the watch) ends the mode, then applies; turning it off
 // brings back the looks from before. Not kept over a reboot (see
 // "Music mode" below).
-// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
-// mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
-// (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
-// the inside light does, to see it without the car's lights. Neither is set in platformio.ini (every
-// test hook: docs/ARCHITECTURE.md "Test hooks").
+// Test hook: building with -D THEME_TEST=<swatch 0..7> (e.g. PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6";
+// ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
+// the inside light does, to see it without the car's lights. Not set in platformio.ini (every test
+// hook: docs/ARCHITECTURE.md "Test hooks").
 // Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
 //   pio run -e ledpanel_ota -t upload
 // A page in the theme holds the screen meanwhile (see "Update over WiFi" below); three crash resets
@@ -115,7 +111,6 @@
 #include "../util/car/healthview.h"
 #include "../util/yellow/bothlook.h"
 #include "../util/yellow/dashtext.h"
-#include "../util/common/daynight.h"
 #include "../util/yellow/deckaddr.h"
 #include "../util/yellow/deckmenu.h"
 #include "../util/yellow/elkcmd.h"
@@ -192,11 +187,8 @@ static bool onHealth() { return screen == Screen::Check || screen == Screen::Par
 static void drawHealth();
 static void drawHealthClock();
 static void leaveHealth();
-// The palette: every colour goes through termpal with this flag, so night mode only flips it and
-// redraws.
-static bool night = false;
-// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green / amber. Loop-owned, as
-// `night`; updateTheme() keeps it, from the looks and `insideSeen`: the INSIDE light's link as loop()
+// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green. Loop-owned;
+// updateTheme() keeps it, from the looks and `insideSeen`: the INSIDE light's link as loop()
 // last took it (its edge loop sets it before anything draws the change).
 static int theme = -1;
 static bool insideSeen = false;
@@ -549,19 +541,16 @@ static int textMarked(const char* s, int x, int y, Face f, uint8_t datum) {
 }
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
-static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night, theme)); }
+static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme)); }
 // A terminal message's colour: ALERT for a problem (a lost link, the wrong key, a car warning: alert),
 // else TEXT.
 static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
 static uint16_t msgInk(const char* m, bool alert) { return pal(alert || isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
 
-// A real colour (a chip), dimmed with the palette at night.
-static uint16_t tint(uint32_t rgb) { return c565(termpal::tile(rgb, night)); }
-
 static void clearBg(int x, int y, int w, int h) {
     if (w <= 0 || h <= 0) return;
     tft.fillRect(x, y, w, h, pal(termpal::BG));
-    const uint16_t line = c565(termpal::scan(night));
+    const uint16_t line = c565(termpal::scan());
     for (int row = y + (3 - y % 3) % 3; row < y + h; row += 3) tft.drawFastHLine(x, row, w, line);
 }
 static void clearBg(const Rect& r) { clearBg(r.x, r.y, r.w, r.h); }
@@ -637,10 +626,10 @@ static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, b
     text(tag, x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
 }
 
-// A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
+// A colour chip of `l`: filled when lit, a DIM outline when
 // off. On a bar, a 1 px BG edge keeps it apart from the fill (pink on yellow, white on green).
 static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
-    if (l.lit) tft.fillRect(x, y, w, h, tint(screenOf(l.swatch)));
+    if (l.lit) tft.fillRect(x, y, w, h, c565(screenOf(l.swatch)));
     else tft.drawRect(x, y, w, h, pal(termpal::DIM));
     if (onBar) tft.drawRect(x - 1, y - 1, w + 2, h + 2, pal(termpal::BG));
 }
@@ -826,7 +815,7 @@ static void drawHeader() {
 static int hiLoRowTop() { return HILO_BASE - termfont::accentAscent(Face::SMALL); }
 
 // The clock's minute of the day on screen (-1: not synced, "--:--") and its date, read together
-// (netclock::localNow) so they never straddle midnight; updateDayNight keeps them.
+// (netclock::localNow) so they never straddle midnight; updateClock keeps them.
 static int clockMin = -1;
 static int clockY = 0, clockMonth = 0, clockDay = 0;
 
@@ -1069,7 +1058,7 @@ static void drawPrompt() {
         return;
     }
     text(MUSIC_PROMPT, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM);
-    tft.fillRect(songChipX(), PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, tint(SWATCHES[musicSwatch].screen));
+    tft.fillRect(songChipX(), PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, c565(SWATCHES[musicSwatch].screen));
     char name[12];
     upper(SWATCHES[musicSwatch].name, name, sizeof(name));
     placeCursor(songNameX() + text(name, songNameX(), PROMPT_BASE, Face::SMALL, BL_DATUM));
@@ -2482,8 +2471,8 @@ static int drawHealthLines(const Screenful& now, Screenful& shown, const HealthS
 
 static uint32_t healthFullDraws = 0;  // whole-screen draws of Check / Parked since boot (the log)
 
-// The whole Check or Parked screen, from the snapshot (drawAll has cleared it): on entry, a night or
-// theme change, a recalibration.
+// The whole Check or Parked screen, from the snapshot (drawAll has cleared it): on entry, a theme
+// change, a recalibration.
 static void drawHealth() {
     tft.setTextColor(pal(termpal::MID));
     const bool sim = car.snap.sim;
@@ -3161,7 +3150,7 @@ static void voiceTask(void*) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     server->begin();
-    netclock::begin();  // SNTP, for night mode and the Menu's clock
+    netclock::begin();  // SNTP, for the Menu's clock
     weatherTick();  // the first try
     beginLyrics();
 #ifndef HEALTH_TEST  // the test draws from a canned snapshot (carTick)
@@ -3216,10 +3205,8 @@ static void vividGamma() {
     for (uint8_t v : NEG) tft.writedata(v);
 }
 
-// Night mode and the Menu's clock. Polled each second (a time() call) so the clock turns over on the
-// minute; the mode follows the clock. On a change the backlight drops before the repaint, so no
-// frame shows at day brightness.
-static void updateDayNight() {
+// The Menu's clock. Polled each second (a time() call) so it turns over on the minute.
+static void updateClock() {
     static uint32_t checkedAt = 0;
     static bool first = true;
     if (!first && millis() - checkedAt < 1000) return;
@@ -3228,24 +3215,15 @@ static void updateDayNight() {
     int m = 0, y = 0, month = 0, day = 0;
     const bool synced = netclock::localNow(&m, &y, &month, &day);
     const int minute = synced ? m : -1;
-    bool want = synced && daynight::isNight(m);
-#ifdef NIGHT_TEST
-    want = true;
-#endif
     if (minute != clockMin || day != clockDay) {
         if (minute >= 0 && clockMin < 0) Serial.printf("[clock] synced, local %02d:%02d\n", m / 60, m % 60);
         clockMin = minute;
         clockY = y;
         clockMonth = month;
         clockDay = day;
-        if (want == night && screen == Screen::Menu) drawClock();
-        if (want == night && onHealth()) drawHealthClock();
+        if (screen == Screen::Menu) drawClock();
+        if (onHealth()) drawHealthClock();
     }
-    if (want == night) return;
-    night = want;
-    backlight::set(night);  // before the repaint
-    Serial.printf("[ui] night mode %s\n", night ? "on" : "off");
-    drawAll();
 }
 
 // The theme the INSIDE light asks for: its colour while it's on and linked (insideSeen), else -1.
@@ -3282,7 +3260,7 @@ void setup() {
     // voice, lyrics, car, music and weather tasks, and this loop from the end of setup().
     watchdog::begin();
     tft.init();
-    backlight::begin();  // PWM, at the day level
+    backlight::begin();  // PWM, full
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
     tft.setRotation(1);
     // The texts are Latin-1 bytes (txt::latin1Fold) and the fonts cover 0x20-0xFF: each byte is its
@@ -3445,7 +3423,7 @@ void loop() {
     carTick();
     musicTick();
     musicFadeTick();
-    updateDayNight();
+    updateClock();
     tripTick();
     blinkCursor();
 
