@@ -3306,10 +3306,27 @@ void setup() {
     enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
 }
 
-// "SHOT\n" on the serial port sends the panel to the PC (tools/deck_shot.py): "SHOT 320 240", a line
-// "R<yyy> <hex RGB565>" per row, "SHOT END". Each row is one write, so a log line from another task
-// lands between rows, never inside one. About 30 s at 115200, in the loop: touch and drawing wait
-// (the 90 s watchdog doesn't mind), the lights' link and the servers keep running.
+// One panel row to the PC: "R<yyy> <hex RGB565>".
+static void shotRow(int y) {
+    static const char HEX_DIGITS[] = "0123456789abcdef";
+    static uint8_t rgb[320 * 3 + 1];  // this panel's read comes one byte late: rgb[0] is the dummy's
+    static char row[6 + 320 * 4 + 2];
+    tft.readRectRGB(0, y, 320, 1, rgb);
+    int n = snprintf(row, sizeof row, "R%03d ", y);
+    for (int x = 0; x < 320; x++) {
+        const uint8_t* p = rgb + x * 3 + 1;
+        const unsigned v = ((p[0] & 0xF8U) << 8) | ((p[1] & 0xFCU) << 3) | (p[2] >> 3);
+        for (int s = 12; s >= 0; s -= 4) row[n++] = HEX_DIGITS[(v >> s) & 15U];
+    }
+    row[n++] = '\n';
+    Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
+}
+
+// "SHOT\n" on the serial port sends the panel to the PC (tools/deck_shot.py): "SHOT 320 240", a row
+// line each, "SHOT END". NimBLE's own error prints skip the serial lock and can land inside a row, so
+// the PC then asks again for the rows it lost ("R031\n", 2 s of silence or "Q" ends it). About 30 s at
+// 115200, in the loop: the screen holds still, touch and drawing wait (the 90 s watchdog doesn't
+// mind), the lights' link and the servers keep running.
 static void shotTick() {
     static const char WORD[] = "SHOT\n";
     static uint8_t matched = 0;
@@ -3324,22 +3341,28 @@ static void shotTick() {
         }
     }
     if (!go) return;
-    static const char HEX_DIGITS[] = "0123456789abcdef";
-    static uint8_t rgb[320 * 3];
-    static char row[6 + 320 * 4 + 2];
     Serial.println("SHOT 320 240");
-    for (int y = 0; y < 240; y++) {
-        tft.readRectRGB(0, y, 320, 1, rgb);
-        int n = snprintf(row, sizeof row, "R%03d ", y);
-        for (int x = 0; x < 320; x++) {
-            const uint8_t* p = rgb + x * 3;
-            const unsigned v = ((p[0] & 0xF8U) << 8) | ((p[1] & 0xFCU) << 3) | (p[2] >> 3);
-            for (int s = 12; s >= 0; s -= 4) row[n++] = HEX_DIGITS[(v >> s) & 15U];
-        }
-        row[n++] = '\n';
-        Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
-    }
+    for (int y = 0; y < 240; y++) shotRow(y);
     Serial.println("SHOT END");
+    char ask[5];
+    uint8_t n = 0;
+    for (uint32_t until = millis() + 2000; static_cast<int32_t>(until - millis()) > 0;) {
+        if (!Serial.available()) {
+            delay(5);
+            continue;
+        }
+        const char c = static_cast<char>(Serial.read());
+        if (c == 'Q') break;
+        if (c == '\r') continue;
+        if (c != '\n') {
+            if (n < sizeof ask - 1) ask[n++] = c;
+            continue;
+        }
+        ask[n] = 0;
+        n = 0;
+        if (ask[0] == 'R' && atoi(ask + 1) < 240) shotRow(atoi(ask + 1));
+        until = millis() + 2000;
+    }
 }
 
 void loop() {

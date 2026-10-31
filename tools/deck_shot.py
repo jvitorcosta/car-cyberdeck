@@ -2,8 +2,8 @@
     python tools/deck_shot.py <port> <out.png>
 
 Sends "SHOT" to the deck's shotTick (src/yellow/ledpanel.cpp) and rebuilds the picture from its rows;
-log lines from the deck's tasks land between rows and are skipped. Takes about 30 s, and the deck
-doesn't reset (DTR/RTS stay low). Needs pyserial and pillow (tools/requirements.txt).
+log lines are skipped, and a row one of them landed in is asked for again. Takes about 30 s, and the
+deck doesn't reset (DTR/RTS stay low). Needs pyserial and pillow (tools/requirements.txt).
 """
 import re
 import sys
@@ -12,6 +12,7 @@ import time
 ROW = re.compile(r"^R(\d{3}) ([0-9a-f]+)$")
 WIDTH, HEIGHT = 320, 240
 TIMEOUT_S = 90
+RETRIES = 4
 NEVER_PORTS = {"COM12"}  # the black deck: this is the yellow deck's tool
 
 
@@ -41,7 +42,27 @@ def rgb888(rows):
     return bytes(out)
 
 
-def read_lines(port):
+def fetch(s):
+    """Rows from an open port: the whole panel, then the lost ones again."""
+    s.write(b"SHOT\n")
+    lines, t0 = [], time.time()
+    while True:
+        line = s.readline().decode("ascii", errors="replace")
+        if line.startswith("SHOT END"):
+            break
+        lines.append(line)
+        if time.time() - t0 > TIMEOUT_S:
+            raise SystemExit("no SHOT END from the deck in %d s: is it running a build with shotTick?" % TIMEOUT_S)
+    rows = parse_rows(lines)
+    for _attempt in range(RETRIES):
+        for y in missing_rows(rows):
+            s.write(b"R%03d\n" % y)
+            rows.update(parse_rows([s.readline().decode("ascii", errors="replace")]))
+    s.write(b"Q")
+    return rows
+
+
+def read_rows(port):
     import serial
 
     s = serial.Serial()
@@ -50,16 +71,9 @@ def read_lines(port):
     s.rts = False
     s.open()
     try:
-        s.write(b"SHOT\n")
-        lines, t0 = [], time.time()
-        while time.time() - t0 < TIMEOUT_S:
-            line = s.readline().decode("ascii", errors="replace")
-            if line.startswith("SHOT END"):
-                return lines
-            lines.append(line)
+        return fetch(s)
     finally:
         s.close()
-    raise SystemExit("no SHOT END from the deck in %d s: is it running a build with shotTick?" % TIMEOUT_S)
 
 
 def main():
@@ -70,7 +84,7 @@ def main():
         raise SystemExit("%s is the black deck, not this tool's" % port)
     from PIL import Image
 
-    rows = parse_rows(read_lines(port))
+    rows = read_rows(port)
     gone = missing_rows(rows)
     if gone:
         raise SystemExit("%d rows cut in transit (first %d): nothing saved, run it again" % (len(gone), gone[0]))

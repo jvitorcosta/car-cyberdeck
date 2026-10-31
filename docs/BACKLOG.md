@@ -51,8 +51,11 @@ Open items, not scheduled. Newest decisions first within each section.
   health moments A, B, D): spacing, colours (B's battery lines in ALERT), nothing past 316 px. A
   shows for 5 s after the boot (RESET to see it again); B holds until a tap; D comes 5 s after the
   Menu. Then with the OBD deck: A on a real power-on, D after a real stop. Each screen can be saved
-  as a PNG over USB with `python tools/deck_shot.py <port> <out.png>` (never run on the deck yet:
-  check it reads the panel back, that the colours match, and that about 30 s without touch is fine).
+  as a PNG over USB with `python tools/deck_shot.py <port> <out.png>` (about 30 s, touch waits).
+  Captured on the deck on 2026-10-30 and read against the mockups: layout and colours match, nothing
+  past the edge. Open: B has no line saying what to do (the spec asks for up to three in plain words),
+  A's engine line has no fuel-trim figure, and the clock in the title wasn't seen (no clock set in
+  those builds).
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
