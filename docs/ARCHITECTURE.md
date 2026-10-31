@@ -193,7 +193,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 - **Lyrics** (`util/karaoke`, `yellow/ui/lyricrun`): the line at the black deck's progress,
   Latin-1 in VT323 and Japanese from `data/jp16.bin`.
 - **Music mode** (`util/lights/musiclights`): the palette's main colour snapped to one of the
-  grid's eight, each light at its level under the palette's cap (40 % floor), a ~3 s fade per new
+  grid's eight, the inside light at its level under the palette's cap (40 % floor), the outside at 100 %, a ~3 s fade per new
   song. The pages' looks are never saved over while it runs. On and off from the button, voice
   ("music") or the watch; `/status` says `music=on|off`.
 - **Car health** (`util/car/healthview`): the pre-flight check (A / B) once per power-on when the

@@ -52,8 +52,8 @@
 // The light off or unreachable: the green again. The colour tiles and chips stay real.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
-// (util/musiclights), steady, fading to the next song's over ~3 s, each at the owner's level under the
-// palette's time-of-day cap (never under 40 %). An outside light left off stays off; an inside one
+// (util/musiclights), steady, fading to the next song's over ~3 s, the inside at the owner's level under
+// the palette's time-of-day cap (never under 40 %), the outside at 100 %. An outside light left off stays off; an inside one
 // off is switched on. The theme follows the swatch. The prompt line shows ">MUSIC", a chip and the
 // swatch's name (">MUSIC: WAITING" before the first palette), or ">MUSIC: NO SIGNAL" when no palette
 // came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). Any manual
@@ -2619,7 +2619,7 @@ static void carTick() {
 // black deck's address (musicPeer), signed with REMOTE_TOKEN and with a counter above the last one
 // (util/wire/musicwire), and publishes the latest PalPkt and its time under musicMux.
 // musicTick() (loop) reads them at most MUSIC_TICK_MS apart: the palette's main colour snapped to a
-// swatch (musiclights::nearestSwatch) and each light's level (musiclights::level: the owner's under
+// swatch (musiclights::nearestSwatch) and the inside light's level (musiclights::level: the owner's under
 // the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (musicFadeTick).
 // The prompt line is redrawn when its state or swatch changed.
 struct MusicHeard {
@@ -2756,7 +2756,7 @@ static bool musicTarget(int swatch, int cap) {
         Look t;
         t.swatch = swatch;
         t.lit = i == 0 || own.lit;
-        t.pct = static_cast<uint8_t>(musiclights::level(own.pct, cap));
+        t.pct = static_cast<uint8_t>(i == 0 ? musiclights::level(own.pct, cap) : musiclights::OUTSIDE_PCT);
         if (musicDriving && t == musicLook[i]) continue;
         any = true;
         const Look was = shownLook(i);

@@ -147,10 +147,10 @@ reboot. There is no microphone: the black deck picks the current song's colour (
 - **Colour**: both lights take the song's colour with that colour's tuned LED mix, steady through
   the song. On a new song they fade to the next colour over about 3 s. The black deck waits for
   the new song's cover (up to 8 s) before it sends, so a song changes the lights once.
-- **Brightness**: each light at the level you left it, times the time-of-day cap (day 06:00-18:00
-  100 %, evening 18:00-22:00 and 05:00-06:00 70 %, late night 22:00-05:00 45 %), but never under
-  40 %; a light you had at 40 % or less keeps its level. At each step a playing song's lights fade
-  to the new level once.
+- **Brightness**: the outside light runs at 100 % at any hour. The inside light stays at the level
+  you left it, times the time-of-day cap (day 06:00-18:00 100 %, evening 18:00-22:00 and 05:00-06:00
+  70 %, late night 22:00-05:00 45 %), but never under 40 %; at 40 % or less it keeps its level. At
+  each step a playing song's inside light fades to the new level once.
 - **Off lights**: an outside light you left off stays off; the inside light is switched on.
 - **Screen**: the terminal theme follows the song's colour. The lights row shows what the lights
   show; the prompt line shows `>MUSIC [chip] PINK`, `>MUSIC: WAITING` until the first palette
