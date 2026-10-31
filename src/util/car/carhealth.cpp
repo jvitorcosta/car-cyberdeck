@@ -93,6 +93,7 @@ bool Watch::critical() const { return haveLast_ && (last_.mil || hot(last_)); }
 void Watch::endTrip() {
     if (ltftN_ > 0) {
         float mean = ltftSum_ / static_cast<float>(ltftN_);
+        lastTrim_ = mean;
         float a = std::fabs(mean);
         Verdict v;
         if (a > LTFT_NOTE) {

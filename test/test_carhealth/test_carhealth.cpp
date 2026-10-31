@@ -324,8 +324,20 @@ void test_memo_worth_saving() {
     TEST_ASSERT_TRUE(worthSaving(w.memo()));
 }
 
+void test_last_trim_is_the_judged_trips_mean() {
+    Watch w;
+    TEST_ASSERT_TRUE(std::isnan(w.lastTrimPct()));
+    drive(w, 3.0f);
+    TEST_ASSERT_TRUE(std::isnan(w.lastTrimPct()));   // not before the trip is judged
+    w.endTrip();
+    TEST_ASSERT_EQUAL_FLOAT(3.0f, w.lastTrimPct());
+    w.endTrip();                                     // a trip without readings keeps it
+    TEST_ASSERT_EQUAL_FLOAT(3.0f, w.lastTrimPct());
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_last_trim_is_the_judged_trips_mean);
     RUN_TEST(test_battery_low_needs_sixty_seconds_running);
     RUN_TEST(test_battery_recovery_resets_the_hold);
     RUN_TEST(test_battery_low_ignored_with_engine_off);

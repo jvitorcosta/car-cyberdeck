@@ -254,6 +254,20 @@ void test_too_wide_finite_value_is_null_not_a_failed_reply() {
 }
 
 // Every real at its widest (REAL_CHARS) still fits MAX_JSON, so no figure can fail the reply.
+void test_trim_round_trips_and_is_nan_when_absent() {
+    carwire::Snapshot a{};
+    a.trimPct = -3.5f;
+    char json[carwire::MAX_JSON];
+    TEST_ASSERT_TRUE(carwire::encode(a, json, sizeof json) > 0);
+    carwire::Snapshot b{};
+    TEST_ASSERT_TRUE(carwire::decode(json, &b));
+    TEST_ASSERT_EQUAL_FLOAT(-3.5f, b.trimPct);
+    carwire::Snapshot none{};
+    TEST_ASSERT_TRUE(carwire::encode(none, json, sizeof json) > 0);
+    TEST_ASSERT_TRUE(carwire::decode(json, &b));
+    TEST_ASSERT_TRUE(std::isnan(b.trimPct));
+}
+
 void test_sim_flag_round_trips_and_defaults_off() {
     carwire::Snapshot a{};
     a.sim = true;
@@ -297,6 +311,7 @@ int main() {
     RUN_TEST(test_too_wide_finite_value_is_null_not_a_failed_reply);
     RUN_TEST(test_widest_reals_fit_max_json);
     RUN_TEST(test_sim_flag_round_trips_and_defaults_off);
+    RUN_TEST(test_trim_round_trips_and_is_nan_when_absent);
     RUN_TEST(test_link_names);
     RUN_TEST(test_why_with_quotes_and_backslashes_survives);
     RUN_TEST(test_encode_reports_no_fit);

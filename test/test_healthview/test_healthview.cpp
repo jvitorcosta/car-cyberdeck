@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <cmath>
+#include <initializer_list>
 #include <cstdio>
 #include <cstring>
 #include "../../src/util/car/healthview.h"
@@ -177,9 +178,11 @@ void test_lines_fit_forty_chars() {
     TEST_ASSERT_EQUAL_STRING("BATTERY  15.9V  LOW", c.battery.text);
     TEST_ASSERT_EQUAL_STRING("99 PENDING CODES, NOT CONFIRMED", c.batteryWhy.text);
     TEST_ASSERT_EQUAL_STRING("ENGINE  CHECK", c.engine.text);
-    TEST_ASSERT_EQUAL_STRING("LAST TRIP 1000 KM  99.9 KM/L  R$ 999,99", c.lastTrip.text);
-    TEST_ASSERT_EQUAL_STRING("RANGE ~999 KM", c.range.text);
     TEST_ASSERT_EQUAL_STRING(">2 ISSUES  [TAP TO CLOSE]", c.status.text);
+    const Verdict note = v(Level::Note, "BATTERY WAS LOW LAST TRIP");   // A's rows: no advice over them
+    auto n = healthview::check(note, 15.9f, note, &s, 999.99f, 999.0f);
+    TEST_ASSERT_EQUAL_STRING("LAST TRIP 1000 KM  99.9 KM/L  R$ 999,99", n.lastTrip.text);
+    TEST_ASSERT_EQUAL_STRING("RANGE ~999 KM", n.range.text);
     auto p = healthview::parked(s, 999.99f, 999.0f, w, w);
     TEST_ASSERT_EQUAL_STRING("1000 KM", p.km.text);
     TEST_ASSERT_EQUAL_STRING("999 MIN", p.minutes.text);
@@ -271,8 +274,50 @@ void test_check_shows_only_when_still() {
     TEST_ASSERT_FALSE(healthview::checkMayShow(NAN));
 }
 
+// Each real problem from the Watch gets its own advice, inside the screen's 39 characters.
+static void adviceFor(const Verdict& batt, const Verdict& eng, const char* first) {
+    const healthview::Check c = healthview::check(batt, 11.9f, eng, nullptr, NAN, 310.0f);
+    TEST_ASSERT_TRUE(c.problem);
+    TEST_ASSERT_EQUAL_STRING(first, c.advice[0].text);
+    TEST_ASSERT_EQUAL_STRING("", c.lastTrip.text);
+    TEST_ASSERT_EQUAL_STRING("", c.range.text);
+}
+
+void test_advice_follows_the_most_urgent_problem() {
+    const Verdict ok = v(Level::Ok), low = v(Level::Problem, "BATTERY LOW WHILE RUNNING");
+    adviceFor(low, ok, "THE CAR ISN'T CHARGING AS IT SHOULD.");
+    adviceFor(ok, v(Level::Problem, "ENGINE HOT 108C"), "STOP WHEN SAFE AND TURN THE ENGINE OFF.");
+    adviceFor(ok, v(Level::Problem, "CHECK ENGINE LIGHT ON"), "HAVE THE FAULT CODES READ SOON.");
+    adviceFor(ok, v(Level::Problem, "2 STORED CODES"), "THE ENGINE LOGGED A FAULT.");
+    adviceFor(ok, v(Level::Problem, "FUEL TRIM +22% THIS TRIP"), "THE FUEL MIXTURE IS FAR FROM NORMAL.");
+    adviceFor(ok, v(Level::Problem, "SOMETHING NEW"), "HAVE IT CHECKED SOON.");
+    adviceFor(low, v(Level::Problem, "ENGINE HOT 108C"), "STOP WHEN SAFE AND TURN THE ENGINE OFF.");   // the worst wins
+    adviceFor(low, v(Level::Problem, "1 STORED CODE"), "THE CAR ISN'T CHARGING AS IT SHOULD.");
+}
+
+void test_no_advice_on_a_note_or_all_ok() {
+    Verdict ok = v(Level::Ok), note = v(Level::Note, "BATTERY WAS LOW LAST TRIP");
+    ok.known = note.known = true;
+    for (const healthview::Check& c : {healthview::check(ok, 14.1f, ok, nullptr, NAN, 310.0f), healthview::check(note, 14.1f, ok, nullptr, NAN, 310.0f)}) {
+        for (const healthview::Line& l : c.advice) TEST_ASSERT_EQUAL_STRING("", l.text);
+        TEST_ASSERT_EQUAL_STRING("RANGE ~310 KM", c.range.text);
+    }
+}
+
+void test_ok_engine_shows_the_last_trips_trim() {
+    Verdict ok = v(Level::Ok);
+    ok.known = true;
+    TEST_ASSERT_EQUAL_STRING("NO FAULTS  FUEL TRIM +2%", healthview::check(ok, 14.1f, ok, nullptr, NAN, 310.0f, 2.4f).engineWhy.text);
+    TEST_ASSERT_EQUAL_STRING("NO FAULTS  FUEL TRIM -3%", healthview::check(ok, 14.1f, ok, nullptr, NAN, 310.0f, -3.4f).engineWhy.text);
+    TEST_ASSERT_EQUAL_STRING("NO FAULTS  FUEL TRIM +0%", healthview::check(ok, 14.1f, ok, nullptr, NAN, 310.0f, -0.2f).engineWhy.text);
+    TEST_ASSERT_EQUAL_STRING("NO FAULTS SEEN", healthview::check(ok, 14.1f, ok, nullptr, NAN, 310.0f).engineWhy.text);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_advice_follows_the_most_urgent_problem);
+    RUN_TEST(test_no_advice_on_a_note_or_all_ok);
+    RUN_TEST(test_ok_engine_shows_the_last_trips_trim);
     RUN_TEST(test_check_all_ok_lines);
     RUN_TEST(test_check_problem_marks_only_that_item);
     RUN_TEST(test_check_note_is_not_a_problem);

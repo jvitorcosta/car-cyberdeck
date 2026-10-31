@@ -58,6 +58,7 @@ public:
     // the Note "BATTERY WAS LOW LAST TRIP". Both stay until the next trip ends; live readings still win.
     void endTrip();
     void codesRead();             // the caller read 03/07 successfully: the engine has been checked
+    float lastTrimPct() const { return lastTrim_; }  // the last judged trip's mean LTFT; NAN before one
     Memo memo() const;            // this trip so far
     void restore(const Memo& m);  // at boot, before endTrip(): the last trip's state
 private:
@@ -68,6 +69,7 @@ private:
     float ltftSum_ = 0.0f;  // sum and count of the running trip so far
     uint32_t ltftN_ = 0;
     Verdict ltftVerdict_;  // the last finished trip's, kept until the next one ends
+    float lastTrim_ = NAN;
     bool ltftJudged_ = false;   // a trip with LTFT readings has been judged
     bool battLowSeen_ = false;  // the battery Problem fired this trip
     bool lastBattLow_ = false;  // ... and in the last finished one

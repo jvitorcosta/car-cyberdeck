@@ -2333,12 +2333,14 @@ static healthview::Parked parkedShown;
 // Layout (caps tops): the dashboard's header row and rule, then the rows below.
 static constexpr int HC_BATT_Y = 30, HC_BATT_WHY_Y = 50, HC_ENG_Y = 74, HC_ENG_WHY_Y = 94, HC_RULE1_Y = 114;
 static constexpr int HC_LAST_Y = 124, HC_RANGE_Y = 144, HC_RULE2_Y = 166, HC_STATUS_Y = 180, HC_WHY_X = DASH_X + 8;
+static constexpr int HC_ADVICE_Y = 120, HC_ADVICE_STEP = 15;  // B's three lines, over the last trip and range rows
 static constexpr int HP_ROW1_Y = 32, HP_ROW2_Y = 72, HP_SMALL_Y = 108, HP_RULE1_Y = 126, HP_ITEMS_Y = 136;
 static constexpr int HP_RULE2_Y = 158, HP_FOOTER_Y = 172, HP_COL2_X = 168;
 
 static healthview::Check carCheck() {
     const carwire::Snapshot& s = car.snap;
-    return healthview::check(s.battery, s.volts, s.engine, s.hasLast ? &s.last : nullptr, s.lastCostRs, s.rangeKm);
+    return healthview::check(s.battery, s.volts, s.engine, s.hasLast ? &s.last : nullptr, s.lastCostRs, s.rangeKm,
+                             s.trimPct);
 }
 static healthview::Parked carParked() {
     const carwire::Snapshot& s = car.snap;
@@ -2403,7 +2405,7 @@ struct HealthSlot {
     Face face;
     HowDrawn how;
 };
-static constexpr int N_CHECK_LINES = 7, N_PARKED_LINES = 8;
+static constexpr int N_CHECK_LINES = 10, N_PARKED_LINES = 8;
 static const HealthSlot CHECK_SLOTS[N_CHECK_LINES] = {
     {"battery", DASH_X, HC_BATT_Y, RULE_X1, Face::BODY, HowDrawn::Line},
     {"batteryWhy", HC_WHY_X, HC_BATT_WHY_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
@@ -2412,6 +2414,11 @@ static const HealthSlot CHECK_SLOTS[N_CHECK_LINES] = {
     {"lastTrip", DASH_X, HC_LAST_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
     {"range", DASH_X, HC_RANGE_Y, RULE_X1, Face::BODY, HowDrawn::Line},
     {"status", DASH_X, HC_STATUS_Y, RULE_X1, Face::BODY, HowDrawn::Cursor},
+    // Share rows with lastTrip and range, which are empty while these aren't: a change between A and B
+    // redraws the whole screen (carTick).
+    {"advice1", DASH_X, HC_ADVICE_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"advice2", DASH_X, HC_ADVICE_Y + HC_ADVICE_STEP, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"advice3", DASH_X, HC_ADVICE_Y + 2 * HC_ADVICE_STEP, RULE_X1, Face::SMALL, HowDrawn::Line},
 };
 static const HealthSlot PARKED_SLOTS[N_PARKED_LINES] = {
     {"km", DASH_X, HP_ROW1_Y, HP_COL2_X, Face::BIG, HowDrawn::Figure},
@@ -2425,7 +2432,8 @@ static const HealthSlot PARKED_SLOTS[N_PARKED_LINES] = {
 };
 static void healthLines(const healthview::Check& c, const healthview::Line* out[N_CHECK_LINES]) {
     const healthview::Line* l[N_CHECK_LINES] = {&c.battery, &c.batteryWhy, &c.engine, &c.engineWhy,
-                                                &c.lastTrip, &c.range, &c.status};
+                                                &c.lastTrip, &c.range, &c.status,
+                                                &c.advice[0], &c.advice[1], &c.advice[2]};
     for (int i = 0; i < N_CHECK_LINES; i++) out[i] = l[i];
 }
 static void healthLines(const healthview::Parked& p, const healthview::Line* out[N_PARKED_LINES]) {
@@ -2545,6 +2553,7 @@ static bool healthTestTake(carlink::Reading* r) {
     s.last = tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60};
     s.lastCostRs = 9.40f;
     s.rangeKm = which == 'd' ? 290.0f : 310.0f;
+    s.trimPct = 2.0f;
     s.seq = ++seq;
     r->snap = s;
     r->seqAt = now ? now : 1;
@@ -2595,7 +2604,9 @@ static void carTick() {
             Serial.println("[car] check: back to the Menu");
             show(Screen::Menu);
         } else if (got) {
-            drawHealthLines(carCheck(), checkShown, CHECK_SLOTS, false);  // only the lines that changed
+            const healthview::Check c = carCheck();
+            if (c.problem != checkShown.problem) show(Screen::Check);  // A <-> B share rows: start clean
+            else drawHealthLines(c, checkShown, CHECK_SLOTS, false);   // only the lines that changed
         }
         return;
     }

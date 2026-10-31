@@ -16,6 +16,32 @@ void setLine(Line* l, Role r, const char* s) {
     l->role = r;
 }
 
+// What to do about a problem, most urgent first: `when` is found in the Verdict's why.
+struct Tip {
+    const char* when;
+    const char* lines[3];
+};
+const Tip TIPS[] = {
+    {"ENGINE HOT", {"STOP WHEN SAFE AND TURN THE ENGINE OFF.", "NEVER OPEN THE COOLANT CAP WHILE HOT.", "CHECK THE COOLANT LEVEL ONCE COLD."}},
+    {"CHECK ENGINE LIGHT", {"HAVE THE FAULT CODES READ SOON.", "IF IT FLASHES OR THE ENGINE SHAKES,", "EASE OFF AND STOP WHEN SAFE."}},
+    {"BATTERY LOW", {"THE CAR ISN'T CHARGING AS IT SHOULD.", "HAVE THE BATTERY AND ALTERNATOR", "CHECKED BEFORE A LONG TRIP."}},
+    {"STORED CODE", {"THE ENGINE LOGGED A FAULT.", "HAVE THE CODES READ AT A SHOP.", ""}},
+    {"FUEL TRIM", {"THE FUEL MIXTURE IS FAR FROM NORMAL.", "HAVE AIR LEAKS AND INJECTORS CHECKED.", ""}},
+};
+
+bool saysProblem(const carhealth::Verdict& v, const char* when) {
+    return v.level == Level::Problem && std::strstr(v.why, when);
+}
+
+void setAdvice(Check* c, const carhealth::Verdict& batt, const carhealth::Verdict& eng) {
+    for (const Tip& t : TIPS) {
+        if (!saysProblem(batt, t.when) && !saysProblem(eng, t.when)) continue;
+        for (int i = 0; i < 3; i++) setLine(&c->advice[i], Role::Text, t.lines[i]);
+        return;
+    }
+    setLine(&c->advice[0], Role::Text, "HAVE IT CHECKED SOON.");
+}
+
 // A number with `dec` decimals, clamped to `cap` so the text stays short; "--" when unknown or negative.
 void num(char* out, size_t n, float v, int dec, float cap, char point = '.') {
     if (!(v >= 0.0f)) {  // NAN fails this too
@@ -51,7 +77,7 @@ const char* engWord(Level l) { return l == Level::Ok ? "OK" : l == Level::Note ?
 }  // namespace
 
 Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdict& eng, const tripsum::Summary* last,
-            float lastCostRs, float rangeKm) {
+            float lastCostRs, float rangeKm, float trimPct) {
     Check c{};
     char buf[96], a[16], b[16], d[24];
 
@@ -78,8 +104,14 @@ Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdic
     } else {
         std::snprintf(buf, sizeof buf, "ENGINE  %s", engWord(eng.level));
         setLine(&c.engine, roleOf(eng.level), buf);
-        if (eng.level == Level::Ok) setLine(&c.engineWhy, Role::Mid, "NO FAULTS SEEN");
-        else setLine(&c.engineWhy, roleOf(eng.level), eng.why);
+        if (eng.level != Level::Ok) {
+            setLine(&c.engineWhy, roleOf(eng.level), eng.why);
+        } else if (std::isfinite(trimPct)) {
+            std::snprintf(buf, sizeof buf, "NO FAULTS  FUEL TRIM %+d%%", static_cast<int>(std::lround(trimPct)));
+            setLine(&c.engineWhy, Role::Mid, buf);
+        } else {
+            setLine(&c.engineWhy, Role::Mid, "NO FAULTS SEEN");
+        }
     }
 
     if (last) {
@@ -101,6 +133,9 @@ Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdic
     const int notes = (batt.level == Level::Note ? 1 : 0) + (eng.level == Level::Note ? 1 : 0);
     c.problem = problems > 0;
     if (problems > 0) {
+        setLine(&c.lastTrip, Role::Mid, "");
+        setLine(&c.range, Role::Mid, "");
+        setAdvice(&c, batt, eng);
         std::snprintf(buf, sizeof buf, ">%d ISSUE%s  [TAP TO CLOSE]", problems, problems == 1 ? "" : "S");
         setLine(&c.status, Role::Alert, buf);
     } else if (notes > 0) {

@@ -18,15 +18,19 @@ struct Line {
 // One full row each, label and value together, drawn left-aligned.
 struct Check {
     Line battery, batteryWhy, engine, engineWhy, lastTrip, range, status;
-    bool problem;  // any item at Level::Problem
+    Line advice[3];  // screen B only: what to do, in plain words; "" on A
+    bool problem;    // any item at Level::Problem
 };
 // Screen A/B. `last` may be null (no trip yet). status: ">2 ISSUES  [TAP TO CLOSE]" when anything is a
 // problem (the details are on screen; a tap goes back to the Menu), else ">1 NOTE" for notes (they
 // leave by themselves after 5 s), else ">ALL SYSTEMS NOMINAL" only when both items
 // are known (Verdict::known); while either is still unknown it is ">CHECKING..." (Dim). An unknown item
-// reads "BATTERY  CHECKING" / "ENGINE  CHECKING" (Dim) with an empty why-line.
+// reads "BATTERY  CHECKING" / "ENGINE  CHECKING" (Dim) with an empty why-line. An engine that's Ok
+// shows the last trip's fuel trim when there is one (trimPct, NAN: none). With a problem the advice
+// lines take the place of the last trip and the range, which are then "": the most urgent problem's,
+// worst first (overheating, the check-engine lamp, a low battery, stored codes, the fuel trim).
 Check check(const carhealth::Verdict& batt, float volts, const carhealth::Verdict& eng,
-            const tripsum::Summary* last, float lastCostRs, float rangeKm);
+            const tripsum::Summary* last, float lastCostRs, float rangeKm, float trimPct = NAN);
 // A/B shows once per power-on, and only with the car still (below 3 km/h; an unknown speed is not
 // still): a deck that reboots mid-drive skips it rather than cover the road screen.
 inline bool checkMayShow(float kmh) { return kmh < 3.0f; }

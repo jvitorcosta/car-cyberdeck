@@ -273,6 +273,7 @@ void second() {
     s.last = s_last;
     s.lastCostRs = s_lastCost;
     s.critical = s_watch.critical();
+    s.trimPct = s_watch.lastTrimPct();
     s.sim = BENCH;
     Lock lock;
     fuelbook::burn(&s_book, litres);
