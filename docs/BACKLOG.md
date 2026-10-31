@@ -112,6 +112,8 @@ Portuguese voice commands for the black deck through a cloud agent (spec
 `docs/superpowers/specs/2026-10-23-voice-agent-design.md` on the branch). Rebased onto the new layout on
 2026-10-29: 36 commits, not pushed; the old head is tagged `backup/voice-agent-pre-reorg`.
 
+- **Next, when the new deck arrives:** `docs/superpowers/plans/2026-10-31-voice-agent-next.md`:
+  make it speak first, then side brain, music and scenes, the car, WhatsApp.
 - **Mic:** the onboard ES8311 mic is too weak inside the shell; waiting on an external I2S mic
   (INMP441), then re-run the 10-clip recording and the speech-to-text bench.
 - **Untested since the rebase:** the mic functions now go through main's shared audio port (the
