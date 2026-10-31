@@ -11,6 +11,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   saturated night version of its hue (pure red, a deep marine blue, a phosphor-terminal green, one
   yellow), picked on the panel; problems stay white on the red, orange and pink themes and red on
   the rest. The scanlines lose their amber tint.
+- **Changed:** music mode runs the outside light at 100 % at any hour.
 
 ### Black deck (S3)
 - **Added:** camera alerts for fixed speed cameras, electronic speed bumps and red-light cameras.
