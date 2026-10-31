@@ -12,6 +12,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   yellow), picked on the panel; problems stay white on the red, orange and pink themes and red on
   the rest. The scanlines lose their amber tint.
 - **Changed:** music mode runs the outside light at 100 % at any hour.
+- **Changed:** presets fade in instead of jumping, and the lights rise to the last look when the
+  deck starts.
 
 ### Black deck (S3)
 - **Added:** camera alerts for fixed speed cameras, electronic speed bumps and red-light cameras.
