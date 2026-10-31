@@ -128,13 +128,17 @@ It is not on the Lights page's grid, and song colours never snap to it. Voice se
 "light blue", "azul claro"); the deck, Siri's replies, `/state`, `/presets` and the watch all call
 it Cyan. With cyan on the inside light the terminal takes the blue theme.
 
-- **Apply**: tap a preset on the PRESETS tab, or Xbox A on it.
+- **Apply**: tap a preset on the PRESETS tab, or Xbox A on it. The lights fade to it: the inside
+  over about a second, the outside in two steps a second apart (its controller is slow).
 - **Voice**: "rose", "fire", "gojira" (or "godzilla"), "purpura", "civic", "ocean", or "preset
   one" … "preset six" (also `favourite` / `favorite`, and digits: "preset 2"). It applies to both
   lights and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
   `Rose: inside Pink 40 percent, outside Pink 100 percent`. Siri may hear "purpura" as "purple",
   the colour; say "preset four" for that one.
 - **Watch**: the PRESETS page (see [garmin/README.md](../garmin/README.md)).
+
+**Welcome:** the first time each light links after the deck starts, a lit light rises from black
+to your last look over about 3 s. A later reconnect sets the look straight away.
 
 ## Music mode: song colours
 

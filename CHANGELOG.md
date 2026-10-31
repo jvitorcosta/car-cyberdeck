@@ -8,6 +8,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ### Changed
 - Yellow deck: the white theme is a softer grey-white.
 - Music mode: the outside light runs at 100 % at any hour.
+- Yellow deck: presets fade in instead of jumping, and the lights rise to the last look when the
+  deck starts.
 
 ### Removed
 - Yellow deck: night mode. The screen keeps its colours and full backlight at any hour. The black
