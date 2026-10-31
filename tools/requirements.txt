@@ -1,3 +1,7 @@
 pyserial>=3.5
 # tools/gen_emoji.py (Image.get_flattened_data needs 12.1)
 pillow>=12.1
+# tools/obd_sim.py (bench ELM327 over BLE; only the script path imports it)
+bless>=0.2.6
+# tools/obd_probe.py (try a BLE adapter from the PC; only the script path imports it)
+bleak>=0.22

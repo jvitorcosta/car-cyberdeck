@@ -6,7 +6,7 @@ Open items, not scheduled. Newest decisions first within each section.
 
 - **Yellow deck** (the CYD as the car's light panel): the car LEDs over BLE by touch, voice, Xbox
   controller and the watch (#13, tested in the car 2026-10-22); the CYBERDECK dashboard, presets,
-  LYRICS, weather, trip, themes and night mode (#18, tested in the car 2026-10-24: "works great");
+  LYRICS, weather, trip and themes (#18, tested in the car 2026-10-24: "works great");
   Japanese lyrics (#21).
 - **Updates over WiFi** on both decks (#9, #19; the yellow deck's first OTA went through on
   2026-10-24 and kept its touch calibration), with their own `OTA_PASSWORD` (#25) and the
@@ -46,6 +46,15 @@ Open items, not scheduled. Newest decisions first within each section.
   home).
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
+- **Car-health screens, by eye** (yellow deck, built 2026-10-29, only the serial log seen): look at
+  screens A, B and D with `-D HEALTH_TEST=a|b|d` and compare with the mockups (the brainstorm's
+  health moments A, B, D): spacing, colours (B's battery lines in ALERT), nothing past 316 px. A
+  shows for 5 s after the boot (RESET to see it again); B holds until a tap; D comes 5 s after the
+  Menu. Then with the OBD deck: A on a real power-on, D after a real stop. Each screen can be saved
+  as a PNG over USB with `python tools/deck_shot.py <port> <out.png>` (about 30 s, touch waits).
+  Captured on the deck on 2026-10-30 and read against the mockups: layout and colours match, nothing
+  past the edge. B's advice lines and A's fuel-trim figure were added after and captured too. Open:
+  the clock in the title wasn't seen (no clock set in those builds).
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
@@ -55,12 +64,12 @@ Open items, not scheduled. Newest decisions first within each section.
   and music tasks and the weather are each a candidate file under `src/yellow/`. Wait until the car
   health work (`feat/car-health`, which adds screens to this file) is merged.
 - **`feat/obd`** predates the 2026-10-28 reorganisation and ran on the retired companion. Its OBD
-  core moves to the yellow deck in `feat/car-health` (`src/util/car/`); retire the branch once that
+  core moves to the OBD deck in `feat/car-health` (`src/util/car/`); retire the branch once that
   merges. (`feat/voice-agent` is already on the new layout.)
-- **CI doesn't build the diagnostics**: only `ledpanel` and `s3` are in the firmware matrix, so
-  `blescan` / `bletest` stopped linking without anyone noticing. Add `blescan`, `bletest`,
-  `xboxtest`, `ps3test` and `hwcheck` / `hwcheck_s3` (and the mic envs once the voice agent merges),
-  or a weekly job that builds them.
+- **CI doesn't build the diagnostics**: the firmware matrix has `s3`, `ledpanel`, `obddeck`,
+  `hwcheck` and `hwcheck_s3`, so `blescan` / `bletest` stopped linking without anyone noticing. Add
+  `blescan`, `bletest`, `xboxtest` and `ps3test` (and the mic envs once the voice agent merges), or
+  a weekly job that builds them.
 
 ## Investigate
 
@@ -85,6 +94,156 @@ Open items, not scheduled. Newest decisions first within each section.
 
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
+
+## OBD deck: first flash
+
+The OBD deck (`src/obd`, env `obddeck`) is built and host-tested but has never run on a board
+(none was plugged in on 2026-10-29). On its first board, over USB, never the yellow deck's or the
+black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the monitor.
+
+- **Boot log**: `[boot] obddeck v...`, `[car] LittleFS ... bytes used, mounted in N ms`,
+  `[car] boot 1, last trip none, fuel book empty`, `[obd] BLE up, 3 connections allowed`,
+  `[wifi] connected ...` (on the hotspot `[wifi] fixed hotspot address 172.20.10.12`),
+  `[clock] SNTP started`, `[ota] listening`, `[net] on: http://.../car`. A second boot says
+  `boot 2`.
+- **First-boot format**: the first boot formats the data partition; note the `mounted in N ms`
+  of the first boot against the second (the format must stay well under the 90 s watchdog; it
+  runs in setup(), before the loop watchdog starts).
+- **BLE with the roles compiled out**: NimBLE runs central + observer only on esp32dev
+  (peripheral and broadcaster off in `platformio.ini`): the 4 s scan logs `[obd] seen ...` lines
+  for nearby devices (a phone, the black deck's `V-CYBERDECK`), and a connect attempt to a
+  scanned candidate gets as far as `connect failed` / `no serial service` without a crash.
+- **No adapter**: `[obd] no adapter: next try in 5 s`, then 10, 20, 40, 60 s and 60 s from then on;
+  the black deck (`V-CYBERDECK`) is seen but never connected (its name isn't an adapter's), and
+  the lights never appear in the log (they're filtered out before the `seen` line).
+- **`/car`**: a signed request answers 200 with the JSON (`"v":1`, `"seq"` rising each second,
+  `"link":"off"` with no adapter); the same with `?k=<REMOTE_TOKEN>` and no signature answers 403; before SNTP a signed
+  one answers 503 "clock not set". Sign from the PC with `util/wire/sigreq`'s scheme (or wait for
+  Task 10's yellow-deck client).
+- **`/fill`**: signed `GET /fill?p=6.49` answers `ok 6.49`; after a reboot `/car` still shows
+  `"price":6.49` (the fuel book in NVS). Then signed `GET /fill?p=20` answers `refused 20` and
+  `/car` still shows `"price":6.49`; `GET /fill` with no `p` answers `ok none`.
+- **Staying up**: `[car]` every 10 s and `[mem]` every minute for 10 min, no `TG1WDT` / task
+  watchdog reset, no `[ota] rolled back`; after a minute online `[ota] this firmware is good`.
+- **Memory** (`[mem]` after 10 min with WiFi, NimBLE and the server all up, no adapter):
+  - stack left in `net`, `obd-link` and `obd-ask`: each must stay above 1 KB (pass floor); note
+    the numbers (each task has 6 KB);
+  - the minimum free heap (`min`): note it as the no-adapter baseline for the adapter checks below.
+- **Power cut mid-row** (`::truncate` on esp_littlefs, never run on a board): pull the power
+  within a few seconds of a `[car]` line after a minute or more (or append a partial line by hand
+  from a test build), boot again: `[car] log: cut a partial row left by a power cut`, and the file
+  ends at its last whole row (`truncate()` returning 0 is what LittleFS on this core must do).
+- **Usage cap** (the 128 KB partition, 32 blocks): boot it 20+ times for a minute or two each
+  (each power-on is a file, a whole block): from the 21st file, or past 70 % of the blocks, the
+  boot logs `[car] log: dropped the N oldest trip file(s), U of T bytes used` and the oldest
+  `/t<seq>.jsonl` are gone; U stays at or under 70 % of T, and rows keep being written.
+- **Update over WiFi**: `pio run -e obddeck_ota -t upload` from a PC on the hotspot.
+
+## OBD deck bench build (`obddeck_bench`, never in the car)
+
+A simulated 10 min drive (`util/car/benchdrive`) in place of the adapter, on a real board: start-up,
+stops for screen D, an overheat at 4:00, a low battery from 7:20, a stored code and the MIL from
+8:50. `/car` says `"sim":1`, and the yellow deck writes SIM on the check, the trip summary and the
+band's small line. Its NVS namespace is `carsim` and it keeps no trip log, so a real deck's records
+stay; the trip log is therefore only tested by the normal build. Reflash `obddeck` before the car.
+
+## Both decks on the hotspot, 30 min, OBD deck without adapter
+
+Before the car: the yellow deck and the OBD deck on the hotspot together for 30 min, no Vgate.
+- Yellow `[mem]`: the minimum free heap stays above 78 KB with the car task polling `/car`; note
+  the car task's stack left (`carlink::stackLeft`).
+- No `TG1WDT` / task watchdog reset on either deck, no `[ota] rolled back`.
+- The lights and the pad answer as fast as without the OBD deck while it is polled (a colour from
+  the pad, a preset, a `/say`).
+- The `/say` fill-up end to end: `filled up at 6.49` -> `Full tank noted, 6.49 per litre.`;
+  `filled up at 649` (the OBD deck answers `refused 649`) -> `Full tank noted. I heard 649, that's
+  not a price.`; `full tank` (`ok none`) -> `Full tank noted.`; the OBD deck logs each.
+- The trip band on the Menu: `0.0 KM`, dashes for km/L and the range, and the small line
+  `0:16  R$ --  --V  --C` style (the time, dashes for the rest).
+
+## Car-health: waiting on the adapter
+
+The OBD link (now on the OBD deck) has never met an adapter: the Vgate hasn't arrived and
+`tools/obd_sim.py` can't run its BLE side on the Windows PC. From the yellow-deck attempt (Task 8,
+2026-10-28, parked): a 4th BLE connection on the yellow deck is not safe (the precompiled framework
+reserves the controller's DRAM for 3; a build with 4 crash-looped), which is why the OBD link moved
+to its own board. That attempt measured ~7-8 KB of heap for obdlink.
+
+First, from the PC: `python tools/obd_probe.py` to find it, then `python tools/obd_probe.py <name>`
+in the car with the ignition on: its GATT layout, each reply, and ATRV beside PID 42. Check both
+voltages against a multimeter: the battery warnings trust ATRV, and another maker's adapter read
+28.3 V and 11.8 V on one car.
+
+To check on the OBD deck when the Vgate arrives (or against a sim on a spare ESP32):
+- `[obd] gatt ...` lines: record the Vgate's real service (16-bit FFF0 or a 128-bit UUID);
+  `obdble::pick` keeps 128-bit services apart by their discovery index.
+- `[obd] connected <name>`, then `[obd] supported: ...` and `[obd] codes N ...` /
+  `[obd] pending N ...` once the car answers (the codes wait for a live reply).
+- Values follow the car within ~2 s (speed, RPM) and the battery at least every ~5 s with the engine
+  running (`[car]` line).
+- A stored code shows as `[obd] codes 1 P0301` (sim: `code P0301`; within 5 min or at reconnect).
+- With the adapter gone: `[obd] <name>: disconnected`, then the backoff 5, 10, 20, 40, 60 s; with a
+  working adapter that drops, back at once.
+- After a reboot the remembered adapter connects first (`(remembered)`, NVS `obd`/`bleaddr`).
+- The Vgate's advertised name: `[obd] seen "<name>" ... dBm` must be one `obd::looksLikeAdapter`
+  takes (a name it doesn't take is never tried; only a nameless serial device is); a nearby serial gadget
+  that fails the setup shows `skipped for 10 min` and the next round tries another device.
+- `[mem]` with the adapter connected vs the no-adapter level; the `obd-ask` stack's live use.
+- A trip: `/t<seq>.jsonl` gets a row a minute (30 s flushes); a power cut mid-row is trimmed at the
+  next boot (`[car] log: cut a partial row`), and screen A's last trip / range follow.
+
+## Car test (car-health, the owner)
+
+With both decks in the car, the Vgate in the port, the hotspot on:
+1. The OBD deck connects to the Vgate within 30 s of the start.
+2. Screen A appears with real volts.
+3. km matches the car's trip meter within 2 %.
+4. km/l is within 10 % of the car's display.
+5. Screen D appears at a stop.
+6. Voice fill-up at the pump works.
+7. The LEDs, the pad and KARAOKE keep working.
+8. A one-week log on the OBD deck shows no row gaps beyond link drops.
+
+Before the car, from a PC that can reach the yellow deck (the home router isolates them; the
+hotspot doesn't), with no OBD deck on: `/say?text=filled%20up%20at%206.49&k=<REMOTE_TOKEN>` must
+answer `I can't reach the car module.` at once (not checked on 2026-10-29: the PC couldn't reach the
+deck). With the OBD deck: `filled up at 6.49` -> `Full tank noted, 6.49 per litre.`, `filled up at
+649` -> `Full tank noted. I heard 649, that's not a price.`, `full tank` -> `Full tank noted.`, and
+the OBD deck's log says `[car] fill-up from ...` each time.
+
+Also by eye on the yellow deck's Menu: the trip band's three figures and the small line under them
+(spacing, nothing past 316 px), and a warning in red on the prompt line (a hot engine, or the MIL).
+
+## Car-health polish (deferred minors, reviews of 2026-10-28/29)
+
+Behaviour, to watch in the car test:
+- Trip and fuel book litres can disagree while the speed reading is stale.
+- `session()` can use an rpm that isn't fresh just after a reconnect.
+- A warning replaces the message on the prompt line, and screen A wipes the Menu message.
+- Screen A waits for the next Menu if the car turns ready on another screen, so it can show late
+  after a long Lights session (a deliberate choice).
+- `carhealth::hot()` ignores whether the engine runs (heat soak); the deck only runs with the
+  engine on, so low risk.
+
+Small code gaps:
+- `/fill` accepts `nan` and `inf` (`strtof`; only the reply is affected); `carwire::getReal` accepts
+  them too, plus hex.
+- `triplog`: a partial append plus a retry leaves a partial row mid-file; long ids can collide
+  after the cut.
+- `obd::parse` answers NoData if "NO DATA" appears anywhere, before the multi-ECU status walk;
+  `anchored()` refuses a headered first frame (fails safe, the deck runs ATH0).
+- `healthview`: `-` as the unknown check; the band truncates minutes where the parked screen rounds;
+  sub-zero coolant shows `--C`. The line clear assumes ASCII (an accented reason would leave its top
+  pixels behind).
+- The yellow deck logs host-not-found as rc=-1, like a timeout.
+
+Tests missing:
+- `tripsum`: the trim averages, flag bits 1-2.
+- `carhealth`: LTFT exactly 10/20, LTFT with the engine off, `endTrip` with no samples, MIL plus
+  stored codes.
+- `fuelbook`: "abastecido", a lone "full" / "tanque", a failed decode leaves the book untouched.
+- `healthview`: `ParkGate` wrap and NAN trip km; the small-line fit test has no margin.
+- `carwire`: `level` over 2 and `flag` over 1 refused. `carfs`: `tripSeq` and the sort.
 
 ## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
 
@@ -136,9 +295,9 @@ it is one or the other.
 
 ## Accepted as is
 
-- **No auto-dim from the light sensor** (decided 2026-10-07): the backlight is full by day and
-  about a third at night on both decks (by the clock, 18:00-06:00), never from the CYD's light
-  sensor (GPIO 34).
+- **No auto-dim from the light sensor** (decided 2026-10-07): the yellow deck's backlight is always
+  full and the black deck's is about a third at night (by the clock, 18:00-06:00), never from the
+  CYD's light sensor (GPIO 34).
 - **Decks stay on the network they joined** (tried 2026-10-14 and 2026-10-22, removed both
   times): scanning for the hotspot from home WiFi paused the S3's network task, and the iPhone
   hides its hotspot unless its settings screen is open, so the scan rarely saw it. Restarting the

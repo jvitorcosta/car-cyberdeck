@@ -9,7 +9,7 @@ lyrics, and in music mode gives the lights each song's colour.
 - [On the deck](#on-the-deck)
 - [Presets](#presets)
 - [Music mode: song colours](#music-mode-song-colours)
-- [Night mode and themes](#night-mode)
+- [Theme: the inside light's colour](#theme-the-inside-lights-colour)
 - [Voice and HTTP](#voice-and-http), [Siri Shortcuts](#siri-shortcuts)
 - [From the watch](#from-the-watch)
 - [Updates over WiFi](#updates-over-wifi)
@@ -42,8 +42,8 @@ hotspot.
 The deck boots by typing the welcome (`WELCOME TO CYBERDECK`, about half a second) and its firmware
 version (`FW 2.0.0`), then shows the **main screen**. The look is "Seegson" (Alien: Isolation):
 pale green on black, one hue at three brightnesses, and red kept for problems only (`-- NO LINK`,
-`>OFFLINE`, `>WRONG KEY`; a deeper red at night). Every screen has faint scanlines and all-caps
-labels. Every colour clears a contrast on black of at least 4.5:1 by day and 3:1 at night (WCAG;
+`>OFFLINE`, `>WRONG KEY`). Every screen has faint scanlines and all-caps
+labels. Every colour clears a contrast on black of at least 4.5:1 (WCAG;
 `src/util/yellow/termpal.h` lists each one's figure).
 
 - **Main screen**, top to bottom; it puts first what the car's panel and CarPlay don't show:
@@ -53,13 +53,19 @@ labels. Every colour clears a contrast on black of at least 4.5:1 by day and 3:1
     (`PARTLY CLOUDY`); under them `HI 32 LO 26  <CITY>` (dim). Where the car is comes from the
     hotspot's public IP (ip-api.com, approximate), the weather from Open-Meteo, every 15 min.
     A failed fetch keeps the last reading; `>OFFLINE` shows only when no reading ever came;
-  - the trip: `TRIP`, its time big (`0:32`), and on the right the distance (`12.4 KM`, or a dim
-    `-- KM` while no speed source feeds it);
+  - the trip, from the OBD deck (see [ARCHITECTURE.md](ARCHITECTURE.md) "OBD deck"): three
+    figures, the trip `12.4 KM`, `11.8 KM/L` now and the range `296 KM LEFT`, and under them
+    `0:16  R$ 6,30  14.1V  90C` (the time since the deck started, R$ so far, battery, coolant).
+    Without the OBD deck (or with no new snapshot for 3 s) the figures read a dim `--` and the
+    small line `0:16  R$ --  --V  --C` (the time, dashes for the rest);
   - both lights on one row: `IN`, a chip of its colour, its name and level (`ROSE 40%`) on the
     left, `OUT` the same on the right; `OFF` (dim) for a light that is off, `-- NO LINK` (red)
     when the deck has no link to it;
   - the prompt line: `>` and a block cursor; a message while one shows, and music mode's line
-    while it is on;
+    while it is on. A car warning from the OBD deck shows here in red for 2.5 s (also on the
+    Lights page's status line): the engine's (`>ENGINE HOT 108C`, `>CHECK ENGINE LIGHT ON`) even
+    while driving, any problem (`>BATTERY LOW WHILE RUNNING`, `>2 STORED CODES`) only once the
+    car stands; each at most once every 2 minutes, never over the health screens;
   - three big buttons: `[LIGHTS]` opens the Lights page, `[LYRICS]` the black deck's lyrics,
     `MUSIC MODE` turns music mode on or off (an inverted `ON` / `OFF` tag under it). LYRICS is
     bright with a `LIVE` tag while the black deck plays a song with synced lyrics, dim otherwise:
@@ -122,13 +128,17 @@ It is not on the Lights page's grid, and song colours never snap to it. Voice se
 "light blue", "azul claro"); the deck, Siri's replies, `/state`, `/presets` and the watch all call
 it Cyan. With cyan on the inside light the terminal takes the blue theme.
 
-- **Apply**: tap a preset on the PRESETS tab, or Xbox A on it.
+- **Apply**: tap a preset on the PRESETS tab, or Xbox A on it. The lights fade to it: the inside
+  over about a second, the outside in two steps a second apart (its controller is slow).
 - **Voice**: "rose", "fire", "gojira" (or "godzilla"), "purpura", "civic", "ocean", or "preset
   one" … "preset six" (also `favourite` / `favorite`, and digits: "preset 2"). It applies to both
   lights and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
   `Rose: inside Pink 40 percent, outside Pink 100 percent`. Siri may hear "purpura" as "purple",
   the colour; say "preset four" for that one.
 - **Watch**: the PRESETS page (see [garmin/README.md](../garmin/README.md)).
+
+**Welcome:** the first time each light links after the deck starts, a lit light rises from black
+to your last look over about 3 s. A later reconnect sets the look straight away.
 
 ## Music mode: song colours
 
@@ -141,10 +151,10 @@ reboot. There is no microphone: the black deck picks the current song's colour (
 - **Colour**: both lights take the song's colour with that colour's tuned LED mix, steady through
   the song. On a new song they fade to the next colour over about 3 s. The black deck waits for
   the new song's cover (up to 8 s) before it sends, so a song changes the lights once.
-- **Brightness**: each light at the level you left it, times the time-of-day cap (day 06:00-18:00
-  100 %, evening 18:00-22:00 and 05:00-06:00 70 %, late night 22:00-05:00 45 %), but never under
-  40 %; a light you had at 40 % or less keeps its level. At each step a playing song's lights fade
-  to the new level once.
+- **Brightness**: the outside light runs at 100 % at any hour. The inside light stays at the level
+  you left it, times the time-of-day cap (day 06:00-18:00 100 %, evening 18:00-22:00 and 05:00-06:00
+  70 %, late night 22:00-05:00 45 %), but never under 40 %; at 40 % or less it keeps its level. At
+  each step a playing song's inside light fades to the new level once.
 - **Off lights**: an outside light you left off stays off; the inside light is switched on.
 - **Screen**: the terminal theme follows the song's colour. The lights row shows what the lights
   show; the prompt line shows `>MUSIC [chip] PINK`, `>MUSIC: WAITING` until the first palette
@@ -230,28 +240,21 @@ The time of day changes only the brightness, never the colour. The black deck's 
 line per song with what it knew and which rule decided:
 `[colour] "Popular" | The Weeknd | Popular | "blinded by the lights 🌃" | genre R&B | cover FF0800 FF9000 | playlist mood neon | -> Red cap 100`.
 
-## Night mode
-
-From **18:00 to 06:00** local time (`TIMEZONE`), once the deck has the time over WiFi, the screen
-goes to an amber palette and the backlight to about a third. It changes only the screen, never
-the lights. Without WiFi there is no clock, so the deck stays in day mode. To check it without
-waiting for evening, build with the `NIGHT_TEST` hook, then clear it:
-
-```
-$env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
-Remove-Item Env:PLATFORMIO_BUILD_FLAGS
-```
-
-### Theme: the inside light's colour
+## Theme: the inside light's colour
 
 While the **INSIDE** light is on and linked, the terminal (main screen, Lights, Lyrics; not the
 boot typing or the touch calibration) takes that light's colour: the same three brightnesses in
-its hue, by day and darker at night. Blue and purple are lighter shades so the text reads; white
-is a pale grey-white by day and the usual amber at night. Problems stay red, except on the red,
+its hue. Blue and purple are lighter shades so the text reads; white is a soft grey-white, held
+back so it doesn't glare. Problems stay red, except on the red,
 orange and pink themes, where they show in white. The colour tiles and chips keep their real
 colours. Cyan takes blue's theme. With the inside light off or out of reach the screen goes back
-to green / amber. `-D THEME_TEST=<0..7>` (red, orange, pink, purple, blue, green, white, yellow)
-forces a theme the same way as `NIGHT_TEST`.
+to green. To see a theme without the car's lights, build with `THEME_TEST` (0..7: red, orange,
+pink, purple, blue, green, white, yellow), then clear it:
+
+```
+$env:PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6"; pio run -e ledpanel -t upload
+Remove-Item Env:PLATFORMIO_BUILD_FLAGS
+```
 
 ## Voice and HTTP
 
@@ -259,7 +262,7 @@ The deck's web server (port 80) answers four routes, all `GET`, all plain text:
 
 | Route | What it does | Reply |
 |---|---|---|
-| `/say?text=<phrase>` | changes the lights (see [What it understands](#what-it-understands)) | `Purple, 70 percent`, `Rose: inside Pink 40 percent, outside Pink 100 percent`, `Music mode on` |
+| `/say?text=<phrase>` | changes the lights (see [What it understands](#what-it-understands)), or notes a full tank on the OBD deck | `Purple, 70 percent`, `Rose: inside Pink 40 percent, outside Pink 100 percent`, `Music mode on`, `Full tank noted, 6.49 per litre.` |
 | `/state` | the current look, changes nothing | `Purple, 70 percent`, `Lights off` |
 | `/presets` | the six presets, one line each: slot, name, inside colour and level, outside colour and level | `1 ROSE pink 40 pink 100` |
 | `/status` | each light's link, music mode, the firmware | `inside=on outside=nolink music=off fw=2.0.0` |
@@ -294,6 +297,18 @@ English or Portuguese, any order, other words ignored (`src/util/yellow/ledvoice
 | Level | a number (`50`, `50%`, rounded to 10), max/máximo, min/mínimo |
 | Preset | rose, fire, gojira/godzilla, purpura, civic, ocean; or preset/favourite/favorite + 1-6, as a word or digit ("preset two", "preset 2") |
 | Music mode | music, música ("music mode" too): on; with an off word ("music off", "desliga o modo música"): off. Nothing else in the phrase is applied |
+
+**Fill-up** (`src/util/car/fuelbook.h`, checked before the lights): "filled up at 6.49", "fill
+up 6,49", "full tank", "tanque cheio a 6,49", "abasteci a 5,9". The deck forwards it to the OBD
+deck (which keeps the fuel book) as a signed `GET /fill?p=6.49` (no `p` without a price, or with
+one outside 3.00-15.00 R$/L: the tank is noted full all the same) and answers:
+
+| Said | Reply |
+|---|---|
+| "filled up at 6.49" | `Full tank noted, 6.49 per litre.` |
+| "filled up at 649" | `Full tank noted. I heard 649, that's not a price.` |
+| "full tank" | `Full tank noted.` |
+| any, OBD deck not answering (~2-3 s) | `I can't reach the car module.` |
 
 A colour also turns the lights on. "light" only counts right before "blue" ("light off" is just
 off), so "turn the light blue" means cyan, and "lights blue" means blue.

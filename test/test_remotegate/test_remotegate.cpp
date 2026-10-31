@@ -68,8 +68,20 @@ void test_key_check_alone_never_uses_up_a_play() {
     TEST_ASSERT_FALSE(off.keyOk(""));               // remote off: nothing is accepted
 }
 
+void test_signed_only_gate_refuses_the_bearer_key() {
+    // Between decks (the OBD deck's /car and /fill) only a signature passes: the key never travels
+    // in a URL. The gate stays enabled, so reqauth::pass still checks signatures against it.
+    remotegate::Gate g("secret", remotegate::Accept::SignedOnly);
+    TEST_ASSERT_TRUE(g.enabled());
+    TEST_ASSERT_FALSE(g.keyOk("secret"));
+    TEST_ASSERT_EQUAL_INT((int)remotegate::Result::BadKey, (int)g.request("secret", false, 100));
+    remotegate::Gate def("secret");                 // the default still takes the key (Siri's /say)
+    TEST_ASSERT_TRUE(def.keyOk("secret"));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_signed_only_gate_refuses_the_bearer_key);
     RUN_TEST(test_a_request_is_judged_key_then_busy_then_rate);
     RUN_TEST(test_no_token_configured_turns_the_remote_off);
     RUN_TEST(test_key_check_alone_never_uses_up_a_play);
