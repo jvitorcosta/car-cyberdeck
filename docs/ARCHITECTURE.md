@@ -67,8 +67,10 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   one while the network task loads the next song's walker into the staged one. Fallback:
   the PokeAPI sprite with a bob/flip fake walk.
 - **Pokémon** — random #1–1025 from a bundled Pokédex (`pokemon/dex`, generated).
-- **Lyrics** (`lyrics/lrclib`, `util/lrcstream`, `util/lyricbuf`) — LRCLIB `/api/get`, then
-  `/api/search`; synced beats plain; retries on server errors; the dialogue box shows
+- **Lyrics** (`lyrics/lrclib`, `util/lrcstream`, `util/lrcmatch`, `util/lyricbuf`) — LRCLIB
+  `/api/get`, then `/api/search` for the title without its suffix unless get found synced lines
+  or an instrumental; entries must match by duration and title; synced beats plain; retries on
+  server errors; the dialogue box shows
   Pokémon-style status messages (`ui/lyricmsg`) when there is no line to show.
 - **Genre badge** (`genre/apple`, `util/genre`, `util/genrebadge`) — Apple artist genre, cached
   per artist, mapped to Gen-3 style badges.
@@ -268,7 +270,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
     genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,
-    intropick, linkstatus, loudness, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
+    intropick, linkstatus, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
     quietboot, ridersprite, songmood (+ songpicks.inc), termblend, walkanim, walkrect
   - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, geoip, httphead, karaoke,
     ledpresets, ledvoice, lightstatus, otapage, pollpace, tapguard, termpal, touchcal, touchguard,

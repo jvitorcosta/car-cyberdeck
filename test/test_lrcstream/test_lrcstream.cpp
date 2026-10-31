@@ -210,6 +210,52 @@ void test_search_empty_array_is_none() {
     TEST_ASSERT_EQUAL_INT(0, feedAll(ex, "[]"));
     TEST_ASSERT_EQUAL_INT((int)Kind::None, (int)ex.kind());
 }
+// LRCLIB added "name", "hasWordSync" and "lyricsfile" to every entry: real-shaped rows.
+void test_search_reads_todays_entries() {
+    lrcstream::Extractor ex(L, Mode::Search, 196000, "I Heard It Through The Grapevine");
+    feedAll(ex, "[{\"id\":1,\"name\":\"Heard It\",\"trackName\":\"Heard It Through the Grapevine\","
+                "\"artistName\":\"Marvin Gaye\",\"albumName\":\"A\",\"duration\":196.0,"
+                "\"instrumental\":false,\"hasWordSync\":false,\"plainLyrics\":\"wrong\","
+                "\"syncedLyrics\":\"[00:01.00]wrong\",\"lyricsfile\":\"lines:\\n- text: x\"},"
+                "{\"id\":2,\"name\":\"I Heard\",\"trackName\":\"I Heard It Through The Grapevine\","
+                "\"artistName\":\"Marvin Gaye\",\"albumName\":null,\"duration\":195.0,"
+                "\"instrumental\":false,\"hasWordSync\":false,\"plainLyrics\":\"ooh\","
+                "\"syncedLyrics\":\"[00:01.00]ooh\",\"lyricsfile\":null}]");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
+    TEST_ASSERT_EQUAL_STRING("ooh", lyricbuf::lineText(L, 0));
+}
+void test_search_skips_other_songs_of_the_same_length() {
+    lrcstream::Extractor ex(L, Mode::Search, 200000, "Love - Remastered");
+    feedAll(ex, "[{\"trackName\":\"Love Story\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]no\"},"
+                "{\"trackName\":\"love\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]yes\"}]");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
+    TEST_ASSERT_EQUAL_STRING("yes", lyricbuf::lineText(L, 0));
+}
+void test_search_title_check_reads_escapes_and_resets_each_entry() {
+    lrcstream::Extractor ex(L, Mode::Search, 200000, "Caf\xC3\xA9 \"Noir\"");
+    feedAll(ex, "[{\"trackName\":\"Other\",\"duration\":200,\"plainLyrics\":\"no\"},"
+                "{\"duration\":200,\"plainLyrics\":\"no title: taken\"},"
+                "{\"trackName\":\"Caf\\u00e9 \\\"Noir\\\"\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]yes\"}]");
+    TEST_ASSERT_EQUAL_STRING("yes", lyricbuf::lineText(L, 0));
+}
+void test_search_keeps_get_plain_until_synced_comes() {
+    lrcstream::Extractor get(L);
+    feedAll(get, "{\"plainLyrics\":\"from get\",\"syncedLyrics\":null}");
+    lrcstream::Extractor none(L, Mode::Search, 200000, "Song", true);
+    feedAll(none, "[{\"trackName\":\"Song\",\"duration\":200,\"plainLyrics\":\"from search\"}]");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Plain, (int)none.kind());
+    TEST_ASSERT_EQUAL_STRING("from get", lyricbuf::lineText(L, 0));
+    lrcstream::Extractor synced(L, Mode::Search, 200000, "Song", true);
+    feedAll(synced, "[{\"trackName\":\"Song\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]timed\"}]");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)synced.kind());
+    TEST_ASSERT_EQUAL_INT(1, L.n);
+    TEST_ASSERT_EQUAL_STRING("timed", lyricbuf::lineText(L, 0));
+}
+void test_search_instrumental_entry_does_not_hide_a_later_synced_one() {
+    lrcstream::Extractor ex(L, Mode::Search, 120000);
+    feedAll(ex, "[{\"duration\":120,\"instrumental\":true},{\"duration\":120,\"syncedLyrics\":\"[00:01.00]sung\"}]");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
+}
 void test_search_matching_instrumental() {
     lrcstream::Extractor ex(L, Mode::Search, 120000);
     feedAll(ex, "[{\"duration\":120,\"instrumental\":true,\"plainLyrics\":null}]");
@@ -227,7 +273,7 @@ void test_search_braces_in_strings_do_not_confuse_objects() {
     TEST_ASSERT_EQUAL_INT((int)Kind::Plain, (int)ex.kind());
     TEST_ASSERT_EQUAL_STRING("ok", lyricbuf::lineText(L, 0));
 }
-void test_search_reads_at_most_48_kb() {
+void test_search_read_is_capped() {
     std::string json = "[";
     while (json.size() < lrcstream::SEARCH_CAP + 1000)
         json += "{\"duration\":10,\"plainLyrics\":\"" + std::string(500, 'z') + "\"},";
@@ -287,10 +333,15 @@ int main(int, char**) {
     RUN_TEST(test_search_stops_at_first_synced_match);
     RUN_TEST(test_search_rejects_entry_without_duration_first);
     RUN_TEST(test_search_empty_array_is_none);
+    RUN_TEST(test_search_reads_todays_entries);
+    RUN_TEST(test_search_skips_other_songs_of_the_same_length);
+    RUN_TEST(test_search_title_check_reads_escapes_and_resets_each_entry);
+    RUN_TEST(test_search_keeps_get_plain_until_synced_comes);
+    RUN_TEST(test_search_instrumental_entry_does_not_hide_a_later_synced_one);
     RUN_TEST(test_search_matching_instrumental);
     RUN_TEST(test_search_ignores_instrumental_of_other_versions);
     RUN_TEST(test_search_braces_in_strings_do_not_confuse_objects);
-    RUN_TEST(test_search_reads_at_most_48_kb);
+    RUN_TEST(test_search_read_is_capped);
     RUN_TEST(test_search_empty_plain_does_not_block_a_later_match);
     RUN_TEST(test_get_done_at_end_of_document);
     RUN_TEST(test_search_done_at_end_of_array);

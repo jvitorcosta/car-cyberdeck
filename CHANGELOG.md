@@ -5,6 +5,14 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Black deck (S3)
+- **Fixed:** more songs get synced lyrics. A plain-only `/api/get` hit no longer ends the lookup:
+  the search runs too, and its synced lines replace the plain ones. The search drops title suffixes
+  (" - Remastered 2011", " (feat. X)", " - Ao Vivo") and skips entries of another song, reads up to
+  128 KB (LRCLIB's answers grew to ~230 KB, past the old 48 KB cap), still runs when `/api/get`
+  answers 5xx, and an instrumental entry no longer hides a later synced one. On 95 real songs, 75
+  had synced lyrics before and 89 now. The phone can still show lyrics LRCLIB doesn't have.
+
 ## [2.0.0] - 2026-10-28
 
 The CYD became the **yellow deck**, which drives the car's LED lights, and a Garmin watch app

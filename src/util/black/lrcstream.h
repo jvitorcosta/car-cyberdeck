@@ -6,19 +6,25 @@
 // (ArduinoJson grew strings by doubling, up to 16 KB contiguous while TLS was open).
 // Reads "instrumental", "plainLyrics" and "syncedLyrics" (plus "duration" in search mode),
 // unescaping strings (\n \" \\ \/ \t \uXXXX incl. surrogate pairs -> UTF-8) straight into a
-// lyricbuf arena one line at a time. Synced lines replace plain ones; instrumental wins.
+// lyricbuf arena one line at a time. Synced lines replace plain ones; instrumental wins, except
+// over a later search entry's synced lines.
 // Spec: docs/superpowers/specs/2026-10-07-lyrics-reliability-design.md. PURE, host-tested.
 namespace lrcstream {
 constexpr int LINE_CAP = 256;               // longer lines are cut
-constexpr size_t SEARCH_CAP = 48 * 1024;    // search mode: stop after this many bytes
+// Search mode: stop after this many bytes. Each entry repeats its lyrics in "lyricsfile" now, so
+// 20 entries reach ~230 KB; every lookup checked ended within 96 KB. Skipped bytes cost time, not RAM.
+constexpr size_t SEARCH_CAP = 128 * 1024;
 constexpr uint32_t DURATION_TOL_MS = 3000;  // search mode: accepted |duration - track|
 enum class Mode { Get, Search };            // /api/get object, /api/search array of objects
 enum class Kind { None, Synced, Plain, Instrumental };
 class Extractor {
 public:
     // Search mode skips objects whose duration (listed before their lyrics) is more than
-    // DURATION_TOL_MS away from durationMs.
-    explicit Extractor(lyricbuf::Lyrics& out, Mode mode = Mode::Get, uint32_t durationMs = 0);
+    // DURATION_TOL_MS away from durationMs, or, with a title, whose trackName is another song
+    // (lrcmatch::sameTitle; the title must outlive the Extractor). keepPlain: out already holds
+    // plain lines (from /api/get), which only synced lines replace.
+    explicit Extractor(lyricbuf::Lyrics& out, Mode mode = Mode::Get, uint32_t durationMs = 0,
+                       const char* title = nullptr, bool keepPlain = false);
     void feed(char c);
     bool done() const { return done_; }               // stop reading the stream
     bool found() const { return syncedLines_ > 0; }   // synced lines were stored
@@ -29,7 +35,7 @@ public:
     // (captive portal, CDN error): a network problem, not "no lyrics".
     bool sawJson() const { return sawJson_; }
 private:
-    enum class Str { None, Key, Skip, Plain, Synced };
+    enum class Str { None, Key, Skip, Title, Plain, Synced };
     enum class Esc { None, Backslash, Unicode };
     static constexpr int KEY_CAP = 16, LIT_CAP = 24;
     bool accepted() const;
@@ -43,6 +49,7 @@ private:
     lyricbuf::Lyrics& out_;
     Mode mode_;
     uint32_t targetMs_;
+    const char* title_;
     int objDepth_;                 // nesting level whose keys we read (get: 1, search: 2)
     int depth_ = 0;
     bool inStr_ = false, inLit_ = false, expectValue_ = false;
@@ -56,7 +63,8 @@ private:
     int len_ = 0;
     uint32_t hex_ = 0, hi_ = 0;
     int hexDigits_ = 0;
-    bool objMatch_ = false;        // search: this object's duration matched
+    bool objMatch_ = false;        // search: this object's duration and title matched
+    bool titleOk_ = true;          // search: this object's trackName is the song (or not seen)
     bool plainTaken_ = false;      // the first accepted plain string was read
     bool instrumental_ = false, truncated_ = false, done_ = false;
     bool sawFirst_ = false, sawJson_ = false;   // first non-blank byte seen / it opened JSON
