@@ -66,8 +66,8 @@ Builds on the Spotify tools, `/say` and the #23 song colours.
 
 ## Phase 3: the car
 
-Needs the Vgate iCar Pro BLE. The yellow deck reads OBD and the agent asks the deck, because the
-cloud can't reach the car.
+Needs the OBD deck (`feat/car-health`, draft #30) and the Vgate iCar Pro BLE. The OBD deck reads the
+car and owns health and the trip log; the agent asks the decks, because the cloud can't reach the car.
 
 | Feature | Example | Reads | Writes |
 |---|---|---|---|
