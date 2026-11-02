@@ -29,9 +29,12 @@ enum { BOTH = 0, INSIDE = 1, OUTSIDE = 2 }
 // The Presets page, and the marker on a job that isn't about one zone (/presets, /status, and the
 // /say that applies a preset: no zone param, and its reply must not be read as a look).
 const PRESETS = 3;
+// The fifth page: the owner's Spotify playlists, from the black deck (Tunes.mc).
+const PLAYLISTS = 4;
+const PAGES = 5;
 // The marker on the /say that turns music mode on or off: no zone param, and its reply ("Music mode
 // on") isn't a look.
-const MUSIC = 4;
+const MUSIC = 5;
 
 // One light's look as the watch knows it.
 class Look {
@@ -170,21 +173,7 @@ class Deck {
             }
         } else {
             _queue = [];  // the deck isn't answering: drop the rest rather than wait on each
-            if (code == -300) {
-                status = "No answer";            // timed out: the deck isn't on the hotspot
-            } else if (code == -104 || code == -2) {
-                status = "Phone not connected";  // no Bluetooth link to Garmin Connect
-            } else if (code == 403 && data != null && data.toString().find("clock") != null) {
-                status = "Clock off: sync watch";  // the deck's clock and the watch's are over 2 min apart
-            } else if (code == 403) {
-                status = "Wrong key";            // Secrets.mc doesn't match REMOTE_TOKEN
-            } else if (code == 503 && data != null && data.toString().find("clock") != null) {
-                status = "Deck has no clock";   // it can't check a signature before its first SNTP answer
-            } else if (code == 503) {
-                status = "Deck busy";
-            } else {
-                status = "Error " + code;
-            }
+            status = errorText(code, data);
         }
         WatchUi.requestUpdate();
         next();
@@ -249,19 +238,6 @@ class Deck {
         return sp != null ? rest.substring(0, sp) as String : rest;
     }
 
-    private function split(text as String, sep as String) as Array<String> {
-        var parts = [] as Array<String>;
-        var rest = text;
-        var at = rest.find(sep);
-        while (at != null) {
-            parts.add(rest.substring(0, at) as String);
-            rest = rest.substring(at + sep.length(), rest.length()) as String;
-            at = rest.find(sep);
-        }
-        parts.add(rest);
-        return parts;
-    }
-
     // Reads a deck line into a look: "[Inside: |Outside: ]<Colour>[, <n> percent]" or "... Lights off".
     private function absorb(text as String, l as Look) as Void {
         var colon = text.find(": ");
@@ -292,4 +268,36 @@ class Deck {
             }
         }
     }
+}
+
+// What the bottom line says when a deck didn't answer 200 (code: the HTTP status, or a negative
+// Communications error). Both decks check signatures the same way (common/net/reqauth).
+function errorText(code as Number, data as Dictionary or String or Null) as String {
+    if (code == -300) {
+        return "No answer";            // timed out: the deck isn't on the hotspot
+    } else if (code == -104 || code == -2) {
+        return "Phone not connected";  // no Bluetooth link to Garmin Connect
+    } else if (code == 403 && data != null && data.toString().find("clock") != null) {
+        return "Clock off: sync watch";  // the deck's clock and the watch's are over 2 min apart
+    } else if (code == 403) {
+        return "Wrong key";            // Secrets.mc doesn't match REMOTE_TOKEN
+    } else if (code == 503 && data != null && data.toString().find("clock") != null) {
+        return "Deck has no clock";   // it can't check a signature before its first SNTP answer
+    } else if (code == 503) {
+        return "Deck busy";
+    }
+    return "Error " + code;
+}
+
+function split(text as String, sep as String) as Array<String> {
+    var parts = [] as Array<String>;
+    var rest = text;
+    var at = rest.find(sep);
+    while (at != null) {
+        parts.add(rest.substring(0, at) as String);
+        rest = rest.substring(at + sep.length(), rest.length()) as String;
+        at = rest.find(sep);
+    }
+    parts.add(rest);
+    return parts;
 }
