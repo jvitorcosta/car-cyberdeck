@@ -131,8 +131,16 @@ it Cyan. With cyan on the inside light the terminal takes the blue theme.
   the colour; say "preset four" for that one.
 - **Watch**: the PRESETS page (see [garmin/README.md](../garmin/README.md)).
 
-**Welcome:** the first time each light links after the deck starts, a lit light rises from black
-to your last look over about 3 s. A later reconnect sets the look straight away.
+**Welcome:** the first time each light links after the deck starts, a lit light plays a short wave
+in your last look's colour. The inside light goes dark, swells past its level to a peak (30 points
+brighter, at most 100 %) over 1.5 s and settles on the look by about 2.7 s. The outside light stays
+dark until the inside one peaks, then rises through the peak to the look by about 4.5 s. When both
+link together (the car's power coming on), the light seems to travel from the cabin outwards. Only
+the level moves, never the colour, and each light ends on its look twice, so a lost write still
+lands on it. The controllers drive one colour per strip (they are not addressable), so the motion
+runs from one light to the other, not along a strip. A light you left off stays off, music mode
+skips the wave, and a change, a preset or a song's colour takes over from where the wave is. A
+later reconnect sets the look straight away.
 
 ## Music mode: song colours
 
