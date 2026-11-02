@@ -10,6 +10,7 @@ lyrics, and in music mode gives the lights each song's colour.
 - [Presets](#presets)
 - [Music mode: song colours](#music-mode-song-colours)
 - [Theme: the inside light's colour](#theme-the-inside-lights-colour)
+- [Night dimming](#night-dimming)
 - [Voice and HTTP](#voice-and-http), [Siri Shortcuts](#siri-shortcuts)
 - [From the watch](#from-the-watch)
 - [Updates over WiFi](#updates-over-wifi)
@@ -253,6 +254,19 @@ pink, purple, blue, green, white, yellow), then clear it:
 
 ```
 $env:PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6"; pio run -e ledpanel -t upload
+Remove-Item Env:PLATFORMIO_BUILD_FLAGS
+```
+
+## Night dimming
+
+From **18:00 to 06:00** local time (`TIMEZONE`), once the deck has the time over WiFi, the
+backlight drops to about a third. Only the brightness changes: the palette, the theme and the
+colour chips stay exactly as by day, and the lights are untouched. Without WiFi there is no clock,
+so the backlight stays full. The serial log says `[ui] night dim on` / `off`. To check it without
+waiting for evening, build with the `NIGHT_TEST` hook, then clear it:
+
+```
+$env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
 Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ```
 

@@ -293,9 +293,10 @@ it is one or the other.
 
 ## Accepted as is
 
-- **No auto-dim from the light sensor** (decided 2026-10-07): the yellow deck's backlight is always
-  full and the black deck's is about a third at night (by the clock, 18:00-06:00), never from the
-  CYD's light sensor (GPIO 34).
+- **No auto-dim from the light sensor** (decided 2026-10-07): both decks' backlights are full by
+  day and about a third at night, by the clock (18:00-06:00), never from the CYD's light sensor
+  (GPIO 34). The yellow deck dims by the clock again since 2026-11-02, the backlight only: its
+  colours stay as by day.
 - **Decks stay on the network they joined** (tried 2026-10-14 and 2026-10-22, removed both
   times): scanning for the hotspot from home WiFi paused the S3's network task, and the iPhone
   hides its hotspot unless its settings screen is open, so the scan rarely saw it. Restarting the

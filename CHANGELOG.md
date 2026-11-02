@@ -10,10 +10,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - Music mode: the outside light runs at 100 % at any hour.
 - Yellow deck: presets fade in instead of jumping, and the lights rise to the last look when the
   deck starts.
-
-### Removed
-- Yellow deck: night mode. The screen keeps its colours and full backlight at any hour. The black
-  deck keeps its own.
+- Yellow deck: night mode only dims. From 18:00 to 06:00, once the clock is synced, the backlight
+  drops to about a third; the colours (no more amber palette) stay as by day.
 
 ## [2.0.0] - 2026-10-28
 

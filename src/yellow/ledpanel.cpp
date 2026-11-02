@@ -50,6 +50,9 @@
 // typing or the calibration) takes that light's colour, termpal's three levels of it
 // (problems show in white on the red, orange and pink themes).
 // The light off or unreachable: the green again. The colour tiles and chips stay real.
+// Night dimming: 18:00-06:00 local time, once WiFi has synced the clock, the backlight drops to its
+// night level (ui/backlight). Only the brightness: the palette, theme and chips stay as by day.
+// Without REMOTE_TOKEN there is no WiFi, no clock, and the backlight stays full.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
 // (util/musiclights), steady, fading to the next song's over ~3 s, the inside at the owner's level under
@@ -60,10 +63,11 @@
 // change (touch, the Xbox controller, voice, the watch) ends the mode, then applies; turning it off
 // brings back the looks from before. Not kept over a reboot (see
 // "Music mode" below).
-// Test hook: building with -D THEME_TEST=<swatch 0..7> (e.g. PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6";
-// ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
-// the inside light does, to see it without the car's lights. Not set in platformio.ini (every test
-// hook: docs/ARCHITECTURE.md "Test hooks").
+// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") dims the
+// backlight whatever the time, to check it without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
+// (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
+// the inside light does, to see it without the car's lights. Neither is set in platformio.ini (every
+// test hook: docs/ARCHITECTURE.md "Test hooks").
 // Updates over WiFi (net/ota, like the black deck): once online, from a PC on the iPhone hotspot,
 //   pio run -e ledpanel_ota -t upload
 // A page in the theme holds the screen meanwhile (see "Update over WiFi" below); three crash resets
@@ -111,6 +115,7 @@
 #include "../util/car/healthview.h"
 #include "../util/yellow/bothlook.h"
 #include "../util/yellow/dashtext.h"
+#include "../util/common/daynight.h"
 #include "../util/yellow/deckaddr.h"
 #include "../util/yellow/deckmenu.h"
 #include "../util/yellow/elkcmd.h"
@@ -3166,7 +3171,7 @@ static void voiceTask(void*) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     server->begin();
-    netclock::begin();  // SNTP, for the Menu's clock
+    netclock::begin();  // SNTP, for the Menu's clock and night dimming
     weatherTick();  // the first try
     beginLyrics();
 #ifndef HEALTH_TEST  // the test draws from a canned snapshot (carTick)
@@ -3221,8 +3226,10 @@ static void vividGamma() {
     for (uint8_t v : NEG) tft.writedata(v);
 }
 
-// The Menu's clock. Polled each second (a time() call) so it turns over on the minute.
+// The Menu's clock and night dimming. Polled each second (a time() call) so the clock turns over on
+// the minute; the backlight follows it, and only the backlight: nothing is redrawn.
 static void updateClock() {
+    static bool dimmed = false;
     static uint32_t checkedAt = 0;
     static bool first = true;
     if (!first && millis() - checkedAt < 1000) return;
@@ -3240,6 +3247,14 @@ static void updateClock() {
         if (screen == Screen::Menu) drawClock();
         if (onHealth()) drawHealthClock();
     }
+    bool night = synced && daynight::isNight(m);
+#ifdef NIGHT_TEST
+    night = true;
+#endif
+    if (night == dimmed) return;
+    dimmed = night;
+    backlight::set(night);
+    Serial.printf("[ui] night dim %s\n", night ? "on" : "off");
 }
 
 // The theme the INSIDE light asks for: its colour while it's on and linked (insideSeen), else -1.
@@ -3276,7 +3291,7 @@ void setup() {
     // voice, lyrics, car, music and weather tasks, and this loop from the end of setup().
     watchdog::begin();
     tft.init();
-    backlight::begin();  // PWM, full
+    backlight::begin();  // PWM, full until updateClock says night
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
     tft.setRotation(1);
     // The texts are Latin-1 bytes (txt::latin1Fold) and the fonts cover 0x20-0xFF: each byte is its
