@@ -43,8 +43,8 @@ UDP sender (`audio/musicsvc`, started on demand), the update listener (`net/ota`
 boot the boot scene and intro video (core 1) and the one-shot sound task.
 
 Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, both public;
-`GET /state` and `GET /music`, which take `k=<REMOTE_TOKEN>` or a signature (see
-[Between the devices](#between-the-devices)); and `POST /play?clip=howl`, `POST /trip/reset` and
+`GET /state`, `GET /music`, `GET /playlists` and `GET /playlists/play`, which take
+`k=<REMOTE_TOKEN>` or a signature (see [Between the devices](#between-the-devices)); and `POST /play?clip=howl`, `POST /trip/reset` and
 `GET /music/debug`, which take `k=` only.
 
 - **UI loop** draws only: battle layout (`ui/screen_now`, `ui/battle`, `ui/icons`), album
@@ -148,6 +148,19 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   phone icon and "REMOTE", 3 px modules on a cream panel, 2-module quiet zone, x 4-127,
   y 22-149), painted once with the screen and again only when the address changes; without a
   link the scene is painted back over it.
+- **Playlist picker** (`net/remote`, `spotify/client`, `util/playlists`) — the watch's
+  `GET /playlists?offset=N` and `GET /playlists/play?id=<id>`, signed. The remote task can't touch
+  the Spotify connection, so it leaves the request in a one-slot mailbox and waits (15 s at most);
+  the network task runs it between polls (`spclient::serveWatch`, before the next per-track step)
+  on the kept-open connection: no TLS handshake of its own, and none at all below `TLS_NEED`
+  (`503 low memory`) or while a 429 is being waited out. A page is 8 playlists of
+  `/v1/me/playlists` (about 1.5 KB of JSON each, into the 16 KB answer buffer; asked again at 4 when
+  long descriptions overflow it), sent as `playlists <total> <next>` and one `<id> <name>` line
+  each (names cut to 48 bytes). Play is `PUT /v1/me/player/play` with the playlist as
+  `context_uri`. Spotify's refusals come back as `502` with what to do ("Open Spotify on phone" for
+  `NO_ACTIVE_DEVICE`, "Needs Spotify Premium", "Re-authorise Spotify" for a missing scope); a
+  request the network task didn't reach in time is `504`. The token's scopes are logged once at the
+  first login when the playlist ones are missing.
 - **Music mode** (`audio/musicsvc`, `util/songmood`, `util/songpalette`,
   `util/musicwire`) — the network task decides each song's colour (`songmood::choose`: the owner's
   picks, a colour word, the playlist description's #colour tags, else a mood's allowed swatches
@@ -209,6 +222,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 | yellow → black | `GET /music?on=1` / `on=0` (signed); the reply proves the black deck's boot id for the request's nonce | `audio/musicsvc`, `util/wire/musicwire::readBoot` |
 | black → yellow | UDP port 4210: the song's palette (v2: boot id, rising counter, 8-byte HMAC tag) | `util/wire/musicwire`, `util/wire/songpalette`; the colour is `util/black/songmood`'s |
 | watch → yellow | `GET /say`, `/state`, `/presets`, `/status` (signed) | replies from `util/lightstatus`, `util/ledpresets` (wire lines), `util/ledvoice` |
+| watch → black | `GET /playlists?offset=N` (a page: `playlists <total> <next>`, then `<id> <name>` lines), `GET /playlists/play?id=` (signed); `502` + Spotify's refusal in words | `util/black/playlists`; read by the watch's `Tunes.mc` |
 | Siri → yellow | `GET /say?k=<REMOTE_TOKEN>&text=...` | bearer key, plain HTTP |
 | phone → black | the page `/?k=`, then `/state` and `POST /play` with `k=` | bearer key, plain HTTP |
 
