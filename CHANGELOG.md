@@ -8,8 +8,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ### Changed
 - Yellow deck: the white theme is a softer grey-white.
 - Music mode: the outside light runs at 100 % at any hour.
-- Yellow deck: presets fade in instead of jumping, and the lights rise to the last look when the
-  deck starts.
+- Yellow deck: presets fade in instead of jumping.
+- Yellow deck: when the deck starts, the lights play a welcome wave in the last look's colour: the
+  inside light swells and settles, then the outside light follows, about 4.5 s in all.
 - Yellow deck: night mode only dims. From 18:00 to 06:00, once the clock is synced, the backlight
   drops to about a third; the colours (no more amber palette) stay as by day.
 

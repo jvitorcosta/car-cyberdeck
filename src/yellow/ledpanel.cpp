@@ -121,6 +121,7 @@
 #include "../util/yellow/elkcmd.h"
 #include "../util/yellow/geoip.h"
 #include "../util/common/hotspotip.h"
+#include "../util/lights/ledintro.h"
 #include "../util/lights/ledlook.h"
 #include "../util/yellow/ledpresets.h"
 #include "../util/yellow/ledvoice.h"
@@ -307,11 +308,14 @@ static bool musicDriving = false;
 static Look musicLook[N_CTRL];
 static Look shownLook(int i) { return musicDriving ? musicLook[i] : looks[i + 1]; }
 
-// A running fade (see "A new music look" below; presets and the first link use it too). Loop-owned.
+// A running fade (see "A new music look" below; presets use it too), or the welcome's intro (see
+// startIntro): its keys in place of from..to, each at its time after `start`. Loop-owned.
 struct LightFade {
     songpalette::Rgb from{}, to{};
     int steps = 0, done = 0;  // done == steps: no fade
     uint32_t every = 0, at = 0;  // at: millis() of the last step written
+    ledintro::Track intro;  // intro.n > 0: the welcome (steps == intro.n)
+    uint32_t start = 0;
 };
 static LightFade lightFade[N_CTRL];
 
@@ -325,6 +329,7 @@ static songpalette::Rgb frameOf(const Look& l) {
 // The colour frame light i shows now: a fade's current step, else its look's.
 static songpalette::Rgb frameNow(int i) {
     const LightFade& f = lightFade[i];
+    if (f.done < f.steps && f.intro.n) return f.intro.k[f.done ? f.done - 1 : 0].c;
     if (f.done < f.steps) return musiclights::blend(f.from, f.to, f.done, f.steps);
     return frameOf(shownLook(i));
 }
@@ -337,6 +342,7 @@ static void writeFrame(int i, const songpalette::Rgb& c) {
 // the first step, so the light never shows its old colour; else the first step waits for its gap.
 static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rgb& to, bool powerOn, int steps, uint32_t every) {
     LightFade& f = lightFade[i];
+    f.intro.n = 0;  // a fade ends the welcome
     f.from = from;
     f.to = to;
     f.steps = steps;
@@ -347,6 +353,22 @@ static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rg
     f.done = 1;
     f.at = millis();
     writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+}
+
+// The welcome, the first time since boot light i links lit (ledintro: a wave from the inside light to
+// the outside one, ~4.5 s): its power-on and first key (dark) now, the rest from fadeTick. A change,
+// a preset or a song's look takes over from the key it reached; a reconnect gets its look (push).
+static void startIntro(int i) {
+    const Look l = shownLook(i);
+    const Rgb s = ledRgb(l.swatch);
+    LightFade& f = lightFade[i];
+    f = LightFade();
+    f.intro = ledintro::plan(i == 0, {s.r, s.g, s.b}, l.pct);
+    f.steps = f.intro.n;
+    f.start = f.at = millis();
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+    f.done = 1;
+    writeFrame(i, f.intro.k[0].c);
 }
 
 // Controller i's look (power + dimmed colour), both header variants. Ends a running fade.
@@ -2769,7 +2791,15 @@ static void fadeTick() {
     const uint32_t now = millis();
     for (int i = 0; i < N_CTRL; i++) {
         LightFade& f = lightFade[i];
-        if (f.done >= f.steps || now - f.at < f.every) continue;
+        if (f.done >= f.steps) continue;
+        if (f.intro.n) {  // the welcome: its next key at its time
+            if (now - f.start < f.intro.k[f.done].at) continue;
+            f.at = now;
+            if (linkUp(controllers[i])) writeFrame(i, f.intro.k[f.done].c);
+            f.done++;
+            continue;
+        }
+        if (now - f.at < f.every) continue;
         f.done++;
         f.at = now;
         if (linkUp(controllers[i])) writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
@@ -3473,7 +3503,7 @@ void loop() {
     }
 
     // A controller that just came up gets its zone's look, so it matches what the deck remembers.
-    // The first time since boot a lit light rises to it from black over ~3 s, the welcome.
+    // The first time since boot a lit light plays the welcome to it instead (startIntro).
     static bool welcomed[N_CTRL] = {};
     static bool shown[N_CTRL] = {};
     static uint32_t edgeAt[N_CTRL] = {};  // when each light last changed link state, and which way
@@ -3484,8 +3514,7 @@ void loop() {
         if (up && c.fresh) {
             c.fresh = false;
             if (!welcomed[i] && shownLook(i).lit && !musicDriving) {
-                const int steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
-                startFade(i, {0, 0, 0}, frameOf(shownLook(i)), true, steps, MUSIC_FADE_MS / static_cast<uint32_t>(steps));
+                startIntro(i);
             } else {
                 push(i);
             }
