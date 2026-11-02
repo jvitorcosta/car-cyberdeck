@@ -11,4 +11,12 @@ void poll(AppState& st);
 // last poll; network task.
 bool fromPlaylist();
 const char* playlistDescription();
+// The watch's playlist picker (net/remote, util/black/playlists). Called from the remote task, they
+// hand the request to the network task, where the connection and the answer buffer live, and wait
+// for it. The HTTP status for the watch, its text in out: 200 with the page or "playing"; 502 with
+// what Spotify's answer means (playlists::why); 503 busy or low on memory; 504 not run in time.
+int watchPlaylists(int offset, char* out, size_t n);
+int watchPlay(const char* id, char* out, size_t n);
+// Network task, each pass: runs the watch's request if one waits. rateLimited: polls are waiting out a 429.
+void serveWatch(bool rateLimited);
 }

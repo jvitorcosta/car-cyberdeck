@@ -17,6 +17,8 @@
 #include "../../util/common/version.h"
 #include "../../util/lights/tripclock.h"
 #include "../../util/black/interp.h"
+#include "../../util/black/playlists.h"
+#include "../spotify/client.h"
 #include <WiFi.h>
 
 
@@ -174,6 +176,30 @@ static void handleMusic() {
     }
 }
 
+// The watch's playlist picker (util/black/playlists): signed, or the key. Spotify is asked on the
+// network task (spotify/client), so these wait for it: a page of the owner's playlists, or one played.
+static void handlePlaylists() {
+    if (!reqauth::pass(*s_server, s_gate, "/playlists", "wrong key")) return;
+    int offset = 0;
+    if (s_server->hasArg("offset") && !playlists::parseOffset(s_server->arg("offset").c_str(), &offset)) {
+        s_server->send(400, "text/plain", "bad offset");
+        return;
+    }
+    static char out[playlists::REPLY_MAX];   // static: off this task's 4 KB stack
+    const int code = spclient::watchPlaylists(offset, out, sizeof out);
+    s_server->sendHeader("Cache-Control", "no-store");
+    s_server->send(code, "text/plain; charset=utf-8", out);
+}
+
+static void handlePlaylistPlay() {
+    if (!reqauth::pass(*s_server, s_gate, "/playlists/play", "wrong key")) return;
+    const String id = s_server->arg("id");
+    if (!playlists::validId(id.c_str())) { s_server->send(400, "text/plain", "bad id"); return; }
+    char out[48];
+    const int code = spclient::watchPlay(id.c_str(), out, sizeof out);
+    s_server->send(code, "text/plain", out);
+}
+
 // &on=1 also counts as a keep-alive, so one URL in a loop is the owner's whole capture; without it, read-only.
 // It leaves the stream's peer (set by /music?on=1) alone: it streams here only when nobody else asked.
 static void handleMusicDebug() {
@@ -216,6 +242,8 @@ void begin(bool (*hold)()) {
     s_server->on("/state", HTTP_GET, handleState);
     s_server->on("/music", HTTP_GET, handleMusic);
     s_server->on("/music/debug", HTTP_GET, handleMusicDebug);
+    s_server->on("/playlists", HTTP_GET, handlePlaylists);
+    s_server->on("/playlists/play", HTTP_GET, handlePlaylistPlay);
     s_server->on("/trip/reset", HTTP_POST, [] {
         if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
         s_trip.reset(millis());
