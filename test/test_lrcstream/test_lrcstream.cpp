@@ -4,6 +4,8 @@
 #include "../../src/util/black/lrcstream.h"
 
 using lrcstream::Kind;
+// Two more timed lines: a synced string needs lrcstream::MIN_SYNCED_LINES to count as synced.
+#define MORE "\\n[00:05.00]more\\n[00:06.00]more"
 static lyricbuf::Lyrics L;
 void setUp() {}
 void tearDown() {}
@@ -32,9 +34,9 @@ void test_knows_whether_the_body_was_json() {
 
 void test_extracts_synced_lines() {
     lrcstream::Extractor ex(L);
-    int n = feedAll(ex, "{\"id\":1,\"syncedLyrics\":\"[00:01.00]hello\\n[00:03.50]world\\n\"}");
+    int n = feedAll(ex, "{\"id\":1,\"syncedLyrics\":\"[00:01.00]hello\\n[00:03.50]world\\n[00:05.00]again\"}");
     TEST_ASSERT_TRUE(ex.found());
-    TEST_ASSERT_EQUAL_INT(2, n);
+    TEST_ASSERT_EQUAL_INT(3, n);
     TEST_ASSERT_EQUAL_STRING("hello", lyricbuf::lineText(L, 0));
     TEST_ASSERT_EQUAL_UINT32(3500, L.lines[1].tMs);
     TEST_ASSERT_FALSE(ex.truncated());
@@ -57,12 +59,12 @@ void test_raw_utf8_passes_through() {
 }
 void test_whitespace_around_colon_and_done_after_string() {
     lrcstream::Extractor ex(L);
-    const char* json = "{ \"syncedLyrics\" :  \"[00:01.00]a\" , \"x\": \"[00:09.00]zzz\" }";
+    const char* json = "{ \"syncedLyrics\" :  \"[00:01.00]a" MORE "\" , \"x\": \"[00:09.00]zzz\" }";
     const char* p = json;
     for (; *p && !ex.done(); ++p) ex.feed(*p);
     TEST_ASSERT_TRUE(ex.done());
     TEST_ASSERT_TRUE(*p != '\0');                 // stopped before the end of the document
-    TEST_ASSERT_EQUAL_INT(1, ex.finish());
+    TEST_ASSERT_EQUAL_INT(3, ex.finish());
 }
 void test_arena_full_sets_truncated() {
     std::string json = "{\"syncedLyrics\":\"";
@@ -107,17 +109,17 @@ void test_plain_only_skips_blank_lines() {
 }
 void test_synced_after_plain_replaces_it() {
     lrcstream::Extractor ex(L);
-    feedAll(ex, "{\"plainLyrics\":\"p1\\np2\\np3\",\"syncedLyrics\":\"[00:02.00]s1\\n[00:04.00]s2\"}");
+    feedAll(ex, "{\"plainLyrics\":\"p1\\np2\\np3\",\"syncedLyrics\":\"[00:02.00]s1\\n[00:04.00]s2\\n[00:06.00]s3\"}");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
-    TEST_ASSERT_EQUAL_INT(2, L.n);
+    TEST_ASSERT_EQUAL_INT(3, L.n);
     TEST_ASSERT_EQUAL_STRING("s1", lyricbuf::lineText(L, 0));
     TEST_ASSERT_EQUAL_INT(0, L.plainTotal);
 }
 void test_synced_before_plain_ignores_plain() {
     lrcstream::Extractor ex(L);
-    feedAll(ex, "{\"syncedLyrics\":\"[00:02.00]s1\",\"plainLyrics\":\"p1\\np2\"}");
+    feedAll(ex, "{\"syncedLyrics\":\"[00:02.00]s1" MORE "\",\"plainLyrics\":\"p1\\np2\"}");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
-    TEST_ASSERT_EQUAL_INT(1, L.n);
+    TEST_ASSERT_EQUAL_INT(3, L.n);
 }
 void test_instrumental_wins_even_with_text() {
     lrcstream::Extractor ex(L);
@@ -158,7 +160,7 @@ using lrcstream::Mode;
 void test_search_picks_entry_by_duration() {
     lrcstream::Extractor ex(L, Mode::Search, 305000);
     feedAll(ex, "[{\"id\":1,\"duration\":100.0,\"syncedLyrics\":\"[00:01.00]wrong\"},"
-                "{\"id\":2,\"duration\":304.2,\"syncedLyrics\":\"[00:01.00]right\"}]");
+                "{\"id\":2,\"duration\":304.2,\"syncedLyrics\":\"[00:01.00]right" MORE "\"}]");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
     TEST_ASSERT_EQUAL_STRING("right", lyricbuf::lineText(L, 0));
 }
@@ -180,9 +182,9 @@ void test_search_tolerance_is_3_seconds() {
 void test_search_prefers_a_later_synced_match_over_plain() {
     lrcstream::Extractor ex(L, Mode::Search, 200000);
     feedAll(ex, "[{\"duration\":200,\"plainLyrics\":\"plain one\",\"syncedLyrics\":null},"
-                "{\"duration\":201,\"plainLyrics\":\"plain two\",\"syncedLyrics\":\"[00:03.00]timed\"}]");
+                "{\"duration\":201,\"plainLyrics\":\"plain two\",\"syncedLyrics\":\"[00:03.00]timed" MORE "\"}]");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
-    TEST_ASSERT_EQUAL_INT(1, L.n);
+    TEST_ASSERT_EQUAL_INT(3, L.n);
     TEST_ASSERT_EQUAL_STRING("timed", lyricbuf::lineText(L, 0));
 }
 void test_search_keeps_first_plain_match() {
@@ -192,7 +194,7 @@ void test_search_keeps_first_plain_match() {
     TEST_ASSERT_EQUAL_STRING("first", lyricbuf::lineText(L, 0));
 }
 void test_search_stops_at_first_synced_match() {
-    const char* json = "[{\"duration\":200,\"syncedLyrics\":\"[00:01.00]a\"},"
+    const char* json = "[{\"duration\":200,\"syncedLyrics\":\"[00:01.00]a" MORE "\"},"
                        "{\"duration\":200,\"syncedLyrics\":\"[00:01.00]b\"}]";
     lrcstream::Extractor ex(L, Mode::Search, 200000);
     const char* p = json;
@@ -220,14 +222,14 @@ void test_search_reads_todays_entries() {
                 "{\"id\":2,\"name\":\"I Heard\",\"trackName\":\"I Heard It Through The Grapevine\","
                 "\"artistName\":\"Marvin Gaye\",\"albumName\":null,\"duration\":195.0,"
                 "\"instrumental\":false,\"hasWordSync\":false,\"plainLyrics\":\"ooh\","
-                "\"syncedLyrics\":\"[00:01.00]ooh\",\"lyricsfile\":null}]");
+                "\"syncedLyrics\":\"[00:01.00]ooh" MORE "\",\"lyricsfile\":null}]");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
     TEST_ASSERT_EQUAL_STRING("ooh", lyricbuf::lineText(L, 0));
 }
 void test_search_skips_other_songs_of_the_same_length() {
     lrcstream::Extractor ex(L, Mode::Search, 200000, "Love - Remastered");
     feedAll(ex, "[{\"trackName\":\"Love Story\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]no\"},"
-                "{\"trackName\":\"love\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]yes\"}]");
+                "{\"trackName\":\"love\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]yes" MORE "\"}]");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
     TEST_ASSERT_EQUAL_STRING("yes", lyricbuf::lineText(L, 0));
 }
@@ -235,7 +237,7 @@ void test_search_title_check_reads_escapes_and_resets_each_entry() {
     lrcstream::Extractor ex(L, Mode::Search, 200000, "Caf\xC3\xA9 \"Noir\"");
     feedAll(ex, "[{\"trackName\":\"Other\",\"duration\":200,\"plainLyrics\":\"no\"},"
                 "{\"duration\":200,\"plainLyrics\":\"no title: taken\"},"
-                "{\"trackName\":\"Caf\\u00e9 \\\"Noir\\\"\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]yes\"}]");
+                "{\"trackName\":\"Caf\\u00e9 \\\"Noir\\\"\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]yes" MORE "\"}]");
     TEST_ASSERT_EQUAL_STRING("yes", lyricbuf::lineText(L, 0));
 }
 void test_search_keeps_get_plain_until_synced_comes() {
@@ -246,15 +248,58 @@ void test_search_keeps_get_plain_until_synced_comes() {
     TEST_ASSERT_EQUAL_INT((int)Kind::Plain, (int)none.kind());
     TEST_ASSERT_EQUAL_STRING("from get", lyricbuf::lineText(L, 0));
     lrcstream::Extractor synced(L, Mode::Search, 200000, "Song", true);
-    feedAll(synced, "[{\"trackName\":\"Song\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]timed\"}]");
+    feedAll(synced, "[{\"trackName\":\"Song\",\"duration\":200,\"syncedLyrics\":\"[00:01.00]timed" MORE "\"}]");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)synced.kind());
-    TEST_ASSERT_EQUAL_INT(1, L.n);
+    TEST_ASSERT_EQUAL_INT(3, L.n);
     TEST_ASSERT_EQUAL_STRING("timed", lyricbuf::lineText(L, 0));
 }
 void test_search_instrumental_entry_does_not_hide_a_later_synced_one() {
     lrcstream::Extractor ex(L, Mode::Search, 120000);
-    feedAll(ex, "[{\"duration\":120,\"instrumental\":true},{\"duration\":120,\"syncedLyrics\":\"[00:01.00]sung\"}]");
+    feedAll(ex, "[{\"duration\":120,\"instrumental\":true},{\"duration\":120,\"syncedLyrics\":\"[00:01.00]sung" MORE "\"}]");
     TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
+}
+// One /api/get entry of "Nightcall" holds a single synced line; its plain text is whole.
+void test_synced_stub_keeps_the_plain_read_before_it() {
+    lrcstream::Extractor ex(L);
+    feedAll(ex, "{\"plainLyrics\":\"There is a nightcall\\nI'm giving you\\nsomething\","
+                "\"syncedLyrics\":\"[00:12.42]There is a nightcall\"}");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Plain, (int)ex.kind());
+    TEST_ASSERT_FALSE(ex.found());
+    TEST_ASSERT_EQUAL_INT(3, L.n);
+    TEST_ASSERT_EQUAL_STRING("something", lyricbuf::lineText(L, 2));
+}
+void test_synced_stub_alone_counts_as_plain() {
+    lrcstream::Extractor ex(L);
+    feedAll(ex, "{\"plainLyrics\":null,\"syncedLyrics\":\"[00:12.42]There is a nightcall\\n[00:15.00]x\"}");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Plain, (int)ex.kind());
+    TEST_ASSERT_EQUAL_INT(2, L.n);
+}
+void test_search_reads_past_a_stub_to_full_lines() {
+    lrcstream::Extractor ex(L, Mode::Search, 258000, "Nightcall");
+    feedAll(ex, "[{\"trackName\":\"Nightcall\",\"duration\":258,\"syncedLyrics\":\"[00:12.42]stub\"},"
+                "{\"trackName\":\"Nightcall\",\"duration\":257,\"syncedLyrics\":\"[00:01.00]full" MORE "\"}]");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
+    TEST_ASSERT_EQUAL_INT(3, L.n);
+    TEST_ASSERT_EQUAL_STRING("full", lyricbuf::lineText(L, 0));
+}
+void test_search_stub_does_not_replace_get_plain() {
+    lrcstream::Extractor get(L);
+    feedAll(get, "{\"plainLyrics\":\"whole\\nsong\",\"syncedLyrics\":null}");
+    lrcstream::Extractor ex(L, Mode::Search, 258000, "Nightcall", true);
+    feedAll(ex, "[{\"trackName\":\"Nightcall\",\"duration\":258,\"syncedLyrics\":\"[00:12.42]stub\"}]");
+    TEST_ASSERT_EQUAL_INT((int)Kind::Plain, (int)ex.kind());
+    TEST_ASSERT_EQUAL_INT(2, L.n);
+    TEST_ASSERT_EQUAL_STRING("whole", lyricbuf::lineText(L, 0));
+}
+void test_synced_after_a_full_arena_of_plain_still_fits() {
+    std::string json = "{\"plainLyrics\":\"";
+    for (int i = 0; i < 200; ++i) json += std::string(50, 'q') + "\\n";
+    json += "\",\"syncedLyrics\":\"[00:01.00]a\\n[00:02.00]b\\n[00:03.00]c\"}";
+    lrcstream::Extractor ex(L);
+    TEST_ASSERT_EQUAL_INT(3, feedAll(ex, json.c_str()));
+    TEST_ASSERT_EQUAL_INT((int)Kind::Synced, (int)ex.kind());
+    TEST_ASSERT_FALSE(ex.truncated());
+    TEST_ASSERT_EQUAL_STRING("a", lyricbuf::lineText(L, 0));
 }
 void test_search_matching_instrumental() {
     lrcstream::Extractor ex(L, Mode::Search, 120000);
@@ -338,6 +383,11 @@ int main(int, char**) {
     RUN_TEST(test_search_title_check_reads_escapes_and_resets_each_entry);
     RUN_TEST(test_search_keeps_get_plain_until_synced_comes);
     RUN_TEST(test_search_instrumental_entry_does_not_hide_a_later_synced_one);
+    RUN_TEST(test_synced_stub_keeps_the_plain_read_before_it);
+    RUN_TEST(test_synced_stub_alone_counts_as_plain);
+    RUN_TEST(test_search_reads_past_a_stub_to_full_lines);
+    RUN_TEST(test_search_stub_does_not_replace_get_plain);
+    RUN_TEST(test_synced_after_a_full_arena_of_plain_still_fits);
     RUN_TEST(test_search_matching_instrumental);
     RUN_TEST(test_search_ignores_instrumental_of_other_versions);
     RUN_TEST(test_search_braces_in_strings_do_not_confuse_objects);

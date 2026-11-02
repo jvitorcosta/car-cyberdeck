@@ -15,6 +15,9 @@ constexpr int LINE_CAP = 256;               // longer lines are cut
 // 20 entries reach ~230 KB; every lookup checked ended within 96 KB. Skipped bytes cost time, not RAM.
 constexpr size_t SEARCH_CAP = 128 * 1024;
 constexpr uint32_t DURATION_TOL_MS = 3000;  // search mode: accepted |duration - track|
+// Fewer synced lines than this is a stub (one "Nightcall" entry holds only its first line). It
+// counts as plain: the plain lines read before it stay, a search reads on, a full entry replaces it.
+constexpr int MIN_SYNCED_LINES = 3;
 enum class Mode { Get, Search };            // /api/get object, /api/search array of objects
 enum class Kind { None, Synced, Plain, Instrumental };
 class Extractor {
@@ -27,7 +30,7 @@ public:
                        const char* title = nullptr, bool keepPlain = false);
     void feed(char c);
     bool done() const { return done_; }               // stop reading the stream
-    bool found() const { return syncedLines_ > 0; }   // synced lines were stored
+    bool found() const { return full_; }               // MIN_SYNCED_LINES or more were stored
     bool truncated() const { return truncated_; }     // arena filled up
     int finish();                                      // flush + sort; returns stored lines
     Kind kind() const { return kind_; }                // valid after finish()
@@ -46,6 +49,7 @@ private:
     void put(char c);
     void putCodepoint(uint32_t cp);
     void endLine();
+    void dropHeld();               // synced lines take over from the held ones
     lyricbuf::Lyrics& out_;
     Mode mode_;
     uint32_t targetMs_;
@@ -68,7 +72,9 @@ private:
     bool plainTaken_ = false;      // the first accepted plain string was read
     bool instrumental_ = false, truncated_ = false, done_ = false;
     bool sawFirst_ = false, sawJson_ = false;   // first non-blank byte seen / it opened JSON
-    int syncedLines_ = 0;
+    int syncedLines_ = 0;          // in the synced string being read (or the last one)
+    int keepN_ = 0;                // lines held before it: they go once it has MIN_SYNCED_LINES
+    bool full_ = false;            // a synced string reached MIN_SYNCED_LINES
     size_t bytes_ = 0;
     Kind kind_ = Kind::None;
 };

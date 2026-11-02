@@ -12,6 +12,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   128 KB (LRCLIB's answers grew to ~230 KB, past the old 48 KB cap), still runs when `/api/get`
   answers 5xx, and an instrumental entry no longer hides a later synced one. On 95 real songs, 75
   had synced lyrics before and 89 now. The phone can still show lyrics LRCLIB doesn't have.
+- **Fixed:** a synced entry with fewer than 3 lines (one "Nightcall" entry holds only its first
+  line) counts as plain: the plain text read before it stays, and the search looks for a full one.
 
 ## [2.0.0] - 2026-10-28
 

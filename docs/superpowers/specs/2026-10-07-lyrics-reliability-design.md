@@ -103,6 +103,11 @@ Problem section that suffixes "do match" no longer holds for the search.
 - Plain lines from `/api/get` stay in the arena until synced lines replace them.
 - An instrumental entry no longer ends the search: a later synced entry wins.
 - The cap is 128 KB: LRCLIB's `lyricsfile` field took 20 entries to ~230 KB.
+- A synced string with fewer than `lrcstream::MIN_SYNCED_LINES` (3) lines is a stub: one
+  "Nightcall" `/api/get` entry is "[00:12.42]There is a nightcall" and nothing else. It counts as
+  plain, so the search runs and reads on. The lines held before it (plain text or an earlier stub)
+  stay in the arena until a synced string reaches 3 lines (`lyricbuf::dropFirst`), and come back
+  if it ends short (`lyricbuf::keepFirst`).
 - An attempt that couldn't look everywhere is a `TempError`; the last one shows any plain lines
   it holds instead. `lrcmatch::settle` holds these rules.
 

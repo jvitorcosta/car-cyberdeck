@@ -121,6 +121,8 @@ never blocks on the network) are here. The design records behind each step are i
     about 4 of 20 entries. Now plain still searches (`util/lrcmatch`), the title loses its suffix,
     the row's title must match, and the cap is 128 KB. Title-only and `q=` searches and a ±5 s
     tolerance found nothing more on 95 real songs (75 -> 89 synced), so they stayed out.
+    On the deck, "Nightcall" then showed one synced line: its `/api/get` entry holds only the
+    first, while 20 search entries have all 39. Fewer than 3 synced lines now count as plain.
 14. **Genre badge.** Spotify no longer returns artist genres to this app, so the genre comes
     from Apple's iTunes Search API (artist search, no key, ~300 B): one request per new artist
     alongside the lyrics (~1.5 s on the network task; it also fills a lyrics-retry wait),
