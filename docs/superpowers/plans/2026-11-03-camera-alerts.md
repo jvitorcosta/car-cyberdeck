@@ -15,7 +15,7 @@
 - Nothing senses radar or any signal: GPS position against a list only (CTB art. 230, III).
 - Three kinds: `speed`, `bump`, `redlight`. CSV columns, in order: `id,kind,lat,lon,heading,limit,label,source,checked`.
 - `heading` is required on every row the deck loads; `limit` is empty for `redlight`, and for other kinds only while unknown (unknown → alerts with `--`, never alarms).
-- Matching: no alerts with no fix or under 10 km/h; `nofix` after 5 s without a fix while moving; candidates within 800 m; course within ±40° of `heading`; bearing to the point within ±30° of course; inside 200 m, cross-track under 30 m; passed = was within 60 m and the distance grows, then ignored for 60 s; nearest remaining point wins.
+- Matching: no alerts with no fix or under 10 km/h; `nofix` after 5 s without a valid fix, moving or not (the clock starts at the first update: the boot grace); candidates within 800 m; course within ±40° of `heading`; bearing to the point within ±30° of course; inside 200 m, cross-track under 30 m; passed = was within 60 m and the distance grows, then ignored for 60 s; nearest remaining point wins.
 - Stages: alert at max(400 m, 20 s × speed) for speed/bump, 250 m for red-light; alarm zone is the last 200 m, speed (km/h rounded down) > limit, no tolerance; red-light never alarms; the band clears 2 s after passing.
 - Sounds on the black deck only: speed = two mid tones, bump = two low, red-light = one long high; alarm = fast triple beep every 1.5 s until clear. Alerts interrupt the intro / music box, which then continue.
 - Mute keeps the bands, silences sound, lives on the black deck, resets at each start; reached by voice ("cameras mute"), the watch (it sends the same phrase to `/say`) and the yellow deck's touch.
@@ -46,7 +46,7 @@
   namespace camlist {
   enum class Kind : uint8_t { Speed, Bump, RedLight };
   constexpr int MAX_POINTS = 96;
-  constexpr size_t MAX_CSV = 8192;          // what the deck stores and accepts
+  constexpr size_t MAX_CSV = 6144;          // what the deck stores and accepts (NVS headroom)
   constexpr uint8_t NO_LIMIT = 0;
   struct Point { int32_t latE6, lonE6; uint16_t heading; uint8_t limit; Kind kind; char id[12]; char label[28]; };
   // Parses the whole CSV (header line required, exactly the column order above; CRLF or LF).
@@ -199,7 +199,7 @@
   ```
   Routes (all in `remote.cpp`, beside `/state`):
   - `GET /cam` → `camwire::write` (signed like `/state`, through `reqauth::pass`).
-  - `GET /cam/mute?on=1|0` and `GET /cam/mark` → signed, 204 / 409 "no fix".
+  - `GET /cam/mute?on=1|0` and `GET /cam/mark` → signed, 204 / 409 "no fix" / 507 "not stored" (mark: NVS, or marks it could not read back; it never overwrites them).
   - `POST /cam/list?k=` body = CSV (the PC tool, bearer key like `/trip/reset`; 413 over `MAX_CSV`; 400 `line N` from `badLine`).
   - `GET /cam/marks?k=` → `marksCsv`; `POST /cam/marks/clear?k=` → 204.
 - [ ] **Step 1: Config.** Add `GPS_HOST` / `GPS_PORT` where the other deck addresses live (`config.h` is git-ignored: update its committed template and the setup docs).
@@ -265,7 +265,7 @@
 - Produces the commands:
   - `fetch`: IMMU page (`https://immu.manaus.am.gov.br/index.php?r=site%2Finforadar`, its three lists by heading text) + Overpass (`highway=speed_camera` in `-3.25,-60.15,-2.90,-59.80`, with a User-Agent) → prints new / gone vs `data/cameras.csv` (match: label words or within 50 m). Edits nothing.
   - `place [--from immu|osm|marks]`: for each unplaced item, a Nominatim guess (≤1 request/s, User-Agent set), then writes `build/camera_place.html` with draggable pins, a heading arrow per pin, kind and limit fields (prefilled from the survey or `maxspeed`), and a "save" button that downloads `placed.json`; `place --apply placed.json` merges into `data/cameras.csv` with new `mao-NNNN` ids and today's `checked`.
-  - `push`: validates locally with the same rules as `camlist::parse` (heading required, red-light without limit, ≤96 rows, ≤8192 bytes), then `POST /cam/list`.
+  - `push`: validates locally with the same rules as `camlist::parse` (heading required, red-light without limit, ≤96 rows, ≤6144 bytes; a list with no rows only with `--force`), then `POST /cam/list`.
   - `import-car`: `GET /cam/marks` → items for `place --from marks`; after `--apply`, `POST /cam/marks/clear`.
   - `check`: `fetch`, exit code 1 when anything is new or gone.
 - [ ] **Step 1: Write the failing pytest tests:** `test_validate_rejects_missing_heading`, `test_validate_rejects_redlight_limit`, `test_parse_immu_lists` (a saved copy of the page in `tools/testdata/immu_inforadar.html` → 13 speed, 2 bump, 5 redlight, each with its `sentido`), `test_apply_assigns_next_id`, `test_match_by_distance`.
@@ -280,7 +280,7 @@
 - Modify: `data/cameras.csv`, `docs/BACKLOG.md`, `README` / device docs where the decks' features are listed
 
 - [ ] **Step 1 (owner):** `python tools/cameras.py fetch`, then `place --from immu` and `place --from osm`; drag each pin onto its lane and set the arrow using the IMMU direction and the survey photos; limits from the surveys (Av. do Turismo 60) and the road signs, empty where unknown. `place --apply`, commit `data/cameras.csv`.
-- [ ] **Step 2:** `python tools/cameras.py push` → 204; `/cam` answers `off` at home. Install GPS 2 IP on the iPhone, set it to socket server mode on port 11123 with background mode on; `/cam` leaves `nofix` once the hotspot is up.
+- [ ] **Step 2:** `python tools/cameras.py push` → 204; with GPS 2 IP closed `/cam` answers `nofix` (both decks `GPS --`) about 5 s after boot. Install GPS 2 IP on the iPhone, set it to socket server mode on port 11123 with background mode on; `/cam` answers `off` once the hotspot is up and the app sends a fix.
 - [ ] **Step 3 (owner, in the car):** drive past at least one point of each kind, one in the opposite direction and one parallel road (e.g. Av. do Turismo, both ways). Expected: alerts at the right distance, no alert the other way, alarm only above the limit, both bands agree, music resumes. Note any false alarm with its place.
 - [ ] **Step 4:** "mark camera" once on the drive; `import-car` shows it.
-- [ ] **Step 5:** Add to `docs/BACKLOG.md`: the watch MARK / MUTE menu items, OBD speed when the OBD deck exists, any false-alarm places from Step 3. **Commit** `docs: camera alerts in the car`.
+- [ ] **Step 5:** Add to `docs/BACKLOG.md`: the watch MARK / MUTE menu items, OBD speed when the OBD deck exists, the bench gates still owed, any false-alarm places from Step 3. **Commit** `docs: camera alerts in the car`.

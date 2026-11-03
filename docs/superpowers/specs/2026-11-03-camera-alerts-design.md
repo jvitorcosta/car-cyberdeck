@@ -84,7 +84,8 @@ the locations are public (IMMU publishes them).
 | `checked` | date the row was last confirmed (`YYYY-MM-DD`) |
 
 About 50 rows fill only a few KB. On the black deck the list lives in NVS (namespace `cam`, key
-`list`, the CSV as pushed, at most 8 KB), not the media partition: that pack is read-only and replaced
+`list`, the CSV as pushed, at most 6 KB: the 20 KB NVS partition must also hold the old list
+while a push writes the new one, OTA's flags and the WiFi keys), not the media partition: that pack is read-only and replaced
 only by `uploadmedia`, while `push` must store a new list without a reboot. It is parsed into RAM at
 boot and after each push; a push that fails to parse or to store leaves the old list in place.
 
@@ -124,8 +125,9 @@ The matching code has no board dependencies, so it can move to the OBD deck late
 
 Every GPS fix (about 1 Hz from the phone):
 
-1. **No fix or moving under 10 km/h:** no alerts. If the fix is lost for more than 5 s while moving,
-   the state is `nofix`.
+1. **No fix or moving under 10 km/h:** no alerts. With no valid fix for more than 5 s, moving or
+   not (the app never connected, or the feed dropped while parked), the state is `nofix`; the
+   first 5 s after boot are the grace.
 2. **Candidates:** points within 800 m (a precomputed grid of about 1 km cells keeps this cheap).
 3. **Same direction:** the car's course within ±40° of the point's `heading`.
 4. **Ahead and on this road:** the bearing from the car to the point within ±30° of the course,
@@ -158,7 +160,9 @@ between the decks never silences an alarm.
 - **Alert / alarm:** a band across the bottom of the battle screen (or whatever screen shows):
   the kind's icon, `RADAR 60`, `LOMBADA 40` or `SINAL`, the distance and the speed. Red for an alarm.
   This is the fallback the driver can always trust, even with the yellow deck off.
-- **No fix:** a small `GPS --` tag in a corner; no band.
+- **No fix:** a small `GPS --` tag in a corner; no band. Also when the deck can't run the alerts
+  at all (no memory at boot).
+- **Muted:** `MUTE` on the band (a mute nobody meant must show where the driver looks).
 
 ### Yellow deck (the dashboard)
 
@@ -171,8 +175,11 @@ between the decks never silences an alarm.
   ("320 m") and the current speed. It uses the CYBERDECK green palette; orange for red-light.
 - **Alarm:** the same band in red, with the speed shown large and blinking at 2 Hz. It is the only
   blinking element on the deck.
-- **No fix:** a small `GPS --` tag on the dashboard's status row; no band. If `/cam` stops answering,
-  `CAM --` instead (the black deck still beeps).
+- **No fix:** a small `GPS --` tag on the dashboard's status row; no band. If `/cam` stops answering
+  (or can't be signed for 10 s: no clock), `CAM --` instead (the black deck still beeps). Muted with
+  no band up: `MUTED` there (`CAM MUTE` doesn't fit beside the title).
+- A tap on the band toggles mute; the band going up or down first waits for the finger to lift, so a
+  tap meant for a button never mutes by accident.
 - The band disappears 2 s after the point is passed.
 
 ### Sound (black deck speaker)

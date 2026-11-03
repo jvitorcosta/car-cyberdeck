@@ -46,6 +46,20 @@ Open items, not scheduled. Newest decisions first within each section.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
+- **Camera alerts, owed on the bench** (`feat/camera-alerts`, built 2026-11-03, only compiled and
+  host-tested):
+  - With GPS 2 IP closed, both decks show `GPS --` within ~5 s of the hotspot; kill the app while
+    parked, drive off: the tag appears.
+  - A 30-min drive with Spotify and the yellow deck's `/cam` poll: `[mem]` largest ≥ 102 KB; free
+    stack ≥ 512 B on the `gps`, `camsnd`, `remote` and the yellow deck's `cam` tasks.
+  - Push a list near 6 KB twice, then an OTA (confirmed) and a reboot: both succeed (NVS room).
+  - The alarm over the intro, over the music box and with music mode's mic on: the beeps cut in,
+    the clip resumes, the alarm stops once under the limit.
+  - GPS 2 IP in background mode still sends `$GPRMC`; check its course while stopped.
+  - The OSM tiles load on the place page served from 127.0.0.1.
+  - Mute: a tap on the yellow band shows `MUTE` on both bands and `MUTED` on the Menu's header
+    with no band up; a tap on a Menu item as the band comes up mutes nothing.
+
 ## Code health
 
 - **Split `src/yellow/ledpanel.cpp`** (~3 000 lines): the link task, the web server, the lyrics
@@ -120,6 +134,10 @@ it is one or the other.
   deck with that screen open is what works; in the car only the hotspot exists.
 
 ## Ideas
+
+- **Camera alerts, next** (`feat/camera-alerts`): MARK and MUTE items on the watch's menu (the
+  black deck's `/cam/mark` and `/cam/mute` are ready, signed); the alarm on OBD speed once the OBD
+  deck exists (what the dash shows; GPS lags in tunnels and on bridges).
 
 - **Car lights from CarPlay** (researched 2026-10-23, wireless CarPlay in the City). In order:
   (1) Siri from the steering-wheel button running the voice Shortcut. Nothing to build, so try
