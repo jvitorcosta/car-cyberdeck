@@ -345,7 +345,7 @@ def parse_marks(text):
 # --- network -------------------------------------------------------------------------------------
 
 
-def http(url, data=None, headers=None, timeout=30):
+def http_req(url, data=None, headers=None, timeout=30):
     h = {"User-Agent": USER_AGENT}
     h.update(headers or {})
     req = urllib.request.Request(url, data=data, headers=h)
@@ -354,7 +354,7 @@ def http(url, data=None, headers=None, timeout=30):
 
 
 def fetch_immu():
-    _, body = http(IMMU_URL)
+    _, body = http_req(IMMU_URL)
     return parse_immu(body.decode("utf-8", "replace")) + survey_items()
 
 
@@ -364,7 +364,7 @@ def fetch_osm():
     for attempt in range(2):    # the public instances answer 502 or stall now and then: retry, try the mirror
         for url in OVERPASS_URLS:
             try:
-                _, body = http(url, data=urllib.parse.urlencode({"data": q}).encode(), timeout=70)
+                _, body = http_req(url, data=urllib.parse.urlencode({"data": q}).encode(), timeout=70)
                 return parse_overpass(json.loads(body))
             except (urllib.error.URLError, OSError, ValueError) as e:
                 last = e
@@ -388,7 +388,7 @@ def geocode(item):
     q = "%s, %s, Manaus, Amazonas, Brazil" % (street, district) if district else "%s, Manaus, Amazonas, Brazil" % street
     url = NOMINATIM_URL + "?" + urllib.parse.urlencode({"q": q, "format": "json", "limit": 1, "countrycodes": "br"})
     try:
-        _, body = http(url)
+        _, body = http_req(url)
         res = json.loads(body)
         if res:
             return float(res[0]["lat"]), float(res[0]["lon"])
