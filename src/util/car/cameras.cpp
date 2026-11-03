@@ -58,18 +58,22 @@ void Matcher::load(const camlist::Point* pts, int n) {
 
 Status Matcher::update(const Fix& f) {
     if (!f.valid) {
-        // Lost while moving: keep showing what was there for a few seconds (a tunnel, a GPS hiccup),
-        // then say so. Lost while stopped (or never had one): nothing to warn about.
-        if (!hadFix_ || lastKmh_ < MIN_KMH) return last_ = Status{};
+        // No fix for a few seconds is shown as it was (a tunnel, a GPS hiccup), then said, whatever
+        // the last speed: a feed lost while parked (the app killed, the socket dropped) must not
+        // read as a clear road once the car drives off. Never had one: the clock starts at the first
+        // "none" (the grace after boot).
+        if (!clock_) {
+            clock_ = true;
+            lastFixMs_ = f.ms;
+        }
         if (f.ms - lastFixMs_ > NOFIX_MS) {
             last_ = Status{};
             last_.stage = Stage::NoFix;
         }
         return last_;
     }
-    hadFix_ = true;
+    clock_ = true;
     lastFixMs_ = f.ms;
-    lastKmh_ = f.kmh;
     // Crawling: the course is noise, so neither alerts nor passed state change.
     if (f.kmh < MIN_KMH) return last_ = Status{};
 

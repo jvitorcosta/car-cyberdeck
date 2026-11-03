@@ -124,7 +124,7 @@ static void task(void* arg) {
     }
     s_openRate.store(c->rate);
     int16_t buf[CHUNK];
-    static howl::Synth synth;                            // one clip plays at a time (s_output)
+    static howl::Synth synth;                            // one clip plays at a time (output())
     if (!c->data) synth = howl::Synth();
     for (size_t i = 0; i < c->samples;) {
         size_t n = 0;

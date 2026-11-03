@@ -214,8 +214,12 @@ static void handleCamMute() {
 
 static void handleCamMark() {
     if (!reqauth::pass(*s_server, s_gate, "/cam/mark", "wrong key")) return;
-    if (!camsvc::mark()) { s_server->send(409, "text/plain", "no fix"); return; }
-    s_server->send(204);
+    switch (camsvc::mark()) {
+    case camsvc::MarkResult::Ok: s_server->send(204); return;
+    case camsvc::MarkResult::NoFix: s_server->send(409, "text/plain", "no fix"); return;
+    case camsvc::MarkResult::Storage: break;
+    }
+    s_server->send(507, "text/plain", "not stored");   // NVS: the marks so far are kept
 }
 
 // The PC tool (tools/cameras.py push) with the bearer key, like /trip/reset. The body must be sent

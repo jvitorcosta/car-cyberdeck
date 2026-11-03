@@ -27,6 +27,7 @@ static constexpr int DIST_W = 84, KMH_W = 74; // the number boxes, right-aligned
 struct Shown {
     bool on = false;          // something of ours is on screen (and matches the fields below)
     Stage stage = Stage::Off;
+    bool mute = false;
     char id[sizeof camlist::Point::id] = "";
     uint16_t dist = 0, kmh = 0;
 };
@@ -93,7 +94,7 @@ static void numbers(TFT_eSPI& tft, int y0, uint16_t bg, uint16_t dist, uint16_t 
     tft.drawString(t, right, y0 + 30, 2);
 }
 
-static void band(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* p, uint16_t dist) {
+static void band(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* p, uint16_t dist, bool mute) {
     const int w = tft.width(), y0 = tft.height() - BAND_H;
     const bool alarm = s.stage == Stage::Alarm;
     const uint16_t bg = alarm ? ALARM_BG : ALERT_BG;
@@ -111,12 +112,21 @@ static void band(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* 
     tft.setTextDatum(TL_DATUM);
     tft.setTextColor(TFT_WHITE, bg);
     tft.drawString(t, TEXT_X, y0 + 5, 4);
+    int labelX = TEXT_X;
+    if (mute) {   // an inverted tag on the label's row, the label after it
+        const uint16_t box = alarm ? TFT_WHITE : YELLOW;
+        const int mw = tft.textWidth("MUTE", 2) + 6;
+        tft.fillRoundRect(TEXT_X, y0 + 29, mw, 16, 3, box);
+        tft.setTextColor(alarm ? ALARM_BG : TFT_BLACK, box);
+        tft.drawString("MUTE", TEXT_X + 3, y0 + 30, 2);
+        labelX += mw + 4;
+    }
     if (p && p->label[0]) {   // the built-in font is ASCII: accents folded, cut to its room
         txt::asciiFold(p->label, t, sizeof t);
-        const int room = w - PAD - KMH_W - 4 - TEXT_X;
+        const int room = w - PAD - KMH_W - 4 - labelX;
         for (size_t n = strlen(t); n > 0 && tft.textWidth(t, 2) > room; --n) t[n - 1] = '\0';
         tft.setTextColor(alarm ? TFT_WHITE : LABEL_GREY, bg);
-        tft.drawString(t, TEXT_X, y0 + 30, 2);
+        tft.drawString(t, labelX, y0 + 30, 2);
     }
     numbers(tft, y0, bg, dist, s.kmh);
 }
@@ -130,7 +140,7 @@ static void tag(TFT_eSPI& tft) {
     tft.drawString("GPS --", TAG.x + 4, TAG.y + TAG.h / 2, 2);
 }
 
-void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active) {
+void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active, bool mute) {
     if (s.stage == Stage::Off) {
         s_shown.on = false;
         s_shown.stage = Stage::Off;
@@ -139,14 +149,16 @@ void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active)
     const char* id = active ? active->id : "";
     // 10 m steps: one redraw per ~10 m of countdown at most, the fix rate's anyway.
     const uint16_t dist = (uint16_t)((s.distM + 5) / 10 * 10);
-    const bool whole = !s_shown.on || s.stage != s_shown.stage || strcmp(id, s_shown.id) != 0;
+    const bool whole = !s_shown.on || s.stage != s_shown.stage || strcmp(id, s_shown.id) != 0 ||
+                       (s.stage != Stage::NoFix && mute != s_shown.mute);
     if (!whole && (s.stage == Stage::NoFix || (dist == s_shown.dist && s.kmh == s_shown.kmh))) return;
     if (s.stage == Stage::NoFix) tag(tft);
-    else if (whole) band(tft, s, active, dist);
+    else if (whole) band(tft, s, active, dist, mute);
     else numbers(tft, tft.height() - BAND_H, s.stage == Stage::Alarm ? ALARM_BG : ALERT_BG, dist, s.kmh);
     tft.setTextDatum(TL_DATUM);   // the screens draw with the default datum
     s_shown.on = true;
     s_shown.stage = s.stage;
+    s_shown.mute = mute;
     strncpy(s_shown.id, id, sizeof s_shown.id - 1);
     s_shown.id[sizeof s_shown.id - 1] = '\0';
     s_shown.dist = dist;

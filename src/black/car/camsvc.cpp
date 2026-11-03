@@ -23,6 +23,7 @@ static cameras::Matcher* s_matcher = nullptr; // ~1 KB of per-point state: in PS
 static cameras::Status s_status;
 static cameras::Fix s_lastFix{};              // the last valid fix, for mark()
 static volatile bool s_mute = false;
+static bool s_broken = false;                 // begin() found no memory: snapshot() says NoFix
 static void (*volatile s_cb)(cameras::Stage, cameras::Stage, camlist::Kind) = nullptr;
 // Held from a status change until its callback has run (onFix on the GPS task, setList on net/remote's):
 // the buzzer then hears the changes in the order they happened. Without it a list swap's "-> off"
@@ -89,7 +90,9 @@ void begin() {
     s_spare = (camlist::Point*)mem::bigAlloc(sizeof(camlist::Point) * camlist::MAX_POINTS);
     void* m = mem::bigAlloc(sizeof(cameras::Matcher));
     if (!s_lock || !s_order || !s_live || !s_spare || !m) {
-        Serial.println("[cam] off: no memory");
+        // No matcher, no GPS task: GPS -- on both decks rather than an Off that reads as a clear road.
+        s_broken = true;
+        Serial.println("[cam] not watching: no memory (GPS --)");
         return;
     }
     int n = 0;
@@ -116,7 +119,9 @@ void begin() {
 void snapshot(cameras::Status* s, camlist::Point* active, bool* mute) {
     cameras::Status st;
     camlist::Point pt{};
-    if (s_lock) {
+    if (s_broken) {
+        st.stage = cameras::Stage::NoFix;
+    } else if (s_lock) {
         Lock l;
         st = s_status;
         if (st.index >= 0 && st.index < s_count) pt = s_live[st.index];
@@ -182,28 +187,37 @@ struct Mark {
 // the only caller.
 static Mark* s_marks = nullptr;
 
+// The stored marks into s_marks: their count, or -1 when they can't be read whole (no memory, a
+// short or failed read). mark() then refuses rather than write over the ones it couldn't read.
 static int loadMarks(Preferences& p) {
     if (!s_marks) s_marks = (Mark*)mem::bigAlloc(sizeof(Mark) * MAX_MARKS);
     if (!s_marks) return -1;
     size_t len = p.getBytesLength("marks");
     if (len > sizeof(Mark) * MAX_MARKS) len = sizeof(Mark) * MAX_MARKS;
     len -= len % sizeof(Mark);
-    if (len && p.getBytes("marks", s_marks, len) != len) return 0;
+    if (len && p.getBytes("marks", s_marks, len) != len) return -1;
     return (int)(len / sizeof(Mark));
 }
 
-bool mark() {
-    if (!s_lock) return false;
+MarkResult mark() {
+    if (!s_matcher) return MarkResult::NoFix;   // never started: no GPS
     cameras::Fix f;
     {
         Lock l;
         f = s_lastFix;
     }
-    if (!f.valid || millis() - f.ms > cameras::NOFIX_MS) return false;
+    if (!f.valid || millis() - f.ms > cameras::NOFIX_MS) return MarkResult::NoFix;
     Preferences p;
-    if (!p.begin(NS, false)) return false;
+    if (!p.begin(NS, false)) {
+        Serial.println("[cam] mark not stored (NVS)");
+        return MarkResult::Storage;
+    }
     int n = loadMarks(p);
-    if (n < 0) { p.end(); return false; }
+    if (n < 0) {
+        p.end();
+        Serial.println("[cam] mark not stored: the marks can't be read back");
+        return MarkResult::Storage;
+    }
     if (n == MAX_MARKS) {   // full: the oldest goes (the PC tool should have collected it by now)
         memmove(s_marks, s_marks + 1, sizeof(Mark) * (MAX_MARKS - 1));
         n--;
@@ -214,7 +228,7 @@ bool mark() {
     p.end();
     if (!ok) Serial.println("[cam] mark not stored (NVS)");
     else Serial.printf("[cam] mark %d saved\n", n);
-    return ok;
+    return ok ? MarkResult::Ok : MarkResult::Storage;
 }
 
 // Micro-degrees as "-2.965692": integer maths, the same digits the CSV uses.

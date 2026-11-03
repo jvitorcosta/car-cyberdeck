@@ -396,12 +396,13 @@ void loop() {
     // When the band shrinks or goes, or the tag goes, the screen redraws whole to take it all back.
     static cameras::Status cam;
     static camlist::Point camPt;
+    static bool camMute = false;   // the band's MUTE tag
     static uint32_t camAt = 0;
     static int camRows = 0;
     static bool camTag = false;
     if (millis() - camAt >= 100) {   // the GPS changes it once a second: no need to lock per frame
         camAt = millis();
-        camsvc::snapshot(&cam, &camPt, nullptr);
+        camsvc::snapshot(&cam, &camPt, &camMute);
     }
     const int camRowsNow = camband::rows(cam);
     const bool camTagNow = cam.stage == cameras::Stage::NoFix;
@@ -545,6 +546,6 @@ void loop() {
     }
     s_tft.resetViewport();
     if (topDrawn && camTag) camband::invalidate();
-    camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr);
+    camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr, camMute);
     delay(10);
 }

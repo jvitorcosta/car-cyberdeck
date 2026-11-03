@@ -10,7 +10,10 @@
 namespace camlist {
 enum class Kind : uint8_t { Speed, Bump, RedLight };
 constexpr int MAX_POINTS = 96;
-constexpr size_t MAX_CSV = 8192;  // what the deck stores and accepts
+// What the deck stores and accepts. NVS is 20 KB (5 pages, one kept free): a push writes the new
+// list before the old one goes, and OTA's `good`, `boot/last` and the WiFi keys live there too, so
+// 6 KB (twice that in flight) leaves them room. tools/cameras.py's MAX_BYTES follows it.
+constexpr size_t MAX_CSV = 6144;
 constexpr uint8_t NO_LIMIT = 0;   // limit unknown (or none, for a red light)
 struct Point {
     int32_t latE6, lonE6;  // micro-degrees: integers, so matching never touches float drift

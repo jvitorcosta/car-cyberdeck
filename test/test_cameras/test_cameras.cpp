@@ -264,13 +264,35 @@ void test_nofix_after_5s_moving() {
     TEST_ASSERT_TRUE(m.update(along(LAT, LON, 270, 200, 50, lastFix + 10000)).stage == Stage::Alert);
 }
 
-void test_nofix_while_stopped_is_off() {
+// Lost while stopped (GPS 2 IP killed while parked, the socket dropped): after NOFIX_MS it says so
+// all the same, or the car drives off with the deck pretending the road is clear.
+void test_nofix_while_stopped_after_5s() {
     cameras::Matcher m;
     camlist::Point p = pt(LAT, LON, 270, 60, camlist::Kind::Speed);
     m.load(&p, 1);
-    TEST_ASSERT_TRUE(m.update(noFix(10000)).stage == Stage::Off);  // never had a fix
     m.update(along(LAT, LON, 270, 1000, 5, 20000));
-    TEST_ASSERT_TRUE(m.update(noFix(30000)).stage == Stage::Off);
+    TEST_ASSERT_TRUE(m.update(noFix(21000)).stage == Stage::Off);
+    TEST_ASSERT_TRUE(m.update(noFix(24900)).stage == Stage::Off);
+    TEST_ASSERT_TRUE(m.update(noFix(25100)).stage == Stage::NoFix);
+    TEST_ASSERT_TRUE(m.update(noFix(40000)).stage == Stage::NoFix);
+    // The fix comes back (still stopped): Off again.
+    TEST_ASSERT_TRUE(m.update(along(LAT, LON, 270, 1000, 0, 41000)).stage == Stage::Off);
+}
+
+// GPS 2 IP never connected: the first "none" starts the clock (a short grace after boot), then NoFix.
+void test_never_had_fix_is_nofix_after_5s() {
+    cameras::Matcher m;
+    camlist::Point p = pt(LAT, LON, 270, 60, camlist::Kind::Speed);
+    m.load(&p, 1);
+    TEST_ASSERT_TRUE(m.update(noFix(1000)).stage == Stage::Off);
+    TEST_ASSERT_TRUE(m.update(noFix(5900)).stage == Stage::Off);
+    cameras::Status s = m.update(noFix(6100));
+    TEST_ASSERT_TRUE(s.stage == Stage::NoFix);
+    TEST_ASSERT_EQUAL_INT(-1, s.index);
+    TEST_ASSERT_TRUE(m.update(noFix(60000)).stage == Stage::NoFix);
+    // A new list doesn't hide it: the clock is the feed's, not the list's.
+    m.load(&p, 1);
+    TEST_ASSERT_TRUE(m.update(noFix(61000)).stage == Stage::NoFix);
 }
 
 void test_slow_course_is_ignored() {
@@ -319,7 +341,8 @@ int main(int, char**) {
     RUN_TEST(test_next_point_after_passing);
     RUN_TEST(test_nearest_point_wins);
     RUN_TEST(test_nofix_after_5s_moving);
-    RUN_TEST(test_nofix_while_stopped_is_off);
+    RUN_TEST(test_nofix_while_stopped_after_5s);
+    RUN_TEST(test_never_had_fix_is_nofix_after_5s);
     RUN_TEST(test_slow_course_is_ignored);
     RUN_TEST(test_heading_wraps_at_north);
     RUN_TEST(test_load_clears_passed);

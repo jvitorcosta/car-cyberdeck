@@ -10,7 +10,7 @@
 namespace cameras {
 // The thresholds, as the design fixed them (one place to change each).
 constexpr uint16_t MIN_KMH = 10;              // under it: no alerts (course is noise when crawling)
-constexpr uint32_t NOFIX_MS = 5000;           // fix lost this long while moving -> NoFix
+constexpr uint32_t NOFIX_MS = 5000;           // no valid fix this long (moving or not) -> NoFix
 constexpr uint32_t CANDIDATE_M = 800;         // points further away are not looked at
 constexpr int COURSE_TOL_DEG = 40;            // car course vs the point's enforced heading
 constexpr int BEARING_TOL_DEG = 30;           // bearing car->point vs the car's course (point ahead)
@@ -51,9 +51,10 @@ private:
     // Has alerted on this approach: stays eligible while it stays a candidate, so braking for the
     // alert (a shorter 20 s distance) doesn't take it back and chime again further on.
     bool alerted_[camlist::MAX_POINTS] = {};
-    bool hadFix_ = false;
+    // The fix clock: the last valid fix's ms, or the first update's when none has come yet. Not
+    // touched by load(): a new list doesn't make the GPS any fresher.
+    bool clock_ = false;
     uint32_t lastFixMs_ = 0;
-    uint16_t lastKmh_ = 0;
     Status last_;
 };
 
