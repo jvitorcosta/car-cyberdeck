@@ -31,8 +31,8 @@
 //           the Menu shows (see "Lyrics" below)
 // Speed cameras (the black deck has the GPS and beeps; this deck shows): an alert or alarm from the
 // black deck's GET /cam is a band over the bottom third of any screen (a tap on it mutes the black
-// deck's beeps), "GPS --" / "CAM --" a tag on the Menu's header; voice "mark camera", "cameras mute"
-// (see "Speed cameras" below).
+// deck's beeps), "GPS --" / "CAM --" / "MUTED" a tag on the Menu's header; voice "mark camera",
+// "cameras mute" (see "Speed cameras" below).
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button; it shows as the bar with a ring cut in it (ui/presslook). After a screen or page
 // change touch waits for the finger to lift and 250 ms (util/tapguard). The iPhone's Bluetooth
@@ -791,7 +791,7 @@ static void drawStatus() {
 // ---- Speed cameras: what the band and the tag need before the screens draw (see "Speed cameras") ----
 // While the band is up (bandUp) the screens draw through a TFT viewport over the rows above BAND_Y,
 // so nothing of theirs lands on it; drawAll() ends with the band. camTag is the Menu header's tag:
-// "GPS --", "CAM --" or "". All loop()'s.
+// one of termlayout's CAM_TAG_* or "". All loop()'s.
 static constexpr int BAND_Y = 160, BAND_H = 80;  // the bottom third of the 240 rows
 static bool bandUp = false;
 static const char* camTag = "";
@@ -811,8 +811,8 @@ static void camBandTap();
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
 // The header: one MID line and its rule (the boot's welcome lines typed out before it); the camera
-// tag ("GPS --", "CAM --") right-aligned on it in ALERT (a problem: the road isn't being watched).
-// The title ends at x 259, the tag starts at 272.
+// tag right-aligned on it in ALERT ("GPS --", "CAM --": the road isn't being watched; "MUTED": the
+// black deck won't beep). The title ends at x 259; each tag keeps 4 px clear of it (test_termfont).
 static void drawHeader() {
     clearBg(deckmenu::HEADER);
     tft.setTextColor(pal(termpal::MID));
@@ -1757,6 +1757,7 @@ static void act() {
     if (bandUp && y >= BAND_Y) {  // the band covers the buttons there: a tap on it is mute / unmute
         tap.id = -1;
         camBandTap();
+        tapGuard.arm();  // a double tap or a bounce must not toggle it straight back
         return;
     }
     tap.id = deckmenu::hit(screen, x, y);
@@ -2248,13 +2249,17 @@ static void beginLyrics() {
 //     speed. An alert is termpal's green theme (whatever the deck's theme, night too), a red
 //     light's its orange; an alarm is the band in red with the speed big, blinking at 2 Hz, the
 //     deck's only blinking thing. MUTE on it while the black deck's beeps are off; a tap on it
-//     toggles that (GET /cam/mute?on= the opposite of the last /cam's mute). It stays CAM_HOLD_MS
-//     after st leaves alert / alarm (frozen, not blinking), and through one or two missed polls.
+//     toggles that (GET /cam/mute?on= the opposite of the last /cam's mute); the band going up or
+//     down, or a tap on it, arms tapGuard, so a tap meant for a button doesn't mute. It stays
+//     CAM_HOLD_MS after st leaves alert / alarm (frozen, not blinking), and through one or two
+//     missed polls.
 //   No fix: "GPS --" on the Menu's header line, no band. CAM_LOST_MISSES polls in a row without an
-//     answer: "CAM --" there instead, and no band (the black deck still beeps).
+//     answer, or CAM_UNSIGNED_MS without a clock to sign them: "CAM --" there instead, and no band
+//     (the black deck still beeps). Muted with no band up: "MUTED" there.
 // This deck never beeps. Voice ("mark camera", "cameras mute") is /say's (util/yellow/camvoice).
 static constexpr uint32_t CAM_HOLD_MS = 2000;
 static constexpr int CAM_LOST_MISSES = 3;
+static constexpr uint32_t CAM_UNSIGNED_MS = 10000;  // no clock to sign /cam this long: CAM --
 static constexpr uint32_t CAM_BLINK_MS = 250;  // on 250, off 250: 2 Hz
 
 struct CamReading {
@@ -2273,8 +2278,8 @@ static void camTask(void*) {
     static char body[camwire::MAX_JSON];  // static: off the 4 KB stack
     pollpace::Pace pace;
     camwire::View v{};
-    bool heard = false, first = true;
-    uint32_t lastPoll = 0;
+    bool heard = false, first = true, unsignedTold = false;
+    uint32_t lastPoll = 0, unsignedAt = 0;  // unsignedAt: since when /cam can't be signed; 0: it can
     watchdog::watch();  // each pass: at most a mute GET and a /cam GET, each a lock wait and ~6 s
     for (;;) {
         watchdog::feed();
@@ -2298,9 +2303,26 @@ static void camTask(void*) {
         lastPoll = now;
         body[0] = 0;
         const int rc = deckGet("/cam", nullptr, 0, body, sizeof(body));
-        if (rc == NOT_SIGNED) continue;  // no clock yet: nothing was asked, so nothing is lost either
+        if (rc == NOT_SIGNED) {
+            // No clock yet: nothing was asked, so no miss either; but past CAM_UNSIGNED_MS the road
+            // isn't being watched from here, so CAM -- says so (the black deck still beeps).
+            if (unsignedAt == 0) unsignedAt = now | 1;
+            if (now - unsignedAt < CAM_UNSIGNED_MS) continue;
+            if (!unsignedTold) Serial.println("[cam] can't sign /cam (no clock): CAM --");
+            unsignedTold = true;
+            portENTER_CRITICAL(&camMux);
+            camPub.misses = CAM_LOST_MISSES;
+            portEXIT_CRITICAL(&camMux);
+            camFresh = true;
+            continue;
+        }
+        unsignedAt = 0;
+        unsignedTold = false;
         const bool ok = rc == 200 && camwire::parse(body, &v);
-        deckAnswered(ok);
+        // Any HTTP answer is the deck at that address (an older black firmware's 404, a 500): only no
+        // answer, or a 403 (someone else's key), counts toward looking the address up again, so this
+        // poll doesn't restart the lyrics' lookups.
+        deckAnswered(rc > 0 && rc != 403);
         if (!ok && pace.misses() + 1 == CAM_LOST_MISSES) Serial.printf("[cam] deck lost (rc=%d)\n", rc);
         if (ok && pace.misses() >= CAM_LOST_MISSES) Serial.println("[cam] deck back");
         pace.onResult(ok);
@@ -2333,6 +2355,7 @@ static const char* camSay(camvoice::Cmd c) {
     if (rc == 204 && !mark) camPollNow = true;
     if (rc == 204) return mark ? "Marked" : mute ? "Camera sounds off" : "Camera sounds on";
     if (rc == 409 && mark) return "No GPS fix";
+    if (rc == 507 && mark) return "The black deck couldn't save it";
     if (rc == NOT_SIGNED) return "The clock isn't set yet, try again";
     if (rc == 403) return "The black deck turned it down: wrong key or clock";
     return "The black deck didn't answer";
@@ -2484,12 +2507,6 @@ static void camTick() {
         portEXIT_CRITICAL(&camMux);
     }
     const bool lost = camNow.misses >= CAM_LOST_MISSES;
-    const char* tag = lost ? "CAM --" : camNow.heard && camNow.view.stage == cameras::Stage::NoFix ? "GPS --" : "";
-    if (strcmp(tag, camTag) != 0) {
-        Serial.printf("[cam] tag \"%s\"\n", tag);
-        camTag = tag;
-        if (screen == Screen::Menu) drawHeader();
-    }
     bool want = false;
     if (!lost && camNow.heard && alerting(camNow.view)) {
         bandView = camNow.view;
@@ -2502,18 +2519,32 @@ static void camTick() {
     bandView.mute = camNow.view.mute;  // live through the hold too
     if (want == bandUp) {
         if (bandUp) drawBand(false);
-        return;
+    } else {
+        bandUp = want;
+        Serial.printf("[cam] band %s\n", want ? "up" : "down");
+        // The band takes or gives back the bottom third under a finger that may be on its way to a
+        // button: that tap must not land on the band (a mute nobody meant) or the button under it.
+        tapGuard.arm();
+        tap.acted = true;  // and the press under way, if any, doesn't act on release
+        if (want) {
+            drawBand(true);
+        } else {
+            bandShown.drawn = false;
+            camQuietAt = 0;
+            tft.resetViewport();
+            drawAll();
+        }
     }
-    bandUp = want;
-    Serial.printf("[cam] band %s\n", want ? "up" : "down");
-    if (want) {
-        drawBand(true);
-        return;
+    // The header's tag, after the band: MUTED only while no band is up to say MUTE.
+    const char* tag = lost ? CAM_TAG_LOST
+                    : !camNow.heard ? ""
+                    : camNow.view.stage == cameras::Stage::NoFix ? CAM_TAG_NOFIX
+                    : camNow.view.mute && !bandUp ? CAM_TAG_MUTE : "";
+    if (strcmp(tag, camTag) != 0) {
+        Serial.printf("[cam] tag \"%s\"\n", tag);
+        camTag = tag;
+        if (screen == Screen::Menu) drawHeader();
     }
-    bandShown.drawn = false;
-    camQuietAt = 0;
-    tft.resetViewport();
-    drawAll();
 }
 
 // In loop(): tells the task how to poll, takes a published poll, and redraws what changed: on the
