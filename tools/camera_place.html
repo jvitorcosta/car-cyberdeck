@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Place cameras</title>
-<!-- Template for tools/cameras.py: __ITEMS__ is replaced by the points to place. Opens locally, needs no server. -->
+<!-- Template for tools/cameras.py: __ITEMS__ is replaced by the points to place, __APPLY__ by the command
+     that takes placed.json. cameras.py serves it on 127.0.0.1: OSM refuses tiles to a file:// page (no Referer). -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   html, body { height: 100%; margin: 0; font: 14px system-ui, sans-serif; }
@@ -28,7 +29,8 @@
   <p><button id="save">save placed.json</button></p>
   <p class="addr">Select a card, drag its pin onto the road (or click the map), set the arrow to the enforced
   direction of travel (0 = north, 90 = east), confirm the limit from the road sign, untick "include" to skip a point.
-  Labels longer than 27 bytes are cut on the deck.</p>
+  Labels longer than 27 bytes are cut on the deck; commas and quotes are left out of them.
+  Then: <code>python tools/cameras.py __APPLY__</code></p>
   <div id="cards"></div>
 </div>
 <div id="map"></div>
@@ -101,7 +103,7 @@ ITEMS.forEach(function (it, i) {
   label.value = it.label || ""; kind.value = it.kind;
   limit.value = it.limit == null ? "" : it.limit;
   head.value = it.heading == null ? "" : it.heading; rng.value = it.heading == null ? 0 : it.heading;
-  label.oninput = function () { it.label = label.value.replace(/,/g, " "); refresh(i); };
+  label.oninput = function () { it.label = label.value.replace(/[,"]/g, " "); refresh(i); };  // the deck's CSV has no quoting
   kind.onchange = function () { it.kind = kind.value; if (it.kind === "redlight") { it.limit = null; limit.value = ""; } refresh(i); };
   limit.oninput = function () { it.limit = limit.value === "" ? null : parseInt(limit.value, 10); };
   head.oninput = function () { it.heading = head.value === "" ? null : ((parseInt(head.value, 10) % 360) + 360) % 360; if (it.heading != null) rng.value = it.heading; refresh(i); };

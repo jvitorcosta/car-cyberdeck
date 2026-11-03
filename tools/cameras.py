@@ -5,7 +5,8 @@
   cameras.py place [--from immu|osm|marks]   writes build/camera_place.html (drag each pin onto its road,
                                      set the arrow, limit and label, press "save" -> placed.json)
   cameras.py place --apply placed.json       merges placed.json into data/cameras.csv (new mao-NNNN ids)
-  cameras.py push                    validates the list like the deck does, then POST /cam/list
+  cameras.py push [--force]          validates the list like the deck does, then POST /cam/list
+                                     (a list with no rows only with --force)
   cameras.py import-car [--apply placed.json]  the points marked in the car (GET /cam/marks) -> place page;
                                      with --apply: merge, then clear the deck's marks
   cameras.py check                   fetch; exit 1 when anything is new or gone (for a monthly routine)
@@ -46,7 +47,9 @@ USER_AGENT = "car-cyberdeck-cameras/1.0 (+https://github.com/jvitorcosta/car-cyb
 
 HEADER = "id,kind,lat,lon,heading,limit,label,source,checked"
 MAX_ROWS = 96       # camlist::MAX_POINTS
-MAX_BYTES = 8192    # camlist::MAX_CSV
+# camlist::MAX_CSV: the "nvs" partition (20 KB) must also hold the old list while the new one is
+# written, OTA's flags and the WiFi keys, so the list stays under a third of it
+MAX_BYTES = 6144
 MAX_LABEL = 27      # the deck cuts a label here (char label[28])
 MAX_ID = 11         # char id[12]
 KINDS = ("speed", "bump", "redlight")
@@ -57,7 +60,13 @@ HEADING_TOL = 60    # degrees: IMMU gives a cardinal direction, the owner sets t
 
 
 def _degrees_ok(s, max_deg):
-    return re.fullmatch(r"[+-]?(\d+(\.\d*)?|\.\d+)", s) is not None and abs(float(s)) <= max_deg
+    # re.A: ASCII digits only, like the deck's parser (Unicode digits match \d, and float() takes them)
+    return re.fullmatch(r"[+-]?(\d+(\.\d*)?|\.\d+)", s, re.A) is not None and abs(float(s)) <= max_deg
+
+
+def _uint_ok(s, lo, hi):
+    """ASCII digits only (str.isdigit() takes "²" and "٦٠", which the deck refuses), lo..hi."""
+    return re.fullmatch(r"\d+", s, re.A) is not None and lo <= int(s) <= hi
 
 
 def validate(text):
@@ -85,13 +94,15 @@ def validate(text):
             errors.append("line %d: lat out of range" % no)
         if not _degrees_ok(lon, 180):
             errors.append("line %d: lon out of range" % no)
-        if not (head.isdigit() and int(head) <= 359):
+        if not _uint_ok(head, 0, 359):
             errors.append("line %d: heading is required, 0..359 (a camera without a direction would alert both lanes)" % no)
         if limit != "":
             if kind == "redlight":
                 errors.append("line %d: a redlight has no limit" % no)
-            elif not (limit.isdigit() and 1 <= int(limit) <= 199):
+            elif not _uint_ok(limit, 1, 199):
                 errors.append("line %d: limit must be empty or 1..199" % no)
+        if '"' in line:   # no CSV quoting here: other tools would read a quote as one and re-split the row
+            errors.append('line %d: a " is not allowed (like commas, quotes stay out of labels)' % no)
         if len(pid.encode("utf-8")) > MAX_ID:
             errors.append("line %d: id longer than %d bytes" % (no, MAX_ID))
         if len(label.encode("utf-8")) > MAX_LABEL:
@@ -132,7 +143,7 @@ def apply_placed(path, placed, today=None):
     for it in placed:
         if it.get("confirmed") is not True:
             raise ValueError("'%s' is not marked confirmed in placed.json: place it by hand first" % it.get("label", "?"))
-        label = re.sub(r"\s+", " ", str(it.get("label", "")).replace(",", " ")).strip()
+        label = re.sub(r"\s+", " ", re.sub(r'[,"]', " ", str(it.get("label", "")))).strip()
         rows.append({"id": "mao-%04d" % nxt, "kind": it["kind"], "lat": float(it["lat"]), "lon": float(it["lon"]),
                      "heading": "" if it.get("heading") is None else int(it["heading"]),
                      "limit": it.get("limit") if it["kind"] != "redlight" else None,
@@ -264,7 +275,7 @@ def immu_label(address):
     street = street.split(",")[0]
     district = parts[-1].split(",")[0] if len(parts) > 1 else ""
     label = _abbrev(street) + num + (" · " + district if district else "")
-    return re.sub(r"\s+", " ", label.replace(",", " ")).strip()
+    return re.sub(r"\s+", " ", re.sub(r'[,"]', " ", label)).strip()
 
 
 def sentido_of(address):
@@ -426,8 +437,9 @@ def deck_call(host, method, path, body=None):
 # --- the placing page ----------------------------------------------------------------------------
 
 
-def write_place_page(items, out=PLACE_HTML):
-    template = open(TEMPLATE, encoding="utf-8").read()
+def write_place_page(items, out=PLACE_HTML, apply_cmd="place --apply placed.json"):
+    """The page, its hint naming the command that takes its placed.json (`apply_cmd`)."""
+    template = open(TEMPLATE, encoding="utf-8").read().replace("__APPLY__", apply_cmd)
     data = json.dumps(items, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8", newline="\n") as fh:
@@ -500,15 +512,15 @@ def serve(directory, page, port=8765):
         srv.server_close()
 
 
-def _place(items, no_serve=False):
+def _place(items, no_serve=False, apply_cmd="place --apply placed.json"):
     for it in items:
         if it.get("lat") is None:
             g = geocode(it)
             it["lat"], it["lon"] = g if g else (-3.1019, -60.0250)   # not found: Manaus centre, the owner drags it
             it["guess"] = True
-    out = write_place_page(items)
-    print("wrote %s (%d points): open it, place each pin, press save, then run with --apply placed.json" % (
-        os.path.relpath(out, ROOT), len(items)))
+    out = write_place_page(items, apply_cmd=apply_cmd)
+    print("wrote %s (%d points): open it, place each pin, press save, then run: python tools/cameras.py %s" % (
+        os.path.relpath(out, ROOT), len(items), apply_cmd))
     if not no_serve:
         serve(os.path.dirname(out), os.path.basename(out))
 
@@ -547,9 +559,15 @@ def cmd_push(a):
         for e in errs:
             print("error: " + e, file=sys.stderr)
         return 1
+    rows = sum(1 for line in text.lstrip("\ufeff").split("\n")[1:] if line.strip("\r"))
+    if rows == 0 and not a.force:
+        # The deck can't say how many it holds now: an empty file is almost always a slip.
+        print("error: the list has no rows; the deck would drop every camera it has (--force pushes it anyway)",
+              file=sys.stderr)
+        return 1
     status, body = deck_call(a.host, "POST", "/cam/list", text.encode("utf-8"))
     if status == 204:
-        print("pushed %d rows (%d bytes) to %s" % (text.count("\n") - 1, len(text.encode("utf-8")), a.host))
+        print("pushed %d rows (%d bytes) to %s" % (rows, len(text.encode("utf-8")), a.host))
         return 0
     print("deck refused the list: %d %s" % (status, body.strip()), file=sys.stderr)
     return 1
@@ -570,7 +588,7 @@ def cmd_import_car(a):
     if not items:
         print("no marks on the deck")
         return 0
-    _place(items, a.no_serve)
+    _place(items, a.no_serve, apply_cmd="import-car --apply placed.json")
     return 0
 
 
@@ -580,7 +598,9 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("fetch").set_defaults(fn=cmd_fetch)
     sub.add_parser("check").set_defaults(fn=cmd_check)
-    sub.add_parser("push").set_defaults(fn=cmd_push)
+    p = sub.add_parser("push")
+    p.add_argument("--force", action="store_true", help="push even a list with no rows")
+    p.set_defaults(fn=cmd_push)
     p = sub.add_parser("place")
     p.add_argument("--from", dest="src", choices=("immu", "osm", "marks"), default="immu")
     p.add_argument("--apply", metavar="placed.json")

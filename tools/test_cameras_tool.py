@@ -39,7 +39,7 @@ def test_validate_rejects_bad_header_columns_and_too_big():
     row = "mao-%04d,speed,-3.1,-60.0,90,60,A,car,2026-11-03\n"
     assert errors("".join(row % i for i in range(97)))                         # > 96 rows
     long_label = "mao-%04d,speed,-3.1,-60.0,90,60," + "x" * 100 + ",car,2026-11-03\n"
-    assert any("8192" in e for e in errors("".join(long_label % i for i in range(90))))
+    assert any("6144" in e for e in errors("".join(long_label % i for i in range(60))))
 
 
 def test_validate_warns_on_long_label():
@@ -176,3 +176,53 @@ def test_heading_tolerance():
 
 def test_user_agent_has_no_personal_address():
     assert "@" not in cam.USER_AGENT and "github.com" in cam.USER_AGENT
+
+
+def test_validate_rejects_unicode_digits():
+    # str.isdigit() takes these, the deck's parser doesn't ("²" even made int() raise)
+    assert errors("mao-1,speed,-3.1,-60.0,²,60,A,car,2026-11-03\n")            # heading "²"
+    assert errors("mao-1,speed,-3.1,-60.0,٩٠,60,A,car,2026-11-03\n")      # heading "٩٠"
+    assert errors("mao-1,speed,-3.1,-60.0,90,٦٠,A,car,2026-11-03\n")      # limit "٦٠"
+    assert errors("mao-1,speed,-٣.1,-60.0,90,60,A,car,2026-11-03\n")           # lat "-٣.1"
+
+
+def test_validate_rejects_quote_in_label():
+    errs = errors('mao-1,speed,-3.1,-60.0,90,60,Av. "X",car,2026-11-03\n')
+    assert errs and "line 2" in errs[0] and '"' in errs[0]
+
+
+def test_apply_strips_quotes_from_labels(tmp_path):
+    p = tmp_path / "cameras.csv"
+    p.write_text(HDR, encoding="utf-8", newline="")
+    placed = [{"kind": "speed", "lat": -3.2, "lon": -60.1, "heading": 90, "limit": 60, "label": 'Av. "Q", 9',
+               "source": "car", "confirmed": True}]
+    cam.apply_placed(str(p), placed, today="2026-11-03")
+    assert ",Av. Q 9,car," in p.read_text(encoding="utf-8")
+
+
+def _push(tmp_path, monkeypatch, body, *args):
+    p = tmp_path / "cameras.csv"
+    p.write_text(HDR + body, encoding="utf-8", newline="")
+    monkeypatch.setattr(cam, "CSV_PATH", str(p))
+    sent = []
+    monkeypatch.setattr(cam, "deck_call", lambda host, method, path, data=None: (sent.append(path), (204, ""))[1])
+    return cam.main(["--host", "deck.test", "push", *args]), sent
+
+
+def test_push_refuses_an_empty_list_without_force(tmp_path, monkeypatch):
+    code, sent = _push(tmp_path, monkeypatch, "")
+    assert code == 1 and sent == []          # the deck would drop every point it has
+    code, sent = _push(tmp_path, monkeypatch, "", "--force")
+    assert code == 0 and sent == ["/cam/list"]
+    code, sent = _push(tmp_path, monkeypatch, "mao-0001,speed,-3.1,-60.0,90,60,A,car,2026-11-03\n")
+    assert code == 0 and sent == ["/cam/list"]
+
+
+def test_place_page_names_its_apply_command(tmp_path):
+    out = tmp_path / "p.html"
+    item = {"kind": "speed", "label": "A", "lat": -3.1, "lon": -60.0, "heading": 90, "limit": None, "source": "car"}
+    cam.write_place_page([item], str(out), apply_cmd="import-car --apply placed.json")
+    html = out.read_text(encoding="utf-8")
+    assert "import-car --apply placed.json" in html and "__APPLY__" not in html
+    cam.write_place_page([item], str(out))
+    assert "place --apply placed.json" in out.read_text(encoding="utf-8")
