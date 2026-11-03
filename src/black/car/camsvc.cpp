@@ -24,12 +24,21 @@ static cameras::Status s_status;
 static cameras::Fix s_lastFix{};              // the last valid fix, for mark()
 static volatile bool s_mute = false;
 static void (*volatile s_cb)(cameras::Stage, cameras::Stage, camlist::Kind) = nullptr;
+// Held from a status change until its callback has run (onFix on the GPS task, setList on net/remote's):
+// the buzzer then hears the changes in the order they happened. Without it a list swap's "-> off"
+// could reach it after the GPS task's next "-> alarm", and the beeps would stop with the alarm on
+// (or never stop with it off).
+static SemaphoreHandle_t s_order = nullptr;
 
 static const char* NS = "cam";
 
 struct Lock {
     Lock() { xSemaphoreTake(s_lock, portMAX_DELAY); }
     ~Lock() { xSemaphoreGive(s_lock); }
+};
+struct OrderLock {
+    OrderLock() { xSemaphoreTake(s_order, portMAX_DELAY); }
+    ~OrderLock() { xSemaphoreGive(s_order); }
 };
 
 static const char* stageName(cameras::Stage s) {
@@ -44,6 +53,7 @@ static const char* stageName(cameras::Stage s) {
 
 // The GPS task's sink (car/gps): one fix, or a once-a-second "none".
 static void onFix(const cameras::Fix& f) {
+    OrderLock order;
     cameras::Status prev, now;
     camlist::Kind kind = camlist::Kind::Speed;
     char id[sizeof camlist::Point::id] = "";
@@ -74,10 +84,11 @@ static void onFix(const cameras::Fix& f) {
 void begin() {
     if (s_lock) return;
     s_lock = xSemaphoreCreateMutex();
+    s_order = xSemaphoreCreateMutex();
     s_live = (camlist::Point*)mem::bigAlloc(sizeof(camlist::Point) * camlist::MAX_POINTS);
     s_spare = (camlist::Point*)mem::bigAlloc(sizeof(camlist::Point) * camlist::MAX_POINTS);
     void* m = mem::bigAlloc(sizeof(cameras::Matcher));
-    if (!s_lock || !s_live || !s_spare || !m) {
+    if (!s_lock || !s_order || !s_live || !s_spare || !m) {
         Serial.println("[cam] off: no memory");
         return;
     }
@@ -133,16 +144,27 @@ bool setList(const char* csv, size_t len, int* badLine) {
         Serial.printf("[cam] list of %u B not stored (NVS)\n", (unsigned)len);
         return false;
     }
+    // The swap ends the stage the old list was in (its index points into it): the buzzer hears that
+    // as a stage change like any other, so an alarm under way stops with it (the next fix starts
+    // the new list's from Off).
+    OrderLock order;
+    cameras::Status prev;
+    camlist::Kind kind = camlist::Kind::Speed;
+    void (*cb)(cameras::Stage, cameras::Stage, camlist::Kind);
     {
         Lock l;
+        prev = s_status;
+        if (prev.index >= 0 && prev.index < s_count) kind = s_live[prev.index].kind;
         camlist::Point* old = s_live;
         s_live = s_spare;
         s_spare = old;
         s_count = n;
         s_matcher->load(s_live, n);
-        s_status = cameras::Status{};   // its index was into the old list
+        s_status = cameras::Status{};
+        cb = s_cb;
     }
     Serial.printf("[cam] new list: %d points\n", n);
+    if (prev.stage != cameras::Stage::Off && cb) cb(prev.stage, cameras::Stage::Off, kind);
     return true;
 }
 

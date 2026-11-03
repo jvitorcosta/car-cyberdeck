@@ -25,8 +25,9 @@ bool mark();
 // with 6 decimals), oldest first. Returns the length written; stops at whole rows that fit in n.
 size_t marksCsv(char* out, size_t n);
 void clearMarks();
-// For the buzzer: called from the GPS task on every stage change. `kind` is the active point's (the
+// For the buzzer: called on every stage change, in the order they happen: from the GPS task, and from
+// setList's caller when a new list ends the current stage (-> Off). `kind` is the active point's (the
 // one just left when `to` has none). One slot: a second call replaces the first. It runs on the GPS
-// task's 4 KB stack, outside camsvc's lock: start the sound and return.
+// task's 4 KB stack, outside camsvc's lock but holding the next change back: start the sound and return.
 void onStage(void (*cb)(cameras::Stage from, cameras::Stage to, camlist::Kind kind));
 }  // namespace camsvc

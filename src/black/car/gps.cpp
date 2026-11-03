@@ -31,6 +31,8 @@ static void task(void*) {
     static WiFiClient client;   // static: off the 4 KB stack
     static nmea::Reader reader;
     bool connected = false, failedOnce = false;
+    bool fed = false;          // a byte has come on this connection
+    bool memLogged = false;
     uint32_t backoff = BACKOFF_MIN_MS, nextTry = 0, lastByte = 0, lastSink = millis();
     for (;;) {
         uint32_t now = millis();
@@ -40,12 +42,15 @@ static void task(void*) {
             nextTry = now;   // try as soon as WiFi is back
         } else if (!connected && (int32_t)(now - nextTry) >= 0) {
             if (client.connect(GPS_HOST, GPS_PORT, CONNECT_TIMEOUT_MS)) {
+                // The back-off resets only with the first byte (below): a peer that accepts and
+                // stays silent (the app open but not sending) is retried like a refusal.
                 connected = true;
-                failedOnce = false;
-                backoff = BACKOFF_MIN_MS;
+                fed = false;
                 lastByte = millis();
-                Serial.printf("[gps] connected to %s:%d\n", GPS_HOST, GPS_PORT);
-                mem::log("gps");   // reports this task's free stack too: the 4 KB budget, on the deck
+                if (!failedOnce) Serial.printf("[gps] connected to %s:%d\n", GPS_HOST, GPS_PORT);
+                // Once: mem::log resets the per-log count of failed allocations that the network
+                // task's "poll failed" line reports.
+                if (!memLogged) { mem::log("gps"); memLogged = true; }
             } else {
                 client.stop();
                 // One line per outage, not per retry: the phone may stay away for a whole drive.
@@ -61,6 +66,12 @@ static void task(void*) {
                 const int c = client.read();
                 if (c < 0) break;
                 lastByte = millis();
+                if (!fed) {
+                    fed = true;
+                    backoff = BACKOFF_MIN_MS;
+                    if (failedOnce) Serial.printf("[gps] feed back from %s:%d\n", GPS_HOST, GPS_PORT);
+                    failedOnce = false;
+                }
                 cameras::Fix f;
                 if (reader.feed((char)c, lastByte, &f)) {
                     s_sink(f);
@@ -72,8 +83,20 @@ static void task(void*) {
                 // A half-open socket (the phone left the hotspot) never says so: silence is the sign.
                 client.stop();
                 connected = false;
-                nextTry = now;   // straight back: it was working a moment ago
-                Serial.println("[gps] feed lost, reconnecting");
+                // This task's free stack, the 4 KB budget, once it has run a while.
+                const unsigned stackFree = (unsigned)uxTaskGetStackHighWaterMark(nullptr);
+                if (fed) {
+                    nextTry = now;   // straight back: it was working a moment ago
+                    Serial.printf("[gps] feed lost, reconnecting (stackfree=%u)\n", stackFree);
+                } else {
+                    // Never said a word: back off as for a refused connect, one line per outage.
+                    if (!failedOnce)
+                        Serial.printf("[gps] %s:%d silent, retrying (stackfree=%u)\n", GPS_HOST, GPS_PORT,
+                                      stackFree);
+                    failedOnce = true;
+                    nextTry = now + backoff;
+                    backoff = backoff * 2 > BACKOFF_MAX_MS ? BACKOFF_MAX_MS : backoff * 2;
+                }
             }
         }
         now = millis();
