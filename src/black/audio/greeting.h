@@ -28,4 +28,15 @@ void playIntro(intropick::Opening o);
 // the synthesised one while music mode's mic holds the port (the recording is 48 kHz).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
+// Camera alert beeps (car/camsound) cutting in. pauseFor silences the clip playing now for ms (it
+// stops between two 128-sample writes, keeps its output open, and carries on from the same sample
+// afterwards); it returns once that clip has stopped writing (or none plays). A clip that starts
+// meanwhile waits for it too. Its length on screen (durationMs, level) does not stretch.
+void pauseFor(uint32_t ms);
+// Then the output for the beeps: the rate to write them at with audiosink::write (the paused clip's,
+// whose output they borrow, or 16 kHz on an output opened for them when no clip plays), or 0 when it
+// can't be had right now (a clip opening or closing it: ask again shortly). endTones() follows on
+// the same task, whatever beginTones() said: it gives the output back and ends the pause.
+int beginTones();
+void endTones();
 }

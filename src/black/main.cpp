@@ -29,6 +29,8 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "../util/black/linkstatus.h"
 #include "net/remote.h"
 #include "car/camsvc.h"
+#include "car/camsound.h"
+#include "ui/camband.h"
 #include "../common/net/remote_config.h"
 #include "../common/net/ota.h"
 #include "ui/otascreen.h"
@@ -188,7 +190,10 @@ void setup() {
         playOpening();
     }
     // Speed cameras (car/camsvc): the list from NVS and the phone's GPS on its own small task; it
-    // runs with the remote off too (the buzzer needs no web page).
+    // runs with the remote off too (the buzzer needs no web page). The beeps (car/camsound) listen
+    // from before the first fix.
+    camsound::begin();
+    camsvc::onStage(camsound::onStage);
     camsvc::begin();
     remote::begin(bootscene::active);
     ota::begin(REMOTE_NAME, bootscene::active);
@@ -379,10 +384,27 @@ void loop() {
         shownPct = ov.pct;
         shownPhase = ov.phase;
         lastMode = -2;     // no screen's mode: the one it covered comes back in full
+        camband::invalidate();   // and the camera band over it
         delay(20);
         return;
     }
     if (lastMode == -2) lastMode = -1;
+
+    // Speed cameras (car/camsvc, ui/camband): while the band (or the GPS -- strip) shows, the screens
+    // below draw through a viewport over the rest of the panel, so it never flickers under their
+    // frames; when it shrinks or goes, the screen redraws whole to take the rows back.
+    static cameras::Status cam;
+    static camlist::Point camPt;
+    static uint32_t camAt = 0;
+    static int camRows = 0;
+    if (millis() - camAt >= 100) {   // the GPS changes it once a second: no need to lock per frame
+        camAt = millis();
+        camsvc::snapshot(&cam, &camPt, nullptr);
+    }
+    const int camRowsNow = camband::rows(cam);
+    if (camRowsNow < camRows) lastMode = -1;
+    camRows = camRowsNow;
+    if (camRows) s_tft.setViewport(0, 0, s_tft.width(), s_tft.height() - camRows, false);
 
     static uint32_t shownGen = 0;
     static bool walkerOn = false;
@@ -513,5 +535,7 @@ void loop() {
             ui::drawWalker(s_tft, view, animMs, walkStep);
         }
     }
+    s_tft.resetViewport();
+    camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr);
     delay(10);
 }
