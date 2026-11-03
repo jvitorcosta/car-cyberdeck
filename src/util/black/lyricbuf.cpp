@@ -61,6 +61,25 @@ void finish(Lyrics& out) {
     }
 }
 
+// Line i's text starts at lines[i].off; each line's text follows the one before.
+static int textEnd(const Lyrics& out, int n) { return n < out.n ? out.lines[n].off : out.used; }
+
+void keepFirst(Lyrics& out, int n) {
+    if (n < 0 || n >= out.n) return;
+    out.used = textEnd(out, n);
+    out.n = n;
+}
+
+void dropFirst(Lyrics& out, int n) {
+    if (n <= 0) return;
+    if (n >= out.n) { reset(out); return; }
+    const int cut = out.lines[n].off - 1;   // text[0] stays the shared ""
+    memmove(out.text + 1, out.text + out.lines[n].off, (size_t)(out.used - out.lines[n].off));
+    out.used -= cut;
+    out.n -= n;
+    for (int i = 0; i < out.n; ++i) out.lines[i] = {out.lines[i + n].tMs, (uint16_t)(out.lines[i + n].off - cut)};
+}
+
 bool hasTag(const char* line, size_t len) {
     uint32_t t;
     const char* txt;

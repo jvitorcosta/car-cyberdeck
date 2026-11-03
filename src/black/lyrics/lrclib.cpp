@@ -1,5 +1,7 @@
 #include "lrclib.h"
+#include "../../util/black/lrcmatch.h"
 #include "../../util/black/lrcstream.h"
+#include "../../util/black/netplan.h"
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "../../common/net/http_config.h"
@@ -32,24 +34,28 @@ static String urlEncode(const char* s) {
 }
 
 // One request into `out`. *rc: HTTP status (negative: HTTPClient connect/TLS/timeout error).
-// *stalled: the body stopped arriving before the reader was done.
+// *stalled: the body stopped arriving before the reader was done. title (search): the song the
+// entries must be. keepPlain: out holds /api/get's plain lines; they stay unless synced lines come,
+// and the kind reports them whatever this request's fate.
 static lrcstream::Kind request(const String& url, lrcstream::Mode mode, uint32_t durationMs,
+                               const char* title, bool keepPlain,
                                lyricbuf::Lyrics& out, int* rc, bool* stalled) {
     *stalled = false;
-    lyricbuf::reset(out);
-    if (!netcfg::linkUp()) { *rc = -1; return lrcstream::Kind::None; }
+    const lrcstream::Kind none = keepPlain ? lrcstream::Kind::Plain : lrcstream::Kind::None;
+    if (!keepPlain) lyricbuf::reset(out);
+    if (!netcfg::linkUp()) { *rc = -1; return none; }
     WiFiClientSecure client;
     netcfg::secure(client);
     HTTPClient https;
     netcfg::streamed(https);   // plain (non-chunked) body: scan straight from the stream
-    if (!https.begin(client, url)) { *rc = -1; return lrcstream::Kind::None; }
+    if (!https.begin(client, url)) { *rc = -1; return none; }
     https.addHeader("User-Agent", netcfg::USER_AGENT);
     watchdog::feed();   // each request is bounded by its own timeouts (common/core/watchdog)
     *rc = https.GET();
-    if (*rc != 200) { https.end(); return lrcstream::Kind::None; }
+    if (*rc != 200) { https.end(); return none; }
     // Stream straight into the arena (no JSON document: ArduinoJson grew the string by
     // doubling, up to 16 KB contiguous while TLS was open).
-    lrcstream::Extractor ex(out, mode, durationMs);
+    lrcstream::Extractor ex(out, mode, durationMs, title, keepPlain);
     WiFiClient* s = https.getStreamPtr();
     uint8_t chunk[128];
     // Stall: the body stopped. Deadline: a trickling server would otherwise hold the network
@@ -73,33 +79,30 @@ static lrcstream::Kind request(const String& url, lrcstream::Mode mode, uint32_t
     return ex.kind();
 }
 
-// 5xx and 429 are the server's problem; negative codes are connect/TLS/timeout failures.
-static bool temporary(int rc) { return rc < 0 || rc == 429 || rc >= 500; }
-
 lyricstatus::Result fetchInto(const AppState& st, lyricbuf::Lyrics& out, int attempt) {
     using lyricstatus::Result;
     lyricbuf::reset(out);
     if (!st.trackName[0]) return Result::NotFound;
-    String q = "track_name=" + urlEncode(st.trackName) + "&artist_name=" + urlEncode(st.artist);
-    int rc = 0;
-    bool stalled = false;
+    String artist = urlEncode(st.artist);
+    lrcmatch::Answer get{0, false, lrcstream::Kind::None}, found = get;
     const char* via = "get";
-    lrcstream::Kind k = request("https://lrclib.net/api/get?" + q + "&album_name=" + urlEncode(st.album) +
-                                    "&duration=" + String(st.durationMs / 1000),
-                                lrcstream::Mode::Get, st.durationMs, out, &rc, &stalled);
-    if (rc == 404) {   // no exact match: fuzzy search, entry chosen by duration
+    get.kind = request("https://lrclib.net/api/get?track_name=" + urlEncode(st.trackName) +
+                           "&artist_name=" + artist + "&album_name=" + urlEncode(st.album) +
+                           "&duration=" + String(st.durationMs / 1000),
+                       lrcstream::Mode::Get, st.durationMs, nullptr, false, out, &get.rc, &get.stalled);
+    const bool searched = lrcmatch::needSearch(get);
+    if (searched) {   // words match anywhere, so entries are chosen by duration and title
+        char base[sizeof(st.trackName)];
+        lrcmatch::baseTitle(st.trackName, base, sizeof(base));
         via = "search";
-        k = request("https://lrclib.net/api/search?" + q, lrcstream::Mode::Search, st.durationMs,
-                    out, &rc, &stalled);
+        found.kind = request("https://lrclib.net/api/search?track_name=" + urlEncode(base) +
+                                 "&artist_name=" + artist,
+                             lrcstream::Mode::Search, st.durationMs, st.trackName,
+                             get.kind == lrcstream::Kind::Plain, out, &found.rc, &found.stalled);
     }
-    Result r;
-    if (temporary(rc) || stalled) r = Result::TempError;
-    else if (rc != 200) r = Result::NotFound;
-    else if (k == lrcstream::Kind::Synced) r = Result::Synced;
-    else if (k == lrcstream::Kind::Plain) r = Result::Plain;
-    else if (k == lrcstream::Kind::Instrumental) r = Result::Instrumental;
-    else r = Result::NotFound;
+    Result r = lrcmatch::settle(get, searched ? &found : nullptr, attempt >= netplan::LyricsRetry::MAX_ATTEMPTS);
     if (r == Result::Plain) lyricbuf::spreadPlain(out, st.durationMs);
+    const lrcmatch::Answer& last = searched ? found : get;
 
     char what[40];
     switch (r) {
@@ -108,8 +111,8 @@ lyricstatus::Result fetchInto(const AppState& st, lyricbuf::Lyrics& out, int att
         case Result::Instrumental: snprintf(what, sizeof(what), "instrumental"); break;
         case Result::NotFound:     snprintf(what, sizeof(what), "not found"); break;
         case Result::TempError:
-            if (stalled) snprintf(what, sizeof(what), "temp error (stalled)");
-            else snprintf(what, sizeof(what), "temp error rc=%d", rc);
+            if (last.stalled) snprintf(what, sizeof(what), "temp error (stalled)");
+            else snprintf(what, sizeof(what), "temp error rc=%d", last.rc);
             break;
     }
     Serial.printf("[lyrics] \"%s\" / %s: %s via %s (try %d)\n", st.trackName, st.artist, what, via, attempt);
