@@ -32,7 +32,6 @@ static void task(void*) {
     static nmea::Reader reader;
     bool connected = false, failedOnce = false;
     bool fed = false;          // a byte has come on this connection
-    bool memLogged = false;
     uint32_t backoff = BACKOFF_MIN_MS, nextTry = 0, lastByte = 0, lastSink = millis();
     for (;;) {
         uint32_t now = millis();
@@ -47,10 +46,12 @@ static void task(void*) {
                 connected = true;
                 fed = false;
                 lastByte = millis();
-                if (!failedOnce) Serial.printf("[gps] connected to %s:%d\n", GPS_HOST, GPS_PORT);
-                // Once: mem::log resets the per-log count of failed allocations that the network
-                // task's "poll failed" line reports.
-                if (!memLogged) { mem::log("gps"); memLogged = true; }
+                // The heap and this task's stack printed here, not with mem::log: that one resets
+                // the count of failed allocations the network task's "poll failed" line reports.
+                if (!failedOnce)
+                    Serial.printf("[gps] connected to %s:%d (free=%u largest=%u stackfree=%u)\n", GPS_HOST,
+                                  GPS_PORT, (unsigned)mem::byteFree(), (unsigned)mem::byteLargest(),
+                                  (unsigned)uxTaskGetStackHighWaterMark(nullptr));
             } else {
                 client.stop();
                 // One line per outage, not per retry: the phone may stay away for a whole drive.

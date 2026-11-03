@@ -215,6 +215,7 @@ void pauseFor(uint32_t ms) {
 }
 
 int beginTones() {
+    if (s_ownTones) return CLIP_RATE;    // still open from the last beep (endTones(true))
     int rate = 0;
     portENTER_CRITICAL(&s_parkMux);
     if (s_parkedRate) {
@@ -234,16 +235,23 @@ int beginTones() {
     return CLIP_RATE;
 }
 
-void endTones() {
-    if (s_ownTones) {
-        s_ownTones = false;
-        audiosink::close();              // plays out the queued beep first
-        xSemaphoreGive(output());
-    }
+void releaseTones() {
+    if (!s_ownTones) return;
+    s_ownTones = false;
+    audiosink::close();                  // plays out the queued beep first
+    xSemaphoreGive(output());
+}
+
+void endTones(bool keepOpen) {
+    // Kept open, the port plays silence between beeps (tx_desc_auto_clear); a clip waiting for the
+    // output (counted in s_playing from its start) gets it now instead.
+    if (!keepOpen || clipWaiting()) releaseTones();
     portENTER_CRITICAL(&s_parkMux);
     s_borrowed = false;                  // a parked clip carries on behind the beep in the DMA queue
     s_paused = false;
     portEXIT_CRITICAL(&s_parkMux);
 }
+
+bool clipWaiting() { return s_ownTones && s_playing.load() > 0; }
 
 }

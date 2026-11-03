@@ -4,13 +4,17 @@
 #include "../../util/car/camlist.h"
 // The camera alert on the black deck's screen, over whatever screen shows: for Alert and Alarm a
 // band over the bottom BAND_H rows (the kind's icon, RADAR 60 / LOMBADA 40 / SINAL, the camera's
-// label, the distance and the speed; red for an alarm), for NoFix a thin strip with a `GPS --` tag
-// in the corner, for Off nothing. main.cpp keeps the screens out of those rows (a TFT viewport over
-// the rest) while it shows, and redraws the screen whole when it goes. UI loop only.
+// label, the distance and the speed; red for an alarm), for NoFix a small `GPS --` tag in the top
+// left corner (TAG), for Off nothing. main.cpp keeps the screens out of the band's rows (a TFT
+// viewport over the rest) while it shows; the tag needs no rows: it covers only the top strip's
+// left end (the "NOW PLAYING" / "PAUSED" title, left of the spinning CD; empty on the status
+// screens), which the screens redraw only with the strip, and main.cpp calls invalidate() then.
+// When either goes, the screen redraws whole. UI loop only.
 namespace camband {
 constexpr int BAND_H = 48;
-constexpr int TAG_H = 16;
-// The bottom rows this status needs: BAND_H, TAG_H or 0.
+struct TagRect { int x, y, w, h; };
+constexpr TagRect TAG = {2, 2, 54, 16};   // the most the tag may cover ("GPS --" is ~44 px wide)
+// The bottom rows this status needs: BAND_H or 0.
 int rows(const cameras::Status& s);
 // Draws what changed since the last call: all of it on a new stage or point, else only the numbers
 // (distance in 10 m steps, speed), so the band costs the battle screen nothing between fixes.

@@ -17,6 +17,9 @@ constexpr float LEVEL = 16000.0f;
 constexpr uint32_t RAMP_MS = 4;          // fade in and out: a tone cut at full level clicks
 constexpr uint32_t TAIL_MS = 150;        // pause margin past the notes (the DMA queue's play-out)
 constexpr int OUTPUT_TRIES = 30;         // x 10 ms: a clip may be opening or closing the output
+// While an alarm holds the output open between beeps: how often the task checks whether to let it go
+// (the alarm over, mute, a clip waiting for it).
+constexpr uint32_t HOLD_CHECK_MS = 100;
 
 struct Change {
     cameras::Stage from, to;
@@ -63,7 +66,8 @@ static void tone(const camtone::Note& n, int rate) {
     }
 }
 
-static void play(const camtone::Note* notes, int n, bool log) {
+// keep: hold an output opened for the beeps until the next one (an alarm), see greeting::endTones.
+static void play(const camtone::Note* notes, int n, bool log, bool keep) {
     uint32_t ms = 0;
     for (int i = 0; i < n; ++i) ms += notes[i].ms;
     greeting::pauseFor(ms + TAIL_MS);
@@ -75,7 +79,7 @@ static void play(const camtone::Note* notes, int n, bool log) {
             tone(notes[i], rate);
         }
     }
-    greeting::endTones();                // ends the pause too, also when no output was had
+    greeting::endTones(keep);            // ends the pause too, also when no output was had
     if (!rate) Serial.println("[cam] beep lost: no audio output");
     else if (log)
         Serial.printf("[cam] beep %d notes at %d Hz (stackfree=%u)\n", n, rate,
@@ -85,9 +89,12 @@ static void play(const camtone::Note* notes, int n, bool log) {
 static void task(void*) {
     static camcue::Cue cue;
     camtone::Note notes[camtone::MAX_NOTES];
+    bool mayHold = false;                    // the last beep may have kept the output open
     for (;;) {
-        // Idle on the queue; in an alarm, until its next repeat slot.
-        const uint32_t wait = cue.waitMs(millis());
+        // Idle on the queue; in an alarm, until its next repeat slot; holding the output, at least
+        // every HOLD_CHECK_MS.
+        uint32_t wait = cue.waitMs(millis());
+        if (mayHold && wait > HOLD_CHECK_MS) wait = HOLD_CHECK_MS;
         Change c;
         const bool got =
             xQueueReceive(s_q, &c, wait == UINT32_MAX ? portMAX_DELAY : pdMS_TO_TICKS(wait)) == pdTRUE;
@@ -98,7 +105,16 @@ static void task(void*) {
         const uint32_t now = millis();
         const int n = got ? cue.onChange(c.from, c.to, c.kind, st.index >= 0 ? pt.id : "", mute, now, notes)
                           : cue.tick(st.stage, mute, now, notes);
-        if (n > 0) play(notes, n, got);      // the repeats aren't logged: one line per 1.5 s is noise
+        // Still in the alarm and heard: the output stays open for the next triple beep (no I2S
+        // driver install, codec reset and amp click every 1.5 s).
+        const bool keep = !mute && cue.waitMs(now) != UINT32_MAX;
+        if (n > 0) {
+            play(notes, n, got, keep);       // the repeats aren't logged: one line per 1.5 s is noise
+            mayHold = keep;
+        } else if (mayHold && (!keep || greeting::clipWaiting())) {
+            greeting::releaseTones();
+            mayHold = false;
+        }
     }
 }
 

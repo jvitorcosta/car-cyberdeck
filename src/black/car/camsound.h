@@ -5,7 +5,8 @@
 // by main.cpp) go into a small queue; one task (3 KB stack, idle on the queue) asks util/camcue what
 // to play, pauses a playing clip (greeting::pauseFor), writes the notes as sine tones on the clip's
 // output or its own (greeting::beginTones), and hands the output back. While the stage stays Alarm it
-// wakes for the 1.5 s repeat, checking the live stage and the mute switch each time.
+// wakes for the 1.5 s repeat, checking the live stage and the mute switch each time, and keeps its
+// own output open between the beeps until the alarm ends, mute turns on or a clip wants the output.
 namespace camsound {
 void begin();   // the queue and the task; call once, before camsvc::begin()
 // camsvc::onStage's callback: queues the change and returns (the GPS task's 4 KB stack, any task).

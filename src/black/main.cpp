@@ -390,21 +390,26 @@ void loop() {
     }
     if (lastMode == -2) lastMode = -1;
 
-    // Speed cameras (car/camsvc, ui/camband): while the band (or the GPS -- strip) shows, the screens
-    // below draw through a viewport over the rest of the panel, so it never flickers under their
-    // frames; when it shrinks or goes, the screen redraws whole to take the rows back.
+    // Speed cameras (car/camsvc, ui/camband): while the band shows, the screens below draw through a
+    // viewport over the rest of the panel, so it never flickers under their frames. The GPS -- tag
+    // takes no rows: it sits on the top strip's title and is drawn again after the strip (topDrawn).
+    // When the band shrinks or goes, or the tag goes, the screen redraws whole to take it all back.
     static cameras::Status cam;
     static camlist::Point camPt;
     static uint32_t camAt = 0;
     static int camRows = 0;
+    static bool camTag = false;
     if (millis() - camAt >= 100) {   // the GPS changes it once a second: no need to lock per frame
         camAt = millis();
         camsvc::snapshot(&cam, &camPt, nullptr);
     }
     const int camRowsNow = camband::rows(cam);
-    if (camRowsNow < camRows) lastMode = -1;
+    const bool camTagNow = cam.stage == cameras::Stage::NoFix;
+    if (camRowsNow < camRows || (camTag && !camTagNow)) lastMode = -1;
     camRows = camRowsNow;
+    camTag = camTagNow;
     if (camRows) s_tft.setViewport(0, 0, s_tft.width(), s_tft.height() - camRows, false);
+    bool topDrawn = false;   // a screen drew its top strip this loop (over the GPS -- tag)
 
     static uint32_t shownGen = 0;
     static bool walkerOn = false;
@@ -438,6 +443,7 @@ void loop() {
             shownKey = statusscene::frameKey(0, look);
             shownQrGen = s_qrGen;
             ui::drawOffline(s_tft, title, detail, look, 0, qr);
+            topDrawn = true;
         } else if (strcmp(text, shownText) != 0) {   // new text (countdown, phone hint)
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
             if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
@@ -476,6 +482,7 @@ void loop() {
         uint8_t cached;   // a cached badge is posted with the track change: draw it with the title
         if (shared::takeGenre(shownGen, &cached)) shownGenre = cached;
         ui::drawNow(s_tft, view, shownGenre);
+        topDrawn = true;
         s_topSig[0] = '\0';
         pushArtIfValid(shownGen);   // back from a status screen: same track's art is still valid
         drawDialogue(view, shownGen);
@@ -504,6 +511,7 @@ void loop() {
         if (strcmp(sig, s_topSig) != 0) {
             strcpy(s_topSig, sig);
             ui::drawTopStrip(s_tft, st);
+            topDrawn = true;
         }
         if (st.isPlaying && now - lastCd >= CD_FRAME_MS) {   // spinning CD ~6 fps
             lastCd = now;
@@ -536,6 +544,7 @@ void loop() {
         }
     }
     s_tft.resetViewport();
+    if (topDrawn && camTag) camband::invalidate();
     camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr);
     delay(10);
 }

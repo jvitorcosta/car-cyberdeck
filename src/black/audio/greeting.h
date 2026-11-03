@@ -36,7 +36,13 @@ void pauseFor(uint32_t ms);
 // Then the output for the beeps: the rate to write them at with audiosink::write (the paused clip's,
 // whose output they borrow, or 16 kHz on an output opened for them when no clip plays), or 0 when it
 // can't be had right now (a clip opening or closing it: ask again shortly). endTones() follows on
-// the same task, whatever beginTones() said: it gives the output back and ends the pause.
+// the same task, whatever beginTones() said: it ends the pause and gives the output back, unless
+// keepOpen asks to hold an output opened for the beeps (an alarm's next beep in 1.5 s: no driver,
+// codec and amp cycle per beep) and no clip is waiting for it. Then the next beginTones() reuses
+// it, and releaseTones() (same task) closes it: on leaving the alarm, on mute, or when
+// clipWaiting() says a clip started meanwhile.
 int beginTones();
-void endTones();
+void endTones(bool keepOpen = false);
+void releaseTones();
+bool clipWaiting();
 }

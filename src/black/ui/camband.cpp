@@ -36,7 +36,7 @@ int rows(const cameras::Status& s) {
     switch (s.stage) {
     case Stage::Alert:
     case Stage::Alarm: return BAND_H;
-    case Stage::NoFix: return TAG_H;
+    case Stage::NoFix:   // a corner tag over the screen, drawn after it (TAG)
     case Stage::Off: break;
     }
     return 0;
@@ -122,11 +122,12 @@ static void band(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* 
 }
 
 static void tag(TFT_eSPI& tft) {
-    const int y = tft.height() - TAG_H;
-    tft.fillRect(0, y, tft.width(), TAG_H, TFT_BLACK);
-    tft.setTextDatum(TR_DATUM);
+    int w = tft.textWidth("GPS --", 2) + 8;
+    if (w > TAG.w) w = TAG.w;
+    tft.fillRoundRect(TAG.x, TAG.y, w, TAG.h, 3, TFT_BLACK);
+    tft.setTextDatum(ML_DATUM);
     tft.setTextColor(ORANGE, TFT_BLACK);
-    tft.drawString("GPS --", tft.width() - PAD, y, 2);
+    tft.drawString("GPS --", TAG.x + 4, TAG.y + TAG.h / 2, 2);
 }
 
 void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active) {
