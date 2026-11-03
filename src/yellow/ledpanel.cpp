@@ -29,6 +29,10 @@
 //           >NOTHING PLAYING / >LYRICS: NO SIGNAL / >WRONG KEY big in place of the lyrics). Read
 //           from the black deck's GET /state every second while this screen shows, every 5 s while
 //           the Menu shows (see "Lyrics" below)
+// Speed cameras (the black deck has the GPS and beeps; this deck shows): an alert or alarm from the
+// black deck's GET /cam is a band over the bottom third of any screen (a tap on it mutes the black
+// deck's beeps), "GPS --" / "CAM --" a tag on the Menu's header; voice "mark camera", "cameras mute"
+// (see "Speed cameras" below).
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button; it shows as the bar with a ring cut in it (ui/presslook). After a screen or page
 // change touch waits for the finger to lift and 250 ms (util/tapguard). The iPhone's Bluetooth
@@ -104,7 +108,9 @@
 #include "../common/net/remote_config.h"
 #include "../common/net/reqauth.h"
 #include "../common/net/wifi.h"
+#include "../util/car/camwire.h"
 #include "../util/yellow/bothlook.h"
+#include "../util/yellow/camvoice.h"
 #include "../util/yellow/dashtext.h"
 #include "../util/common/daynight.h"
 #include "../util/yellow/deckaddr.h"
@@ -782,6 +788,16 @@ static void drawStatus() {
     text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
 }
 
+// ---- Speed cameras: what the band and the tag need before the screens draw (see "Speed cameras") ----
+// While the band is up (bandUp) the screens draw through a TFT viewport over the rows above BAND_Y,
+// so nothing of theirs lands on it; drawAll() ends with the band. camTag is the Menu header's tag:
+// "GPS --", "CAM --" or "". All loop()'s.
+static constexpr int BAND_Y = 160, BAND_H = 80;  // the bottom third of the 240 rows
+static bool bandUp = false;
+static const char* camTag = "";
+static void drawBand(bool whole);
+static void camBandTap();
+
 // ---- The Menu: a dashboard of stacked bands ----
 // Top to bottom (termlayout places them, test_termfont checks they fit): the header line; the clock
 // and the date left, the weather right, today's HI / LO under them; the trip (its time big, the
@@ -794,11 +810,17 @@ static void drawStatus() {
 
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
-// The header: one MID line and its rule (the boot's welcome lines typed out before it).
+// The header: one MID line and its rule (the boot's welcome lines typed out before it); the camera
+// tag ("GPS --", "CAM --") right-aligned on it in ALERT (a problem: the road isn't being watched).
+// The title ends at x 259, the tag starts at 272.
 static void drawHeader() {
     clearBg(deckmenu::HEADER);
     tft.setTextColor(pal(termpal::MID));
     text(DASH_TITLE, DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    if (camTag[0]) {
+        tft.setTextColor(pal(termpal::ALERT));
+        text(camTag, DASH_RIGHT, DASH_TITLE_Y, Face::SMALL, TR_DATUM);
+    }
     drawRule(HEADER_RULE_Y);
 }
 
@@ -1330,6 +1352,7 @@ static void drawAll() {
         if (screen == Screen::Lights) drawLevel();
         drawStatus();
     }
+    if (bandUp) drawBand(true);  // the clear above stopped at the viewport: the band is whole again
 }
 
 // ---- Touch calibration: tap five crosses with the pen, fit, keep it in NVS ("touch"/"hom") ----
@@ -1731,6 +1754,11 @@ static void press(int id) {
 static void act() {
     tap.acted = true;
     const int x = static_cast<int>(tap.sx / tap.n), y = static_cast<int>(tap.sy / tap.n);
+    if (bandUp && y >= BAND_Y) {  // the band covers the buttons there: a tap on it is mute / unmute
+        tap.id = -1;
+        camBandTap();
+        return;
+    }
     tap.id = deckmenu::hit(screen, x, y);
     Serial.printf("[tap] %d,%d -> button %d\n", x, y, tap.id);
     if (tap.id < 0) return;
@@ -1989,8 +2017,8 @@ static volatile bool lyricsFresh = false;  // a poll was published; loop() clear
 enum LyricsWant : uint8_t { WANT_NONE, WANT_MENU, WANT_KARAOKE };
 static volatile uint8_t lyricsWant = WANT_NONE;  // what the screen shown needs; loop() keeps it
 static pollpace::Pace lyricsPace;                 // only the lyrics task touches it (and lyricsHost)
-static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches these three
-static deckaddr::Keep lyricsAddr;
+static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches it
+static deckaddr::Keep lyricsAddr;             // these two: under deckLock (see deckGet)
 static bool lyricsMdns = false;
 
 // Where the black deck is: its fixed address on the hotspot (until it stops answering as the deck),
@@ -2024,12 +2052,21 @@ static bool lyricsHost(char* out, size_t n) {
 // nothing can be signed (the bearer key is never sent). Not a miss: the deck wasn't asked.
 static constexpr int NOT_SIGNED = -1000;
 
+// Three tasks ask the black deck: the lyrics task (/state, /music), the camera task (/cam, its mute)
+// and the voice task (/say's camera words). One asks at a time, under deckLock: the address keeping
+// (lyricsHost, lyricsAddr, lyricsMdns) stays one task's at a time. lyricsPace stays the lyrics
+// task's: lyricsHost only paces its lookups by it (word-sized fields), so another asker at worst
+// makes or skips one lookup. The longest hold is an mDNS query and a GET (1.5 s, then 1.5 s and the
+// body's 3 s): DECK_LOCK_MS waits that out, then counts as no answer.
+static SemaphoreHandle_t deckLock = nullptr;  // beginVoice makes it, before any asker starts
+static constexpr uint32_t DECK_LOCK_MS = 7000;
+
 // A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
 // body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
 // peer: the address asked; nonce: the request's n (16 hex). Short timeouts: the deck is one hop
-// away, and a missing deck must not hold the polls up.
-static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
-                   uint32_t* peer = nullptr, char* nonce = nullptr) {
+// away, and a missing deck must not hold the polls up. Under deckLock (deckGet).
+static int deckAsk(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
+                   uint32_t* peer, char* nonce) {
     if (!net::isOnline()) return -1;
     char auth[sigreq::AUTH_LEN];
     if (!reqauth::signGet(path, params, count, auth, sizeof(auth))) {
@@ -2056,6 +2093,22 @@ static int deckGet(const char* path, const sigreq::Param* params, int count, cha
     IPAddress a;
     if (peer && a.fromString(host)) *peer = static_cast<uint32_t>(a);
     return net::httpGet(url, 1500, body, bodyLen, body ? 3000 : 0);
+}
+
+static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
+                   uint32_t* peer = nullptr, char* nonce = nullptr) {
+    if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return -1;
+    const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce);
+    xSemaphoreGive(deckLock);
+    return rc;
+}
+
+// An asker's verdict on the address it asked (lyricsAddr: 3 misses in a row, look it up again),
+// under deckLock like the rest of the address keeping.
+static void deckAnswered(bool valid) {
+    if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return;
+    lyricsAddr.onPoll(valid);
+    xSemaphoreGive(deckLock);
 }
 
 // GET /state into lyricsBody (cut at MAX_JSON, always terminated).
@@ -2098,7 +2151,7 @@ static int musicAsk(bool on) {
 static int musicGet(bool on) {
     const int rc = musicAsk(on);
     // the deck's own answers (200, "stopping" 409, low memory 503); 3 misses in a row: look it up again
-    if (rc != NOT_SIGNED) lyricsAddr.onPoll(rc == 200 || rc == 409 || rc == 503);
+    if (rc != NOT_SIGNED) deckAnswered(rc == 200 || rc == 409 || rc == 503);
     return rc;
 }
 
@@ -2162,7 +2215,7 @@ static void lyricsTask(void*) {
             if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
             pace.onResult(ok);
             // the deck's own answers (a /state that parses, low memory 503); 3 misses in a row: look it up again
-            lyricsAddr.onPoll(ok || rc == 503);
+            deckAnswered(ok || rc == 503);
             const uint32_t at = millis();
             portENTER_CRITICAL(&lyricsMux);
             lyricsPub.wrongKey = rc == 403;
@@ -2182,6 +2235,285 @@ static void lyricsTask(void*) {
 static void beginLyrics() {
     if (lyricsHandle) return;
     xTaskCreatePinnedToCore(lyricsTask, "lyrics", 6144, nullptr, 0, &lyricsHandle, 1);
+}
+
+// ---- Speed cameras: the black deck's GET /cam, as a band over the bottom third ----
+// The black deck (the S3) has the GPS and the camera list, and beeps. This deck only shows: its own
+// task (core 1, idle priority, 4 KB) asks GET /cam (signed, util/car/camwire's small JSON) every
+// second whatever the screen, through deckGet like the lyrics (plain HTTP, no new client), and
+// publishes each poll under camMux; loop() takes it in camTick(). After 10 misses in a row it asks
+// every 5 s (util/pollpace, as the lyrics do), so an absent deck isn't hunted for every second.
+//   Alert / alarm: a band over the bottom third of whatever screen shows (Menu, Lights, PRESETS,
+//     Karaoke): the kind's icon, RADAR 60 / LOMBADA 40 / SINAL, the distance big ("320 M") and the
+//     speed. An alert is termpal's green theme (whatever the deck's theme, night too), a red
+//     light's its orange; an alarm is the band in red with the speed big, blinking at 2 Hz, the
+//     deck's only blinking thing. MUTE on it while the black deck's beeps are off; a tap on it
+//     toggles that (GET /cam/mute?on= the opposite of the last /cam's mute). It stays CAM_HOLD_MS
+//     after st leaves alert / alarm (frozen, not blinking), and through one or two missed polls.
+//   No fix: "GPS --" on the Menu's header line, no band. CAM_LOST_MISSES polls in a row without an
+//     answer: "CAM --" there instead, and no band (the black deck still beeps).
+// This deck never beeps. Voice ("mark camera", "cameras mute") is /say's (util/yellow/camvoice).
+static constexpr uint32_t CAM_HOLD_MS = 2000;
+static constexpr int CAM_LOST_MISSES = 3;
+static constexpr uint32_t CAM_BLINK_MS = 250;  // on 250, off 250: 2 Hz
+
+struct CamReading {
+    camwire::View view{};  // the last /cam that parsed (a miss keeps it)
+    bool heard = false;    // one has come since boot
+    int misses = 0;        // polls in a row without one
+};
+static TaskHandle_t camHandle = nullptr;
+static portMUX_TYPE camMux = portMUX_INITIALIZER_UNLOCKED;
+static CamReading camPub;                 // guarded by camMux
+static volatile bool camFresh = false;    // a poll was published; loop() clears it
+static volatile int8_t camMuteAsk = -1;   // a band tap: send /cam/mute?on= this (1, 0); -1 none
+static volatile bool camPollNow = false;  // the mute changed: poll at once, so the band shows it
+
+static void camTask(void*) {
+    static char body[camwire::MAX_JSON];  // static: off the 4 KB stack
+    pollpace::Pace pace;
+    camwire::View v{};
+    bool heard = false, first = true;
+    uint32_t lastPoll = 0;
+    watchdog::watch();  // each pass: at most a mute GET and a /cam GET, each a lock wait and ~6 s
+    for (;;) {
+        watchdog::feed();
+        if (ota::active()) {  // an update has the WiFi
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        const int8_t ask = camMuteAsk;
+        if (ask >= 0) {
+            camMuteAsk = -1;
+            const sigreq::Param p[] = {{"on", ask ? "1" : "0"}};
+            Serial.printf("[cam] mute on=%d: rc=%d\n", ask, deckGet("/cam/mute", p, 1, nullptr, 0));
+            camPollNow = true;
+        }
+        const uint32_t now = millis();
+        if (!first && !camPollNow && now - lastPoll < pace.intervalMs()) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+        first = camPollNow = false;
+        lastPoll = now;
+        body[0] = 0;
+        const int rc = deckGet("/cam", nullptr, 0, body, sizeof(body));
+        if (rc == NOT_SIGNED) continue;  // no clock yet: nothing was asked, so nothing is lost either
+        const bool ok = rc == 200 && camwire::parse(body, &v);
+        deckAnswered(ok);
+        if (!ok && pace.misses() + 1 == CAM_LOST_MISSES) Serial.printf("[cam] deck lost (rc=%d)\n", rc);
+        if (ok && pace.misses() >= CAM_LOST_MISSES) Serial.println("[cam] deck back");
+        pace.onResult(ok);
+        heard = heard || ok;
+        portENTER_CRITICAL(&camMux);
+        if (ok) camPub.view = v;
+        camPub.heard = heard;
+        camPub.misses = pace.misses();
+        portEXIT_CRITICAL(&camMux);
+        camFresh = true;
+    }
+}
+
+// From the voice task, as WiFi starts: deckGet asks only once it is up, and the misses before that
+// count, so a deck that never gets online says CAM --.
+static void beginCam() {
+    if (camHandle) return;
+    if (xTaskCreatePinnedToCore(camTask, "cam", 4096, nullptr, 0, &camHandle, 1) != pdPASS) {
+        Serial.println("[cam] no memory for the task: no camera band");
+    }
+}
+
+// /say's camera words, asked of the black deck from the server's task (the handler waits for an
+// answer anyway). The reply is what Siri says.
+static const char* camSay(camvoice::Cmd c) {
+    const bool mark = c == camvoice::Cmd::Mark, mute = c == camvoice::Cmd::Mute;
+    const sigreq::Param p[] = {{"on", mute ? "1" : "0"}};
+    const int rc = mark ? deckGet("/cam/mark", nullptr, 0, nullptr, 0) : deckGet("/cam/mute", p, 1, nullptr, 0);
+    Serial.printf("[voice] /cam/%s: rc=%d\n", mark ? "mark" : mute ? "mute?on=1" : "mute?on=0", rc);
+    if (rc == 204 && !mark) camPollNow = true;
+    if (rc == 204) return mark ? "Marked" : mute ? "Camera sounds off" : "Camera sounds on";
+    if (rc == 409 && mark) return "No GPS fix";
+    if (rc == NOT_SIGNED) return "The clock isn't set yet, try again";
+    if (rc == 403) return "The black deck turned it down: wrong key or clock";
+    return "The black deck didn't answer";
+}
+
+// loop()'s side: the last poll (camNow), the band's view (the live alert, frozen through the hold)
+// and when the stage left alert / alarm with the band up (0: it hasn't).
+static CamReading camNow;
+static camwire::View bandView{};
+static uint32_t camQuietAt = 0;
+
+static bool alerting(const camwire::View& v) {
+    return v.stage == cameras::Stage::Alert || v.stage == cameras::Stage::Alarm;
+}
+
+// The band's colours: an alert a role of termpal's green theme (a red light's of its orange) on the
+// scanlined black; an alarm black on ALERT red. Day and night both, whatever the deck's theme.
+static uint16_t bandRed() { return c565(termpal::rgb(termpal::ALERT, night)); }
+static uint16_t bandInk(termpal::Role r) {
+    if (bandView.stage == cameras::Stage::Alarm) return c565(termpal::rgb(termpal::BG, night));
+    const int hue = bandView.kind == camlist::Kind::RedLight ? ledlook::ORANGE : ledlook::GREEN;
+    return c565(termpal::rgb(r, night, hue));
+}
+static void bandBg(int x, int y, int w, int h) {
+    if (bandView.stage == cameras::Stage::Alarm) tft.fillRect(x, y, w, h, bandRed());
+    else clearBg(x, y, w, h);
+}
+
+// The parts' places: the icon centred on (BAND_ICON_X, BAND_MID), the title (TITLE) and under it the
+// small number (BODY) from BAND_TEXT_X, the big number (BIG) right-aligned at DASH_RIGHT on BAND_MID,
+// MUTE (a SMALL inverted tag, like the Menu's LIVE) over it in the top right corner. The numbers'
+// clears, BAND_BIG and BAND_SMALL, hold their texts' ink (even "65535 KM/H": BIG from x 173, BODY
+// to x 139); BAND_BIG starts right of the longest title's ink ("LOMBADA 100" ends at x 168), so a
+// numbers-only redraw never cuts into it.
+static constexpr int BAND_MID = BAND_Y + 40, BAND_ICON_X = 32, BAND_TEXT_X = 60;
+static constexpr int BAND_TITLE_Y = BAND_Y + 14, BAND_SMALL_BASE = BAND_Y + 64;
+static constexpr Rect BAND_BIG{170, BAND_Y + 24, 145, 36}, BAND_SMALL{BAND_TEXT_X, BAND_Y + 48, 96, 22};
+
+static void bandIcon(camlist::Kind k, uint8_t limit, uint16_t ink) {
+    const int cx = BAND_ICON_X, cy = BAND_MID;
+    switch (k) {
+    case camlist::Kind::Speed:  // the round limit sign, the limit in it
+        for (int r = 16; r <= 18; r++) tft.drawCircle(cx, cy, r, ink);
+        if (limit) {
+            char n[4];
+            snprintf(n, sizeof(n), "%u", static_cast<unsigned>(limit));
+            tft.setTextColor(ink);
+            text(n, cx, cy, Face::BODY, MC_DATUM);
+        }
+        break;
+    case camlist::Kind::Bump:  // a hump on the road
+        tft.fillCircle(cx, cy + 8, 13, ink);
+        bandBg(cx - 14, cy + 9, 29, 14);
+        tft.fillRect(cx - 18, cy + 8, 37, 3, ink);
+        break;
+    case camlist::Kind::RedLight:  // a traffic light, the top lamp lit
+        tft.drawRoundRect(cx - 10, cy - 20, 20, 40, 4, ink);
+        tft.drawRoundRect(cx - 9, cy - 19, 18, 38, 3, ink);
+        tft.fillCircle(cx, cy - 11, 5, ink);
+        tft.drawCircle(cx, cy, 5, ink);
+        tft.drawCircle(cx, cy + 11, 5, ink);
+        break;
+    }
+}
+
+// What the band shows, to redraw only what changed: all of it on a new stage, point, mute or hold,
+// else the numbers when the distance or the speed moved or the blink turned.
+static struct BandShown {
+    bool drawn = false;
+    cameras::Stage stage = cameras::Stage::Off;
+    camlist::Kind kind = camlist::Kind::Speed;
+    uint8_t limit = 0;
+    bool mute = false, hold = false, lit = false;
+    uint16_t dist = 0, kmh = 0;
+} bandShown;
+
+static void drawBand(bool whole) {
+    const camwire::View& v = bandView;
+    const bool alarm = v.stage == cameras::Stage::Alarm, hold = camQuietAt != 0;
+    const bool lit = !alarm || hold || (millis() / CAM_BLINK_MS) % 2 == 0;  // the big speed's blink
+    whole = whole || !bandShown.drawn || v.stage != bandShown.stage || v.kind != bandShown.kind ||
+            v.limit != bandShown.limit || v.mute != bandShown.mute || hold != bandShown.hold;
+    if (!whole && v.distM == bandShown.dist && v.kmh == bandShown.kmh && lit == bandShown.lit) return;
+    tft.resetViewport();
+    const uint16_t ink = bandInk(termpal::TEXT), sub = bandInk(termpal::MID);
+    if (whole) {
+        bandBg(0, BAND_Y, tft.width(), BAND_H);
+        if (!alarm) {  // an alert's frame (the alarm's red is its own)
+            tft.drawRect(2, BAND_Y + 1, tft.width() - 4, BAND_H - 2, ink);
+            tft.drawRect(3, BAND_Y + 2, tft.width() - 6, BAND_H - 4, ink);
+        }
+        bandIcon(v.kind, v.limit, ink);
+        const char* name = v.kind == camlist::Kind::Bump ? "LOMBADA" : v.kind == camlist::Kind::RedLight ? "SINAL" : "RADAR";
+        char title[16];
+        if (v.limit && v.kind != camlist::Kind::RedLight) snprintf(title, sizeof(title), "%s %u", name, static_cast<unsigned>(v.limit));
+        else snprintf(title, sizeof(title), "%s", name);
+        tft.setTextColor(ink);
+        text(title, BAND_TEXT_X, BAND_TITLE_Y, Face::TITLE, TL_DATUM);
+        if (v.mute) {
+            const int w = termfont::width(Face::SMALL, "MUTE") + 2 * TAG_PAD, h = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
+            const int x = DASH_RIGHT - w, y = BAND_Y + 6;
+            tft.fillRect(x, y, w, h, ink);
+            tft.setTextColor(alarm ? bandRed() : pal(termpal::BG));
+            text("MUTE", x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
+        }
+    } else {
+        bandBg(BAND_BIG.x, BAND_BIG.y, BAND_BIG.w, BAND_BIG.h);
+        bandBg(BAND_SMALL.x, BAND_SMALL.y, BAND_SMALL.w, BAND_SMALL.h);
+    }
+    char dist[16], kmh[16];
+    snprintf(dist, sizeof(dist), "%u M", static_cast<unsigned>(v.distM));
+    snprintf(kmh, sizeof(kmh), "%u KM/H", static_cast<unsigned>(v.kmh));
+    if (lit) {
+        tft.setTextColor(ink);
+        text(alarm ? kmh : dist, DASH_RIGHT, BAND_MID, Face::BIG, MR_DATUM);
+    }
+    tft.setTextColor(alarm ? ink : sub);
+    text(alarm ? dist : kmh, BAND_TEXT_X, BAND_SMALL_BASE, Face::BODY, BL_DATUM);
+    tft.setViewport(0, 0, tft.width(), BAND_Y, false);
+    bandShown = {true, v.stage, v.kind, v.limit, v.mute, hold, lit, v.distM, v.kmh};
+}
+
+// The band leaves without a redraw: the OTA page or the touch calibration takes the whole screen
+// (and redraws the deck after). camTick puts it back while it's still wanted.
+static void bandDrop() {
+    if (!bandUp) return;
+    bandUp = false;
+    bandShown.drawn = false;
+    camQuietAt = 0;
+    tft.resetViewport();
+}
+
+// A tap on the band: the black deck's beeps off, or on again (the cam task asks, then polls, and
+// the band shows the answer).
+static void camBandTap() {
+    camMuteAsk = camNow.view.mute ? 0 : 1;
+    Serial.printf("[cam] tap: mute %s\n", camNow.view.mute ? "off" : "on");
+}
+
+// In loop(): takes a published poll, keeps the Menu's tag and the band. The band comes with an
+// alert or alarm, stays through one or two missed polls (the last poll still holds) and CAM_HOLD_MS
+// after the stage leaves (frozen), and goes at once when the deck is lost (CAM --). Going, the
+// screen under it is redrawn whole.
+static void camTick() {
+    if (camFresh) {
+        camFresh = false;  // before the copy: a poll published meanwhile raises it again
+        portENTER_CRITICAL(&camMux);
+        camNow = camPub;
+        portEXIT_CRITICAL(&camMux);
+    }
+    const bool lost = camNow.misses >= CAM_LOST_MISSES;
+    const char* tag = lost ? "CAM --" : camNow.heard && camNow.view.stage == cameras::Stage::NoFix ? "GPS --" : "";
+    if (strcmp(tag, camTag) != 0) {
+        Serial.printf("[cam] tag \"%s\"\n", tag);
+        camTag = tag;
+        if (screen == Screen::Menu) drawHeader();
+    }
+    bool want = false;
+    if (!lost && camNow.heard && alerting(camNow.view)) {
+        bandView = camNow.view;
+        camQuietAt = 0;
+        want = true;
+    } else if (bandUp && !lost) {
+        if (camQuietAt == 0) camQuietAt = millis() | 1;
+        want = millis() - camQuietAt < CAM_HOLD_MS;
+    }
+    bandView.mute = camNow.view.mute;  // live through the hold too
+    if (want == bandUp) {
+        if (bandUp) drawBand(false);
+        return;
+    }
+    bandUp = want;
+    Serial.printf("[cam] band %s\n", want ? "up" : "down");
+    if (want) {
+        drawBand(true);
+        return;
+    }
+    bandShown.drawn = false;
+    camQuietAt = 0;
+    tft.resetViewport();
+    drawAll();
 }
 
 // In loop(): tells the task how to poll, takes a published poll, and redraws what changed: on the
@@ -2483,7 +2815,9 @@ static void drawUpdateBar(int pct) {
     text(line, tft.width() / 2, UPDATE_PCT_Y, Face::TITLE, TC_DATUM);
 }
 
+static void bandDrop();
 static void drawUpdatePage(otaview::Phase p, int pct) {
+    bandDrop();  // the page holds the whole screen; the band comes back after it
     clearBg(0, 0, tft.width(), tft.height());
     drawHeader();
     tft.setTextColor(pal(otapage::alert(p) ? termpal::ALERT : termpal::TEXT));
@@ -2649,6 +2983,14 @@ static void handleSay() {
     const String text = server->arg("text");
     Serial.printf("[voice] \"%s\"\n", text.c_str());
     if (text.length() == 0) { server->send(200, "text/plain", "I didn't hear anything"); return; }  // no text from the Shortcut
+    // camera words first: they need a camera word, which no lights phrase has (util/yellow/camvoice)
+    const camvoice::Cmd cc = camvoice::parse(text.c_str());
+    if (cc != camvoice::Cmd::None) {
+        const char* reply = camSay(cc);
+        Serial.printf("[voice] -> %s\n", reply);
+        server->send(200, "text/plain", reply);
+        return;
+    }
     VoiceJob job;
     if (!ledvoice::parse(text.c_str(), &job.c)) { server->send(200, "text/plain", "Sorry, I didn't get a colour or a command"); return; }
     static uint32_t nextSeq = 0;
@@ -2720,6 +3062,7 @@ static void voiceTask(void*) {
     // Watched: WebServer's waits are 5 s per request, a WiFi join feeds before each try.
     watchdog::watch();
     net::connectAny();
+    beginCam();
     while (!net::isOnline()) {
         watchdog::feed();
         net::loop();
@@ -2752,6 +3095,7 @@ static void beginVoice() {
         return;
     }
     reqauth::begin();  // HMAC's self-test: the watch's requests and ours to the black deck are signed
+    deckLock = xSemaphoreCreateMutex();  // before the voice task, which starts every asker
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);
@@ -2928,13 +3272,14 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, ota %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, cam %u, ota %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       static_cast<unsigned>(weatherStackLeft),  // the last try's (each ends with it)
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
                       musicHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(musicHandle)) : 0u,
+                      camHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(camHandle)) : 0u,
                       ota::stackLeft(),
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
@@ -2942,6 +3287,7 @@ void loop() {
     handlePad();
     takeWeather();
     lyricsTick();
+    camTick();
     musicTick();
     musicFadeTick();
     updateDayNight();
@@ -2953,6 +3299,7 @@ void loop() {
     if (digitalRead(PIN_BOOT) == LOW) {
         if (bootSince == 0) bootSince = millis();
         else if (millis() - bootSince > 2000) {
+            bandDrop();  // the crosses take the whole screen
             calibrate();
             tapGuard.arm();  // the last cross's tap must not land on the screen drawn next
             drawAll();
