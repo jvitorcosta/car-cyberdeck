@@ -199,6 +199,7 @@ class LyricsRetry {
 public:
     static constexpr uint32_t RETRY1_MS = 5000;
     static constexpr uint32_t RETRY2_MS = 20000;
+    static constexpr int MAX_ATTEMPTS = 3;
     void reset() { attempts_ = 0; waiting_ = false; }   // new track
     // Records one attempt; true when no further attempt will be made for this track.
     bool onResult(lyricstatus::Result r, uint32_t nowMs);

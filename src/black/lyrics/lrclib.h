@@ -8,7 +8,8 @@ namespace lyricsvc {
 // network task treats the lyrics step as a temporary error).
 lyricbuf::Lyrics* arena();
 // Fetches lyrics for the current track from LRCLIB into `out`: /api/get (exact match), then
-// /api/search on a 404. Synced beats plain (plain lines get spread times); instrumental wins.
+// /api/search for the title without its suffix unless get settled it with synced lines or an
+// instrumental. Synced beats plain (plain lines get spread times).
 // `attempt` (1-based) is only for the log line. TempError means "retry later".
 lyricstatus::Result fetchInto(const AppState& st, lyricbuf::Lyrics& out, int attempt);
 }
