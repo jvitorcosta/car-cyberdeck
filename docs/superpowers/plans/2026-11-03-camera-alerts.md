@@ -17,8 +17,8 @@
 - `heading` is required on every row the deck loads; `limit` is empty for `redlight`, and for other kinds only while unknown (unknown → alerts with `--`, never alarms).
 - Matching: no alerts with no fix or under 10 km/h; `nofix` after 5 s without a valid fix, moving or not (the clock starts at the first update: the boot grace); candidates within 800 m; course within ±40° of `heading`; bearing to the point within ±30° of course; inside 200 m, cross-track under 30 m; passed = was within 60 m and the distance grows, then ignored for 60 s; nearest remaining point wins.
 - Stages: alert at max(400 m, 20 s × speed) for speed/bump, 250 m for red-light; alarm zone is the last 200 m, speed (km/h rounded down) > limit, no tolerance; red-light never alarms; the band clears 2 s after passing.
-- Sounds on the black deck only: speed = two mid tones, bump = two low, red-light = one long high; alarm = fast triple beep every 1.5 s until clear. Alerts interrupt the intro / music box, which then continue.
-- Mute keeps the bands, silences sound, lives on the black deck, resets at each start; reached by voice ("cameras mute"), the watch (it sends the same phrase to `/say`) and the yellow deck's touch.
+- Sounds on the black deck only. Since Task 10: chime + Japanese voice lines per the spec's "Sound" table, the alarm's triple beep every 1.5 s until clear, and the old beeps (speed = two mid tones, bump = two low, red-light = one long high) as the fallback when a clip is missing. Alerts interrupt the intro / music box, which then continue.
+- Mute keeps the bands, silences the chime and voice (since Task 10 the alarm's triple beep still plays), lives on the black deck, resets at each start; reached by voice ("cameras mute"), the watch (it sends the same phrase to `/say`) and the yellow deck's touch.
 - Speed is GPS only in this version; the GPS is the owner's iPhone running GPS 2 IP (NMEA over a TCP socket on the hotspot, about 1 Hz), not a module.
 - The black deck's Spotify, lyrics and self-heal numbers must not get worse (largest heap block never under 102 KB in the 30-min check).
 - Comments and names follow the repo: a short header comment per module, `// PURE, host-tested` on pure ones, namespaces in lower case.
@@ -284,3 +284,22 @@
 - [ ] **Step 3 (owner, in the car):** drive past at least one point of each kind, one in the opposite direction and one parallel road (e.g. Av. do Turismo, both ways). Expected: alerts at the right distance, no alert the other way, alarm only above the limit, both bands agree, music resumes. Note any false alarm with its place.
 - [ ] **Step 4:** "mark camera" once on the drive; `import-car` shows it.
 - [ ] **Step 5:** Add to `docs/BACKLOG.md`: the watch MARK / MUTE menu items, OBD speed when the OBD deck exists, the bench gates still owed, any false-alarm places from Step 3. **Commit** `docs: camera alerts in the car`.
+
+### Task 10: Voice alerts (chime + Japanese lines)
+
+Added 2026-11-03 after the owner listened to a simulated drive and approved the sounds. Spec: "Sound (black deck speaker)".
+
+**Files:**
+- Create: `tools/gen_camvoice.py` (+ pytest in `tools/test_gen_camvoice.py`), `src/util/car/camvoice.h/.cpp` (the clip table's reader, PURE), `src/util/car/camseq.h/.cpp` (what to play for each event, PURE; may replace or wrap `camcue`), host tests under `test/`
+- Modify: `src/black/car/camsound.cpp/.h` (play clips as well as tones), `src/black/car/camsvc.*` if the change needs the point's limit or the last speed, `tools/pack_media.py` (add `camvoice.bin`), `docs/BACKLOG.md` (bench gates)
+
+**Interfaces:**
+- `data/camvoice.bin` (git-ignored, made by `python tools/gen_camvoice.py <dir with the 16 kHz WAVs>`): a fixed slot table, then 16 kHz mono s16le PCM. Slots, in this order: `PON, GPS_FIRST, TORISHIMARI, GOCHUI, SPD_CHANGE, SPEEDNI, GPS_NG, GPS_OK, L20, L30, L40, L50, L60, L80`. Source names: `chimevoice_chime_pon_16k.wav`, `chimevoice_gps_16k.wav`, `cam_torishimari_02_16k.wav`, `cam_gochuuikudasai_01_16k.wav`, `cam_spd-change_01_16k.wav`, `cam_speednikiwo_01_16k.wav`, `cam_gps-ng_01_16k.wav`, `cam_gps-ok_02_16k.wav`, `cam_speedNNika_01_16k.wav`. A missing WAV is an empty slot. The tool refuses WAVs that are not 16 kHz mono 16-bit.
+- The sequencer is fed stage changes with the point's kind, id and limit (carry id and limit in camsound's queued `Change`: fixes Task 6's deferred minor of reading the id at dequeue time), and the GPS events (no fix while driving, fix back, first fix), and returns steps: a clip slot or a tone pattern. It owns: the 20 s short call, the limit-change line, the 3 s chime guard, the alarm cadence (voice on entry, triple beep each 1.5 s, voice again in a beep slot once 6 s passed), priority and dropping stale steps, mute (voice and chime off, alarm beeps on), and the fallback beep when a slot is empty.
+
+- [ ] **Step 1: Write failing host tests** for the sequencer: speed/bump/red-light full calls; limit 70 has no limit line; short call within 20 s, with and without a limit change; red-light short call unchanged; alarm entry voice then beeps, voice again after 6 s, silence when Alarm ends; alert sequence dropped when the stage moves to Alarm or Off mid-way; GPS lost only after a fix at >= 10 km/h, once per loss; fix back plays GPS_OK only after GPS_NG played; first fix plays GPS_FIRST once; mute keeps alarm beeps, drops voice; empty slot falls back to the old beep pattern for that event. Plus `camvoice` table parsing (bad header, slot out of range, empty slot).
+- [ ] **Step 2: Run** `tools/run_tests.ps1` → the new tests fail.
+- [ ] **Step 3: Implement** the pure modules, then `gen_camvoice.py` (+ pytest), `pack_media.py`, and camsound playing clips through the same `greeting::pauseFor/beginTones/endTones` path as the beeps (resample 16 kHz to the output's rate when a paused clip's output runs at another rate; cut at the next 128-sample write when a higher-priority step arrives).
+- [ ] **Step 4: Run** `tools/run_tests.ps1`, `python -m pytest tools`, `pio run -e s3`, `pio run -e ledpanel` → all pass.
+- [ ] **Step 5:** BACKLOG bench gates: hear each call over the speaker and over a playing intro; volume against the beeps; `[mem]` 30-min check unchanged.
+- [ ] **Step 6: Commit** `feat(black): camera alerts speak (chime + voice, beeps as fallback)`.

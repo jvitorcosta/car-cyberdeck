@@ -184,11 +184,38 @@ between the decks never silences an alarm.
 
 ### Sound (black deck speaker)
 
-- An alert plays one short double beep per kind (speed: two mid tones; bump: two low; red-light:
-  one long high). The alarm repeats a fast triple beep every 1.5 s until it clears.
-- A "mute alerts" toggle keeps the bands but silences the sound; it is reached by voice
-  ("cameras mute", through the yellow deck's `/say`), the watch and the yellow deck's touch, and
-  lives on the black deck. It resets at each start.
+Voice prompts (revised 2026-11-03, after the owner listened to a simulated drive). Three layers, one
+job each: a chime says "look", the voice says what is ahead and its limit, the beep says "act now".
+The clips are the pōn chime and the GPS clip already in the greeting set plus 12 Japanese lines from
+amitaro's radar-detector set (credit "声: あみたろの声素材工房" wherever the build is published),
+16 kHz mono, in one media-pack file (`camvoice.bin`, git-ignored like the other clips).
+
+| Event | Plays |
+|---|---|
+| Speed camera, entering Alert | pōn → 取り締まりポイントです → the limit line |
+| Speed bump, entering Alert | pōn → ご注意ください → the limit line |
+| Red-light camera, entering Alert | pōn → ご注意ください |
+| Entering Alarm | スピードに気をつけてね once, then the triple beep every 1.5 s; the voice again in place of a beep slot once 6 s have gone by since it last played; silence the moment the stage leaves Alarm |
+| NoFix, when the last valid fix was at 10 km/h or more | GPSがみつかりません, once per loss |
+| A fix back after that line played | GPSが測位できました |
+| The first fix after power-on | the greeting set's GPS clip |
+
+- **The limit line** is 制限速度XXkm以下です for 20, 30, 40, 50, 60 and 80; any other or unknown
+  limit has no line (the band shows the number).
+- **Short call:** a point entering Alert within 20 s of the previous point leaving Alert/Alarm plays
+  pōn and the limit line only (red-light: pōn → ご注意ください as usual). If its limit differs from the
+  previous point's (both known), 制限速度が変わったよ goes between them.
+- **Priority:** alarm, then alert, then GPS. A higher event cuts the clip playing now (at the next
+  128-sample write) and drops the rest of its sequence.
+- **Stale lines never play:** before each clip of an alert sequence the live stage must still be
+  Alert for that point; otherwise the rest is dropped.
+- **Mute** silences the chime and every voice line; the alarm's triple beep still plays (being over
+  the limit in the last 200 m is the one thing not to miss). The `MUTE` tags stay as they are.
+- **Fallback:** a clip missing from the pack (no `camvoice.bin`, an empty slot) plays the old beep
+  for that event (speed: two mid tones; bump: two low; red-light: one long high), so a build without
+  the clips still alerts.
+- A "mute alerts" toggle is reached by voice ("cameras mute", through the yellow deck's `/say`),
+  the watch and the yellow deck's touch, and lives on the black deck. It resets at each start.
 
 ## Marking a camera from the car
 
@@ -223,7 +250,7 @@ between the decks never silences an alarm.
 ## Left to the builder
 
 - The NMEA parser (TinyGPS++ or a small RMC/GGA parser of our own).
-- How the beeps share the I2S port with the intro and the music box (generated tones are enough).
+- How the beeps and voice lines share the I2S port with the intro and the music box.
 - The grid size and the exact geometry maths (an equirectangular approximation is enough inside a
   city).
 - The icons (in the existing 1-bit style) and the exact tones.
