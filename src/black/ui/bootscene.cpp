@@ -12,6 +12,7 @@
 #include "../core/mem.h"
 #include "../../util/black/bootanim.h"
 #include "../core/media.h"
+#include "../../common/ui/backlight.h"
 
 MEDIA_DECL(data_montage_bin);
 
@@ -37,6 +38,9 @@ constexpr uint16_t WHITE = 0xFFFF;
 // The montage sound (data/finale.pcm) starts with the first montage frame, so something plays over
 // the photos; false = end it with the fade to black (bootanim::finaleStartFrame).
 constexpr bool MONTAGE_SOUND_AT_START = false;
+// The brake's backlight fade: a little shorter than the brake, so it's dark before the first photo
+// is drawn (the backlight comes back on at once, with the photo).
+constexpr uint32_t BRAKE_FADE_MS = bootanim::BRAKE_MS - 80;
 
 // The greeting has been heard to its end: it comes out ~0.1 s after the scene starts
 // (bootanim::SOUND_LEAD_MS), so the scene's own clock isn't enough.
@@ -411,6 +415,8 @@ void task(void*) {
         uint8_t* jpgWork = nullptr;                              // tjpgd workspace, montage only
         int finaleAt = -1;                                       // montage frame that starts the finale sound
         bool openerCued = false, finaleStarted = false;
+        enum { LIT, FADING, FADED_OUT } light = LIT;            // the backlight through the brake
+        uint32_t pushMs[3] = {0, 0, 0};                          // of busyMs: sending strips to the panel
         uint32_t frames[3] = {0, 0, 0}, busyMs[3] = {0, 0, 0};   // drive, brake, montage
         TickType_t wake = xTaskGetTickCount();
         for (;;) {
@@ -436,18 +442,25 @@ void task(void*) {
             const uint8_t e = greeting::level();                // the lights follow the voice
             int mode;
             if (s_opts.drive) bootterm::events(t, tHero != bootanim::NO_EXIT);
-            if (tHero == bootanim::NO_EXIT) {                    // enter + cruise
-                mode = 0;
+            if (tHero != bootanim::NO_EXIT && !skipBrake && light == LIT && u < bootanim::BRAKE_MS)
+                light = backlight::fadeOut(BRAKE_FADE_MS) ? FADING : FADED_OUT;   // FADED_OUT: dim pixels
+            if (tHero == bootanim::NO_EXIT || (light == FADING && u < bootanim::BRAKE_MS)) {
+                // enter + cruise; the brake too while the backlight fades it (same cheap frame)
+                mode = tHero == bootanim::NO_EXIT ? 0 : 1;
+                const uint32_t world = mode ? bootanim::brakeTime(tHero, u) : t;
                 bootterm::drawDirect(*s_tft, t, skyAt);
-                twinkle(t);
-                const Car car = makeCar(t, bootanim::carX(t, bootanim::NO_EXIT), bootanim::bob(t), e);
+                twinkle(world);
+                const Car car = mode ? makeCar(world, bootanim::brakeX(xc, u), 0, e)
+                                     : makeCar(t, bootanim::carX(t, bootanim::NO_EXIT), bootanim::bob(t), e);
                 for (int s = 0; s < STRIPS; ++s) {
                     s_y0 = SKY_H + s * STRIP_H;
-                    drawBackground(t);
+                    drawBackground(world);
                     drawCar(car);
+                    const uint32_t p0 = millis();
                     spr.pushSprite(0, s_y0);
+                    pushMs[mode] += millis() - p0;
                 }
-            } else if (u < bootanim::BRAKE_MS) {                 // brake + fade the whole screen
+            } else if (u < bootanim::BRAKE_MS) {                 // brake + fade the whole screen's pixels
                 mode = 1;
                 const uint32_t world = bootanim::brakeTime(tHero, u);
                 const Car car = makeCar(world, bootanim::brakeX(xc, u), 0, e);
@@ -461,7 +474,9 @@ void task(void*) {
                     drawBackground(world);
                     drawCar(car);
                     dimStrip(lvl);
+                    const uint32_t p0 = millis();
                     spr.pushSprite(0, s_y0);
+                    pushMs[1] += millis() - p0;
                 }
             } else {                                             // the owner's photo montage
                 mode = 2;
@@ -481,6 +496,10 @@ void task(void*) {
                     const uint8_t* jpg;
                     size_t len;
                     if (montage::frame(i, &jpg, &len)) drawJpg(jpgWork, jpg, len);
+                    if (light == FADING) {                       // the first photo is drawn: light it
+                        backlight::restore();
+                        light = LIT;
+                    }
                     shown = i;
                 }
             }
@@ -490,14 +509,15 @@ void task(void*) {
         }
         // Let the finale finish (it ends with the last frame, ~0.1 s of DMA tail) so its I2S buffers
         // are gone before Spotify's TLS allocates; overlapping them fragmented the heap.
+        if (light == FADING) backlight::restore();              // no montage (or no memory for it)
         for (int k = 0; k < 60 && greeting::playing(); ++k) vTaskDelay(pdMS_TO_TICKS(50));
         free(jpgWork);
         if (s_buf) spr.deleteSprite();
         s_buf = nullptr;
-        Serial.printf("[bootscene] %u ms; render avg drive %u ms (%u frames), brake %u ms (%u), montage %u ms (%u of %d); stack free %u\n",
+        Serial.printf("[bootscene] %u ms; render avg drive %u ms (push %u, %u frames), brake %u ms (push %u, %u), montage %u ms (%u of %d); stack free %u\n",
                       (unsigned)(millis() - t0),
-                      (unsigned)(frames[0] ? busyMs[0] / frames[0] : 0), (unsigned)frames[0],
-                      (unsigned)(frames[1] ? busyMs[1] / frames[1] : 0), (unsigned)frames[1],
+                      (unsigned)(frames[0] ? busyMs[0] / frames[0] : 0), (unsigned)(frames[0] ? pushMs[0] / frames[0] : 0), (unsigned)frames[0],
+                      (unsigned)(frames[1] ? busyMs[1] / frames[1] : 0), (unsigned)(frames[1] ? pushMs[1] / frames[1] : 0), (unsigned)frames[1],
                       (unsigned)(frames[2] ? busyMs[2] / frames[2] : 0), (unsigned)frames[2], montage::count(),
                       (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     }
