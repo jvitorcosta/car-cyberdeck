@@ -23,6 +23,7 @@ DATA = os.path.join(ROOT, "data")
 SLOTS = ["drive", "opener", "finale"]
 RATE = gg.RATE
 MAX_SECONDS = 4.0
+MIN_SECONDS = 0.2            # shorter is a click (an empty or mis-cut WAV), not a greeting
 HEAD, ENTRY, NAME, VERSION, MAX_CLIPS = 8, 32, 24, 1, 32
 SILENCE = 10 ** (-45 / 20)   # trim only below -45 dB of the peak: keeps a word's natural decay
 FADE = RATE // 50            # 20 ms fade-out: no click where the trim cuts the tail
@@ -99,11 +100,17 @@ def build(clips):
     """[(name, float samples)] -> the roster file's bytes."""
     if len(clips) > MAX_CLIPS:
         sys.exit("gen_rosters: %d clips, the firmware reads %d" % (len(clips), MAX_CLIPS))
+    names = [name[:NAME - 1] for name, _ in clips]
+    for name in names:
+        if names.count(name) > 1:
+            sys.exit("gen_rosters: two clips named %s (the log and SOUND_FORCE couldn't tell them apart)" % name)
     off = HEAD + ENTRY * len(clips)
     table, body = b"", b""
     for name, x in clips:
         if len(x) > RATE * MAX_SECONDS:
             sys.exit("gen_rosters: %s is %.2f s; keep it under %.0f s" % (name, len(x) / RATE, MAX_SECONDS))
+        if len(x) < RATE * MIN_SECONDS:
+            sys.exit("gen_rosters: %s is %.2f s; a clip needs at least %.1f s" % (name, len(x) / RATE, MIN_SECONDS))
         pcm = struct.pack("<%dh" % len(x), *(max(-32768, min(32767, int(round(v * 32767)))) for v in x))
         table += struct.pack("<II%ds" % NAME, off + len(body), len(pcm), name.encode()[:NAME - 1])
         body += pcm                                  # 2-byte samples: every clip stays 2-aligned

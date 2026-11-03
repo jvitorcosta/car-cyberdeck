@@ -32,10 +32,11 @@ class ParseTest(unittest.TestCase):
 
 class BuildTest(unittest.TestCase):
     def test_build_layout(self):
-        blob = gr.build([("bem", [0.5] * 3), ("okaeri", [-0.25] * 4)])
+        n = int(gr.RATE * gr.MIN_SECONDS)
+        blob = gr.build([("bem", [0.5] * n), ("okaeri", [-0.25] * (n + 1))])
         magic, version, es = entries(blob)
         self.assertEqual((magic, version, len(es)), (b"SNDR", 1, 2))
-        for (off, size, name), samples in zip(es, (3, 4)):
+        for (off, size, name), samples in zip(es, (n, n + 1)):
             self.assertEqual(off % 2, 0)
             self.assertEqual(size, 2 * samples)
             self.assertLessEqual(off + size, len(blob))
@@ -46,13 +47,25 @@ class BuildTest(unittest.TestCase):
         # the owner's longest: unique once cut (ami_okaerinasai_02 is another clip)
         self.assertEqual(gr.clip_name("ami_okaerinasaimattetayo_01_16k.wav"), "ami_okaerinasaimattetay")
         self.assertEqual(gr.clip_name("listen/now_bemvindo.wav"), "now_bemvindo")
-        _, _, es = entries(gr.build([("x" * 30, [0.0])]))
+        _, _, es = entries(gr.build([("x" * 30, [0.0] * gr.RATE)]))
         self.assertEqual(es[0][2], b"x" * 23 + b"\0")
 
     def test_too_long_clip(self):
         with self.assertRaises(SystemExit):
             gr.build([("long", [0.0] * int(gr.RATE * 4.01))])
         gr.build([("ok", [0.0] * (gr.RATE * 4))])
+
+    def test_duplicate_names(self):
+        # the log and SOUND_FORCE name clips: two of one name can't be told apart
+        with self.assertRaises(SystemExit) as cm:
+            gr.build([("ikuyo", [0.1] * 8000), ("ikuyo", [0.1] * 8000)])
+        self.assertIn("ikuyo", str(cm.exception.code))
+
+    def test_too_short_clip(self):
+        # under 0.2 s is a click, not a greeting (an empty or mis-cut WAV)
+        with self.assertRaises(SystemExit):
+            gr.build([("blip", [0.1] * int(gr.RATE * 0.19))])
+        gr.build([("ok", [0.1] * int(gr.RATE * 0.2))])
 
     def test_missing_wav(self):
         with tempfile.TemporaryDirectory() as d:
