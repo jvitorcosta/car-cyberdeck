@@ -28,6 +28,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "../util/common/daynight.h"
 #include "../util/black/linkstatus.h"
 #include "net/remote.h"
+#include "car/camsvc.h"
 #include "../common/net/remote_config.h"
 #include "../common/net/ota.h"
 #include "ui/otascreen.h"
@@ -186,6 +187,9 @@ void setup() {
     } else {
         playOpening();
     }
+    // Speed cameras (car/camsvc): the list from NVS and the phone's GPS on its own small task; it
+    // runs with the remote off too (the buzzer needs no web page).
+    camsvc::begin();
     remote::begin(bootscene::active);
     ota::begin(REMOTE_NAME, bootscene::active);
     // The UI loop is watched from here (the core feeds it before each loop()); setup()'s waits for

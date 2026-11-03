@@ -83,8 +83,10 @@ the locations are public (IMMU publishes them).
 | `source` | `immu`, `immu-survey`, `osm`, `car` |
 | `checked` | date the row was last confirmed (`YYYY-MM-DD`) |
 
-About 50 rows fill only a few KB. On the black deck the list lives in the media partition, next to
-the intro clips, and is loaded into RAM at boot (a few KB).
+About 50 rows fill only a few KB. On the black deck the list lives in NVS (namespace `cam`, key
+`list`, the CSV as pushed, at most 8 KB), not the media partition: that pack is read-only and replaced
+only by `uploadmedia`, while `push` must store a new list without a reboot. It is parsed into RAM at
+boot and after each push; a push that fails to parse or to store leaves the old list in place.
 
 ### The PC tool (`tools/cameras.py`)
 
@@ -184,7 +186,8 @@ between the decks never silences an alarm.
 ## Marking a camera from the car
 
 - Voice "mark camera" (Siri → yellow deck → black deck) or a MARK item on the watch saves the
-  current position, course and time to `marks.csv` on the black deck. Siri replies "marked". No
+  current position, course and time on the black deck (NVS `cam`/`marks`, the last 32; the PC reads
+  them as CSV from `/cam/marks`). Siri replies "marked". No
   touch target (our call: a new camera has no band to press, and the screens' touch areas are taken).
 - Marks never alert by themselves: they wait for `tools/cameras.py import-car` on the PC, where the
   owner sets the kind and limit and places the pin. This way a mistaken mark can't cause false
@@ -194,7 +197,8 @@ between the decks never silences an alarm.
 
 1. **GPS on the black deck:** the phone's NMEA socket read on its own small task, position, speed and
    course in `/cam`; `GPS --` on both decks. Bench-testable with a recorded NMEA file fed through
-   a small TCP server on the PC in place of the phone.
+   a small TCP server on the PC in place of the phone (`tools/nmea_replay.py`, with `GPS_HOST`
+   pointed at the PC).
 2. **The list:** `tools/cameras.py` with fetch, placing and push; the first curated Manaus list
    (the IMMU rows, the Av. do Turismo surveys, the OSM nodes).
 3. **Alerts and alarms:** matching in `src/util/car/cameras.*` with host tests (approach, opposite
