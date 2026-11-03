@@ -2,10 +2,10 @@
 #include <cstddef>
 #include <cstdint>
 // A slot's boot clips (tools/gen_rosters.py): "SNDR", u16 version, u16 count, then count x
-// {u32 offset from the file's start, u32 size in bytes, char name[16] NUL-padded}, then the clips
+// {u32 offset from the file's start, u32 size in bytes, char name[24] NUL-padded}, then the clips
 // (16-bit mono 16 kHz PCM, 2-byte aligned). Little-endian. PURE, host-tested.
 namespace sndroster {
-constexpr size_t HEAD = 8, ENTRY = 24, NAME = 16;
+constexpr size_t HEAD = 8, ENTRY = 32, NAME = 24;
 constexpr uint16_t VERSION = 1;
 constexpr int MAX = 32;
 struct Clip { const uint8_t* data; size_t bytes; const char* name; };

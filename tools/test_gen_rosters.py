@@ -14,7 +14,7 @@ def entries(blob):
     magic, version, n = struct.unpack_from("<4sHH", blob, 0)
     out = []
     for i in range(n):
-        off, size, name = struct.unpack_from("<II16s", blob, gr.HEAD + gr.ENTRY * i)
+        off, size, name = struct.unpack_from("<II%ds" % gr.NAME, blob, gr.HEAD + gr.ENTRY * i)
         out.append((off, size, name))
     return magic, version, out
 
@@ -39,14 +39,15 @@ class BuildTest(unittest.TestCase):
             self.assertEqual(off % 2, 0)
             self.assertEqual(size, 2 * samples)
             self.assertLessEqual(off + size, len(blob))
-        self.assertEqual(es[0][2], b"bem".ljust(16, b"\0"))
+        self.assertEqual(es[0][2], b"bem".ljust(gr.NAME, b"\0"))
         self.assertEqual(struct.unpack_from("<h", blob, es[1][0])[0], round(-0.25 * 32767))
 
     def test_long_name_truncated(self):
-        self.assertEqual(gr.clip_name("okaerinasaimattetayo_01_16k.wav"), "okaerinasaimatt")
+        # the owner's longest: unique once cut (ami_okaerinasai_02 is another clip)
+        self.assertEqual(gr.clip_name("ami_okaerinasaimattetayo_01_16k.wav"), "ami_okaerinasaimattetay")
         self.assertEqual(gr.clip_name("listen/now_bemvindo.wav"), "now_bemvindo")
-        _, _, es = entries(gr.build([("x" * 20, [0.0])]))
-        self.assertEqual(es[0][2], b"x" * 15 + b"\0")
+        _, _, es = entries(gr.build([("x" * 30, [0.0])]))
+        self.assertEqual(es[0][2], b"x" * 23 + b"\0")
 
     def test_too_long_clip(self):
         with self.assertRaises(SystemExit):

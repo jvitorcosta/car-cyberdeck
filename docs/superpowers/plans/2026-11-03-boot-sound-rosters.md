@@ -51,7 +51,7 @@ a roster the owner picked.
    Test: `test_soundpick` `test_none_fit_gives_minus_one`.
 4. **Packing media from the worktree:** its `data/` has only stand-ins, so `uploadmedia` from
    there would wipe João's real montage and videos. Task 5 copies the real media in first.
-5. **A clip name longer than the 16-byte field:** the tool truncates it to 15 characters and the
+5. **A clip name longer than the 24-byte field:** the tool truncates it to 23 characters and the
    reader never reads past the field. Tests: `test_gen_rosters.test_long_name_truncated`, and
    `test_sndroster` `test_name_needs_nul`.
 
@@ -67,10 +67,10 @@ a roster the owner picked.
 - Produces:
 ```cpp
 // A slot's boot clips (tools/gen_rosters.py): "SNDR", u16 version, u16 count, then count x
-// {u32 offset from the file's start, u32 size in bytes, char name[16] NUL-padded}, then the clips
+// {u32 offset from the file's start, u32 size in bytes, char name[24] NUL-padded}, then the clips
 // (16-bit mono 16 kHz PCM, 2-byte aligned). Little-endian. PURE, host-tested.
 namespace sndroster {
-constexpr size_t HEAD = 8, ENTRY = 24, NAME = 16;
+constexpr size_t HEAD = 8, ENTRY = 32, NAME = 24;
 constexpr uint16_t VERSION = 1;
 constexpr int MAX = 32;
 struct Clip { const uint8_t* data; size_t bytes; const char* name; };
@@ -151,7 +151,7 @@ int forced(const char* spec, const char* slot, int count);
   `build(clips: [(name, samples_float_list)]) -> bytes`.
 - **`rosters.txt` format:** `[drive]` / `[opener]` / `[finale]` headers, one WAV path per line,
   `#` comments, blank lines ignored. The clip name is the file's base name without
-  `_16k.wav`/`.wav`, truncated to 15 characters.
+  `_16k.wav`/`.wav`, truncated to 23 characters.
 
 - [ ] **Step 1: Write the failing tests** in `test_gen_rosters.py` (as `test_pack_media.py` does):
   - `test_parse`: sections, comments, blank lines, an unknown section → `SystemExit`.

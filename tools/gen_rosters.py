@@ -22,7 +22,7 @@ DATA = os.path.join(ROOT, "data")
 SLOTS = ["drive", "opener", "finale"]
 RATE = gg.RATE
 MAX_SECONDS = 4.0
-HEAD, ENTRY, NAME, VERSION, MAX_CLIPS = 8, 24, 16, 1, 32
+HEAD, ENTRY, NAME, VERSION, MAX_CLIPS = 8, 32, 24, 1, 32
 
 
 def parse(text):
