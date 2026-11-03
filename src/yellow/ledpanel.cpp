@@ -355,9 +355,21 @@ static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rg
     writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
 }
 
-// The welcome, the first time since boot light i links lit (ledintro: a wave from the inside light to
-// the outside one, ~4.5 s): its power-on and first key (dark) now, the rest from fadeTick. A change,
-// a preset or a song's look takes over from the key it reached; a reconnect gets its look (push).
+// One of the welcome's keys on light i: its colour frame, or the start of the inside light's
+// curtain fill (its speed, then the effect; the MELK frames only, the ELK one ignores them).
+static void writeKey(int i, const ledintro::Key& k) {
+    if (!k.fill) {
+        writeFrame(i, k.c);
+        return;
+    }
+    write(controllers[i], elkcmd::speed(ledintro::FILL_SPEED));
+    write(controllers[i], elkcmd::effect(ledintro::FILL_MODE));
+}
+
+// The welcome, the first time since boot light i links lit (ledintro: the inside light's strip
+// fills from both ends inwards, then the outside light rises, ~6 s): its power-on and first key
+// (dark) now, the rest from fadeTick. A change, a preset or a song's look takes over from the key
+// it reached (its colour frame ends the fill); a reconnect gets its look (push).
 static void startIntro(int i) {
     const Look l = shownLook(i);
     const Rgb s = ledRgb(l.swatch);
@@ -368,7 +380,7 @@ static void startIntro(int i) {
     f.start = f.at = millis();
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
     f.done = 1;
-    writeFrame(i, f.intro.k[0].c);
+    writeKey(i, f.intro.k[0]);
 }
 
 // Controller i's look (power + dimmed colour), both header variants. Ends a running fade.
@@ -2795,7 +2807,7 @@ static void fadeTick() {
         if (f.intro.n) {  // the welcome: its next key at its time
             if (now - f.start < f.intro.k[f.done].at) continue;
             f.at = now;
-            if (linkUp(controllers[i])) writeFrame(i, f.intro.k[f.done].c);
+            if (linkUp(controllers[i])) writeKey(i, f.intro.k[f.done]);
             f.done++;
             continue;
         }
