@@ -18,7 +18,9 @@ hotspot's 172.20.10.10); the key is REMOTE_TOKEN from src/config.h (git-ignored,
 import argparse
 import csv
 import datetime
+import functools
 import html.parser
+import http.server
 import json
 import math
 import os
@@ -40,7 +42,7 @@ IMMU_URL = "https://immu.manaus.am.gov.br/index.php?r=site%2Finforadar"
 OVERPASS_URLS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 BBOX = "-3.25,-60.15,-2.90,-59.80"  # south,west,north,east
-USER_AGENT = "spotify-pokemon-deck-cameras/1.0 (personal car-deck tool; joaovpro17@gmail.com)"
+USER_AGENT = "car-cyberdeck-cameras/1.0 (+https://github.com/jvitorcosta/car-cyberdeck)"
 
 HEADER = "id,kind,lat,lon,heading,limit,label,source,checked"
 MAX_ROWS = 96       # camlist::MAX_POINTS
@@ -49,6 +51,7 @@ MAX_LABEL = 27      # the deck cuts a label here (char label[28])
 MAX_ID = 11         # char id[12]
 KINDS = ("speed", "bump", "redlight")
 MATCH_M = 50.0
+HEADING_TOL = 60    # degrees: IMMU gives a cardinal direction, the owner sets the real bearing
 
 # --- validation (same rules as camlist::parse) -------------------------------------------------
 
@@ -127,6 +130,8 @@ def apply_placed(path, placed, today=None):
     used = [int(m.group(1)) for r in rows for m in [re.fullmatch(r"mao-(\d+)", r["id"])] if m]
     nxt = 1 + max(used or [0])
     for it in placed:
+        if it.get("confirmed") is not True:
+            raise ValueError("'%s' is not marked confirmed in placed.json: place it by hand first" % it.get("label", "?"))
         label = re.sub(r"\s+", " ", str(it.get("label", "")).replace(",", " ")).strip()
         rows.append({"id": "mao-%04d" % nxt, "kind": it["kind"], "lat": float(it["lat"]), "lon": float(it["lon"]),
                      "heading": "" if it.get("heading") is None else int(it["heading"]),
@@ -162,6 +167,11 @@ def _words(label):
     return {w for w in re.findall(r"[a-z0-9]+", _plain(label)) if w not in _STOP}
 
 
+def _district(label):
+    """Words after the '·' of a label ('Av. Torquato Tapajós · Da Paz' -> {'paz'}); empty when there is none."""
+    return _words(label.split("·", 1)[1]) if "·" in label else set()
+
+
 def matches(item, row):
     """Same camera? Within 50 m when both have coordinates, else by the words of the label (numbers
     and a known direction must agree: 'Seripa 7' is not 'Seripa 8')."""
@@ -177,7 +187,12 @@ def matches(item, row):
         return False
     if {w for w in a if w.isdigit()} != {w for w in b if w.isdigit()}:
         return False
-    if item.get("heading") is not None and row.get("heading") is not None and item["heading"] != row["heading"]:
+    if item.get("heading") is not None and row.get("heading") is not None:
+        d = abs(item["heading"] - row["heading"]) % 360
+        if min(d, 360 - d) > HEADING_TOL:   # the owner's real bearing (255) vs IMMU's cardinal (270) is fine
+            return False
+    da, db = _district(item.get("label", "")), _district(row.get("label", ""))
+    if da and db and not (da <= db or db <= da):   # same street, other district: another camera
         return False
     shared = len(a & b)
     return shared >= 2 and shared / min(len(a), len(b)) >= 0.6
@@ -468,7 +483,24 @@ def cmd_check(a):
     return code
 
 
-def _place(items):
+def serve(directory, page, port=8765):
+    """Serves build/ on 127.0.0.1 so the page loads over http with a Referer (OSM refuses tiles without one)."""
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
+    handler.log_message = lambda *a, **k: None
+    try:
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+    except OSError:
+        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    print("open http://127.0.0.1:%d/%s  (Ctrl+C stops the server)" % (srv.server_address[1], page))
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        srv.server_close()
+
+
+def _place(items, no_serve=False):
     for it in items:
         if it.get("lat") is None:
             g = geocode(it)
@@ -477,6 +509,8 @@ def _place(items):
     out = write_place_page(items)
     print("wrote %s (%d points): open it, place each pin, press save, then run with --apply placed.json" % (
         os.path.relpath(out, ROOT), len(items)))
+    if not no_serve:
+        serve(os.path.dirname(out), os.path.basename(out))
 
 
 def _load_placed(path):
@@ -490,7 +524,7 @@ def cmd_place(a):
         print("added %d rows to data/cameras.csv" % n)
         return 0
     if a.src == "marks":
-        return cmd_import_car(argparse.Namespace(host=a.host, apply=None))
+        return cmd_import_car(argparse.Namespace(host=a.host, apply=None, no_serve=a.no_serve))
     try:
         items = fetch_immu() if a.src == "immu" else fetch_osm()
     except (urllib.error.URLError, OSError, ValueError) as e:
@@ -500,7 +534,7 @@ def cmd_place(a):
     if not new:
         print("nothing unplaced from %s" % a.src)
         return 0
-    _place(new)
+    _place(new, a.no_serve)
     return 0
 
 
@@ -536,7 +570,7 @@ def cmd_import_car(a):
     if not items:
         print("no marks on the deck")
         return 0
-    _place(items)
+    _place(items, a.no_serve)
     return 0
 
 
@@ -550,9 +584,11 @@ def main(argv=None):
     p = sub.add_parser("place")
     p.add_argument("--from", dest="src", choices=("immu", "osm", "marks"), default="immu")
     p.add_argument("--apply", metavar="placed.json")
+    p.add_argument("--no-serve", action="store_true", help="only write the page, do not start the local server")
     p.set_defaults(fn=cmd_place)
     p = sub.add_parser("import-car")
     p.add_argument("--apply", metavar="placed.json")
+    p.add_argument("--no-serve", action="store_true", help="only write the page, do not start the local server")
     p.set_defaults(fn=cmd_import_car)
     a = ap.parse_args(argv)
     return a.fn(a)

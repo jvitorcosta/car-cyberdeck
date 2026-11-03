@@ -13,6 +13,7 @@
   #map { flex: 1; }
   .card { border: 1px solid #bbb; border-radius: 6px; padding: 6px; margin-bottom: 8px; cursor: pointer; }
   .card.sel { border-color: #d33; background: #fff4f4; }
+  .card.unconf { border-left: 5px solid #e90; }
   .card.off { opacity: .5; }
   .card label { display: block; margin: 3px 0; }
   .card input[type=text], .card input[type=number], .card select { width: 100%; box-sizing: border-box; }
@@ -51,6 +52,12 @@ function icon(it) {
   return L.divIcon({ html: svg, className: "", iconSize: [40, 40], iconAnchor: [20, 20] });
 }
 
+function setConfirmed(i, v) {
+  ITEMS[i].confirmed = v;
+  cards[i].querySelector(".conf").checked = v;
+  cards[i].classList.toggle("unconf", !v);
+}
+
 function bytes(s) { return new TextEncoder().encode(s).length; }
 
 function select(i) {
@@ -72,7 +79,7 @@ function refresh(i) {
 ITEMS.forEach(function (it, i) {
   it.include = true;
   var m = L.marker([it.lat, it.lon], { draggable: true, icon: icon(it) }).addTo(map);
-  m.on("dragend", function () { var p = m.getLatLng(); it.lat = p.lat; it.lon = p.lng; select(i); });
+  m.on("dragend", function () { var p = m.getLatLng(); it.lat = p.lat; it.lon = p.lng; setConfirmed(i, true); select(i); });
   m.on("click", function () { select(i); });
   markers.push(m);
 
@@ -86,6 +93,7 @@ ITEMS.forEach(function (it, i) {
     '<label>limit km/h (empty = unknown) <input type="number" class="limit" min="1" max="199"></label>' +
     '<label>heading <input type="number" class="head" min="0" max="359"> ' +
     '<input type="range" class="rng" min="0" max="359"></label>' +
+    '<label><input type="checkbox" class="conf"> <b>position is right</b> (dragged onto the road, or ticked by hand)</label>' +
     '<label><input type="checkbox" class="inc" checked> include</label>';
   c.querySelector(".addr").textContent = (it.address || "") + (it.sentido ? " (sentido " + it.sentido + ")" : "");
   var label = c.querySelector(".label"), kind = c.querySelector(".kind"), limit = c.querySelector(".limit"),
@@ -98,6 +106,9 @@ ITEMS.forEach(function (it, i) {
   limit.oninput = function () { it.limit = limit.value === "" ? null : parseInt(limit.value, 10); };
   head.oninput = function () { it.heading = head.value === "" ? null : ((parseInt(head.value, 10) % 360) + 360) % 360; if (it.heading != null) rng.value = it.heading; refresh(i); };
   rng.oninput = function () { it.heading = parseInt(rng.value, 10); head.value = it.heading; refresh(i); };
+  it.confirmed = false;
+  c.classList.add("unconf");
+  c.querySelector(".conf").onchange = function () { setConfirmed(i, this.checked); };
   inc.onchange = function () { it.include = inc.checked; refresh(i); };
   c.onclick = function () { select(i); };
   document.getElementById("cards").appendChild(c);
@@ -109,6 +120,7 @@ map.on("click", function (e) {
   if (selected < 0) return;
   ITEMS[selected].lat = e.latlng.lat; ITEMS[selected].lon = e.latlng.lng;
   markers[selected].setLatLng(e.latlng);
+  setConfirmed(selected, true);
 });
 
 if (ITEMS.length) {
@@ -117,14 +129,19 @@ if (ITEMS.length) {
 }
 
 document.getElementById("save").onclick = function () {
-  var out = [], bad = [];
+  var out = [], bad = [], unconf = [];
   ITEMS.forEach(function (it, i) {
     if (!it.include) return;
+    if (!it.confirmed) { unconf.push(i + 1); return; }
     if (it.heading == null) { bad.push((i + 1) + " has no heading"); return; }
     out.push({ kind: it.kind, lat: +it.lat.toFixed(6), lon: +it.lon.toFixed(6), heading: it.heading,
-               limit: it.kind === "redlight" ? null : it.limit, label: it.label, source: it.source });
+               limit: it.kind === "redlight" ? null : it.limit, label: it.label, source: it.source, confirmed: true });
   });
   if (bad.length) { alert("Set a heading first: point " + bad.join(", ")); return; }
+  if (unconf.length) {
+    if (!out.length) { alert("Nothing confirmed. Drag each pin onto its road (or tick \"position is right\")."); return; }
+    alert("Left out, position not confirmed: point " + unconf.join(", ") + ". They stay unplaced.");
+  }
   var a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
   a.download = "placed.json";

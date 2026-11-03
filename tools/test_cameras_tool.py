@@ -103,8 +103,8 @@ def test_diff_new_and_gone():
 def test_apply_assigns_next_id(tmp_path):
     p = tmp_path / "cameras.csv"
     p.write_text(HDR + "mao-0007,speed,-3.1,-60.0,90,60,Old,car,2026-01-01\n", encoding="utf-8", newline="")
-    placed = [{"kind": "bump", "lat": -3.2, "lon": -60.1, "heading": 45, "limit": 30, "label": "New one", "source": "immu"},
-              {"kind": "redlight", "lat": -3.3, "lon": -60.2, "heading": 180, "limit": None, "label": "Light", "source": "osm"}]
+    placed = [{"kind": "bump", "lat": -3.2, "lon": -60.1, "heading": 45, "limit": 30, "label": "New one", "source": "immu", "confirmed": True},
+              {"kind": "redlight", "lat": -3.3, "lon": -60.2, "heading": 180, "limit": None, "label": "Light", "source": "osm", "confirmed": True}]
     n = cam.apply_placed(str(p), placed, today="2026-11-03")
     assert n == 2
     text = p.read_text(encoding="utf-8")
@@ -116,7 +116,7 @@ def test_apply_assigns_next_id(tmp_path):
 def test_apply_refuses_an_invalid_result(tmp_path):
     p = tmp_path / "cameras.csv"
     p.write_text(HDR, encoding="utf-8", newline="")
-    bad = [{"kind": "speed", "lat": -3.2, "lon": -60.1, "heading": None, "limit": 60, "label": "No arrow", "source": "immu"}]
+    bad = [{"kind": "speed", "lat": -3.2, "lon": -60.1, "heading": None, "limit": 60, "label": "No arrow", "source": "immu", "confirmed": True}]
     try:
         cam.apply_placed(str(p), bad, today="2026-11-03")
         assert False, "should refuse"
@@ -137,3 +137,42 @@ def test_place_page_embeds_items(tmp_path):
     html = out.read_text(encoding="utf-8")
     assert "__ITEMS__" not in html and "leaflet" in html.lower()
     assert "</script> b" not in html          # embedded JSON can't close the script tag
+
+
+def test_apply_refuses_unconfirmed(tmp_path):
+    p = tmp_path / "cameras.csv"
+    p.write_text(HDR, encoding="utf-8", newline="")
+    guess = [{"kind": "speed", "lat": -3.2, "lon": -60.1, "heading": 90, "limit": 60, "label": "Guess", "source": "immu"}]
+    for placed in (guess, [dict(guess[0], confirmed=False)]):
+        try:
+            cam.apply_placed(str(p), placed, today="2026-11-03")
+            assert False, "should refuse"
+        except ValueError as e:
+            assert "confirmed" in str(e)
+    assert p.read_text(encoding="utf-8") == HDR
+
+
+def _pair(label_a, label_b, heading):
+    return cam.matches({"kind": "speed", "label": label_a, "heading": heading},
+                       {"kind": "speed", "lat": -3.1, "lon": -60.0, "label": label_b, "heading": heading})
+
+
+def test_same_street_other_district_is_another_camera():
+    assert not _pair("Av. Torquato Tapajós · Da Paz", "Av. Torquato Tapajós · Flores", 180)
+    assert not _pair("Av. Autaz Mirim · Coroado", "Av. Autaz Mirim · Zumbi dos Palmares", 180)
+    assert not _pair("Av. Codajás/Av. Marquês da Silveira · Petrópolis",
+                     "Av. Codajás/Av. Marquês da Silveira · São Francisco", 270)
+    assert _pair("Av. Torquato Tapajós · Flores", "Av. Torquato Tapajós · Flores", 180)
+
+
+def test_heading_tolerance():
+    def m(h_item, h_row):
+        return cam.matches({"kind": "speed", "label": "Av. Torquato Tapajós · Flores", "heading": h_item},
+                           {"kind": "speed", "lat": -3.1, "lon": -60.0, "label": "Av. Torquato Tapajós · Flores", "heading": h_row})
+    assert m(270, 255)
+    assert m(10, 350)
+    assert not m(90, 270)
+
+
+def test_user_agent_has_no_personal_address():
+    assert "@" not in cam.USER_AGENT and "github.com" in cam.USER_AGENT
