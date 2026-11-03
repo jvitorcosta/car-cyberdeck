@@ -133,9 +133,12 @@ void events(uint32_t t, bool braking) {
         }
     }
     if (t >= 4800 && !s_engine) s_engine = bios::termSet(s_term, "ENGINE", "RUNNING", bios::OK, t);
-    if (t >= 5300 && !s_greet && t < greeting::durationMs())
+    // The greeting is heard ~0.1 s after the scene starts (bootanim::SOUND_LEAD_MS): DONE once it
+    // has really stopped, not at its length on the scene's clock.
+    const bool heard = t >= greeting::durationMs() && !greeting::playing();
+    if (t >= 5300 && !s_greet && !heard)
         s_greet = bios::termSet(s_term, "GREETING", "PLAYING", bios::PURPLE, t);
-    if (s_greet && !s_done && t >= greeting::durationMs()) s_done = bios::termSet(s_term, "GREETING", "DONE", bios::OK, t);
+    if (s_greet && !s_done && heard) s_done = bios::termSet(s_term, "GREETING", "DONE", bios::OK, t);
     if (braking && !s_parked) s_parked = bios::termSet(s_term, "PARKING", "BRAKE", bios::OK, t);
     bios::termExpire(s_term, t, TERM_TTL);
 }
