@@ -82,6 +82,16 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
+- **Boot sound rosters** (`util/sndroster`, `util/soundpick`, `audio/greeting`) — the Honda's
+  drive greeting, the montage start and the Honda logo sound each come from a roster:
+  `data/drive.snd`, `opener.snd` and `finale.snd` (git-ignored), built by `tools/gen_rosters.py`
+  from the WAVs listed in `data/rosters.txt` (git-ignored; format in `data/rosters.example.txt`):
+  up to 32 clips of up to 4 s each, 16-bit mono 16 kHz. `setup()` (`pickSounds`) picks one per
+  slot at random, never last boot's (NVS `boot`/`drive`, `opener`, `finale`): the logo's first,
+  then a montage start among the clips that end before it starts (`bootscene::openerFits`, the
+  rule the scene applies); the drive's only for the Honda's opening. A slot without a roster plays
+  its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). Serial: `[boot] sounds: drive=…
+  opener=… finale=…`.
 - **Boot opening** (`util/intropick`) — `setup()` picks one of four openings each boot:
   your intro video ("kiss"), the Honda's night drive, McQueen's, or the second video ("max").
   Random, never last boot's (NVS `boot`/`last`), and only from what the build has (the clips,
@@ -270,7 +280,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
     genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,
-    intropick, linkstatus, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
+    intropick, linkstatus, sndroster, soundpick, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
     quietboot, ridersprite, songmood (+ songpicks.inc), termblend, walkanim, walkrect
   - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, geoip, httphead, karaoke,
     ledpresets, ledvoice, lightstatus, otapage, pollpace, tapguard, termpal, touchcal, touchguard,
@@ -293,6 +303,7 @@ Build flags that are never set in `platformio.ini`; add one for a desk check, th
 | Flag | Deck (env) | What it does |
 |---|---|---|
 | `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) | black (`s3`) | Forces that boot opening (`main.cpp`, `util/intropick`). |
+| `-D SOUND_FORCE=\"drive:3,opener:0,finale:11\"` (any subset) | black (`s3`) | Forces those boot sound roster indices (`main.cpp` `pickSounds`, `util/soundpick`). |
 | `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
 | `-D NIGHT_TEST` | yellow (`ledpanel`) | Night mode whatever the time (`ledpanel.cpp`). |
 | `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |
