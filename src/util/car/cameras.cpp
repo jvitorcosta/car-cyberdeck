@@ -51,6 +51,7 @@ void Matcher::load(const camlist::Point* pts, int n) {
         passedMs_[i] = 0;
         near_[i] = false;
         lastDist_[i] = UINT32_MAX;
+        alerted_[i] = false;
     }
     last_ = Status{};
 }
@@ -82,6 +83,7 @@ Status Matcher::update(const Fix& f) {
         if (d > CANDIDATE_M || iabs(angleDiff(f.course, p.heading)) > COURSE_TOL_DEG) {
             near_[i] = false;  // off this approach (another road or the other way)
             lastDist_[i] = UINT32_MAX;
+            alerted_[i] = false;
             continue;
         }
         // Passed: was within NEAR_M on this approach and is now further than at the last fix. At 1 Hz
@@ -93,17 +95,26 @@ Status Matcher::update(const Fix& f) {
             passedMs_[i] = f.ms ? f.ms : 1;  // 0 means "not passed"
             near_[i] = false;
             lastDist_[i] = UINT32_MAX;
+            alerted_[i] = false;
             continue;
         }
-        if (iabs(angleDiff(bearing(f.latE6, f.lonE6, p.latE6, p.lonE6), f.course)) > BEARING_TOL_DEG) continue;
+        if (iabs(angleDiff(bearing(f.latE6, f.lonE6, p.latE6, p.lonE6), f.course)) > BEARING_TOL_DEG) {
+            alerted_[i] = false;
+            continue;
+        }
         if (d < CROSS_CHECK_M) {
             int32_t x = crossTrackM(f, p);
-            if (x <= -CROSS_MAX_M || x >= CROSS_MAX_M) continue;
+            if (x <= -CROSS_MAX_M || x >= CROSS_MAX_M) {
+                alerted_[i] = false;
+                continue;
+            }
         }
         bool red = p.kind == camlist::Kind::RedLight;
         uint32_t ahead = (uint32_t)f.kmh * ALERT_AHEAD_S * 1000 / 3600;
         uint32_t alertM = red ? REDLIGHT_ALERT_M : (ahead > ALERT_MIN_M ? ahead : ALERT_MIN_M);
-        if (d > alertM || d >= bestD) continue;
+        if (d > alertM && !alerted_[i]) continue;
+        alerted_[i] = true;  // latched even when a nearer point wins this fix
+        if (d >= bestD) continue;
         bestD = d;
         best.index = i;
         best.distM = (uint16_t)d;

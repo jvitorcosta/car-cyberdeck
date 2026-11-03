@@ -96,6 +96,19 @@ void test_alert_reaches_further_when_fast() {
     TEST_ASSERT_TRUE(m.update(along(LAT, LON, 90, 540, 100, 2000)).stage == Stage::Alert);
 }
 
+// The driver brakes for the alert: the shorter 20 s distance must not take the alert back.
+void test_alert_stays_when_braking() {
+    camlist::Point p = pt(LAT, LON, 90, 60, camlist::Kind::Speed);
+    cameras::Matcher m;
+    m.load(&p, 1);
+    TEST_ASSERT_TRUE(m.update(along(LAT, LON, 90, 540, 100, 1000)).stage == Stage::Alert);
+    TEST_ASSERT_TRUE(m.update(along(LAT, LON, 90, 515, 89, 2000)).stage == Stage::Alert);
+    TEST_ASSERT_TRUE(m.update(along(LAT, LON, 90, 492, 80, 3000)).stage == Stage::Alert);
+    // Off the road (a turn onto a parallel street) drops the latch: back at 515 m it is Off again.
+    TEST_ASSERT_TRUE(m.update(along(LAT, LON, 0, 480, 60, 4000)).stage == Stage::Off);
+    TEST_ASSERT_TRUE(m.update(along(LAT, LON, 90, 515, 89, 5000)).stage == Stage::Off);
+}
+
 void test_redlight_alerts_at_250m_never_alarms() {
     camlist::Point p = pt(LAT, LON, 0, camlist::NO_LIMIT, camlist::Kind::RedLight);
     cameras::Matcher m;
@@ -292,6 +305,7 @@ int main(int, char**) {
     RUN_TEST(test_geometry_helpers);
     RUN_TEST(test_alert_at_400m);
     RUN_TEST(test_alert_reaches_further_when_fast);
+    RUN_TEST(test_alert_stays_when_braking);
     RUN_TEST(test_redlight_alerts_at_250m_never_alarms);
     RUN_TEST(test_alarm_over_limit_in_last_200m);
     RUN_TEST(test_bump_alarms_too);

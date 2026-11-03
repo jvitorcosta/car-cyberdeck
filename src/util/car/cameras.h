@@ -48,6 +48,9 @@ private:
     uint32_t passedMs_[camlist::MAX_POINTS] = {};  // when it was passed; 0 = not passed
     bool near_[camlist::MAX_POINTS] = {};          // has been within NEAR_M on this approach
     uint32_t lastDist_[camlist::MAX_POINTS] = {};  // its distance at the last moving fix
+    // Has alerted on this approach: stays eligible while it stays a candidate, so braking for the
+    // alert (a shorter 20 s distance) doesn't take it back and chime again further on.
+    bool alerted_[camlist::MAX_POINTS] = {};
     bool hadFix_ = false;
     uint32_t lastFixMs_ = 0;
     uint16_t lastKmh_ = 0;
