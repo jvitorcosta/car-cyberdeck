@@ -11,7 +11,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   says "Bem-vindo, moreno", the ETC voice or one of seven Japanese greetings, and the montage and
   the logo get 14 and 12 anime-style voice lines. The montage start always ends before the logo's
   sound starts. Rosters are built locally with `tools/gen_rosters.py` (git-ignored, like the other
-  clips); without them each moment plays its single clip as before.
+  clips); without them each moment plays its single clip as before. They are levelled to the
+  loudness of today's clips, so a dense one (the Bem-vindo over its music bed) no longer rasps.
+- **Fixed:** clips and the intro videos' sound no longer lose their first syllable: the speaker
+  amp gets 60 ms to wake before the first sample.
 - **Fixed:** more songs get synced lyrics. A plain-only `/api/get` hit no longer ends the lookup:
   the search runs too, and its synced lines replace the plain ones. The search drops title suffixes
   (" - Remastered 2011", " (feat. X)", " - Ao Vivo") and skips entries of another song, reads up to

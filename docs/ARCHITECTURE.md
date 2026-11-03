@@ -77,8 +77,8 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
 - **Night mode** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
   (SNTP; `TIMEZONE` in `src/config.h`, daylight saving included): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
 - **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
-  16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task that frees the
-  driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
+  16 kHz) played through the ES8311 (`board/s3/sink_es8311`, which gives the amp 60 ms to wake
+  before the first sample) in a one-shot task that frees the driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
   The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
@@ -86,7 +86,8 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   drive greeting, the montage start and the Honda logo sound each come from a roster:
   `data/drive.snd`, `opener.snd` and `finale.snd` (git-ignored), built by `tools/gen_rosters.py`
   from the WAVs listed in `data/rosters.txt` (git-ignored; format in `data/rosters.example.txt`):
-  up to 32 clips of up to 4 s each, 16-bit mono 16 kHz. `setup()` (`pickSounds`) picks one per
+  up to 32 clips of up to 4 s each, 16-bit mono 16 kHz, trimmed at -45 dB, faded out over 20 ms
+  and levelled to 0.12 RMS (peaks capped at 95 %). `setup()` (`pickSounds`) picks one per
   slot at random, never last boot's (NVS `boot`/`drive`, `opener`, `finale`): the logo's first,
   then a montage start among the clips that end before it starts (`bootscene::openerFits`, the
   rule the scene applies); the drive's only for the Honda's opening. A slot without a roster plays

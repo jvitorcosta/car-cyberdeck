@@ -19,6 +19,7 @@ constexpr int CHUNK = 128;                 // mono samples per i2s_write
 // Codec DAC gain (0xBF = 0 dB, 0.5 dB steps). The clips peak near full scale, so each dB above
 // 0 shaves the loudest peaks; +6 dB was the owner's pick by ear after 100 % volume.
 constexpr uint8_t CODEC_GAIN = 0xCB;
+constexpr uint32_t AMP_SETTLE_MS = 60;     // amp enable to first sample
 int s_rate = 16000;
 int16_t s_buf[2 * CHUNK];
 bool s_held = false;                       // open() holds the port: close() releases it once
@@ -35,6 +36,9 @@ bool open(int clipRate) {
     }
     pinMode(PIN_AMP_EN, OUTPUT);
     digitalWrite(PIN_AMP_EN, AMP_ON);      // only now: codec up, I2S sending silence (no pop)
+    // The amp needs a moment to wake: samples written straight away lost a clip's first syllable.
+    // I2S sends silence meanwhile (tx_desc_auto_clear).
+    vTaskDelay(pdMS_TO_TICKS(AMP_SETTLE_MS));
     s_held = true;
     return true;
 }
