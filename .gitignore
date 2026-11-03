@@ -61,3 +61,4 @@ mcqueen*.png
 # Garmin watch app: the deck key, and build output
 garmin/carlights/source/Secrets.mc
 garmin/carlights/bin/
+build/
