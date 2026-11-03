@@ -66,10 +66,33 @@ class BuildTest(unittest.TestCase):
                 w.setnchannels(2)
                 w.setsampwidth(2)
                 w.setframerate(32000)
-                w.writeframes(struct.pack("<%dh" % 800, *([1000, 1000, -1000, -1000] * 200)))
+                w.writeframes(struct.pack("<%dh" % 8000, *([1000] * 8 + [-1000] * 8) * 500))
             [(name, x)] = gr.load(d, ["a_16k.wav"])
             self.assertEqual(name, "a")
-            self.assertAlmostEqual(max(abs(v) for v in x), 0.95, places=2)   # normalised
+            self.assertAlmostEqual(gr.rms(x[:-gr.FADE]), gr.LOUDNESS, places=3)   # levelled
+
+
+class LevelTest(unittest.TestCase):
+    def test_dense_clip_levelled_by_loudness(self):
+        # Bem-vindo, moreno: speech over a music bed, loud on average. Pushing its peak to 95 %
+        # made it ~2.5x louder than today's clips and the speaker rasped.
+        x = gr.level([0.4, -0.4] * 4000)
+        self.assertAlmostEqual(gr.rms(x), gr.LOUDNESS, places=3)
+
+    def test_peaky_clip_capped_at_full_scale(self):
+        x = gr.level([0.9] + [0.001] * 7999)
+        self.assertAlmostEqual(max(abs(v) for v in x), gr.gg.PEAK, places=3)
+
+    def test_quiet_tail_kept(self):
+        # a word's natural decay at -40 dB stays; the 2 % trim (-34 dB) cut it short
+        x = gr.trim([0.0] * 100 + [0.5] * 1000 + [0.005] * 400 + [0.0] * 100)
+        self.assertEqual(len(x), 1400)
+
+    def test_fade_out(self):
+        x = gr.fade([0.5] * 2000)
+        self.assertEqual(x[-1], 0.0)
+        self.assertEqual(x[-gr.FADE - 1], 0.5)
+        self.assertLess(x[-gr.FADE // 2], 0.5)
 
 
 if __name__ == "__main__":

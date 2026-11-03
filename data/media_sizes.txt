@@ -13,6 +13,6 @@ backdrop.bin 153608
 max.bin 1102328
 max.pcm 780000
 shadow.bin 7168
-drive.snd 431966
-opener.snd 471620
-finale.snd 680222
+drive.snd 452298
+opener.snd 486776
+finale.snd 689840
