@@ -12,8 +12,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   yellow), picked on the panel; problems stay white on the red, orange and pink themes and red on
   the rest. The scanlines lose their amber tint.
 - **Changed:** music mode runs the outside light at 100 % at any hour.
-- **Changed:** presets fade in instead of jumping, and the lights rise to the last look when the
-  deck starts.
+- **Changed:** presets fade in instead of jumping.
+- **Added:** when the deck starts, the lights play a welcome in the last look's colour: the inside
+  strip fills from both ends inwards over 4 s (the controller's own curtain effect), then the
+  outside light rises, about 6 s in all. ">WELCOME" shows when it plays, and "INTRO" on the serial
+  port replays it on the desk (`tools/intro_check.py` checks it).
 
 ### Black deck (S3)
 - **Added:** camera alerts for fixed speed cameras, electronic speed bumps and red-light cameras.

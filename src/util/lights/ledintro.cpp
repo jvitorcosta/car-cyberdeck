@@ -8,16 +8,8 @@ songpalette::Rgb at(songpalette::Rgb s, int pct) {
     return {elkcmd::dim(s.r, p), elkcmd::dim(s.g, p), elkcmd::dim(s.b, p)};
 }
 
-// from + (to - from) x smoothstep(k / n), rounded: slow out of the dark, slow into the peak.
-int ease(int from, int to, int k, int n) {
-    const long t3 = 3L * k * k * n - 2L * k * k * k;  // smoothstep(k / n) x n^3
-    const long n3 = static_cast<long>(n) * n * n;
-    const long d = static_cast<long>(to - from) * t3;
-    return from + static_cast<int>((d + (d >= 0 ? n3 / 2 : -n3 / 2)) / n3);
-}
-
-void add(Track& t, uint32_t ms, songpalette::Rgb c) {
-    if (t.n < MAX_KEYS) t.k[t.n++] = {ms, c};
+void add(Track& t, uint32_t ms, songpalette::Rgb c, bool fill = false) {
+    if (t.n < MAX_KEYS) t.k[t.n++] = {ms, c, fill};
 }
 }  // namespace
 
@@ -28,21 +20,21 @@ int peakPct(int pct) {
 
 Track plan(bool inside, songpalette::Rgb swatch, int pct) {
     Track t;
-    const int peak = peakPct(pct);
+    const songpalette::Rgb look = at(swatch, pct);
     if (inside) {
-        // dark, then 5 steps up to the peak (1.5 s), 3 down onto the look (0.9 s), the look again
-        constexpr int RISE = 5, SETTLE = 3;
-        uint32_t ms = 0;
-        for (int k = 0; k <= RISE; k++, ms += IN_GAP_MS) add(t, ms, at(swatch, ease(0, peak, k, RISE)));
-        for (int k = 1; k <= SETTLE; k++, ms += IN_GAP_MS) add(t, ms, at(swatch, ease(peak, pct, k, SETTLE)));
-        add(t, ms, at(swatch, pct));
+        // dark, the curtain fill, then the look twice once it has filled
+        add(t, 0, at(swatch, 0));
+        add(t, IN_GAP_MS, look, true);
+        add(t, IN_GAP_MS + FILL_MS, look);
+        add(t, IN_GAP_MS + FILL_MS + IN_GAP_MS, look);
     } else {
-        // dark while the inside light rises, then half the peak, the peak, the look, the look again
+        // dark while the inside light fills, then half the peak, the peak, the look, the look again
+        const int peak = peakPct(pct);
         add(t, 0, at(swatch, 0));
         add(t, OUT_DELAY_MS, at(swatch, peak / 2));
         add(t, OUT_DELAY_MS + OUT_GAP_MS, at(swatch, peak));
-        add(t, OUT_DELAY_MS + 2 * OUT_GAP_MS, at(swatch, pct));
-        add(t, OUT_DELAY_MS + 3 * OUT_GAP_MS, at(swatch, pct));
+        add(t, OUT_DELAY_MS + 2 * OUT_GAP_MS, look);
+        add(t, OUT_DELAY_MS + 3 * OUT_GAP_MS, look);
     }
     return t;
 }

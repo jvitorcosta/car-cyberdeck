@@ -131,16 +131,22 @@ it Cyan. With cyan on the inside light the terminal takes the blue theme.
   the colour; say "preset four" for that one.
 - **Watch**: the PRESETS page (see [garmin/README.md](../garmin/README.md)).
 
-**Welcome:** the first time each light links after the deck starts, a lit light plays a short wave
-in your last look's colour. The inside light goes dark, swells past its level to a peak (30 points
-brighter, at most 100 %) over 1.5 s and settles on the look by about 2.7 s. The outside light stays
-dark until the inside one peaks, then rises through the peak to the look by about 4.5 s. When both
-link together (the car's power coming on), the light seems to travel from the cabin outwards. Only
-the level moves, never the colour, and each light ends on its look twice, so a lost write still
-lands on it. The controllers drive one colour per strip (they are not addressable), so the motion
-runs from one light to the other, not along a strip. A light you left off stays off, music mode
-skips the wave, and a change, a preset or a song's colour takes over from where the wave is. A
-later reconnect sets the look straight away.
+**Welcome:** the first time each light links after the deck starts, a lit light plays a short
+intro in your last look. The inside light goes dark, then its strip fills with colour from both ends
+inwards over 4 s and takes your look. The outside light stays dark meanwhile, then rises through a
+peak (30 points brighter, at most 100 %) as the fill ends and settles on its look, about 6 s in all.
+The deck can't light single LEDs: the fill is the inside controller's own built-in curtain effect
+(`ledintro::FILL_MODE` and `FILL_SPEED`), started with its effect command, and the outside
+controller has no such effect. The curtain's colours are the controller's own, so for a look it
+has no colour for (orange, pink) the strip fills with the nearest and shifts to the look at the
+end. Each light ends on its look twice, so a lost write still lands on it. A light you left off
+stays off, music mode skips the intro, and a change, a preset or a song's colour takes over at
+once. A later reconnect sets the look straight away.
+
+Tuning the fill in the car: the effect numbers come from published notes on a sibling controller
+(MELK-OA10), which list 57 to 76 as the curtains without naming each one. If the inside strip
+doesn't fill from both ends inwards, try the other numbers in that range in `FILL_MODE`; if the
+fill doesn't finish in time, raise `FILL_SPEED` (0 to 100) or `FILL_MS`.
 
 ## Music mode: song colours
 
