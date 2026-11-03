@@ -17,6 +17,14 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   playlist as context. Spotify is asked on the network task, on the kept-open connection.
 - **Changed:** `tools/spotify_auth.py` asks for `playlist-read-private` and
   `playlist-read-collaborative` too; the boot log says when the token lacks them.
+- **Fixed:** more songs get synced lyrics. A plain-only `/api/get` hit no longer ends the lookup:
+  the search runs too, and its synced lines replace the plain ones. The search drops title suffixes
+  (" - Remastered 2011", " (feat. X)", " - Ao Vivo") and skips entries of another song, reads up to
+  128 KB (LRCLIB's answers grew to ~230 KB, past the old 48 KB cap), still runs when `/api/get`
+  answers 5xx, and an instrumental entry no longer hides a later synced one. On 95 real songs, 75
+  had synced lyrics before and 89 now. The phone can still show lyrics LRCLIB doesn't have.
+- **Fixed:** a synced entry with fewer than 3 lines (one "Nightcall" entry holds only its first
+  line) counts as plain: the plain text read before it stays, and the search looks for a full one.
 
 ### Upgrading
 - To see private and collaborative playlists on the watch, run `python tools/spotify_auth.py`

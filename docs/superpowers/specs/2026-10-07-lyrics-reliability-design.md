@@ -1,6 +1,7 @@
 # Lyrics reliability and dialogue-box messages: design
 
-Date: 2026-10-07. Status: implemented (main, f45da1a).
+Date: 2026-10-07. Status: implemented (main, f45da1a). Search rules updated 2026-10-31: see
+"Synced lookup" under Fetching.
 
 ## Problem
 
@@ -73,8 +74,7 @@ keep their true share of the song when the tail did not fit.
 | `NotFound` | 404 from `/api/get` and search found nothing, or an entry with no text |
 | `TempError` | HTTP 5xx or 429, connect/TLS failure, timeout, stalled read |
 
-Order per attempt: `/api/get`; on 404 → `/api/search`. A `TempError` in either counts as the
-attempt's result.
+Order per attempt: `/api/get`; then `/api/search` (see "Synced lookup" below).
 
 **Retry rule** (pure, in `util/netplan`): `TempError` retries after **5 s**, then **20 s**; the
 third `TempError` becomes `NotFound`. `NotFound`/`Synced`/`Plain`/`Instrumental` are final. A
@@ -90,6 +90,28 @@ starts at `Searching`.
 `[lyrics] "MIDNIGHT DOWN TOWN" / S. Kiyotaka & Omega Tribe: plain 24 lines via get (try 1)`
 (results: `synced N`, `plain N`, `instrumental`, `not found`, `temp error rc=503`; source `get`
 or `search`).
+
+**Synced lookup (2026-10-31).** Replaces the order above and the 48 KB cap. The note in the
+Problem section that suffixes "do match" no longer holds for the search.
+
+- `/api/get` settles it only with synced lines or an instrumental. Plain, no text, a 404 or a 5xx
+  go on to the search; 429, connect failures and stalls don't.
+- The search asks for the title without its suffix (`lrcmatch::baseTitle`), since LRCLIB wants
+  every word. That also finds other songs, so an entry needs the duration and the same title
+  (`lrcmatch::sameTitle`: case, Latin accents and punctuation ignored). The title comes before
+  `duration` in each entry and is read into the line buffer: no new buffer.
+- Plain lines from `/api/get` stay in the arena until synced lines replace them.
+- An instrumental entry no longer ends the search: a later synced entry wins.
+- The cap is 128 KB: LRCLIB's `lyricsfile` field took 20 entries to ~230 KB.
+- A synced string with fewer than `lrcstream::MIN_SYNCED_LINES` (3) lines is a stub: one
+  "Nightcall" `/api/get` entry is "[00:12.42]There is a nightcall" and nothing else. It counts as
+  plain, so the search runs and reads on. The lines held before it (plain text or an earlier stub)
+  stay in the arena until a synced string reaches 3 lines (`lyricbuf::dropFirst`), and come back
+  if it ends short (`lyricbuf::keepFirst`).
+- An attempt that couldn't look everywhere is a `TempError`; the last one shows any plain lines
+  it holds instead. `lrcmatch::settle` holds these rules.
+
+No new heap: the requests run one after the other, as a 404 already did.
 
 ### 2. Dialogue-box messages (UI)
 

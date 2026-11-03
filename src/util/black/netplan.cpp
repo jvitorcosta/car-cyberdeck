@@ -48,7 +48,7 @@ bool canRun(Step s, unsigned largest) {
 
 bool LyricsRetry::onResult(lyricstatus::Result r, uint32_t nowMs) {
     ++attempts_;
-    if (r != lyricstatus::Result::TempError || attempts_ >= 3) {
+    if (r != lyricstatus::Result::TempError || attempts_ >= MAX_ATTEMPTS) {
         waiting_ = false;
         return true;
     }

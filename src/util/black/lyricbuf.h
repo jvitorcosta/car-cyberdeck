@@ -19,6 +19,9 @@ void reset(Lyrics& out);
 // False when the arena is full: the caller should stop.
 bool addLine(Lyrics& out, const char* line, size_t len);
 void finish(Lyrics& out);   // sorts by time
+// Before finish (lines in the order added): keep only the first n lines, or drop them.
+void keepFirst(Lyrics& out, int n);
+void dropFirst(Lyrics& out, int n);
 // True when `line` starts with a valid "[mm:ss.xx]" tag.
 bool hasTag(const char* line, size_t len);
 // Adds one untimed (plain) line, tMs 0. Blank lines (verse breaks) are skipped and not counted.
