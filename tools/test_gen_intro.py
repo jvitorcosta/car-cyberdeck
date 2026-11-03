@@ -45,5 +45,18 @@ class Sound(unittest.TestCase):
         self.assertEqual(gi.fit(b"", frames=1, fps=10, rate=40), b"" + bytes(6))
 
 
+    def test_level_matches_the_greetings(self):
+        # the kiss video's sound sat at 0.265 RMS (peaks near clipping), Max's at 0.068: both
+        # now land at the boot rosters' loudness, so no clip jumps out after another
+        loud = struct.pack("<%dh" % 4000, *([20000, -20000] * 2000))
+        x = struct.unpack("<%dh" % 4000, gi.level(loud))
+        rms = (sum(v * v for v in x) / len(x)) ** 0.5 / 32767
+        self.assertAlmostEqual(rms, gi.gr.LOUDNESS, places=3)
+        self.assertEqual(len(gi.level(loud)), len(loud))
+
+    def test_level_keeps_silence(self):
+        self.assertEqual(gi.level(bytes(8)), bytes(8))
+
+
 if __name__ == "__main__":
     unittest.main()
