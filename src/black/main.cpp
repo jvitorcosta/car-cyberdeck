@@ -40,6 +40,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "../util/black/idlewait.h"
 #include <Preferences.h>
 #include "../util/black/intropick.h"
+#include "../util/black/greetpick.h"
 #include "ui/carlook.h"
 #include "images/art.h"
 #include "images/walksprite.h"
@@ -123,6 +124,22 @@ static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen, bool have
     return (intropick::Opening)o;
 }
 
+// The Honda's greeting in the sky (util/greetpick): random, never last boot's (NVS "boot"/"hello");
+// the time-of-day ones only when a soft reset kept the clock (a cold boot counts from 1970).
+static const greetpick::Greeting* pickHello() {
+    netclock::zone();
+    int minute = -1;
+    if (!netclock::minuteOfDay(&minute)) minute = -1;
+    Preferences p;
+    p.begin("boot", false);
+    const int g = greetpick::pick(esp_random(), p.getInt("hello", -1), minute);
+    p.putInt("hello", g);
+    p.end();
+    Serial.printf("[boot] greeting: %s (%s)\n", greetpick::at(g).romaji,
+                  minute < 0 ? "clock not set" : "by the clock");
+    return &greetpick::at(g);
+}
+
 static void playOpening();
 
 void setup() {
@@ -202,7 +219,7 @@ static void playOpening() {
     const bool video = intropick::isVideo(opening);
     greeting::choose(intropick::greetingFor(opening));
     const bootscene::Opts opts{opening == intropick::MCQUEEN ? mcqueen : carlook::honda(),
-                               !video};
+                               !video, opening == intropick::HONDA ? pickHello() : nullptr};
     if (video) {
         intro::start(s_tft, net::isOnline, opening);
     } else {                              // the drive covers the WiFi connect (the screen'd be black)

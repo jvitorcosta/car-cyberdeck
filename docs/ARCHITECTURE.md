@@ -82,6 +82,16 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
+- **Japanese greeting** (`util/greetpick`, `ui/bootscene`) — the Honda's drive also shows a
+  greeting in the sky right of the boot terminal: kana/kanji in Unifont (`data/cjk16.bin`), the
+  romaji and the English under them in the terminal's font. One of ten each boot, never last
+  boot's (NVS `boot`/`hello`). Five fit any time (お帰りなさい, ようこそ, 安全運転で, よい旅を,
+  出発進行); おはよう, こんにちは, こんばんは and the night's 夜のドライブ and おつかれさま join
+  only when the clock is known at boot, which is after a soft reset (`netclock::zone()` sets
+  `TIMEZONE` before WiFi); a cold boot counts from 1970, so it gets a neutral one. The host test
+  checks every glyph against `data/cjk16.bin` (none blank or missing) and every line against the
+  sky's width (6 glyphs, 17 characters). The voice clip stays the same each boot: other spoken
+  greetings would need their own recorded clips (one per greeting, `tools/gen_greeting.py`).
 - **Boot opening** (`util/intropick`) — `setup()` picks one of four openings each boot:
   your intro video ("kiss"), the Honda's night drive, McQueen's, or the second video ("max").
   Random, never last boot's (NVS `boot`/`last`), and only from what the build has (the clips,
@@ -269,7 +279,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   - `common/` (both decks): bootguard, daynight, hotspotip, jsonflat, jsonpath, netdiag, netup,
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
-    genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,
+    genre_data.inc), genrebadge, glyphrun, greetpick, howl, idlesprite, idlewait, interp, introclock,
     intropick, linkstatus, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
     quietboot, ridersprite, songmood (+ songpicks.inc), termblend, walkanim, walkrect
   - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, geoip, httphead, karaoke,

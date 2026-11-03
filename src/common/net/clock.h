@@ -4,6 +4,9 @@
 // (UDP, no TLS). Named netclock: `clock` would collide with the C library's clock().
 namespace netclock {
 void begin();
+// Just TIMEZONE, no SNTP: so the clock a soft reset kept reads as local time before WiFi is up
+// (the black deck's boot greeting). begin() sets it too.
+void zone();
 // Local minute of the day (0..1439, TIMEZONE in config.h); false until the first SNTP answer.
 bool minuteOfDay(int* m);
 // Local minute of the day and date (year, month 1..12, day 1..31) from one reading of the clock, so

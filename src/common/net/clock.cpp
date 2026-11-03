@@ -21,6 +21,11 @@ void begin() {
     Serial.printf("[clock] SNTP started, TZ %s\n", TIMEZONE);
 }
 
+void zone() {
+    setenv("TZ", TIMEZONE, 1);
+    tzset();
+}
+
 bool minuteOfDay(int* m) {
     time_t now = time(nullptr);
     if (!daynight::synced((int64_t)now)) return false;

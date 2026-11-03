@@ -6,6 +6,8 @@
 #include "car_sprite.h"
 #include "carlook.h"
 #include "bootterm.h"
+#include "cjkdata.h"
+#include <cstring>
 #include "montage.h"
 #include "../../util/common/rgb565.h"
 #include "../audio/greeting.h"
@@ -94,7 +96,41 @@ struct Star { int x, y; };
 Star star(int i) { return {(i * 73) % W, (i * 37) % (SKY_H - 6)}; }
 constexpr int STARS = 18;
 constexpr uint16_t STAR = hex(0x96A0BE);
-bool starSkipped(const Star& s) { return s.y < bootterm::Y + bootterm::H && s.x < bootterm::X + bootterm::W; }   // under the terminal
+// The greeting (Opts::hello) in the sky right of the terminal: the kana/kanji, the romaji under them
+// in the terminal's font, then the English, each line centred.
+constexpr int HELLO_X = bootterm::X + bootterm::W + 4, HELLO_CX = (HELLO_X + W) / 2;   // 214, 267
+constexpr int HELLO_JP_Y = 8, HELLO_ROMAJI_Y = 30, HELLO_EN_Y = 42, HELLO_BOTTOM = 52;
+static_assert(W - HELLO_X >= greetpick::MAX_GLYPHS * 16 && W - HELLO_X >= greetpick::MAX_LATIN * 6,
+              "the longest greeting fits right of the terminal");
+constexpr uint16_t HELLO_EN = hex(0x96A0BE);
+bool starSkipped(const Star& s) {
+    return (s.y < bootterm::Y + bootterm::H && s.x < bootterm::X + bootterm::W) ||   // under the terminal
+           (s_opts.hello && s.y < HELLO_BOTTOM && s.x >= HELLO_X - 2);              // or the greeting
+}
+
+// The greeting into g: the display (y0 0) or the strip sprite, whose (0,0) is screen (0, y0).
+void drawHello(TFT_eSPI& g, int y0) {
+    const greetpick::Greeting* h = s_opts.hello;
+    if (!h) return;
+    int n = 0;
+    while (h->jp[n]) ++n;
+    int x = HELLO_CX - n * 8;                    // Unifont kana/kanji are 16 px wide
+    for (const char16_t* p = h->jp; *p; ++p, x += 16) {
+        int w = 0;
+        const uint8_t* bm = ui::cjk().glyph(*p, &w);
+        if (!bm) continue;                       // no font in the media pack: just the romaji
+        const int bpr = w / 8;
+        for (int r = 0; r < 16; ++r)
+            for (int c = 0; c < w; ++c)
+                if ((bm[r * bpr + c / 8] >> (7 - (c & 7))) & 1) g.drawPixel(x + c, HELLO_JP_Y + r - y0, WHITE);
+    }
+    const auto line = [&](const char* s, int y, uint16_t c) {
+        g.setTextColor(c);                       // one argument: transparent background
+        g.drawString(s, HELLO_CX - (int)strlen(s) * 3, y - y0, 1);   // font 1: 6 px a character
+    };
+    line(h->romaji, HELLO_ROMAJI_Y, UNDERGLOW);
+    line(h->english, HELLO_EN_Y, HELLO_EN);
+}
 
 // Cruising: sky straight on the display, once (the terminal draws itself on top).
 void drawSky() {
@@ -395,7 +431,10 @@ void task(void*) {
         Serial.println("[bootscene] no memory for the strip buffer: scene skipped");
         runWithoutScene(t0);
     } else {
-        if (s_opts.drive) drawSky();                             // no drive: black until the montage
+        if (s_opts.drive) {                                      // no drive: black until the montage
+            drawSky();
+            drawHello(*s_tft, 0);
+        }
         uint32_t tHero = bootanim::NO_EXIT;
         bool skipBrake = false;
         int xc = 0, shown = -1;
@@ -442,6 +481,7 @@ void task(void*) {
                     if (s_y0 < SKY_H) {
                         drawSkyIntoStrip(world);
                         bootterm::drawInto(spr, t, 0, s_y0);
+                        drawHello(spr, s_y0);            // fades with the sky
                     }
                     drawBackground(world);
                     drawCar(car);

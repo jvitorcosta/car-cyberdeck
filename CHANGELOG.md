@@ -6,6 +6,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck (S3)
+- **Added:** the Honda's boot drive greets in Japanese in the sky beside the boot terminal, with
+  the romaji and the English under it: one of ten each boot, never the same twice in a row
+  (お帰りなさい, ようこそ, 安全運転で, よい旅を, 出発進行, and by the clock おはよう, こんにちは,
+  こんばんは, 夜のドライブ, おつかれさま). The time-of-day ones only show when the deck still knows
+  the time at boot (after a soft reset); the voice clip is unchanged.
 - **Fixed:** more songs get synced lyrics. A plain-only `/api/get` hit no longer ends the lookup:
   the search runs too, and its synced lines replace the plain ones. The search drops title suffixes
   (" - Remastered 2011", " (feat. X)", " - Ao Vivo") and skips entries of another song, reads up to
