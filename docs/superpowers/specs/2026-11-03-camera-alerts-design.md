@@ -104,10 +104,14 @@ the intro clips, and is loaded into RAM at boot (a few KB).
 
 ## Hardware
 
-- **GPS module on the black deck** (Freenove FNK0104 ESP32-S3), on a free UART: a u-blox M10-class
-  module (e.g. a "GPS M10" board or an ATGM336H, R$40-80) with its patch antenna on the dashboard.
-  It runs at 5 Hz with GPS+Galileo, using the RMC sentence (position, speed, course). A UART takes
-  nothing from the radio or the TLS heap.
+- **GPS from the owner's iPhone** (2026-11-03, the owner's choice: no module to buy for now). The
+  iPhone app GPS 2 IP (App Store id408625926, runs in the background) serves the phone's GPS as
+  NMEA over a TCP socket. The decks already join the iPhone's hotspot, so the black deck connects as
+  a TCP client to the phone (the hotspot's gateway, `172.20.10.1`, port from `config.h`, the app's
+  default 11123) and reads `$GPRMC` sentences (about 1 Hz). Reconnects with a back-off; a dropped
+  socket shows as `GPS --` after 5 s like a lost fix (reviews say the app's link drops now and then
+  without warning, so this path matters). A u-blox module on a UART can replace it later behind the
+  same NMEA reader.
 - **Speed:** GPS speed (the only source until an OBD deck exists).
 - **Sound:** the black deck's own speaker (ES8311 on its single I2S port). Alerts take priority:
   they interrupt the intro or the waiting-screen music box, then let it continue.
@@ -116,7 +120,7 @@ the intro clips, and is loaded into RAM at boot (a few KB).
 
 The matching code has no board dependencies, so it can move to the OBD deck later unchanged.
 
-Every GPS fix (5 Hz):
+Every GPS fix (about 1 Hz from the phone):
 
 1. **No fix or moving under 10 km/h:** no alerts. If the fix is lost for more than 5 s while moving,
    the state is `nofix`.
@@ -188,9 +192,9 @@ between the decks never silences an alarm.
 
 ## Phases
 
-1. **GPS on the black deck:** module wired, NMEA parsed on its own small task, position, speed and
+1. **GPS on the black deck:** the phone's NMEA socket read on its own small task, position, speed and
    course in `/cam`; `GPS --` on both decks. Bench-testable with a recorded NMEA file fed through
-   the serial port.
+   a small TCP server on the PC in place of the phone.
 2. **The list:** `tools/cameras.py` with fetch, placing and push; the first curated Manaus list
    (the IMMU rows, the Av. do Turismo surveys, the OSM nodes).
 3. **Alerts and alarms:** matching in `src/util/car/cameras.*` with host tests (approach, opposite
@@ -207,9 +211,7 @@ between the decks never silences an alarm.
 
 ## Left to the builder
 
-- The NMEA parser (TinyGPS++ or a small RMC/GGA parser of our own), and which free GPIO pair on the
-  Freenove board's header takes the UART (check the board's pinout against the display, SD and
-  audio pins).
+- The NMEA parser (TinyGPS++ or a small RMC/GGA parser of our own).
 - How the beeps share the I2S port with the intro and the music box (generated tones are enough).
 - The grid size and the exact geometry maths (an equirectangular approximation is enough inside a
   city).

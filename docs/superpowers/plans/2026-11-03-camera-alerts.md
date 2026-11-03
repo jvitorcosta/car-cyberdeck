@@ -19,7 +19,7 @@
 - Stages: alert at max(400 m, 20 s × speed) for speed/bump, 250 m for red-light; alarm zone is the last 200 m, speed (km/h rounded down) > limit, no tolerance; red-light never alarms; the band clears 2 s after passing.
 - Sounds on the black deck only: speed = two mid tones, bump = two low, red-light = one long high; alarm = fast triple beep every 1.5 s until clear. Alerts interrupt the intro / music box, which then continue.
 - Mute keeps the bands, silences sound, lives on the black deck, resets at each start; reached by voice ("cameras mute"), the watch (it sends the same phrase to `/say`) and the yellow deck's touch.
-- Speed is GPS only in this version.
+- Speed is GPS only in this version; the GPS is the owner's iPhone running GPS 2 IP (NMEA over a TCP socket on the hotspot, about 1 Hz), not a module.
 - The black deck's Spotify, lyrics and self-heal numbers must not get worse (largest heap block never under 102 KB in the 30-min check).
 - Comments and names follow the repo: a short header comment per module, `// PURE, host-tested` on pure ones, namespaces in lower case.
 - Commits end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
@@ -86,7 +86,7 @@
   class Matcher {
   public:
       void load(const camlist::Point* pts, int n);   // keeps the pointer; clears passed state
-      Status update(const Fix& f);                   // call per fix (5 Hz) and at least 1 Hz without one
+      Status update(const Fix& f);                   // call per fix (about 1 Hz) and at least 1 Hz without one
   };
   // Geometry helpers, exposed for tests: metres, degrees 0..359, signed metres (left < 0).
   uint32_t distanceM(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2);
@@ -95,7 +95,7 @@
   int32_t crossTrackM(const Fix& f, const camlist::Point& p);
   }
   ```
-  All thresholds as `constexpr` at the top of `cameras.h` with the Global Constraints' values. A linear scan of ≤96 points per fix (no grid: the spec left it to the builder, and 96 × 5 Hz is nothing). Equirectangular maths with `cos(lat)` of the fix.
+  All thresholds as `constexpr` at the top of `cameras.h` with the Global Constraints' values. A linear scan of ≤96 points per fix (no grid: the spec left it to the builder, and 96 points a second is nothing). Fixes arrive about once a second, so a car at 100 km/h moves 28 m between them: every threshold must hold with that step. Equirectangular maths with `cos(lat)` of the fix.
 
 - [ ] **Step 1: Write the failing tests.** Build fixtures with a helper `Fix along(int32_t lat, int32_t lon, uint16_t course, int metresBefore, uint16_t kmh, uint32_t ms)` placing the car `metresBefore` metres before a point along `course`. Tests:
   - `test_alert_at_400m` (60 km/h, speed point limit 60: 410 m → `Off`, 390 m → `Alert`, `distM` within ±5 of 390).
@@ -179,7 +179,7 @@
 
 **Files:**
 - Create: `src/black/car/gps.cpp`, `src/black/car/gps.h`, `src/black/car/camsvc.cpp`, `src/black/car/camsvc.h`
-- Modify: `src/black/net/remote.cpp` (routes), `src/black/main.cpp` (start the service), `platformio.ini` (`[env:s3]` build flags `-D GPS_RX=<pin> -D GPS_TX=<pin>`; `-D GPS_REPLAY` in a new `[env:s3_gpsreplay]` extending `env:s3`)
+- Modify: `src/black/net/remote.cpp` (routes), `src/black/main.cpp` (start the service), `src/config.h.example` or the repo's config template (`GPS_HOST` default `"172.20.10.1"`, `GPS_PORT` default `11123`)
 - Modify: `docs/superpowers/specs/2026-11-03-camera-alerts-design.md` (the list lives in NVS, not the media partition: the pack is read-only and replaced only by `uploadmedia`, while `push` must store it without a reboot)
 
 **Interfaces:**
@@ -187,7 +187,7 @@
 - Produces:
   ```cpp
   namespace camsvc {
-  void begin();                         // NVS → list, starts the GPS task (UART1, 9600 baud, then 5 Hz)
+  void begin();                         // NVS → list, starts the GPS task (TCP client to GPS_HOST:GPS_PORT)
   void snapshot(cameras::Status* s, camlist::Point* active, bool* mute);   // thread-safe copy
   bool setList(const char* csv, size_t len, int* badLine);  // parse, then store in NVS ("cam"/"list"); old list kept on failure
   void setMute(bool on);                // RAM only: resets at each start
@@ -202,13 +202,13 @@
   - `GET /cam/mute?on=1|0` and `GET /cam/mark` → signed, 204 / 409 "no fix".
   - `POST /cam/list?k=` body = CSV (the PC tool, bearer key like `/trip/reset`; 413 over `MAX_CSV`; 400 `line N` from `badLine`).
   - `GET /cam/marks?k=` → `marksCsv`; `POST /cam/marks/clear?k=` → 204.
-- [ ] **Step 1: Pick the GPS pins.** From the Freenove FNK0104 pinout, choose two header pins not used by the display (10-13, 45, 46), audio, SD or touch; write them as `GPS_RX`/`GPS_TX` with a comment naming the source of the pinout.
-- [ ] **Step 2: Implement `gps.cpp`:** a task (3 KB stack, priority 1, core 0) reading `Serial1` into `nmea::Reader`, sending the module's 5 Hz + GPS/Galileo setup at boot (u-blox UBX-CFG-VALSET or ATGM `$PCAS` lines, whichever module is fitted; log which), and under `GPS_REPLAY` reading the same sentences from USB `Serial` instead.
+- [ ] **Step 1: Config.** Add `GPS_HOST` / `GPS_PORT` where the other deck addresses live (`config.h` is git-ignored: update its committed template and the setup docs).
+- [ ] **Step 2: Implement `gps.cpp`:** a task (4 KB stack, priority 1, core 0) that keeps a `WiFiClient` to `GPS_HOST:GPS_PORT` (connect timeout 1 s; back-off 2 s → 30 s while it fails; reconnect when no byte arrives for 5 s) and feeds every byte to `nmea::Reader`; only while WiFi is up; one plain TCP socket, no TLS (it must not touch the Spotify TLS heap).
 - [ ] **Step 3: Implement `camsvc.cpp`** to the interface: list in an NVS blob (`Preferences`, namespace `cam`), a `Matcher` updated per fix and once a second without one, a mutex around the snapshot.
 - [ ] **Step 4: Add the routes** in `remote.cpp`.
-- [ ] **Step 5: Build** `pio run -e s3` and `pio run -e s3_gpsreplay` → both succeed; RAM and flash use within 2 % of `main`'s.
-- [ ] **Step 6: Bench check on the deck** (`s3_gpsreplay`): push a 3-row test CSV with `tools/cameras.py push` (Task 8) or `curl -X POST --data-binary @test.csv`, stream a recorded drive with `python tools/capture_serial.py`'s port into the deck (`tools/nmea_replay.py`, a 30-line script added in this step: file + port + rate), and see `/cam` go `off → alert → alarm → off`. Then a bad CSV (row without heading) → 400 `line 3`, and `/cam` still uses the old list. Reboot → the list is still there, `"mute":0`.
-- [ ] **Step 7: Update the spec's storage line**, then **commit** `feat(black): GPS, camera list and /cam`.
+- [ ] **Step 5: Build** `pio run -e s3` → succeeds; RAM and flash use within 2 % of `main`'s.
+- [ ] **Step 6: Bench check on the deck:** add `tools/nmea_replay.py` (a TCP server that sends a recorded or synthesised NMEA file at 1 Hz, `--port 11123`); point `GPS_HOST` at the PC; push a 3-row test CSV with `curl -X POST --data-binary @test.csv` (or Task 8's `push`), and see `/cam` go `off → alert → alarm → off`. Then a bad CSV (row without heading) → 400 `line 3`, and `/cam` still uses the old list. Reboot → the list is still there, `"mute":0`.
+- [ ] **Step 7: Update the spec's storage line** (and note that the PC replay stands in for the phone), then **commit** `feat(black): GPS, camera list and /cam`.
 
 ### Task 6: Black deck: beeps and band
 
@@ -280,7 +280,7 @@
 - Modify: `data/cameras.csv`, `docs/BACKLOG.md`, `README` / device docs where the decks' features are listed
 
 - [ ] **Step 1 (owner):** `python tools/cameras.py fetch`, then `place --from immu` and `place --from osm`; drag each pin onto its lane and set the arrow using the IMMU direction and the survey photos; limits from the surveys (Av. do Turismo 60) and the road signs, empty where unknown. `place --apply`, commit `data/cameras.csv`.
-- [ ] **Step 2:** `python tools/cameras.py push` → 204; `/cam` answers `off` at home.
+- [ ] **Step 2:** `python tools/cameras.py push` → 204; `/cam` answers `off` at home. Install GPS 2 IP on the iPhone, set it to socket server mode on port 11123 with background mode on; `/cam` leaves `nofix` once the hotspot is up.
 - [ ] **Step 3 (owner, in the car):** drive past at least one point of each kind, one in the opposite direction and one parallel road (e.g. Av. do Turismo, both ways). Expected: alerts at the right distance, no alert the other way, alarm only above the limit, both bands agree, music resumes. Note any false alarm with its place.
 - [ ] **Step 4:** "mark camera" once on the drive; `import-car` shows it.
 - [ ] **Step 5:** Add to `docs/BACKLOG.md`: the watch MARK / MUTE menu items, OBD speed when the OBD deck exists, any false-alarm places from Step 3. **Commit** `docs: camera alerts in the car`.
