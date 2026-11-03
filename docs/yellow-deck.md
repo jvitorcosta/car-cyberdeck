@@ -243,14 +243,15 @@ line per song with what it knew and which rule decided:
 
 ## Theme: the inside light's colour
 
-While the **INSIDE** light is on and linked, the terminal (main screen, Lights, Lyrics; not the
-boot typing or the touch calibration) takes that light's colour: the same three brightnesses in
+While the **INSIDE** light is on, the terminal (main screen, Lights, Lyrics; not the boot typing
+or the touch calibration) takes that light's colour: the same three brightnesses in
 its hue. Blue and purple are lighter shades so the text reads; white is a soft grey-white, held
 back so it doesn't glare. Problems stay red, except on the red,
 orange and pink themes, where they show in white. The colour tiles and chips keep their real
-colours. Cyan takes blue's theme. With the inside light off or out of reach the screen goes back
-to green. To see a theme without the car's lights, build with `THEME_TEST` (0..7: red, orange,
-pink, purple, blue, green, white, yellow), then clear it:
+colours. Cyan takes blue's theme. The theme follows the inside look as the deck has it, linked or
+not: a colour tapped with the lights out of reach still shows on the screen. With the inside light
+off the screen goes back to green. To force a theme whatever the look, build with `THEME_TEST`
+(0..7: red, orange, pink, purple, blue, green, white, yellow), then clear it:
 
 ```
 $env:PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6"; pio run -e ledpanel -t upload

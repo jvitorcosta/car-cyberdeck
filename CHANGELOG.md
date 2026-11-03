@@ -12,6 +12,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   deck starts.
 - Yellow deck: night mode only dims. From 18:00 to 06:00, once the clock is synced, the backlight
   drops to about a third; the colours (no more amber palette) stay as by day.
+- Yellow deck: the theme follows the inside look even when that light isn't connected, so a colour
+  tapped away from the car still shows on the screen.
 
 ## [2.0.0] - 2026-10-28
 
