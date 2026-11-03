@@ -28,4 +28,15 @@ void playIntro(intropick::Opening o);
 // the synthesised one while music mode's mic holds the port (the recording is 48 kHz).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
+
+// Boot sound rosters (data/drive.snd, opener.snd, finale.snd from tools/gen_rosters.py, git-ignored):
+// many clips per slot, one picked each boot by main.cpp (util/soundpick). A slot without a roster
+// plays its single file above (greeting.pcm, opener.pcm, finale.pcm).
+enum Slot : uint8_t { DRIVE = 0, OPENER = 1, FINALE = 2 };
+int rosterCount(Slot s);                 // clips in the slot's roster; 0 = none
+uint32_t rosterMs(Slot s, int i);        // clip i's length; 0 when out of range
+const char* rosterName(Slot s, int i);   // clip i's name (logs); "?" when out of range
+// This boot's clip of the slot (DRIVE stands for MAIN's greeting). i < 0 with a roster: no sound
+// for that slot (no montage-start clip fits before the logo's); without a roster: the single file.
+void pick(Slot s, int i);
 }

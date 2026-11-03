@@ -40,6 +40,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "../util/black/idlewait.h"
 #include <Preferences.h>
 #include "../util/black/intropick.h"
+#include "../util/black/soundpick.h"
 #include "ui/carlook.h"
 #include "images/art.h"
 #include "images/walksprite.h"
@@ -123,6 +124,43 @@ static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen, bool have
     return (intropick::Opening)o;
 }
 
+// This boot's drive greeting, montage start and Honda logo sounds (util/soundpick): one clip of
+// each roster (data/drive.snd, opener.snd, finale.snd), never last boot's (NVS "boot"/"drive",
+// "opener", "finale"); the montage start only among the clips that end before the logo's starts.
+// The drive's is picked only for the Honda's opening. -D SOUND_FORCE=\"drive:3,opener:0\" forces
+// roster indices for testing. A slot without a roster plays its single file (audio/greeting).
+static void pickSounds(intropick::Opening opening) {
+    using greeting::Slot;
+    static const char* const KEYS[3] = {"drive", "opener", "finale"};
+    Preferences p;
+    p.begin("boot", false);
+    int picked[3] = {-1, -1, -1};
+    const auto choose = [&](Slot s, const bool* ok) {
+        const int n = greeting::rosterCount(s);
+        int i = soundpick::pick(esp_random(), p.getInt(KEYS[s], -1), n, ok);
+#ifdef SOUND_FORCE
+        const int f = soundpick::forced(SOUND_FORCE, KEYS[s], n);
+        if (f >= 0) i = f;
+#endif
+        greeting::pick(s, i);
+        if (i >= 0) p.putInt(KEYS[s], i);
+        picked[s] = i;
+    };
+    choose(greeting::FINALE, nullptr);                // first: the opener must end before it
+    bool fits[soundpick::MAX];
+    const int openers = greeting::rosterCount(greeting::OPENER);
+    for (int i = 0; i < openers && i < soundpick::MAX; ++i)
+        fits[i] = bootscene::openerFits(greeting::rosterMs(greeting::OPENER, i), greeting::finaleMs());
+    choose(greeting::OPENER, fits);
+    if (opening == intropick::HONDA) choose(greeting::DRIVE, nullptr);
+    p.end();
+    const auto label = [&](Slot s) {
+        return !greeting::rosterCount(s) ? "file" : picked[s] < 0 ? "-" : greeting::rosterName(s, picked[s]);
+    };
+    Serial.printf("[boot] sounds: drive=%s opener=%s finale=%s\n", label(greeting::DRIVE),
+                  label(greeting::OPENER), label(greeting::FINALE));
+}
+
 static void playOpening();
 
 void setup() {
@@ -201,6 +239,7 @@ static void playOpening() {
                                                    intro::available(intropick::MAX));
     const bool video = intropick::isVideo(opening);
     greeting::choose(intropick::greetingFor(opening));
+    pickSounds(opening);
     const bootscene::Opts opts{opening == intropick::MCQUEEN ? mcqueen : carlook::honda(),
                                !video};
     if (video) {

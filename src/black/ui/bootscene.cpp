@@ -38,6 +38,11 @@ constexpr uint16_t WHITE = 0xFFFF;
 // the photos; false = end it with the fade to black (bootanim::finaleStartFrame).
 constexpr bool MONTAGE_SOUND_AT_START = false;
 
+// The montage frame (of the parsed montage) that starts a finale of `ms`; -1 for no finale.
+int finaleFrame(uint32_t ms) {
+    return !ms ? -1 : MONTAGE_SOUND_AT_START ? 0 : bootanim::finaleStartFrame(montage::count(), montage::fps(), ms);
+}
+
 TFT_eSPI* s_tft = nullptr;
 carlook::Look s_car = carlook::honda();   // the car that drives (ui/carlook)
 Opts s_opts{carlook::honda(), true};
@@ -458,9 +463,7 @@ void task(void*) {
                         s_buf = nullptr;
                         jpgWork = (uint8_t*)malloc(TJPGD_WORKSPACE_SIZE);
                         if (!jpgWork) break;                     // no memory: skip the montage
-                        finaleAt = !greeting::finaleMs() ? -1
-                                   : MONTAGE_SOUND_AT_START ? 0
-                                   : bootanim::finaleStartFrame(montage::count(), montage::fps(), greeting::finaleMs());
+                        finaleAt = finaleFrame(greeting::finaleMs());
                         if (bootanim::openerFits(finaleAt, montage::fps(), greeting::openerMs()))
                             greeting::playOpener();              // the montage's first sound
                     }
@@ -502,6 +505,12 @@ void task(void*) {
 }  // namespace
 
 void start(TFT_eSPI& tft, bool (*online)()) { start(tft, online, Opts{carlook::honda(), true}); }
+
+bool openerFits(uint32_t openerMs, uint32_t finaleMs) {
+    const media::Blob photos = MEDIA(data_montage_bin, "montage.bin");
+    montage::parse(photos.data, photos.size);   // the task parses it again: same blob, same result
+    return bootanim::openerFits(finaleFrame(finaleMs), montage::fps(), openerMs);
+}
 
 void start(TFT_eSPI& tft, bool (*online)(), const Opts& o) {
     s_opts = o;
