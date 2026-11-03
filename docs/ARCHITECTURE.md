@@ -93,6 +93,12 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   rule the scene applies); the drive's only for the Honda's opening. A slot without a roster plays
   its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). Serial: `[boot] sounds: drive=…
   opener=… finale=…`.
+- **Sound timing** (`bootanim::SOUND_LEAD_MS`, `introclock::elapsed`, `greeting::level`) — a clip
+  is heard ~0.1 s after it's cued (task, codec bring-up, the amp's wake), so the pictures follow
+  the sound, not the cue: an intro video's frames run from its sound's first sample (frame 0 holds
+  up to 0.5 s for it), the drive's car lights follow the greeting as heard, the montage start is
+  cued that much before the first photo (in the brake's fade) and the logo sound that much before
+  its frame. Serial: `[greeting] <clip>: out N ms after its cue`.
 - **Boot opening** (`util/intropick`) — `setup()` picks one of four openings each boot:
   your intro video ("kiss"), the Honda's night drive, McQueen's, or the second video ("max").
   Random, never last boot's (NVS `boot`/`last`), and only from what the build has (the clips,

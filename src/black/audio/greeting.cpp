@@ -130,18 +130,37 @@ static std::atomic<int> s_playing{0};
 // One clip at a time on the audio output (audiosink's contract): a clip that starts while another
 // still plays waits here instead of colliding with it. Created by the first play*() call (setup()).
 static SemaphoreHandle_t s_output = nullptr;
+// The clip whose sound came out last and when (millis(), after the amp's wake): the pictures that
+// follow a sound (car lights, intro video) run on this clock, not on their own play() call's.
+static portMUX_TYPE s_heardMux = portMUX_INITIALIZER_UNLOCKED;
+static const Clip* s_heard = nullptr;
+static uint32_t s_heardAt = 0;
+static std::atomic<uint32_t> s_cuedAt{0};               // the last start(): for the log
+
+static uint32_t heardAt(const Clip* c) {
+    portENTER_CRITICAL(&s_heardMux);
+    const uint32_t at = s_heard == c ? s_heardAt : 0;
+    portEXIT_CRITICAL(&s_heardMux);
+    return at;
+}
 
 
 static void task(void* arg) {
     const Clip* c = (const Clip*)arg;
     const int volume = *c->volume;
     xSemaphoreTake(s_output, portMAX_DELAY);
+    const uint32_t cued = s_cuedAt.load();
     const uint32_t t0 = millis();
     if (!audiosink::open(c->rate)) {
         xSemaphoreGive(s_output);
         s_playing.fetch_sub(1);
         vTaskDelete(nullptr);
     }
+    const uint32_t out = millis();                       // the amp is awake: the first sample is out
+    portENTER_CRITICAL(&s_heardMux);
+    s_heard = c;
+    s_heardAt = out ? out : 1;
+    portEXIT_CRITICAL(&s_heardMux);
     int16_t buf[CHUNK];
     static howl::Synth synth;                            // one clip plays at a time (s_output)
     if (!c->data) synth = howl::Synth();
@@ -162,8 +181,8 @@ static void task(void* arg) {
     }
     audiosink::close();
     xSemaphoreGive(s_output);
-    Serial.printf("[greeting] %s: played %u samples in ~%u ms (clip %u ms)\n", c->name,
-                  (unsigned)c->samples, (unsigned)(millis() - t0),
+    Serial.printf("[greeting] %s: out %u ms after its cue, played %u samples in ~%u ms (clip %u ms)\n",
+                  c->name, (unsigned)(out - cued), (unsigned)c->samples, (unsigned)(millis() - t0),
                   (unsigned)(c->samples * 1000 / c->rate));
     s_playing.fetch_sub(1);
     vTaskDelete(nullptr);
@@ -171,6 +190,7 @@ static void task(void* arg) {
 
 static void start(const Clip* c, const char* name) {
     if (!s_output) s_output = xSemaphoreCreateMutex();
+    s_cuedAt.store(millis());
     s_playing.fetch_add(1);
     if (xTaskCreate(task, name, 3072, const_cast<Clip*>(c), 1, nullptr) != pdPASS) {
         s_playing.fetch_sub(1);              // never started: don't keep the boot scene waiting
@@ -190,9 +210,16 @@ void playHowl() {
 
 void playFinale() { if (present(finaleClip())) start(&finaleClip(), "finale"); }
 
-void playIntro(intropick::Opening o) {
+bool playIntro(intropick::Opening o) {
     const Clip& c = o == intropick::MAX ? clips().max : clips().intro;
-    if (present(c)) start(&c, "intro");
+    if (!present(c)) return false;
+    start(&c, "intro");
+    return true;
+}
+
+uint32_t introStartedAt() {
+    const uint32_t a = heardAt(&clips().intro);
+    return a ? a : heardAt(&clips().max);
 }
 
 void playOpener() { if (present(openerClip())) start(&openerClip(), "opener"); }
@@ -205,8 +232,11 @@ bool playing() { return s_playing.load() > 0; }
 
 uint32_t finaleMs() { return present(finaleClip()) ? lengthMs(finaleClip()) : 0; }
 
-uint8_t level(uint32_t ms) {
+uint8_t level() {
     const Clip& c = greetingClip();
+    const uint32_t heard = heardAt(&c);
+    if (!heard) return 0;                                // not out yet (or another clip since)
+    const uint32_t ms = millis() - heard;
     const size_t at = (size_t)((uint64_t)ms * c.rate / 1000);
     return loudness::loudness(c.data, c.samples, at, c.rate / 50);
 }

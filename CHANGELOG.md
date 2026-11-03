@@ -15,6 +15,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   loudness of today's clips, so a dense one (the Bem-vindo over its music bed) no longer rasps.
 - **Fixed:** clips and the intro videos' sound no longer lose their first syllable: the speaker
   amp gets 60 ms to wake before the first sample.
+- **Fixed:** boot sounds land on their picture. A sound is heard ~0.1 s after it's cued, so the
+  intro videos now run on their sound's clock (lips match the voice), the car's lights follow the
+  greeting as it's heard, the montage-start voice is cued in the brake's fade so it comes with the
+  first photo, and the logo sound is cued early enough to end with the fade to black.
 - **Fixed:** more songs get synced lyrics. A plain-only `/api/get` hit no longer ends the lookup:
   the search runs too, and its synced lines replace the plain ones. The search drops title suffixes
   (" - Remastered 2011", " (feat. X)", " - Ao Vivo") and skips entries of another song, reads up to

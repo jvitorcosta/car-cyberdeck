@@ -38,6 +38,10 @@ constexpr uint16_t WHITE = 0xFFFF;
 // the photos; false = end it with the fade to black (bootanim::finaleStartFrame).
 constexpr bool MONTAGE_SOUND_AT_START = false;
 
+// The greeting has been heard to its end: it comes out ~0.1 s after the scene starts
+// (bootanim::SOUND_LEAD_MS), so the scene's own clock isn't enough.
+bool greetingDone(uint32_t t) { return t >= greeting::durationMs() && !greeting::playing(); }
+
 // The montage frame (of the parsed montage) that starts a finale of `ms`; -1 for no finale.
 int finaleFrame(uint32_t ms) {
     return !ms ? -1 : MONTAGE_SOUND_AT_START ? 0 : bootanim::finaleStartFrame(montage::count(), montage::fps(), ms);
@@ -376,7 +380,7 @@ void runWithoutScene(uint32_t t0) {
             s_tft->drawString(bootterm::caption(), 10, 10, 2);
         }
         const uint32_t t = millis() - t0;
-        if (bootanim::mayExit(t, t >= greeting::durationMs(), s_online())) return;
+        if (bootanim::mayExit(t, greetingDone(t), s_online())) return;
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -406,7 +410,7 @@ void task(void*) {
         int xc = 0, shown = -1;
         uint8_t* jpgWork = nullptr;                              // tjpgd workspace, montage only
         int finaleAt = -1;                                       // montage frame that starts the finale sound
-        bool finaleStarted = false;
+        bool openerCued = false, finaleStarted = false;
         uint32_t frames[3] = {0, 0, 0}, busyMs[3] = {0, 0, 0};   // drive, brake, montage
         TickType_t wake = xTaskGetTickCount();
         for (;;) {
@@ -416,14 +420,20 @@ void task(void*) {
                 tHero = t;
                 skipBrake = true;                        // straight to the montage
             }
-            if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, t >= greeting::durationMs(), s_online())) {
+            if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, greetingDone(t), s_online())) {
                 tHero = t;
                 xc = bootanim::cruiseX(t);
             }
             const uint32_t u = tHero == bootanim::NO_EXIT ? 0
                              : t - tHero + (skipBrake ? bootanim::BRAKE_MS : 0);
+            if (tHero != bootanim::NO_EXIT && !openerCued && bootanim::openerDue(u)) {
+                openerCued = true;                               // in the brake's fade: heard with the first photo
+                finaleAt = finaleFrame(greeting::finaleMs());
+                if (bootanim::openerFits(finaleAt, montage::fps(), greeting::openerMs()))
+                    greeting::playOpener();                      // the montage's first sound
+            }
             const uint32_t f0 = millis();
-            const uint8_t e = greeting::level(t);
+            const uint8_t e = greeting::level();                // the lights follow the voice
             int mode;
             if (s_opts.drive) bootterm::events(t, tHero != bootanim::NO_EXIT);
             if (tHero == bootanim::NO_EXIT) {                    // enter + cruise
@@ -463,9 +473,6 @@ void task(void*) {
                         s_buf = nullptr;
                         jpgWork = (uint8_t*)malloc(TJPGD_WORKSPACE_SIZE);
                         if (!jpgWork) break;                     // no memory: skip the montage
-                        finaleAt = finaleFrame(greeting::finaleMs());
-                        if (bootanim::openerFits(finaleAt, montage::fps(), greeting::openerMs()))
-                            greeting::playOpener();              // the montage's first sound
                     }
                     if (!finaleStarted && finaleAt >= 0 && i >= finaleAt) {   // the montage sound
                         greeting::playFinale();

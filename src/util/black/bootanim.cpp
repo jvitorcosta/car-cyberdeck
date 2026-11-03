@@ -113,14 +113,17 @@ int montageFrame(uint32_t u, int fps, int count) {
 
 int finaleStartFrame(int count, int fps, uint32_t finaleMs) {
     if (count <= 0 || fps <= 0 || finaleMs == 0) return -1;
-    const int frames = (int)(((uint64_t)finaleMs * (uint64_t)fps + 999) / 1000);   // rounded up
+    const uint64_t ms = (uint64_t)finaleMs + SOUND_LEAD_MS;
+    const int frames = (int)((ms * (uint64_t)fps + 999) / 1000);   // rounded up
     return frames >= count ? 0 : count - frames;
 }
+
+bool openerDue(uint32_t u) { return u + SOUND_LEAD_MS >= BRAKE_MS; }
 
 bool openerFits(int finaleAt, int fps, uint32_t openerMs) {
     if (openerMs == 0 || fps <= 0) return false;
     if (finaleAt < 0) return true;
-    // The opener starts up to one brake frame late and its DMA still drains after the last write.
+    // The opener's cue lands on a brake frame (~110 ms apart) and its DMA still drains after the last write.
     const uint64_t ms = (uint64_t)openerMs + OPENER_MARGIN_MS;
     const int frames = (int)((ms * (uint64_t)fps + 999) / 1000);   // rounded up
     return frames <= finaleAt;
