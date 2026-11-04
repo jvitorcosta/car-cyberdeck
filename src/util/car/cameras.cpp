@@ -16,6 +16,12 @@ void offset(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2, double* east
 int iabs(int v) { return v < 0 ? -v : v; }
 }  // namespace
 
+uint32_t alertDistM(camlist::Kind kind, uint16_t kmh) {
+    if (kind == camlist::Kind::RedLight) return REDLIGHT_ALERT_M;
+    uint32_t ahead = (uint32_t)kmh * ALERT_AHEAD_S * 1000 / 3600;
+    return ahead > ALERT_MIN_M ? ahead : ALERT_MIN_M;
+}
+
 uint32_t distanceM(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2) {
     double e, n;
     offset(lat1, lon1, lat2, lon2, &e, &n);
@@ -114,9 +120,7 @@ Status Matcher::update(const Fix& f) {
             }
         }
         bool red = p.kind == camlist::Kind::RedLight;
-        uint32_t ahead = (uint32_t)f.kmh * ALERT_AHEAD_S * 1000 / 3600;
-        uint32_t alertM = red ? REDLIGHT_ALERT_M : (ahead > ALERT_MIN_M ? ahead : ALERT_MIN_M);
-        if (d > alertM && !alerted_[i]) continue;
+        if (d > alertDistM(p.kind, f.kmh) && !alerted_[i]) continue;
         alerted_[i] = true;  // latched even when a nearer point wins this fix
         if (d >= bestD) continue;
         bestD = d;

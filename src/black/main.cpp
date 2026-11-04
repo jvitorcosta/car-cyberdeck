@@ -390,10 +390,11 @@ void loop() {
     }
     if (lastMode == -2) lastMode = -1;
 
-    // Speed cameras (car/camsvc, ui/camband): while the band shows, the screens below draw through a
-    // viewport over the rest of the panel, so it never flickers under their frames. The GPS -- tag
-    // takes no rows: it sits on the top strip's title and is drawn again after the strip (topDrawn).
-    // When the band shrinks or goes, or the tag goes, the screen redraws whole to take it all back.
+    // Speed cameras (car/camsvc, ui/camband): while the band and its sign panel show, the screens
+    // below draw through a viewport over the rest (camband::screens: left of the panel, above the
+    // band), so they never flicker under their frames. The GPS -- tag takes no rows: it sits on the
+    // top strip's title and is drawn again after the strip (topDrawn). When the band and panel go,
+    // or the tag goes, the screen redraws whole to take it all back.
     static cameras::Status cam;
     static camlist::Point camPt;
     static bool camMute = false;   // the band's MUTE tag
@@ -409,7 +410,10 @@ void loop() {
     if (camRowsNow < camRows || (camTag && !camTagNow)) lastMode = -1;
     camRows = camRowsNow;
     camTag = camTagNow;
-    if (camRows) s_tft.setViewport(0, 0, s_tft.width(), s_tft.height() - camRows, false);
+    if (camRows) {
+        const camband::Rect v = camband::screens(cam, s_tft.width(), s_tft.height());
+        s_tft.setViewport(v.x, v.y, v.w, v.h, false);
+    }
     bool topDrawn = false;   // a screen drew its top strip this loop (over the GPS -- tag)
 
     static uint32_t shownGen = 0;

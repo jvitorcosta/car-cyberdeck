@@ -58,6 +58,10 @@ private:
     Status last_;
 };
 
+// How far ahead a point of `kind` alerts at `kmh`: max(ALERT_MIN_M, ALERT_AHEAD_S x speed) for
+// speed / bump, REDLIGHT_ALERT_M for a red light. The matcher's rule; the sign panel's countdown too.
+uint32_t alertDistM(camlist::Kind kind, uint16_t kmh);
+
 // Geometry helpers, exposed for tests: metres, degrees 0..359, signed metres (left < 0).
 uint32_t distanceM(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2);
 uint16_t bearing(int32_t lat1, int32_t lon1, int32_t lat2, int32_t lon2);

@@ -71,6 +71,15 @@ Open items, not scheduled. Newest decisions first within each section.
   - Without `camvoice.bin` in the pack: the old beeps for every alert and the alarm, no GPS lines.
   - `[mem]` 30-min check unchanged with the voice (the clips are read in place from the media
     pack); `camsnd` free stack (`[cam] sound: ... stackfree=`) ≥ 512 B on its 3 KB.
+  - Sign panel (Task 11; `tools/nmea_replay.py`): the signs read at arm's length in daylight (R-19
+    with two digits in font 7, a 100+ limit in font 4, `--`; the camera badge; the bump diamond; the
+    red-light diamond); the countdown bar shrinks from full and never grows back; `MUTE` under the
+    kind word.
+  - The alarm: only the sign blinks (2 Hz, red face ↔ normal, the digits don't move), `+N` in red
+    under it, the band solid red and steady.
+  - The battle screen's frame rate (walker, CD, notes) with the panel up; the panel and band over
+    each screen (battle, lyrics, status): nothing draws into them, and the screen comes back whole
+    when they go.
 
 ## Code health
 
