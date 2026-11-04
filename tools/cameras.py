@@ -1,48 +1,38 @@
 #!/usr/bin/env python3
-"""Builds and maintains the Manaus camera list (data/cameras.csv) and pushes it to the black deck.
+"""Moves the Manaus radar list onto the black deck, and the car's marks off it.
 
-  cameras.py fetch                   IMMU page + OpenStreetMap vs the list: what is new / gone (edits nothing)
-  cameras.py place [--from immu|osm|marks]   writes build/camera_place.html (drag each pin onto its road,
-                                     set the arrow, limit and label, press "save" -> placed.json)
-  cameras.py place --apply placed.json       merges placed.json into data/cameras.csv (new mao-NNNN ids)
-  cameras.py push [--force]          validates the list like the deck does, then POST /cam/list
+The list itself lives in https://github.com/jvitorcosta/open-radars-manaus (built, reviewed and
+released there as radars.csv); this tool only does the device work:
+
+  cameras.py push [--release VERSION | --file PATH] [--force]
+                                     downloads the released list (latest by default) or reads a local
+                                     file, validates it like the deck does, then POST /cam/list
                                      (a list with no rows only with --force)
-  cameras.py import-car [--apply placed.json]  the points marked in the car (GET /cam/marks) -> place page;
-                                     with --apply: merge, then clear the deck's marks
-  cameras.py check                   fetch; exit 1 when anything is new or gone (for a monthly routine)
+  cameras.py import-car [--out build/car-marks.json] [--clear]
+                                     the points marked in the car (GET /cam/marks) -> an items JSON for
+                                     the data repo's review map; with --clear: forget the deck's marks
 
-Every point is placed by hand once: IMMU gives addresses only, OSM nodes have no direction, and a
-geocoded guess never reaches the deck unconfirmed. The deck is cardeck.local (or --host, e.g. the
-hotspot's 172.20.10.10); the key is REMOTE_TOKEN from src/config.h (git-ignored, never printed).
-`validate` applies the rules of src/util/car/camlist.cpp.
+The marks file never leaves this PC: build/ is git-ignored, and it holds where the car has been.
+Next step for it, in an open-radars-manaus checkout:
+  python tools/radars.py place --from file --file <path>
+
+The deck is cardeck.local (or --host, e.g. the hotspot's 172.20.10.10); the key is REMOTE_TOKEN from
+src/config.h (git-ignored, never printed). `validate` applies the rules of src/util/car/camlist.cpp.
 """
 import argparse
-import csv
-import datetime
-import functools
-import html.parser
-import http.server
 import json
-import math
 import os
 import re
 import sys
-import time
-import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CSV_PATH = os.path.join(ROOT, "data", "cameras.csv")
-PLACE_HTML = os.path.join(ROOT, "build", "camera_place.html")
-TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "camera_place.html")
 CONFIG_H = os.path.join(ROOT, "src", "config.h")
+MARKS_JSON = os.path.join(ROOT, "build", "car-marks.json")
 
-IMMU_URL = "https://immu.manaus.am.gov.br/index.php?r=site%2Finforadar"
-OVERPASS_URLS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter")
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-BBOX = "-3.25,-60.15,-2.90,-59.80"  # south,west,north,east
+RELEASES_URL = "https://github.com/jvitorcosta/open-radars-manaus/releases"
 USER_AGENT = "car-cyberdeck-cameras/1.0 (+https://github.com/jvitorcosta/car-cyberdeck)"
 
 HEADER = "id,kind,lat,lon,heading,limit,label,source,checked"
@@ -53,8 +43,7 @@ MAX_BYTES = 6144
 MAX_LABEL = 27      # the deck cuts a label here (char label[28])
 MAX_ID = 11         # char id[12]
 KINDS = ("speed", "bump", "redlight")
-MATCH_M = 50.0
-HEADING_TOL = 60    # degrees: IMMU gives a cardinal direction, the owner sets the real bearing
+
 
 # --- validation (same rules as camlist::parse) -------------------------------------------------
 
@@ -112,233 +101,7 @@ def validate(text):
     return errors, warnings
 
 
-# --- the list on disk ----------------------------------------------------------------------------
-
-
-def read_rows(path=CSV_PATH):
-    if not os.path.isfile(path):
-        return []
-    with open(path, encoding="utf-8", newline="") as fh:
-        rows = list(csv.DictReader(fh))
-    return [{"id": r["id"], "kind": r["kind"], "lat": float(r["lat"]), "lon": float(r["lon"]),
-             "heading": int(r["heading"]), "limit": int(r["limit"]) if r["limit"] else None,
-             "label": r["label"], "source": r["source"], "checked": r["checked"]} for r in rows]
-
-
-def rows_text(rows):
-    lines = [HEADER]
-    for r in sorted(rows, key=lambda r: r["id"]):
-        lines.append(",".join([r["id"], r["kind"], "%.6f" % r["lat"], "%.6f" % r["lon"], str(r["heading"]),
-                               "" if r["limit"] is None else str(r["limit"]), r["label"], r["source"], r["checked"]]))
-    return "\n".join(lines) + "\n"
-
-
-def apply_placed(path, placed, today=None):
-    """Merges placed items into the CSV with the next free mao-NNNN ids. Refuses (ValueError, file
-    untouched) when the result would not pass validate()."""
-    today = today or datetime.date.today().isoformat()
-    rows = read_rows(path)
-    used = [int(m.group(1)) for r in rows for m in [re.fullmatch(r"mao-(\d+)", r["id"])] if m]
-    nxt = 1 + max(used or [0])
-    for it in placed:
-        if it.get("confirmed") is not True:
-            raise ValueError("'%s' is not marked confirmed in placed.json: place it by hand first" % it.get("label", "?"))
-        label = re.sub(r"\s+", " ", re.sub(r'[,"]', " ", str(it.get("label", "")))).strip()
-        rows.append({"id": "mao-%04d" % nxt, "kind": it["kind"], "lat": float(it["lat"]), "lon": float(it["lon"]),
-                     "heading": "" if it.get("heading") is None else int(it["heading"]),
-                     "limit": it.get("limit") if it["kind"] != "redlight" else None,
-                     "label": label, "source": it.get("source", "car"), "checked": today})
-        nxt += 1
-    text = rows_text(rows)
-    errs, _ = validate(text)
-    if errs:
-        raise ValueError("; ".join(errs))
-    with open(path, "w", encoding="utf-8", newline="") as fh:
-        fh.write(text)
-    return len(placed)
-
-
-# --- matching ------------------------------------------------------------------------------------
-
-_STOP = {"av", "avenida", "rua", "r", "de", "da", "do", "das", "dos", "e", "em", "frente", "n", "no", "a", "o",
-         "prof", "professor", "cel", "coronel"}
-
-
-def haversine_m(la1, lo1, la2, lo2):
-    p1, p2 = math.radians(la1), math.radians(la2)
-    a = math.sin((p2 - p1) / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lo2 - lo1) / 2) ** 2
-    return 2 * 6371000.0 * math.asin(math.sqrt(a))
-
-
-def _plain(s):
-    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
-
-
-def _words(label):
-    return {w for w in re.findall(r"[a-z0-9]+", _plain(label)) if w not in _STOP}
-
-
-def _district(label):
-    """Words after the '·' of a label ('Av. Torquato Tapajós · Da Paz' -> {'paz'}); empty when there is none."""
-    return _words(label.split("·", 1)[1]) if "·" in label else set()
-
-
-def matches(item, row):
-    """Same camera? Within 50 m when both have coordinates, else by the words of the label (numbers
-    and a known direction must agree: 'Seripa 7' is not 'Seripa 8')."""
-    if item.get("kind") != row.get("kind"):
-        return False
-    if item.get("lat") is not None and row.get("lat") is not None:
-        if haversine_m(item["lat"], item["lon"], row["lat"], row["lon"]) <= MATCH_M:
-            return True
-        if item.get("source") == "osm":      # an OSM node has no words worth comparing
-            return False
-    a, b = _words(item.get("label", "")), _words(row.get("label", ""))
-    if not a or not b:
-        return False
-    if {w for w in a if w.isdigit()} != {w for w in b if w.isdigit()}:
-        return False
-    if item.get("heading") is not None and row.get("heading") is not None:
-        d = abs(item["heading"] - row["heading"]) % 360
-        if min(d, 360 - d) > HEADING_TOL:   # the owner's real bearing (255) vs IMMU's cardinal (270) is fine
-            return False
-    da, db = _district(item.get("label", "")), _district(row.get("label", ""))
-    if da and db and not (da <= db or db <= da):   # same street, other district: another camera
-        return False
-    shared = len(a & b)
-    return shared >= 2 and shared / min(len(a), len(b)) >= 0.6
-
-
-def diff(items, rows):
-    """(new items not in the list, list rows no longer reported). Car-sourced rows are never 'gone'."""
-    new = [i for i in items if not any(matches(i, r) for r in rows)]
-    gone = [r for r in rows if r["source"] != "car" and not any(matches(i, r) for i in items)]
-    return new, gone
-
-
-# --- sources -------------------------------------------------------------------------------------
-
-_SENTIDO = {"norte": 0, "leste": 90, "sul": 180, "oeste": 270}
-_KIND_BY_HEADING = (("radares de velocidade", "speed"), ("lombadas", "bump"), ("radares de avanco", "redlight"))
-
-
-class _ImmuParser(html.parser.HTMLParser):
-    """Collects the <li> rows of the <ol> that follows each heading (found by its text, in a <b>)."""
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.kind = None
-        self.in_b = self.in_li = False
-        self.buf = []
-        self.items = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "b":
-            self.in_b, self.buf = True, []
-        elif tag == "li" and self.kind:
-            self.in_li, self.buf = True, []
-
-    def handle_endtag(self, tag):
-        if tag == "b" and self.in_b:
-            self.in_b = False
-            text = _plain(" ".join("".join(self.buf).split()))
-            for key, kind in _KIND_BY_HEADING:
-                if text.startswith(key):
-                    self.kind = kind
-        elif tag == "li" and self.in_li:
-            self.in_li = False
-            text = " ".join("".join(self.buf).split())
-            if text:
-                self.items.append((self.kind, text))
-        elif tag == "ol":
-            self.kind = None
-
-    def handle_data(self, data):
-        if self.in_b or self.in_li:
-            self.buf.append(data)
-
-
-def _abbrev(s):
-    for a, b in (("Avenida ", "Av. "), ("Professor ", "Prof. "), ("Coronel ", "Cel. "), ("Jornalista ", "Jorn. ")):
-        s = s.replace(a, b)
-    return s
-
-
-def immu_label(address):
-    """'Avenida Professor Nilton Lins, nº 900, Jardim Via Veneto – Flores, sentido Leste' -> 'Av. Prof. Nilton Lins 900 · Flores'."""
-    addr = re.sub(r",?\s*sentido\s+.*$", "", address.strip().rstrip("."), flags=re.I)
-    parts = [p.strip() for p in re.split(r"\s+[–—-]\s+", addr)]
-    street, num = parts[0], ""
-    m = re.search(r",\s*n[ºo°]\s*([\d.]+)", street)
-    if m:
-        num = " " + m.group(1).replace(".", "")
-    street = street.split(",")[0]
-    district = parts[-1].split(",")[0] if len(parts) > 1 else ""
-    label = _abbrev(street) + num + (" · " + district if district else "")
-    return re.sub(r"\s+", " ", re.sub(r'[,"]', " ", label)).strip()
-
-
-def sentido_of(address):
-    m = re.search(r"sentido\s+(.+?)\.?$", address.strip(), flags=re.I)
-    return m.group(1).strip() if m else ""
-
-
-def heading_of(sentido):
-    return _SENTIDO.get(_plain(sentido).strip())
-
-
-def parse_immu(page):
-    """The three lists of the IMMU page as items {kind, address, sentido, heading, label, limit, source}."""
-    p = _ImmuParser()
-    p.feed(page)
-    items = []
-    for kind, text in p.items:
-        sentido = sentido_of(text)
-        items.append({"kind": kind, "address": text, "sentido": sentido, "heading": heading_of(sentido),
-                      "label": immu_label(text), "limit": None, "source": "immu", "lat": None, "lon": None})
-    seen = {}
-    for it in items:   # two cameras on one street and district would share a label: tell them apart
-        seen.setdefault(it["label"], []).append(it)
-    for group in seen.values():
-        if len(group) > 1:
-            for it in group:
-                it["label"] += " " + (it["sentido"].split()[0] if it["sentido"] else "?")
-    return items
-
-
-# The 7 "Levantamentos Técnicos" on the IMMU page (Av. do Turismo); the limit (60) is from their PDFs.
-_SURVEY = (
-    ("Av. do Turismo, oposto a empresa Vida Film nº 12568 - Tarumã-açu, sentido oeste", "Av. do Turismo · Vida Film"),
-    ("Av. do Turismo/Av. Thales Loureiro - Ponta Negra, sentido complexo turístico Ponta Negra", "Av. do Turismo · Thales Loureiro"),
-    ("Av. do Turismo, em frente a 123ª IEADAM - Tarumã, sentido norte", "Av. do Turismo · IEADAM"),
-    ("Av. do Turismo, 3727 - Ponta Negra, sentido complexo turístico Ponta Negra", "Av. do Turismo 3727"),
-    ("Av. do Turismo, oposto ao Cond Viver Tarumã - Tarumã-Açu, sentido oeste", "Av. do Turismo · Viver Tarumã"),
-    ("Av. do Turismo, oposto Cond. Mediterrâneo I - Tarumã, sentido aeroporto Eduardo Gomes", "Av. do Turismo · Mediterrâneo"),
-    ("Av. do Turismo, em frente ao Cond Viva Vida Tarumã - Tarumã, sentido leste", "Av. do Turismo · Viva Vida"),
-)
-
-
-def survey_items():
-    out = []
-    for address, label in _SURVEY:
-        s = sentido_of(address)
-        out.append({"kind": "speed", "address": address, "sentido": s, "heading": heading_of(s), "label": label,
-                    "limit": 60, "source": "immu-survey", "lat": None, "lon": None})
-    return out
-
-
-def parse_overpass(data):
-    items = []
-    for el in data.get("elements", []):
-        if el.get("type") != "node":
-            continue
-        tags = el.get("tags", {})
-        ms = re.match(r"\d+", tags.get("maxspeed", ""))
-        d = tags.get("direction", "")
-        items.append({"kind": "speed", "address": "", "sentido": "", "heading": int(d) % 360 if d.isdigit() else None,
-                      "label": tags.get("name") or "OSM %d" % el["id"], "limit": int(ms.group(0)) if ms else None,
-                      "source": "osm", "lat": float(el["lat"]), "lon": float(el["lon"])})
-    return items
+# --- marks from the car --------------------------------------------------------------------------
 
 
 def parse_marks(text):
@@ -351,61 +114,6 @@ def parse_marks(text):
         items.append({"kind": "speed", "address": "", "sentido": "", "heading": int(float(f[3])) % 360,
                       "label": "Mark %d" % n, "limit": None, "source": "car", "lat": float(f[1]), "lon": float(f[2])})
     return items
-
-
-# --- network -------------------------------------------------------------------------------------
-
-
-def http_req(url, data=None, headers=None, timeout=30):
-    h = {"User-Agent": USER_AGENT}
-    h.update(headers or {})
-    req = urllib.request.Request(url, data=data, headers=h)
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return r.status, r.read()
-
-
-def fetch_immu():
-    _, body = http_req(IMMU_URL)
-    return parse_immu(body.decode("utf-8", "replace")) + survey_items()
-
-
-def fetch_osm():
-    q = '[out:json][timeout:25];node["highway"="speed_camera"](%s);out;' % BBOX
-    last = None
-    for attempt in range(2):    # the public instances answer 502 or stall now and then: retry, try the mirror
-        for url in OVERPASS_URLS:
-            try:
-                _, body = http_req(url, data=urllib.parse.urlencode({"data": q}).encode(), timeout=70)
-                return parse_overpass(json.loads(body))
-            except (urllib.error.URLError, OSError, ValueError) as e:
-                last = e
-        time.sleep(2)
-    raise last
-
-
-_last_geocode = [0.0]
-
-
-def geocode(item):
-    """First guess for an address-only item (Nominatim: at most 1 request/s). None when not found."""
-    wait = 1.1 - (time.time() - _last_geocode[0])
-    if wait > 0:
-        time.sleep(wait)
-    _last_geocode[0] = time.time()
-    addr = re.split(r",?\s*sentido\s", item["address"], flags=re.I)[0]
-    parts = [p.strip() for p in re.split(r"\s+[–—-]\s+", addr)]
-    street = parts[0].split(",")[0].split("/")[0]
-    district = parts[-1].split(",")[0] if len(parts) > 1 else ""
-    q = "%s, %s, Manaus, Amazonas, Brazil" % (street, district) if district else "%s, Manaus, Amazonas, Brazil" % street
-    url = NOMINATIM_URL + "?" + urllib.parse.urlencode({"q": q, "format": "json", "limit": 1, "countrycodes": "br"})
-    try:
-        _, body = http_req(url)
-        res = json.loads(body)
-        if res:
-            return float(res[0]["lat"]), float(res[0]["lon"])
-    except (urllib.error.URLError, ValueError, OSError):
-        pass
-    return None
 
 
 # --- the deck ------------------------------------------------------------------------------------
@@ -434,124 +142,37 @@ def deck_call(host, method, path, body=None):
         sys.exit("cameras: cannot reach the deck at %s (%s)" % (host, getattr(e, "reason", e)))
 
 
-# --- the placing page ----------------------------------------------------------------------------
+# --- the released list ---------------------------------------------------------------------------
 
 
-def write_place_page(items, out=PLACE_HTML, apply_cmd="place --apply placed.json"):
-    """The page, its hint naming the command that takes its placed.json (`apply_cmd`)."""
-    template = open(TEMPLATE, encoding="utf-8").read().replace("__APPLY__", apply_cmd)
-    data = json.dumps(items, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    with open(out, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(template.replace("__ITEMS__", data))
-    return out
+def release_url(version):
+    """radars.csv of the latest release of open-radars-manaus, or of the tag `version`."""
+    if version is None:
+        return RELEASES_URL + "/latest/download/radars.csv"
+    return "%s/download/%s/radars.csv" % (RELEASES_URL, urllib.parse.quote(version, safe=""))
+
+
+def download(url, timeout=30):
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return r.read().decode("utf-8")
 
 
 # --- commands ------------------------------------------------------------------------------------
 
 
-def _show(it):
-    where = "" if it.get("lat") is None else "  (%.5f, %.5f)" % (it["lat"], it["lon"])
-    lim = "" if it.get("limit") is None else " %s km/h" % it["limit"]
-    d = it.get("sentido") or ("" if it.get("heading") is None else "%d deg" % it["heading"])
-    return "  [%s%s] %s -> %s%s" % (it["kind"], lim, it["label"], d or "?", where)
-
-
-def collect():
-    items, problems = [], []
-    for name, fn in (("IMMU", fetch_immu), ("OpenStreetMap", fetch_osm)):
-        try:
-            items += fn()
-        except (urllib.error.URLError, OSError, ValueError) as e:
-            problems.append("%s: %s" % (name, getattr(e, "reason", e)))
-    return items, problems
-
-
-def cmd_fetch(_a):
-    items, problems = collect()
-    for p in problems:
-        print("cameras: could not read " + p, file=sys.stderr)
-    if problems:
-        return 2
-    rows = read_rows()
-    new, gone = diff(items, rows)
-    counts = [sum(1 for i in items if i["kind"] == k) for k in KINDS]
-    print("%d points online (%d speed, %d bump, %d redlight); %d in data/cameras.csv" % (len(items), *counts, len(rows)))
-    print("new (%d):" % len(new))
-    for it in new:
-        print(_show(it))
-    print("gone (%d):" % len(gone))
-    for r in gone:
-        print("  %s [%s] %s" % (r["id"], r["kind"], r["label"]))
-    unknown = [r for r in rows if r["kind"] != "redlight" and r["limit"] is None]
-    if unknown:
-        print("limit unknown (%d): %s" % (len(unknown), ", ".join(r["id"] for r in unknown)))
-    return 1 if (new or gone) else 0
-
-
-def cmd_check(a):
-    code = cmd_fetch(a)
-    print({0: "check: the list is up to date", 1: "check: the list needs attention"}.get(code, "check: failed"))
-    return code
-
-
-def serve(directory, page, port=8765):
-    """Serves build/ on 127.0.0.1 so the page loads over http with a Referer (OSM refuses tiles without one)."""
-    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=directory)
-    handler.log_message = lambda *a, **k: None
-    try:
-        srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
-    except OSError:
-        srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    print("open http://127.0.0.1:%d/%s  (Ctrl+C stops the server)" % (srv.server_address[1], page))
-    try:
-        srv.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        srv.server_close()
-
-
-def _place(items, no_serve=False, apply_cmd="place --apply placed.json"):
-    for it in items:
-        if it.get("lat") is None:
-            g = geocode(it)
-            it["lat"], it["lon"] = g if g else (-3.1019, -60.0250)   # not found: Manaus centre, the owner drags it
-            it["guess"] = True
-    out = write_place_page(items, apply_cmd=apply_cmd)
-    print("wrote %s (%d points): open it, place each pin, press save, then run: python tools/cameras.py %s" % (
-        os.path.relpath(out, ROOT), len(items), apply_cmd))
-    if not no_serve:
-        serve(os.path.dirname(out), os.path.basename(out))
-
-
-def _load_placed(path):
-    with open(path, encoding="utf-8") as fh:
-        return json.load(fh)
-
-
-def cmd_place(a):
-    if a.apply:
-        n = apply_placed(CSV_PATH, _load_placed(a.apply))
-        print("added %d rows to data/cameras.csv" % n)
-        return 0
-    if a.src == "marks":
-        return cmd_import_car(argparse.Namespace(host=a.host, apply=None, no_serve=a.no_serve))
-    try:
-        items = fetch_immu() if a.src == "immu" else fetch_osm()
-    except (urllib.error.URLError, OSError, ValueError) as e:
-        print("cameras: could not read %s: %s" % (a.src, getattr(e, "reason", e)), file=sys.stderr)
-        return 2
-    new, _ = diff(items, read_rows())
-    if not new:
-        print("nothing unplaced from %s" % a.src)
-        return 0
-    _place(new, a.no_serve)
-    return 0
-
-
 def cmd_push(a):
-    text = open(CSV_PATH, encoding="utf-8", newline="").read()
+    if a.file:
+        with open(a.file, encoding="utf-8", newline="") as fh:
+            text = fh.read()
+    else:
+        url = release_url(a.release)
+        try:
+            text = download(url)
+        except (urllib.error.URLError, OSError, UnicodeDecodeError) as e:
+            print("cameras: could not download %s (%s): no such release, or no network" % (
+                url, getattr(e, "reason", e)), file=sys.stderr)
+            return 2
     errs, warns = validate(text)
     for w in warns:
         print("warning: " + w)
@@ -559,7 +180,7 @@ def cmd_push(a):
         for e in errs:
             print("error: " + e, file=sys.stderr)
         return 1
-    rows = sum(1 for line in text.lstrip("\ufeff").split("\n")[1:] if line.strip("\r"))
+    rows = sum(1 for line in text.lstrip("﻿").split("\n")[1:] if line.strip("\r"))
     if rows == 0 and not a.force:
         # The deck can't say how many it holds now: an empty file is almost always a slip.
         print("error: the list has no rows; the deck would drop every camera it has (--force pushes it anyway)",
@@ -574,12 +195,10 @@ def cmd_push(a):
 
 
 def cmd_import_car(a):
-    if a.apply:
-        n = apply_placed(CSV_PATH, _load_placed(a.apply))
-        print("added %d rows to data/cameras.csv" % n)
+    if a.clear:
         status, _ = deck_call(a.host, "POST", "/cam/marks/clear")
         print("deck marks cleared" if status == 204 else "could not clear the deck's marks (%d)" % status)
-        return 0
+        return 0 if status == 204 else 1
     status, body = deck_call(a.host, "GET", "/cam/marks")
     if status != 200:
         print("deck answered %d" % status, file=sys.stderr)
@@ -588,7 +207,12 @@ def cmd_import_car(a):
     if not items:
         print("no marks on the deck")
         return 0
-    _place(items, a.no_serve, apply_cmd="import-car --apply placed.json")
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    with open(a.out, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(items, fh, ensure_ascii=False, indent=1)
+    print("wrote %d marks to %s" % (len(items), a.out))
+    print("next, in an open-radars-manaus checkout: python tools/radars.py place --from file --file %s" % a.out)
+    print("then, once they are placed there: python tools/cameras.py import-car --clear")
     return 0
 
 
@@ -596,19 +220,15 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--host", default=os.environ.get("CARDECK_HOST", "cardeck.local"), help="black deck address")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("fetch").set_defaults(fn=cmd_fetch)
-    sub.add_parser("check").set_defaults(fn=cmd_check)
     p = sub.add_parser("push")
+    g = p.add_mutually_exclusive_group()
+    g.add_argument("--release", metavar="VERSION", help="release tag of open-radars-manaus (default: the latest)")
+    g.add_argument("--file", metavar="PATH", help="push a local radars.csv instead of downloading one")
     p.add_argument("--force", action="store_true", help="push even a list with no rows")
     p.set_defaults(fn=cmd_push)
-    p = sub.add_parser("place")
-    p.add_argument("--from", dest="src", choices=("immu", "osm", "marks"), default="immu")
-    p.add_argument("--apply", metavar="placed.json")
-    p.add_argument("--no-serve", action="store_true", help="only write the page, do not start the local server")
-    p.set_defaults(fn=cmd_place)
     p = sub.add_parser("import-car")
-    p.add_argument("--apply", metavar="placed.json")
-    p.add_argument("--no-serve", action="store_true", help="only write the page, do not start the local server")
+    p.add_argument("--out", default=MARKS_JSON, metavar="PATH", help="items JSON to write (default: build/car-marks.json)")
+    p.add_argument("--clear", action="store_true", help="forget the marks on the deck instead of reading them")
     p.set_defaults(fn=cmd_import_car)
     a = ap.parse_args(argv)
     return a.fn(a)

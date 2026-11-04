@@ -69,8 +69,10 @@ No single source is complete, so the list is merged and curated on the PC.
 
 ### The list
 
-One file, `data/cameras.csv` (UTF-8, one row per point, sorted by id), committed to the repo:
-the locations are public (IMMU publishes them).
+The list is a CSV (UTF-8, one row per point, sorted by id) built, curated and released in
+https://github.com/jvitorcosta/open-radars-manaus
+(the locations are public: IMMU publishes them). This repo only pushes a release to the deck. The columns
+the deck reads:
 
 | Field | Meaning |
 |---|---|
@@ -80,7 +82,7 @@ the locations are public (IMMU publishes them).
 | `heading` | degrees (0 = north) of the enforced direction of travel; required (`push` refuses a row without one) |
 | `limit` | km/h; empty for `redlight`; empty for another kind only while unknown (the tool lists those rows) |
 | `label` | short place name for the screen ("Av. do Turismo · Vida Film") |
-| `source` | `immu`, `immu-survey`, `osm`, `car` |
+| `source` | where the row came from (`immu`, `osm`, `survey`, `car`, `community`); the deck ignores it |
 | `checked` | date the row was last confirmed (`YYYY-MM-DD`) |
 
 About 50 rows fill only a few KB. On the black deck the list lives in NVS (namespace `cam`, key
@@ -91,19 +93,16 @@ boot and after each push; a push that fails to parse or to store leaves the old 
 
 ### The PC tool (`tools/cameras.py`)
 
-- `fetch`: reads the IMMU page and the OSM query, and reports what is new or gone compared with
-  `cameras.csv` (by label and distance), without editing the file.
-- **Placing a point:** an IMMU row has only an address. The tool geocodes it (Nominatim) to a
-  first guess and writes a small HTML map (Leaflet, OSM tiles) where the owner drags the pin onto
-  the road and sets the arrow for the direction. The tool then writes the row. Every point, from any
-  source (IMMU, OSM, the car), gets placed by hand once and gets its arrow; a geocoded guess or an
-  OSM node never goes to the deck unconfirmed. Placing also asks for the limit, prefilled from the
-  survey or OSM's `maxspeed`; the owner confirms it from the road sign or leaves it empty.
-- `import-car`: pulls the points marked in the car (below) off the black deck and places them the
-  same way.
-- `push`: uploads `cameras.csv` to the black deck over WiFi (a signed request, like the other
-  deck-to-deck requests); the deck reloads it without a reboot.
-- `check`: run monthly by hand or by a routine; it runs `fetch` and says whether anything changed.
+Fetching, matching and placing points moved to https://github.com/jvitorcosta/open-radars-manaus (its `tools/radars.py` and review map). Here
+the tool does only device work:
+
+- `push`: downloads the latest release of that repo's `radars.csv` (`--release VERSION` pins one,
+  `--file PATH` pushes a local file), validates it with the deck's own rules and uploads it to the black
+  deck over WiFi (a signed request, like the other deck-to-deck requests); the deck reloads it
+  without a reboot.
+- `import-car`: pulls the points marked in the car (below) off the black deck into `build/car-marks.json`
+  (git-ignored, never leaves the PC), for `python tools/radars.py place --from file --file <path>` in an
+  open-radars-manaus checkout, where the owner places them. `import-car --clear` forgets the marks on the deck.
 
 ## Hardware
 
@@ -244,8 +243,8 @@ amitaro's radar-detector set (credit "声: あみたろの声素材工房" where
   current position, course and time on the black deck (NVS `cam`/`marks`, the last 32; the PC reads
   them as CSV from `/cam/marks`). Siri replies "marked". No
   touch target (our call: a new camera has no band to press, and the screens' touch areas are taken).
-- Marks never alert by themselves: they wait for `tools/cameras.py import-car` on the PC, where the
-  owner sets the kind and limit and places the pin. This way a mistaken mark can't cause false
+- Marks never alert by themselves: they wait for `tools/cameras.py import-car` on the PC and the
+  review map of open-radars-manaus, where the owner sets the kind and limit and places the pin. This way a mistaken mark can't cause false
   alarms.
 
 ## Phases
@@ -254,8 +253,8 @@ amitaro's radar-detector set (credit "声: あみたろの声素材工房" where
    course in `/cam`; `GPS --` on both decks. Bench-testable with a recorded NMEA file fed through
    a small TCP server on the PC in place of the phone (`tools/nmea_replay.py`, with `GPS_HOST`
    pointed at the PC).
-2. **The list:** `tools/cameras.py` with fetch, placing and push; the first curated Manaus list
-   (the IMMU rows, the Av. do Turismo surveys, the OSM nodes).
+2. **The list:** `tools/cameras.py` with push and import-car; the Manaus list itself (the IMMU rows,
+   the Av. do Turismo surveys, the OSM nodes) is curated in https://github.com/jvitorcosta/open-radars-manaus.
 3. **Alerts and alarms:** matching in `src/util/car/cameras.*` with host tests (approach, opposite
    lane, parallel road, overpass, passed, unknown limit, no fix), the bands on both decks and the
    sounds on the black deck. A 30-min drive with Spotify playing must keep the self-heal numbers

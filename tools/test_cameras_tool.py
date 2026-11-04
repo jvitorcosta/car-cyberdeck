@@ -1,12 +1,13 @@
 """Host tests for tools/cameras.py (no network). Run: python -m pytest tools/test_cameras_tool.py"""
+import json
 import os
 import sys
+import urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cameras as cam  # noqa: E402
 
 HDR = "id,kind,lat,lon,heading,limit,label,source,checked\n"
-HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def errors(body):
@@ -47,135 +48,10 @@ def test_validate_warns_on_long_label():
     assert errs == [] and warns and "27" in warns[0]
 
 
-def test_parse_immu_lists():
-    html = open(os.path.join(HERE, "testdata", "immu_inforadar.html"), encoding="utf-8").read()
-    items = cam.parse_immu(html)
-    by = {}
-    for it in items:
-        by.setdefault(it["kind"], []).append(it)
-    assert len(by["speed"]) == 13 and len(by["bump"]) == 2 and len(by["redlight"]) == 5
-    assert all(it["sentido"] for it in items)
-    first = by["speed"][0]
-    assert first["sentido"] == "Oeste" and first["heading"] == 270 and first["source"] == "immu"
-    assert "Santos Dumont" in first["address"]
-    assert "," not in first["label"] and "·" in first["label"]
-
-
-def test_survey_rows_are_speed_60():
-    s = cam.survey_items()
-    assert len(s) == 7
-    assert all(i["kind"] == "speed" and i["limit"] == 60 and i["source"] == "immu-survey" for i in s)
-
-
-def test_parse_overpass():
-    data = {"elements": [{"type": "node", "id": 7, "lat": -3.05, "lon": -60.01, "tags": {"maxspeed": "60", "name": "Radar X"}},
-                         {"type": "node", "id": 8, "lat": -3.06, "lon": -60.02, "tags": {}}]}
-    items = cam.parse_overpass(data)
-    assert items[0]["limit"] == 60 and items[0]["lat"] == -3.05 and items[0]["source"] == "osm"
-    assert items[1]["limit"] is None
-
-
-def test_match_by_distance():
-    row = {"kind": "speed", "lat": -3.100000, "lon": -60.000000, "label": "Totally different"}
-    near = {"kind": "speed", "lat": -3.100300, "lon": -60.0, "label": "Other words"}   # ~33 m
-    far = {"kind": "speed", "lat": -3.101000, "lon": -60.0, "label": "Other words"}    # ~111 m
-    assert cam.matches(near, row)
-    assert not cam.matches(far, row)
-
-
-def test_match_by_label_words():
-    row = {"kind": "speed", "lat": -3.1, "lon": -60.0, "label": "Av. Torquato Tapajós · Flores"}
-    it = {"kind": "speed", "label": "Avenida Torquato Tapajós · Flores"}
-    assert cam.matches(it, row)
-    assert not cam.matches({"kind": "speed", "label": "Av. Autaz Mirim · Coroado"}, row)
-
-
-def test_diff_new_and_gone():
-    rows = [{"id": "mao-0001", "kind": "speed", "lat": -3.1, "lon": -60.0, "label": "Av. Torquato Tapajós · Flores", "source": "immu"},
-            {"id": "mao-0002", "kind": "speed", "lat": -3.2, "lon": -60.0, "label": "Av. Autaz Mirim · Coroado", "source": "immu"},
-            {"id": "mao-0003", "kind": "speed", "lat": -3.3, "lon": -60.0, "label": "Mine", "source": "car"}]
-    items = [{"kind": "speed", "label": "Av. Torquato Tapajós · Flores"}, {"kind": "speed", "label": "Av. Codajás · Petrópolis"}]
-    new, gone = cam.diff(items, rows)
-    assert [i["label"] for i in new] == ["Av. Codajás · Petrópolis"]
-    assert [r["id"] for r in gone] == ["mao-0002"]        # car-sourced rows are never "gone"
-
-
-def test_apply_assigns_next_id(tmp_path):
-    p = tmp_path / "cameras.csv"
-    p.write_text(HDR + "mao-0007,speed,-3.1,-60.0,90,60,Old,car,2026-01-01\n", encoding="utf-8", newline="")
-    placed = [{"kind": "bump", "lat": -3.2, "lon": -60.1, "heading": 45, "limit": 30, "label": "New one", "source": "immu", "confirmed": True},
-              {"kind": "redlight", "lat": -3.3, "lon": -60.2, "heading": 180, "limit": None, "label": "Light", "source": "osm", "confirmed": True}]
-    n = cam.apply_placed(str(p), placed, today="2026-11-03")
-    assert n == 2
-    text = p.read_text(encoding="utf-8")
-    assert "mao-0008,bump,-3.200000,-60.100000,45,30,New one,immu,2026-11-03\n" in text
-    assert "mao-0009,redlight,-3.300000,-60.200000,180,,Light,osm,2026-11-03\n" in text
-    assert cam.validate(text)[0] == []
-
-
-def test_apply_refuses_an_invalid_result(tmp_path):
-    p = tmp_path / "cameras.csv"
-    p.write_text(HDR, encoding="utf-8", newline="")
-    bad = [{"kind": "speed", "lat": -3.2, "lon": -60.1, "heading": None, "limit": 60, "label": "No arrow", "source": "immu", "confirmed": True}]
-    try:
-        cam.apply_placed(str(p), bad, today="2026-11-03")
-        assert False, "should refuse"
-    except ValueError:
-        pass
-    assert p.read_text(encoding="utf-8") == HDR
-
-
 def test_parse_marks():
     rows = cam.parse_marks("123,-3.100000,-60.000000,271,55\n456,-3.2,-60.1,10,0\n")
     assert rows[0]["lat"] == -3.1 and rows[0]["heading"] == 271 and rows[0]["source"] == "car"
     assert len(rows) == 2
-
-
-def test_place_page_embeds_items(tmp_path):
-    out = tmp_path / "p.html"
-    cam.write_place_page([{"kind": "speed", "label": "A </script> b", "lat": -3.1, "lon": -60.0, "heading": 90, "limit": 60, "source": "osm"}], str(out))
-    html = out.read_text(encoding="utf-8")
-    assert "__ITEMS__" not in html and "leaflet" in html.lower()
-    assert "</script> b" not in html          # embedded JSON can't close the script tag
-
-
-def test_apply_refuses_unconfirmed(tmp_path):
-    p = tmp_path / "cameras.csv"
-    p.write_text(HDR, encoding="utf-8", newline="")
-    guess = [{"kind": "speed", "lat": -3.2, "lon": -60.1, "heading": 90, "limit": 60, "label": "Guess", "source": "immu"}]
-    for placed in (guess, [dict(guess[0], confirmed=False)]):
-        try:
-            cam.apply_placed(str(p), placed, today="2026-11-03")
-            assert False, "should refuse"
-        except ValueError as e:
-            assert "confirmed" in str(e)
-    assert p.read_text(encoding="utf-8") == HDR
-
-
-def _pair(label_a, label_b, heading):
-    return cam.matches({"kind": "speed", "label": label_a, "heading": heading},
-                       {"kind": "speed", "lat": -3.1, "lon": -60.0, "label": label_b, "heading": heading})
-
-
-def test_same_street_other_district_is_another_camera():
-    assert not _pair("Av. Torquato Tapajós · Da Paz", "Av. Torquato Tapajós · Flores", 180)
-    assert not _pair("Av. Autaz Mirim · Coroado", "Av. Autaz Mirim · Zumbi dos Palmares", 180)
-    assert not _pair("Av. Codajás/Av. Marquês da Silveira · Petrópolis",
-                     "Av. Codajás/Av. Marquês da Silveira · São Francisco", 270)
-    assert _pair("Av. Torquato Tapajós · Flores", "Av. Torquato Tapajós · Flores", 180)
-
-
-def test_heading_tolerance():
-    def m(h_item, h_row):
-        return cam.matches({"kind": "speed", "label": "Av. Torquato Tapajós · Flores", "heading": h_item},
-                           {"kind": "speed", "lat": -3.1, "lon": -60.0, "label": "Av. Torquato Tapajós · Flores", "heading": h_row})
-    assert m(270, 255)
-    assert m(10, 350)
-    assert not m(90, 270)
-
-
-def test_user_agent_has_no_personal_address():
-    assert "@" not in cam.USER_AGENT and "github.com" in cam.USER_AGENT
 
 
 def test_validate_rejects_unicode_digits():
@@ -191,22 +67,18 @@ def test_validate_rejects_quote_in_label():
     assert errs and "line 2" in errs[0] and '"' in errs[0]
 
 
-def test_apply_strips_quotes_from_labels(tmp_path):
-    p = tmp_path / "cameras.csv"
-    p.write_text(HDR, encoding="utf-8", newline="")
-    placed = [{"kind": "speed", "lat": -3.2, "lon": -60.1, "heading": 90, "limit": 60, "label": 'Av. "Q", 9',
-               "source": "car", "confirmed": True}]
-    cam.apply_placed(str(p), placed, today="2026-11-03")
-    assert ",Av. Q 9,car," in p.read_text(encoding="utf-8")
+def test_validate_accepts_every_source_of_the_data_repo():
+    body = "".join("mao-%d,speed,-3.1,-60.0,90,60,A,%s,2026-11-03\n" % (n, src)
+                   for n, src in enumerate(("immu", "osm", "survey", "car", "community")))
+    assert errors(body) == []
 
 
 def _push(tmp_path, monkeypatch, body, *args):
-    p = tmp_path / "cameras.csv"
+    p = tmp_path / "radars.csv"
     p.write_text(HDR + body, encoding="utf-8", newline="")
-    monkeypatch.setattr(cam, "CSV_PATH", str(p))
     sent = []
     monkeypatch.setattr(cam, "deck_call", lambda host, method, path, data=None: (sent.append(path), (204, ""))[1])
-    return cam.main(["--host", "deck.test", "push", *args]), sent
+    return cam.main(["--host", "deck.test", "push", "--file", str(p), *args]), sent
 
 
 def test_push_refuses_an_empty_list_without_force(tmp_path, monkeypatch):
@@ -218,11 +90,62 @@ def test_push_refuses_an_empty_list_without_force(tmp_path, monkeypatch):
     assert code == 0 and sent == ["/cam/list"]
 
 
-def test_place_page_names_its_apply_command(tmp_path):
-    out = tmp_path / "p.html"
-    item = {"kind": "speed", "label": "A", "lat": -3.1, "lon": -60.0, "heading": 90, "limit": None, "source": "car"}
-    cam.write_place_page([item], str(out), apply_cmd="import-car --apply placed.json")
-    html = out.read_text(encoding="utf-8")
-    assert "import-car --apply placed.json" in html and "__APPLY__" not in html
-    cam.write_place_page([item], str(out))
-    assert "place --apply placed.json" in out.read_text(encoding="utf-8")
+def test_release_url_latest_and_pinned():
+    base = "https://github.com/jvitorcosta/open-radars-manaus/releases"
+    assert cam.release_url(None) == base + "/latest/download/radars.csv"
+    assert cam.release_url("v1.2.0") == base + "/download/v1.2.0/radars.csv"
+
+
+class _Resp:
+    def __init__(self, body):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def read(self):
+        return self.body
+
+    status = 200
+
+
+def test_push_from_release_downloads_and_posts(monkeypatch):
+    text = HDR + "mao-0001,speed,-3.1,-60.0,90,60,A,community,2026-11-03\n"
+    urls, posted = [], []
+    monkeypatch.setattr(cam.urllib.request, "urlopen",
+                        lambda req, timeout=None: (urls.append(req.full_url), _Resp(text.encode("utf-8")))[1])
+    monkeypatch.setattr(cam, "deck_call",
+                        lambda host, method, path, data=None: (posted.append((path, data)), (204, ""))[1])
+    assert cam.main(["--host", "deck.test", "push", "--release", "v1.0.0"]) == 0
+    assert urls == [cam.release_url("v1.0.0")]
+    assert posted == [("/cam/list", text.encode("utf-8"))]
+
+
+def test_push_download_failure_exits_2(monkeypatch, capsys):
+    def boom(req, timeout=None):
+        raise urllib.error.URLError("offline")
+    monkeypatch.setattr(cam.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(cam, "deck_call", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not post")))
+    assert cam.main(["push"]) == 2
+    assert "release" in capsys.readouterr().err
+
+
+def test_import_car_writes_marks_file(tmp_path, monkeypatch):
+    calls = []
+    marks = "123,-3.100000,-60.000000,271,55\n456,-3.2,-60.1,10,0\n"
+    monkeypatch.setattr(cam, "deck_call", lambda host, method, path, data=None: (calls.append((method, path)), (200, marks))[1])
+    out = tmp_path / "build" / "car-marks.json"
+    assert cam.main(["--host", "deck.test", "import-car", "--out", str(out)]) == 0
+    items = json.loads(out.read_text(encoding="utf-8"))
+    assert len(items) == 2 and all(i["source"] == "car" for i in items)
+    assert calls == [("GET", "/cam/marks")]
+
+
+def test_import_car_clear_posts_clear(monkeypatch):
+    calls = []
+    monkeypatch.setattr(cam, "deck_call", lambda host, method, path, data=None: (calls.append((method, path)), (204, ""))[1])
+    assert cam.main(["--host", "deck.test", "import-car", "--clear"]) == 0
+    assert calls == [("POST", "/cam/marks/clear")]
