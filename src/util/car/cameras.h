@@ -18,10 +18,10 @@ constexpr uint32_t CROSS_CHECK_M = 200;       // inside this, the sideways dista
 constexpr int32_t CROSS_MAX_M = 30;           // ...under this (parallel service roads, overpasses)
 constexpr uint32_t NEAR_M = 60;               // within this then moving away = passed
 constexpr uint32_t PASSED_IGNORE_MS = 60000;  // a passed point is ignored this long
-constexpr uint32_t ALERT_MIN_M = 400;         // speed / bump alert distance, at least...
-constexpr uint32_t ALERT_AHEAD_S = 20;        // ...or this many seconds ahead, whichever is further
-constexpr uint32_t REDLIGHT_ALERT_M = 250;    // red light: fixed alert distance, never an alarm
-constexpr uint32_t ALARM_ZONE_M = 200;        // the last stretch where over the limit alarms
+constexpr uint32_t ALERT_MIN_M = 200;         // speed / bump alert distance, at least...
+constexpr uint32_t ALERT_AHEAD_S = 12;        // ...or this many seconds ahead, whichever is further
+constexpr uint32_t REDLIGHT_ALERT_M = 200;    // red light: fixed alert distance, never an alarm
+constexpr uint32_t ALARM_ZONE_M = 100;        // the last stretch where over the limit alarms
 
 struct Fix {
     bool valid;
@@ -49,7 +49,7 @@ private:
     bool near_[camlist::MAX_POINTS] = {};          // has been within NEAR_M on this approach
     uint32_t lastDist_[camlist::MAX_POINTS] = {};  // its distance at the last moving fix
     // Has alerted on this approach: stays eligible while it stays a candidate, so braking for the
-    // alert (a shorter 20 s distance) doesn't take it back and chime again further on.
+    // alert (a shorter 12 s distance) doesn't take it back and chime again further on.
     bool alerted_[camlist::MAX_POINTS] = {};
     // The fix clock: the last valid fix's ms, or the first update's when none has come yet. Not
     // touched by load(): a new list doesn't make the GPS any fresher.

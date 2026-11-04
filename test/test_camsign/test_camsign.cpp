@@ -7,41 +7,41 @@ void tearDown() {}
 using camlist::Kind;
 
 void test_alert_distance_is_the_matchers() {
-    TEST_ASSERT_EQUAL_UINT32(400, cameras::alertDistM(Kind::Speed, 60));    // 333 m < 400
-    TEST_ASSERT_EQUAL_UINT32(555, cameras::alertDistM(Kind::Speed, 100));   // 20 s at 100 km/h
-    TEST_ASSERT_EQUAL_UINT32(555, cameras::alertDistM(Kind::Bump, 100));
-    TEST_ASSERT_EQUAL_UINT32(250, cameras::alertDistM(Kind::RedLight, 120));
+    TEST_ASSERT_EQUAL_UINT32(200, cameras::alertDistM(Kind::Speed, 50));    // 166 m < 200
+    TEST_ASSERT_EQUAL_UINT32(333, cameras::alertDistM(Kind::Speed, 100));   // 12 s at 100 km/h
+    TEST_ASSERT_EQUAL_UINT32(333, cameras::alertDistM(Kind::Bump, 100));
+    TEST_ASSERT_EQUAL_UINT32(200, cameras::alertDistM(Kind::RedLight, 120));
 }
 
 void test_bar_full_middle_empty() {
     camsign::Countdown c;
-    c.start(Kind::Speed, 60, 320);   // 400 m
-    TEST_ASSERT_EQUAL_INT(320, c.update(400));
-    TEST_ASSERT_EQUAL_INT(160, c.update(200));
-    TEST_ASSERT_EQUAL_INT(80, c.update(100));
+    c.start(Kind::Speed, 60, 320);   // 200 m
+    TEST_ASSERT_EQUAL_INT(320, c.update(200));
+    TEST_ASSERT_EQUAL_INT(160, c.update(100));
+    TEST_ASSERT_EQUAL_INT(80, c.update(50));
     TEST_ASSERT_EQUAL_INT(0, c.update(0));
 }
 
 void test_bar_never_grows_back() {
     camsign::Countdown c;
     c.start(Kind::Speed, 60, 320);
-    TEST_ASSERT_EQUAL_INT(240, c.update(300));
-    TEST_ASSERT_EQUAL_INT(240, c.update(350));   // GPS jitter, a nearer point dropped: stays
+    TEST_ASSERT_EQUAL_INT(240, c.update(150));
+    TEST_ASSERT_EQUAL_INT(240, c.update(175));   // GPS jitter, a nearer point dropped: stays
     TEST_ASSERT_EQUAL_INT(240, c.width());
-    TEST_ASSERT_EQUAL_INT(160, c.update(200));
+    TEST_ASSERT_EQUAL_INT(160, c.update(100));
 }
 
 void test_bar_full_width_from_when_the_alert_began() {
     camsign::Countdown c;
-    c.start(Kind::Speed, 100, 320);   // 555 m at the start...
-    TEST_ASSERT_EQUAL_INT(320, c.update(555));
-    // ...braking for it doesn't shrink the full width (the matcher's distance would be 400 m now)
-    TEST_ASSERT_EQUAL_INT(160, c.update(278));
+    c.start(Kind::Speed, 100, 320);   // 333 m at the start...
+    TEST_ASSERT_EQUAL_INT(320, c.update(333));
+    // ...braking for it doesn't shrink the full width (the matcher's distance would be 200 m now)
+    TEST_ASSERT_EQUAL_INT(160, c.update(167));
 }
 
 void test_bar_further_than_full_is_full() {
     camsign::Countdown c;
-    c.start(Kind::RedLight, 50, 320);   // 250 m
+    c.start(Kind::RedLight, 50, 320);   // 200 m
     TEST_ASSERT_EQUAL_INT(320, c.update(600));
 }
 

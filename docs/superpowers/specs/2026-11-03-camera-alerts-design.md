@@ -142,8 +142,8 @@ The stages for the active point:
 
 | Stage | Speed camera / bump | Red-light |
 |---|---|---|
-| **Alert** | at 400 m, or 20 s ahead at the current speed, whichever is further | at 250 m |
-| **Alarm zone** | the last 200 m | none (alert only) |
+| **Alert** | at 200 m, or 12 s ahead at the current speed, whichever is further (owner, 2026-11-03: was 400 m / 20 s, too long on screen) | at 200 m (was 250 m) |
+| **Alarm zone** | the last 100 m (was 200 m; half the alert distance keeps a warning step before the alarm) | none (alert only) |
 | **Alarm** | in the alarm zone with speed > limit | — |
 | **Clear** | passed | passed |
 
@@ -190,7 +190,7 @@ between the decks never silences an alarm.
 - The black deck serves `GET /cam` (signed, like `/state`): `{"st":"alert|alarm|nofix|off",
   "kind":"speed","limit":60,"dist":320,"kmh":58,"label":"…","id":"mao-0007"}`. The yellow deck
   polls it every second at all times (a tiny reply; the existing `/state` poll stays as it is). The
-  screen lags at most about 1 s (17 m at 60 km/h), which is fine against 400 m of warning.
+  screen lags at most about 1 s (17 m at 60 km/h), which is fine against 200 m of warning.
 - **Alert:** a band across the bottom third of whatever screen is showing (dashboard, LYRICS,
   PRESETS). It shows the kind's icon, `RADAR 60`, `LOMBADA 40` or `SINAL`, a big distance countdown
   ("320 m") and the current speed. It uses the CYBERDECK green palette; orange for red-light.
@@ -231,7 +231,7 @@ amitaro's radar-detector set (credit "声: あみたろの声素材工房" where
 - **Stale lines never play:** before each clip of an alert sequence the live stage must still be
   Alert for that point; otherwise the rest is dropped.
 - **Mute** silences the chime and every voice line; the alarm's triple beep still plays (being over
-  the limit in the last 200 m is the one thing not to miss). The `MUTE` tags stay as they are.
+  the limit in the last 100 m is the one thing not to miss). The `MUTE` tags stay as they are.
 - **Fallback:** a clip missing from the pack (no `camvoice.bin`, an empty slot) plays the old beep
   for that event (speed: two mid tones; bump: two low; red-light: one long high), so a build without
   the clips still alerts.

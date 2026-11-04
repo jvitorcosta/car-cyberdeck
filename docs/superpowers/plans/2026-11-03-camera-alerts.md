@@ -16,7 +16,7 @@
 - Three kinds: `speed`, `bump`, `redlight`. CSV columns, in order: `id,kind,lat,lon,heading,limit,label,source,checked`.
 - `heading` is required on every row the deck loads; `limit` is empty for `redlight`, and for other kinds only while unknown (unknown → alerts with `--`, never alarms).
 - Matching: no alerts with no fix or under 10 km/h; `nofix` after 5 s without a valid fix, moving or not (the clock starts at the first update: the boot grace); candidates within 800 m; course within ±40° of `heading`; bearing to the point within ±30° of course; inside 200 m, cross-track under 30 m; passed = was within 60 m and the distance grows, then ignored for 60 s; nearest remaining point wins.
-- Stages: alert at max(400 m, 20 s × speed) for speed/bump, 250 m for red-light; alarm zone is the last 200 m, speed (km/h rounded down) > limit, no tolerance; red-light never alarms; the band clears 2 s after passing.
+- Stages: alert at max(200 m, 12 s × speed) for speed/bump, 200 m for red-light (owner, 2026-11-03; was 400 m / 20 s / 250 m); alarm zone is the last 100 m (was 200 m), speed (km/h rounded down) > limit, no tolerance; red-light never alarms; the band clears 2 s after passing.
 - Sounds on the black deck only. Since Task 10: chime + Japanese voice lines per the spec's "Sound" table, the alarm's triple beep every 1.5 s until clear, and the old beeps (speed = two mid tones, bump = two low, red-light = one long high) as the fallback when a clip is missing. Alerts interrupt the intro / music box, which then continue.
 - Mute keeps the bands, silences the chime and voice (since Task 10 the alarm's triple beep still plays), lives on the black deck, resets at each start; reached by voice ("cameras mute"), the watch (it sends the same phrase to `/say`) and the yellow deck's touch.
 - Speed is GPS only in this version; the GPS is the owner's iPhone running GPS 2 IP (NMEA over a TCP socket on the hotspot, about 1 Hz), not a module.
@@ -314,7 +314,7 @@ Added 2026-11-03 after the owner approved a mockup. Spec: "Black deck (the one t
 
 **Interfaces:**
 - `camband` gains a panel rect (`PANEL = {192, 0, 128, 192}` at the 320 × 240 landscape screen) and reports the area the screens must keep out of while it shows (the bottom BAND_H rows and the panel), so main.cpp can set one viewport `(0, 0, 192, 240 - BAND_H)`.
-- The countdown bar's full width is the point's alert distance (cameras.*: max(400 m, 20 s × speed) for speed / bump, 250 m for red-light, from when the alert began); it never grows back while the same alert lasts.
+- The countdown bar's full width is the point's alert distance (cameras.*: max(200 m, 12 s × speed) for speed / bump, 200 m for red-light, from when the alert began); it never grows back while the same alert lasts.
 - The alarm blink runs off millis() at 2 Hz, redrawing only the sign (not the band) at each flip.
 
 - [ ] **Step 1:** If you add the pure helper, write its failing host tests first (bar width at start / middle / 0 m, never growing; `+N` rounding and never under +1 in an alarm; blink phase).
