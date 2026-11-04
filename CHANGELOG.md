@@ -6,6 +6,23 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck (S3)
+- **Added:** varied boot sounds. The Honda's drive greeting, the montage start and the Honda logo
+  each pick one clip at random from their own roster at every boot, never last boot's: the drive
+  says "Bem-vindo, moreno", the ETC voice or one of seven Japanese greetings, and the montage and
+  the logo get 14 and 12 anime-style voice lines. The montage start always ends before the logo's
+  sound starts. Rosters are built locally with `tools/gen_rosters.py` (git-ignored, like the other
+  clips); without them each moment plays its single clip as before. They are levelled to the
+  loudness of today's clips, so a dense one (the Bem-vindo over its music bed) no longer rasps.
+- **Fixed:** clips and the intro videos' sound no longer lose their first syllable: the speaker
+  amp gets 60 ms to wake before the first sample.
+- **Changed:** a smoother boot. The night drive runs at ~19 fps (was ~16): the layers that never
+  move are drawn once, and the underglow and lamp light come from tables. The brake's dip to black is a backlight fade (10+ frames, was 6 dimmed ones).
+  The kiss video plays at 16 fps with every frame (it dropped 28 at 20), and both intro videos'
+  sound is levelled to the greetings' loudness (the kiss was twice as loud, Max quieter).
+- **Fixed:** boot sounds land on their picture. A sound is heard ~0.1 s after it's cued, so the
+  intro videos now run on their sound's clock (lips match the voice), the car's lights follow the
+  greeting as it's heard, the montage-start voice is cued in the brake's fade so it comes with the
+  first photo, and the logo sound is cued early enough to end with the fade to black.
 - **Fixed:** more songs get synced lyrics. A plain-only `/api/get` hit no longer ends the lookup:
   the search runs too, and its synced lines replace the plain ones. The search drops title suffixes
   (" - Remastered 2011", " (feat. X)", " - Ao Vivo") and skips entries of another song, reads up to

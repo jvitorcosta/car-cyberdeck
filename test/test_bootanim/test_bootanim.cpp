@@ -130,13 +130,24 @@ void test_no_frames_finishes_at_once() {
     TEST_ASSERT_EQUAL_INT(0, montageFrame(600, 10, 0));
 }
 
-// Finale sound: starts so it ends with the montage's last frame (the fade to black).
+// Finale sound: starts so it ends with the montage's last frame (the fade to black). Its sound
+// reaches the speaker SOUND_LEAD_MS after the cue, so the cue comes that much earlier.
 void test_finale_start_frame() {
-    TEST_ASSERT_EQUAL_INT(48, finaleStartFrame(67, 10, 1840));   // 1.84 s = 19 frames before the end
-    TEST_ASSERT_EQUAL_INT(57, finaleStartFrame(67, 10, 1000));
+    TEST_ASSERT_EQUAL_INT(100u, SOUND_LEAD_MS);
+    TEST_ASSERT_EQUAL_INT(47, finaleStartFrame(67, 10, 1840));   // 1.84 + 0.1 s = 20 frames before the end
+    TEST_ASSERT_EQUAL_INT(56, finaleStartFrame(67, 10, 1000));
+    TEST_ASSERT_EQUAL_INT(57, finaleStartFrame(67, 10, 900));    // exactly 10 frames
     TEST_ASSERT_EQUAL_INT(0, finaleStartFrame(67, 10, 9000));    // longer than the montage: from the start
     TEST_ASSERT_EQUAL_INT(-1, finaleStartFrame(67, 10, 0));      // no finale clip
     TEST_ASSERT_EQUAL_INT(-1, finaleStartFrame(0, 10, 1840));    // no montage
+}
+
+// The montage-start sound is cued SOUND_LEAD_MS before the first photo, so it's heard with it.
+void test_opener_due() {
+    TEST_ASSERT_FALSE(openerDue(0));
+    TEST_ASSERT_FALSE(openerDue(BRAKE_MS - SOUND_LEAD_MS - 1));
+    TEST_ASSERT_TRUE(openerDue(BRAKE_MS - SOUND_LEAD_MS));      // in the brake's fade to black
+    TEST_ASSERT_TRUE(openerDue(BRAKE_MS));                      // no brake (straight to the montage)
 }
 
 void test_opener_fits() {
@@ -167,6 +178,7 @@ int main(int, char**) {
     RUN_TEST(test_montage_frame_index);
     RUN_TEST(test_no_frames_finishes_at_once);
     RUN_TEST(test_finale_start_frame);
+    RUN_TEST(test_opener_due);
     RUN_TEST(test_opener_fits);
     return UNITY_END();
 }

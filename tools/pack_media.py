@@ -14,11 +14,11 @@ import zlib
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
 PARTITIONS = os.path.join(ROOT, "partitions_s3.csv")
-# The S3's media: the openings' video and sounds, the montage, Sonic, McQueen, the CJK lyrics
+# The S3's media: the openings' video and sounds, the boot sound rosters (tools/gen_rosters.py), the montage, Sonic, McQueen, the CJK lyrics
 # font, the emoji and the update screen's Green Hill Zone and Shadow.
 FILES = ["greeting.pcm", "greeting_alt.pcm", "opener.pcm", "finale.pcm", "intro.bin", "intro.pcm",
          "max.bin", "max.pcm", "howl.pcm", "montage.bin", "idle.bin", "mcqueen.bin",
-         "cjk16.bin", "emoji16.bin", "backdrop.bin", "shadow.bin"]
+         "cjk16.bin", "emoji16.bin", "backdrop.bin", "shadow.bin", "drive.snd", "opener.snd", "finale.snd"]
 MAGIC, VERSION = b"CDMEDIA1", 1
 HEAD, ENTRY, NAME = 16, 32, 20
 STAND_IN = 8

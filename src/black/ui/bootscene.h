@@ -12,6 +12,9 @@ namespace bootscene {
 struct Opts { carlook::Look car; bool drive; };
 void start(TFT_eSPI& tft, bool (*online)(), const Opts& o);
 void start(TFT_eSPI& tft, bool (*online)());   // the Honda's drive
+// Whether a montage opener of openerMs ends before a finale of finaleMs starts on this montage
+// (data/montage.bin): the rule the scene applies before playing the opener. Call before start().
+bool openerFits(uint32_t openerMs, uint32_t finaleMs);
 // Static string. A BIOS-style log types into an on-board terminal in the sky while the car
 // drives; a caption containing "retry" turns its WI-FI line to RETRYING... (the caption text
 // itself only shows when the scene couldn't get its strip buffer).
