@@ -59,6 +59,18 @@ Open items, not scheduled. Newest decisions first within each section.
   - The OSM tiles load on the place page served from 127.0.0.1.
   - Mute: a tap on the yellow band shows `MUTE` on both bands and `MUTED` on the Menu's header
     with no band up; a tap on a Menu item as the band comes up mutes nothing.
+  - Voice (Task 10; `python tools/gen_camvoice.py <WAV dir>`, then `uploadmedia`): the boot log
+    says `[cam] voice: 14 of 14 clips`. Over `tools/nmea_replay.py`, hear each call on the speaker:
+    speed (pōn → 取り締まり → limit), bump and red light (pōn → ご注意), a short call and a limit
+    change between two close points, the alarm (its line, triple beeps, its line again after 6 s,
+    silence once under the limit), GPS lost while driving / back, and the GPS clip at the first fix.
+  - The same calls over a playing intro (48 kHz: the voice resampled, the intro resumes after) and
+    over the music box; an alarm cutting an alert line mid-word; mute mid-line stops it, and the
+    alarm still beeps muted.
+  - Volume: the voice against the beeps (GREETING_VOLUME vs camsound's LEVEL) and over road noise.
+  - Without `camvoice.bin` in the pack: the old beeps for every alert and the alarm, no GPS lines.
+  - `[mem]` 30-min check unchanged with the voice (the clips are read in place from the media
+    pack); `camsnd` free stack (`[cam] sound: ... stackfree=`) ≥ 512 B on its 3 KB.
 
 ## Code health
 

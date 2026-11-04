@@ -3,6 +3,7 @@
 #include <cstdint>
 #include "../../util/car/cameras.h"
 #include "../../util/car/camlist.h"
+#include "../../util/car/camseq.h"
 // Speed-camera alerts on the black deck: the list (NVS "cam"/"list", the CSV as pushed), the matcher
 // fed by the phone's GPS (car/gps, on its task), the mute switch and the marks taken in the car.
 // net/remote serves it as /cam; the buzzer (car/camsound) listens through onStage. The list is in
@@ -30,10 +31,13 @@ MarkResult mark();
 // with 6 decimals), oldest first. Returns the length written; stops at whole rows that fit in n.
 size_t marksCsv(char* out, size_t n);
 void clearMarks();
-// For the buzzer: called on every stage change, in the order they happen: from the GPS task, and from
-// setList's caller (net/remote's task) when a new list ends the current stage (-> Off). `kind` is the
-// active point's (the one just left when `to` has none). One slot: a second call replaces the first.
+// For the sound (car/camsound): called on every stage change, in the order they happen: from the GPS
+// task, and from setList's caller (net/remote's task) when a new list ends the current stage (-> Off).
+// Also when the active point changes within Alert/Alarm (one camera right after another) and on the
+// first valid fix after power-on (camseq::Event: the point's kind, id and limit, the one just left
+// when `to` has none; the last valid fix's speed). One slot: a second call replaces the first.
 // It runs on the caller's 4 KB stack (either task's), outside camsvc's lock but holding the next
-// change back: start the sound and return.
-void onStage(void (*cb)(cameras::Stage from, cameras::Stage to, camlist::Kind kind));
+// change back: queue the event and return.
+void onStage(void (*cb)(const camseq::Event& e));
+bool muted();   // the mute switch alone, without the lock (the sound checks it every 128 samples)
 }  // namespace camsvc

@@ -190,7 +190,7 @@ void setup() {
         playOpening();
     }
     // Speed cameras (car/camsvc): the list from NVS and the phone's GPS on its own small task; it
-    // runs with the remote off too (the buzzer needs no web page). The beeps (car/camsound) listen
+    // runs with the remote off too (the speaker needs no web page). The sound (car/camsound) listens
     // from before the first fix.
     camsound::begin();
     camsvc::onStage(camsound::onStage);

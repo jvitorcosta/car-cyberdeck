@@ -6,6 +6,7 @@
 // An alert sound plays once, on the step INTO Alert from Off or NoFix (not when an alarm eases back
 // to alert: the driver just braked, no need to chime again); the triple beep plays on the step into
 // Alarm and then repeats every ALARM_REPEAT_MS while the alarm lasts. Everything else is silent.
+// Since the voice lines (util/camseq) these are the alarm's beeps and the fallback for a missing clip.
 // PURE, host-tested.
 namespace camtone {
 struct Note { uint16_t hz; uint16_t ms; };  // hz 0 = rest

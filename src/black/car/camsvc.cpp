@@ -24,7 +24,8 @@ static cameras::Status s_status;
 static cameras::Fix s_lastFix{};              // the last valid fix, for mark()
 static volatile bool s_mute = false;
 static bool s_broken = false;                 // begin() found no memory: snapshot() says NoFix
-static void (*volatile s_cb)(cameras::Stage, cameras::Stage, camlist::Kind) = nullptr;
+static bool s_hadFix = false;                 // a valid fix came since power-on (GPS task only)
+static void (*volatile s_cb)(const camseq::Event&) = nullptr;
 // Held from a status change until its callback has run (onFix on the GPS task, setList on net/remote's):
 // the buzzer then hears the changes in the order they happened. Without it a list swap's "-> off"
 // could reach it after the GPS task's next "-> alarm", and the beeps would stop with the alarm on
@@ -52,34 +53,47 @@ static const char* stageName(cameras::Stage s) {
     return "?";
 }
 
+// The point at index i (the one entered, or just left) into the sound's event.
+static void pointInto(camseq::Event& e, int i) {
+    if (i < 0 || i >= s_count) return;
+    e.kind = s_live[i].kind;
+    memcpy(e.id, s_live[i].id, sizeof e.id);
+    e.limit = s_live[i].limit;
+}
+
 // The GPS task's sink (car/gps): one fix, or a once-a-second "none".
 static void onFix(const cameras::Fix& f) {
     OrderLock order;
     cameras::Status prev, now;
-    camlist::Kind kind = camlist::Kind::Speed;
-    char id[sizeof camlist::Point::id] = "";
-    void (*cb)(cameras::Stage, cameras::Stage, camlist::Kind);
+    camseq::Event e;
+    void (*cb)(const camseq::Event&);
     {
         Lock l;
         prev = s_status;
+        // The speed before this update: on the step into NoFix, the last valid fix's.
+        e.lastKmh = s_lastFix.valid ? s_lastFix.kmh : 0;
         now = s_matcher->update(f);
         if (f.valid) s_lastFix = f;
         // The matcher fills kmh only for an active point; /cam shows the speed in every stage while
         // the fix is fresh (camwire).
         now.kmh = s_lastFix.valid && f.ms - s_lastFix.ms <= cameras::NOFIX_MS ? s_lastFix.kmh : 0;
         s_status = now;
-        // The point being entered, or the one just left: the buzzer wants to know which kind it was.
-        const int i = now.index >= 0 ? now.index : prev.index;
-        if (i >= 0 && i < s_count) {
-            kind = s_live[i].kind;
-            memcpy(id, s_live[i].id, sizeof id);
-        }
+        // The point being entered, or the one just left: the sound wants its kind, id and limit.
+        pointInto(e, now.index >= 0 ? now.index : prev.index);
         cb = s_cb;
     }
-    if (now.stage == prev.stage) return;
-    Serial.printf("[cam] %s -> %s %s %um %ukm/h\n", stageName(prev.stage), stageName(now.stage), id,
-                  (unsigned)now.distM, (unsigned)now.kmh);
-    if (cb) cb(prev.stage, now.stage, kind);   // outside the lock: it may take its time
+    e.from = prev.stage;
+    e.to = now.stage;
+    e.firstFix = f.valid && !s_hadFix;
+    if (f.valid) s_hadFix = true;
+    const bool changed = now.stage != prev.stage;
+    // One camera straight after another: Alert -> Alert, but a new point to announce.
+    const bool moved = !changed && now.index != prev.index && now.index >= 0;
+    if (!changed && !moved && !e.firstFix) return;
+    if (changed || moved)
+        Serial.printf("[cam] %s -> %s %s %um %ukm/h\n", stageName(prev.stage), stageName(now.stage), e.id,
+                      (unsigned)now.distM, (unsigned)now.kmh);
+    if (cb) cb(e);   // outside the lock: it may take its time
 }
 
 void begin() {
@@ -154,12 +168,12 @@ bool setList(const char* csv, size_t len, int* badLine) {
     // the new list's from Off).
     OrderLock order;
     cameras::Status prev;
-    camlist::Kind kind = camlist::Kind::Speed;
-    void (*cb)(cameras::Stage, cameras::Stage, camlist::Kind);
+    camseq::Event e;
+    void (*cb)(const camseq::Event&);
     {
         Lock l;
         prev = s_status;
-        if (prev.index >= 0 && prev.index < s_count) kind = s_live[prev.index].kind;
+        pointInto(e, prev.index);
         camlist::Point* old = s_live;
         s_live = s_spare;
         s_spare = old;
@@ -169,7 +183,9 @@ bool setList(const char* csv, size_t len, int* badLine) {
         cb = s_cb;
     }
     Serial.printf("[cam] new list: %d points\n", n);
-    if (prev.stage != cameras::Stage::Off && cb) cb(prev.stage, cameras::Stage::Off, kind);
+    e.from = prev.stage;
+    e.to = cameras::Stage::Off;
+    if (prev.stage != cameras::Stage::Off && cb) cb(e);
     return true;
 }
 
@@ -267,6 +283,8 @@ void clearMarks() {
     Serial.println("[cam] marks cleared");
 }
 
-void onStage(void (*cb)(cameras::Stage from, cameras::Stage to, camlist::Kind kind)) { s_cb = cb; }
+void onStage(void (*cb)(const camseq::Event& e)) { s_cb = cb; }
+
+bool muted() { return s_mute; }
 
 }  // namespace camsvc
