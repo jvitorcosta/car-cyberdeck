@@ -30,7 +30,7 @@ static constexpr int SIGN_X = PANEL.x + PANEL.w / 2, SIGN_Y = 68;
 static constexpr int RIM_R = 56, RING_R = 53, FACE_R = 41;     // R-19: white rim, red ring, white face
 static constexpr int DIGITS_Y = 66, KMH_Y = 100;               // the limit's middle, "km/h" under it
 static constexpr int BELOW_Y = 156;
-static constexpr int BELOW_TOP = 128, BELOW_H = PANEL.y + PANEL.h - 1 - BELOW_TOP;   // the +N's room
+static constexpr int BELOW_TOP = 128, BELOW_H = PANEL.y + PANEL.h - BELOW_TOP;   // the +N's room
 
 struct Shown {
     bool on = false;          // something of ours is on screen (and matches the fields below)

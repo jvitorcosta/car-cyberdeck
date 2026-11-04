@@ -80,6 +80,9 @@ Open items, not scheduled. Newest decisions first within each section.
   - The battle screen's frame rate (walker, CD, notes) with the panel up; the panel and band over
     each screen (battle, lyrics, status): nothing draws into them, and the screen comes back whole
     when they go.
+  - Two points a few metres apart on the same heading (a speed camera beside a red light): GPS jitter
+    can swap the active point each fix, and with it the sign and the countdown bar's full width. If
+    a real pair flickers, add hysteresis to the active-point switch.
 
 ## Code health
 
