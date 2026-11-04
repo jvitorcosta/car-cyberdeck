@@ -20,6 +20,9 @@ constexpr float LEVEL = 16000.0f;
 constexpr uint32_t RAMP_MS = 4;          // fade in and out: a tone cut at full level clicks
 constexpr uint32_t TAIL_MS = 150;        // pause margin past the first step (the DMA queue's play-out)
 constexpr int OUTPUT_TRIES = 30;         // x 10 ms: a clip may be opening or closing the output
+// Every this many writes, a step reads the live stage too (camsvc's lock): an alarm whose "-> off"
+// was dropped by a full queue stops within ~64 ms at 16 kHz.
+constexpr int LIVE_EVERY = 8;
 // While an alarm holds the output open between beeps: how often the task checks whether to let it go
 // (the alarm over, a clip waiting for it).
 constexpr uint32_t HOLD_CHECK_MS = 100;
@@ -43,11 +46,17 @@ static void drain() {
     while (xQueueReceive(s_q, &e, 0) == pdTRUE) s_seq.onEvent(e, millis());
 }
 
-// Between two writes: stop the step playing now for mute (all but the alarm's beeps) or for a
-// higher step that just came due.
+// Between two writes: stop the step playing now for mute (all but the alarm's beeps), for a
+// higher step that just came due, or for an alarm that ended (silence at once).
+static int s_writes = 0;
 static bool cut(const camseq::Step& s) {
     drain();
-    return (s.muteable && camsvc::muted()) || s_seq.cuts(s.prio, millis());
+    if (++s_writes % LIVE_EVERY == 0) {
+        cameras::Status st;
+        camsvc::snapshot(&st, nullptr, nullptr);
+        s_seq.sync(st.stage);
+    }
+    return (s.muteable && camsvc::muted()) || s_seq.stops(s) || s_seq.cuts(s.prio, millis());
 }
 
 // One note as a sine (or silence for hz 0) at the output's rate. False: cut short.

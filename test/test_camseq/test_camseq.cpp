@@ -209,7 +209,7 @@ void test_alarm_voice_then_beeps_then_voice_after_6s() {
     q.clips(ALL);
     q.onEvent(ev(Stage::Alert, Stage::Alarm), 1000);
     TEST_ASSERT_EQUAL_INT(S(Slot::Speedni), next(q, Stage::Alarm, "mao-1", 1000));
-    TEST_ASSERT_FALSE(st.muteable);
+    TEST_ASSERT_TRUE(st.muteable);                         // a voice line: mute stops it
     TEST_ASSERT_EQUAL_UINT32(1500, q.waitMs(1000));
     TEST_ASSERT_EQUAL_INT(NONE, next(q, Stage::Alarm, "mao-1", 2400));
     TEST_ASSERT_EQUAL_INT(TRIPLE, next(q, Stage::Alarm, "mao-1", 2500));
@@ -441,6 +441,108 @@ void test_missing_alarm_voice_beeps() {
     TEST_ASSERT_EQUAL_INT(TRIPLE, next(q, Stage::Alarm, "mao-1", 1000));
 }
 
+// ---- review fixes ----
+
+void test_alarm_step_stops_when_the_alarm_ends() {
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(ev(Stage::Alert, Stage::Alarm), 1000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Speedni), next(q, Stage::Alarm, "mao-1", 1000));
+    const Step voice = st;
+    TEST_ASSERT_FALSE(q.stops(voice));
+    q.onEvent(ev(Stage::Alarm, Stage::Alert), 1300);       // braked mid-line: silence now
+    TEST_ASSERT_TRUE(q.stops(voice));
+
+    camseq::Seq b;   // a beep, the stage going Off
+    b.onEvent(ev(Stage::Alert, Stage::Alarm), 1000);
+    TEST_ASSERT_EQUAL_INT(TRIPLE, next(b, Stage::Alarm, "mao-1", 1000));
+    const Step beep = st;
+    TEST_ASSERT_FALSE(b.stops(beep));
+    b.onEvent(ev(Stage::Alarm, Stage::Off), 1100);
+    TEST_ASSERT_TRUE(b.stops(beep));
+
+    camseq::Seq l;   // the "-> off" lost: the live stage read between writes
+    l.onEvent(ev(Stage::Alert, Stage::Alarm), 1000);
+    TEST_ASSERT_EQUAL_INT(TRIPLE, next(l, Stage::Alarm, "mao-1", 1000));
+    const Step lost = st;
+    l.sync(Stage::Alarm);
+    TEST_ASSERT_FALSE(l.stops(lost));
+    l.sync(Stage::Off);
+    TEST_ASSERT_TRUE(l.stops(lost));
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX, l.waitMs(1100));
+}
+
+void test_alert_steps_never_stop_for_the_alarm_rule() {
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(ev(Stage::Off, Stage::Alert), 1000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Pon), next(q, Stage::Alert, "mao-1", 1000));
+    TEST_ASSERT_FALSE(q.stops(st));
+}
+
+void test_mute_alarm_line_muteable_beeps_not() {
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(ev(Stage::Alert, Stage::Alarm), 1000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Speedni), next(q, Stage::Alarm, "mao-1", 1000));
+    TEST_ASSERT_TRUE(st.muteable);
+    TEST_ASSERT_EQUAL_INT(TRIPLE, next(q, Stage::Alarm, "mao-1", 2500));
+    TEST_ASSERT_FALSE(st.muteable);
+}
+
+void test_new_point_alarm_gets_its_line() {
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(ev(Stage::Alert, Stage::Alarm, Kind::Speed, "a", 50), 1000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Speedni), next(q, Stage::Alarm, "a", 1000));
+    q.onEvent(ev(Stage::Alarm, Stage::Off, Kind::Speed, "a", 50), 2000);
+    q.onEvent(ev(Stage::Off, Stage::Alarm, Kind::Speed, "b", 40), 3000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Speedni), next(q, Stage::Alarm, "b", 3000));
+    // Straight from one alarm into another point's: its line at the next slot.
+    q.onEvent(ev(Stage::Alarm, Stage::Alarm, Kind::Speed, "c", 30), 3500);
+    TEST_ASSERT_EQUAL_INT(NONE, next(q, Stage::Alarm, "c", 3500));
+    TEST_ASSERT_EQUAL_INT(S(Slot::Speedni), next(q, Stage::Alarm, "c", 4500));
+}
+
+void test_same_point_back_into_alarm_beeps() {
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(ev(Stage::Alert, Stage::Alarm, Kind::Speed, "a", 50), 1000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Speedni), next(q, Stage::Alarm, "a", 1000));
+    q.onEvent(ev(Stage::Alarm, Stage::Off, Kind::Speed, "a", 50), 2000);   // under 10 km/h a moment
+    q.onEvent(ev(Stage::Off, Stage::Alarm, Kind::Speed, "a", 50), 3000);
+    TEST_ASSERT_EQUAL_INT(TRIPLE, next(q, Stage::Alarm, "a", 3000));
+}
+
+void test_gps_back_straight_into_alert() {
+    // The fix returns with a camera already in range: the alert's call first (it outranks GPS),
+    // then the "back" line.
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(gps(Stage::Off, Stage::NoFix, 40), 1000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::GpsNg), next(q, Stage::NoFix, "", 1000));
+    q.onEvent(ev(Stage::NoFix, Stage::Alert), 6000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Pon), next(q, Stage::Alert, "mao-1", 6000));
+    TEST_ASSERT_EQUAL_INT(S(Slot::Torishimari), next(q, Stage::Alert, "mao-1", 6000));
+    TEST_ASSERT_EQUAL_INT(S(Slot::L50), next(q, Stage::Alert, "mao-1", 6000));
+    TEST_ASSERT_EQUAL_INT(S(Slot::GpsOk), next(q, Stage::Alert, "mao-1", 6000));
+    TEST_ASSERT_EQUAL_INT(NONE, next(q, Stage::Alert, "mao-1", 6000));
+}
+
+void test_alarm_to_another_points_alert_is_a_short_call() {
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(ev(Stage::Off, Stage::Alert, Kind::Speed, "a", 50), 1000);
+    drain(q, Stage::Alert, "a", 1000);
+    q.onEvent(ev(Stage::Alert, Stage::Alarm, Kind::Speed, "a", 50), 2000);
+    drain(q, Stage::Alarm, "a", 2000);
+    q.onEvent(ev(Stage::Alarm, Stage::Alert, Kind::Speed, "b", 60), 3000);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Pon), next(q, Stage::Alert, "b", 3000));
+    TEST_ASSERT_EQUAL_INT(S(Slot::SpdChange), next(q, Stage::Alert, "b", 3000));
+    TEST_ASSERT_EQUAL_INT(S(Slot::L60), next(q, Stage::Alert, "b", 3000));
+    TEST_ASSERT_EQUAL_INT(NONE, next(q, Stage::Alert, "b", 3000));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_speed_full_call);
@@ -474,5 +576,12 @@ int main() {
     RUN_TEST(test_no_pack_plays_the_old_beeps);
     RUN_TEST(test_missing_chime_becomes_the_beep);
     RUN_TEST(test_missing_alarm_voice_beeps);
+    RUN_TEST(test_alarm_step_stops_when_the_alarm_ends);
+    RUN_TEST(test_alert_steps_never_stop_for_the_alarm_rule);
+    RUN_TEST(test_mute_alarm_line_muteable_beeps_not);
+    RUN_TEST(test_new_point_alarm_gets_its_line);
+    RUN_TEST(test_same_point_back_into_alarm_beeps);
+    RUN_TEST(test_gps_back_straight_into_alert);
+    RUN_TEST(test_alarm_to_another_points_alert_is_a_short_call);
     return UNITY_END();
 }

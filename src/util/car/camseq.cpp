@@ -98,16 +98,18 @@ static void tones(Step* out, uint8_t prio, bool muteable) {
 
 bool Seq::next(Stage live, const char* liveId, bool mute, uint32_t now, Step* out) {
     if (!liveId) liveId = "";
-    // The change that ends an alarm is queued or was lost (a full queue): the live stage wins, and
-    // only another change into Alarm starts it again.
-    if (stage_ == Stage::Alarm && live != Stage::Alarm) alarmOff_ = true;
+    sync(live);
     if (alarmDue(now)) {
         alarmed_ = true;
         alarmMs_ = now;   // a late slot: the next counts from now
-        if (!mute && has(Slot::Speedni) && (!voiced_ || now - voiceMs_ >= ALARM_VOICE_MS)) {
+        // The line: the first time, 6 s on, or for another point (a flicker of the same point
+        // back into Alarm beeps).
+        if (!mute && has(Slot::Speedni) &&
+            (!voiced_ || strcmp(voiceId_, id_) != 0 || now - voiceMs_ >= ALARM_VOICE_MS)) {
             voiced_ = true;
             voiceMs_ = now;
-            return clip(out, ALARM, false, Slot::Speedni);
+            copyId(voiceId_, id_);
+            return clip(out, ALARM, true, Slot::Speedni);
         }
         tones(out, ALARM, false);
         out->n = camtone::alarmRepeat(out->notes);
@@ -150,6 +152,12 @@ uint8_t Seq::top(uint32_t now) const {
     if (line_ < nLines_) return ALERT;
     if (gps_ != Slot::COUNT) return GPS;
     return NONE;
+}
+
+void Seq::sync(Stage live) {
+    // The change that ends an alarm is queued or was lost (a full queue): the live stage wins, and
+    // only another change into Alarm starts it again.
+    if (stage_ == Stage::Alarm && live != Stage::Alarm) alarmOff_ = true;
 }
 
 bool Seq::cuts(uint8_t prio, uint32_t now) const { return top(now) > prio; }

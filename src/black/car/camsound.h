@@ -6,9 +6,11 @@
 // util/camseq what to play, pauses a playing clip (greeting::pauseFor), writes the steps on the
 // clip's output or its own (greeting::beginTones; a voice clip resampled from 16 kHz when that output
 // runs at another rate) and hands the output back. Between two 128-sample writes it takes in new
-// events and stops for a higher step (the alarm over an alert line, an alert over a GPS line) or for
-// mute. While the stage stays Alarm it wakes for each 1.5 s slot, checking the live stage each time,
-// and keeps its own output open between them until the alarm ends or a clip wants the output.
+// events and stops for a higher step (the alarm over an alert line, an alert over a GPS line), for
+// mute (every voice line; the alarm's beeps play on) and for the alarm ending (the live stage is read
+// every few writes too). While the stage stays Alarm it wakes for each 1.5 s slot, checking the live
+// stage each time, and keeps its own output open between them until the alarm ends or a clip wants
+// the output.
 namespace camsound {
 void begin();   // the queue and the task; call once, before camsvc::begin()
 // camsvc::onStage's callback: queues the event and returns (the GPS task's 4 KB stack, any task).

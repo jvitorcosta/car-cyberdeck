@@ -15,13 +15,14 @@
 //   Alert / Off around 10 km/h);
 // - an alert's lines play only while the live stage is still Alert for that point;
 // - Alarm: the alarm line on entry, then camtone's triple beep every camtone::ALARM_REPEAT_MS; the
-//   line again in a beep slot once ALARM_VOICE_MS have gone by since it last played. The slots keep
-//   their cadence across a flicker out of Alarm and back, and stop when the live stage leaves Alarm;
+//   line again in a beep slot once ALARM_VOICE_MS have gone by since it last played (at once for
+//   another point's alarm). The slots keep their cadence across a flicker out of Alarm and back,
+//   and stop, the one playing included (stops()), when the stage leaves Alarm;
 // - GPS: the lost line on NoFix when the last valid fix was at MIN_KMH or more (once per loss), the
 //   back line on the next fix only after the lost line played, the GPS clip on the first fix after
 //   power-on (once);
 // - priority ALARM > ALERT > GPS: cuts() tells the player to stop a clip for a higher step;
-// - mute: no chime, no voice; the alarm's slots all beep;
+// - mute: no chime, no voice (a line playing stops); the alarm's slots all beep;
 // - a slot the pack lacks: a missing chime plays the kind's old beep (camtone) in its place, a
 //   missing alarm line the triple beep; other missing lines are skipped (GPS lines have no beep).
 // Times are millis(), wrap-safe. PURE, host-tested.
@@ -46,7 +47,7 @@ struct Event {
 
 struct Step {
     uint8_t prio;
-    bool muteable;           // mute stops it (all but the alarm's beeps)
+    bool muteable;           // mute stops it (every clip and the alert beeps; not the alarm's beeps)
     bool clip;               // a clip (slot) or tones (notes, n)
     camclip::Slot slot;
     int n;
@@ -64,6 +65,11 @@ public:
     uint32_t waitMs(uint32_t now) const;
     // A step above `prio` is due: the player stops the clip it plays (at its next write).
     bool cuts(uint8_t prio, uint32_t now) const;
+    // The live stage, read between two writes: an alarm whose "-> off" is still queued (or lost)
+    // ends here as it would at the next slot.
+    void sync(cameras::Stage live);
+    // An alarm step playing now has to stop: the stage left Alarm (silence at once).
+    bool stops(const Step& s) const { return s.prio == ALARM && !alarmOn(); }
     bool alarming() const { return alarmOn(); }
 private:
     static constexpr int MAX_LINES = 3;
@@ -96,7 +102,8 @@ private:
     bool alarmed_ = false;
     uint32_t alarmMs_ = 0;   // the last slot
     bool voiced_ = false;
-    uint32_t voiceMs_ = 0;   // the alarm line's last play
+    uint32_t voiceMs_ = 0;   // the alarm line's last play...
+    char voiceId_[sizeof camlist::Point::id] = "";   // ...and the point it was for
     // The GPS line waiting (Slot::COUNT: none), the lost line said this loss, the first fix seen.
     camclip::Slot gps_ = camclip::Slot::COUNT;
     bool ngSaid_ = false;

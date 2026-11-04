@@ -1,5 +1,6 @@
 """Host tests for tools/gen_camvoice.py. Run: python tools/test_gen_camvoice.py"""
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -11,6 +12,40 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen_camvoice as gc  # noqa: E402
 
 TOOL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gen_camvoice.py")
+HEADER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "util", "car", "camclip.h")
+
+
+def camclip_h():
+    """camclip.h's Slot names (in order) and its layout constants."""
+    text = open(HEADER, encoding="utf-8").read()
+    body = re.search(r"enum class Slot : uint8_t \{(.*?)\};", text, re.S).group(1)
+    body = re.sub(r"//[^\n]*", "", body)
+    names = [n.strip() for n in body.split(",") if n.strip() and n.strip() != "COUNT"]
+    consts = {k: int(v) for k, v in re.findall(r"\b(RATE|HEAD|ENTRY|VERSION) = (\d+)", text)}
+    return names, consts
+
+
+def snake(name):
+    """camclip's PascalCase slot -> gen_camvoice's name (GpsFirst -> GPS_FIRST)."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", name).upper()
+
+
+def load(blob):
+    """A mirror of camclip::Table::load: [(offset, samples)] per slot, None when not a table."""
+    count = len(gc.SLOTS)
+    if len(blob) < gc.HEAD or blob[:4] != b"CAMV" or struct.unpack_from("<H", blob, 4)[0] != gc.VERSION:
+        return None
+    n = struct.unpack_from("<H", blob, 6)[0]
+    table = gc.HEAD + gc.ENTRY * n
+    if len(blob) < table:
+        return None
+    out = [(0, 0)] * count
+    for i in range(min(n, count)):
+        off, size = struct.unpack_from("<II", blob, gc.HEAD + gc.ENTRY * i)
+        if not size or size % 2 or off < table or off > len(blob) or size > len(blob) - off:
+            continue
+        out[i] = (off, size // 2)
+    return out
 
 
 def write_wav(path, frames, rate=16000, channels=1, width=2):
@@ -45,6 +80,37 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(names, ["PON", "GPS_FIRST", "TORISHIMARI", "GOCHUI", "SPD_CHANGE", "SPEEDNI",
                                  "GPS_NG", "GPS_OK", "L20", "L30", "L40", "L50", "L60", "L80"])
         self.assertEqual(dict(gc.SLOTS)["L60"], "cam_speed60ika_01_16k.wav")
+
+
+class CamclipTest(unittest.TestCase):
+    """The file's layout, locked to src/util/car/camclip.h (what the deck reads)."""
+
+    def test_slots_and_constants_match_the_header(self):
+        names, consts = camclip_h()
+        self.assertEqual([snake(n) for n in names], [s for s, _ in gc.SLOTS])
+        self.assertEqual(consts, {"RATE": gc.RATE, "HEAD": gc.HEAD, "ENTRY": gc.ENTRY,
+                                  "VERSION": gc.VERSION})
+
+    def test_round_trip_through_the_readers_rules(self):
+        clips = [b""] * len(gc.SLOTS)
+        clips[0] = b"\x01\x00\x02\x00\x03\x00"
+        clips[5] = b"\xff\x7f"
+        clips[-1] = b"\x00\x80\x01\x00"
+        blob = gc.build(clips)
+        self.assertEqual(blob[:8], b"CAMV" + struct.pack("<HH", 1, len(gc.SLOTS)))
+        read = load(blob)
+        self.assertIsNotNone(read)
+        for i, pcm in enumerate(clips):
+            off, samples = read[i]
+            self.assertEqual(samples, len(pcm) // 2, gc.SLOTS[i][0])
+            self.assertEqual(blob[off:off + 2 * samples], pcm)
+            if not pcm:   # an empty slot is 0/0 in the table
+                self.assertEqual(struct.unpack_from("<II", blob, gc.HEAD + gc.ENTRY * i), (0, 0))
+
+    def test_reader_refuses_a_bad_header(self):
+        blob = gc.build([b"\x01\x00"] * len(gc.SLOTS))
+        self.assertIsNone(load(b"X" + blob[1:]))
+        self.assertIsNone(load(blob[:gc.HEAD + gc.ENTRY]))
 
 
 class MainTest(unittest.TestCase):
