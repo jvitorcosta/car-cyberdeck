@@ -27,6 +27,7 @@ summary is now [`../HISTORY.md`](../HISTORY.md).
 | 2026-10-23 | `specs/2026-10-23-yellow-deck-menu-design.md` | `plans/2026-10-23-yellow-deck-menu.md` | menu and night mode implemented (#18); the four saved favourites superseded by six fixed presets (#18, #20); the Car, Heart and Music pages not built (music mode came as song colours) |
 | 2026-10-23 | — | `plans/2026-10-23-presets-restyle.md` | implemented (#18, then six presets and the PRESETS tab in #20) |
 | 2026-10-24 | `specs/2026-10-24-music-mode-design.md` | `plans/2026-10-24-music-mode.md` | superseded by song colours (#20, #23): no microphone, no beat pulse; the voice word, the watch item and `/status music=` came in wave 4 (2026-10-28) |
+| 2026-10-31 | — | `plans/2026-10-31-voice-agent-next.md` | backlog: roadmap for when the new deck arrives; the voice agent's spec and first plans are on `feat/voice-agent` |
 
 Plans keep the machine-specific commands they were executed with (`.devtools\…`, `COM11`);
 see the main README and

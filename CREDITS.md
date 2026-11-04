@@ -71,6 +71,14 @@ intro clips (`tools/gen_intro.py`), the greeting clips
 the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) on
 Wikimedia Commons.
 
+The S3's boot sound rosters (`tools/gen_rosters.py`, the git-ignored `data/*.snd`) are built from
+voice clips you download yourself into `greeting-sounds/`, never distributed here. The suggested
+sources: 声: あみたろの声素材工房 ([amitaro.net](https://amitaro.net/voice/voice_rule/), free, the
+credit is required), [ポケットサウンド](https://pocket-se.info/rules/) and
+[効果音ラボ](https://soundeffect-lab.info/agreement/) (both free, credit not required for
+personal use) and Hinanogi Maya (雛乃木まや). Clips from user-upload sites such as myinstants carry no
+licence: personal use only.
+
 The pixel Lightning McQueen in the S3's boot opening is a fan sprite of a Disney/Pixar
 character (*Cars*), drawn with PixelLab and packed locally by `tools/gen_mcqueen_sprite.py`. It
 lives in the git-ignored `montage-photos/mcqueen.png` and `data/mcqueen.bin`, never distributed here.

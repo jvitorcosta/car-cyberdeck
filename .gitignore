@@ -44,6 +44,9 @@ data/max.bin
 data/max.pcm
 data/howl.pcm
 data/greeting_alt.pcm
+# The S3's boot sound rosters and your picks for them (tools/gen_rosters.py)
+data/*.snd
+data/rosters.txt
 
 # Sonic waiting sprite: SEGA art fetched locally by tools/gen_idle_sprite.py, never committed
 sonic-sprites/

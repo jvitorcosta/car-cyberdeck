@@ -142,6 +142,32 @@ void test_pair_gives_current_and_next() {
     TEST_ASSERT_EQUAL_INT(-1, p.next);
 }
 
+static void three(lyricbuf::Lyrics& l) {
+    lyricbuf::reset(l);
+    lyricbuf::addPlain(l, "one", 3);
+    lyricbuf::addPlain(l, "two", 3);
+    lyricbuf::addLine(l, "[00:01.00]three", 15);
+}
+void test_keep_first_and_drop_first() {
+    static lyricbuf::Lyrics l;
+    three(l);
+    lyricbuf::keepFirst(l, 2);
+    TEST_ASSERT_EQUAL_INT(2, l.n);
+    TEST_ASSERT_EQUAL_INT(9, l.used);                  // "" + "one" + "two"
+    TEST_ASSERT_TRUE(lyricbuf::addLine(l, "[00:02.00]four", 14));
+    TEST_ASSERT_EQUAL_STRING("four", lyricbuf::lineText(l, 2));
+    three(l);
+    lyricbuf::dropFirst(l, 2);
+    TEST_ASSERT_EQUAL_INT(1, l.n);
+    TEST_ASSERT_EQUAL_INT(7, l.used);                  // "" + "three"
+    TEST_ASSERT_EQUAL_STRING("three", lyricbuf::lineText(l, 0));
+    TEST_ASSERT_EQUAL_UINT32(1000, l.lines[0].tMs);
+    TEST_ASSERT_EQUAL_STRING("", lyricbuf::lineText(l, 5));
+    lyricbuf::dropFirst(l, 4);
+    TEST_ASSERT_EQUAL_INT(0, l.n);
+    TEST_ASSERT_EQUAL_INT(1, l.used);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_parses_timestamped_lines);
@@ -161,5 +187,6 @@ int main(int, char**) {
     RUN_TEST(test_spread_plain_over_10_to_90_percent);
     RUN_TEST(test_spread_plain_keeps_share_of_lines_that_did_not_fit);
     RUN_TEST(test_spread_plain_without_duration_is_4s_apart);
+    RUN_TEST(test_keep_first_and_drop_first);
     return UNITY_END();
 }

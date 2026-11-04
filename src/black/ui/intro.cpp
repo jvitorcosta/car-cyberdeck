@@ -46,6 +46,7 @@ static bool (*s_online)() = nullptr;
 static TFT_eSprite* s_term = nullptr;   // bootterm::W x H, KEY where there's no glyph
 static uint16_t* s_termPx = nullptr;
 static uint32_t s_t0 = 0;
+static bool s_sound = false;                      // the video has a sound: its frames follow it
 
 // The terminal's pixels for this frame (util/termblend paints them into each decoded block).
 static void renderTerm(uint32_t t) {
@@ -90,7 +91,8 @@ static void task(void*) {
     int shown = -1, drawn = 0;
     uint32_t busy = 0;
     for (;;) {
-        const int i = introclock::frameAt(millis() - t0, montage::fps(), montage::count());
+        const uint32_t ms = introclock::elapsed(millis(), t0, greeting::introStartedAt(), s_sound);
+        const int i = introclock::frameAt(ms, montage::fps(), montage::count());
         if (i >= montage::count()) break;
         if (i != shown) {                         // late frames are skipped, not queued
             const uint32_t f0 = millis();
@@ -150,7 +152,7 @@ void start(TFT_eSPI& t, bool (*online)(), intropick::Opening o) {
     if (!s_termPx) freeTerm();
     // The sound starts first: started after the decode task (priority 2, busy from its first
     // frame), its task got going late and played the 14 s clip in 24 s, full of gaps.
-    greeting::playIntro(o);
+    s_sound = greeting::playIntro(o);
     if (xTaskCreatePinnedToCore(task, "intro", 6144, nullptr, 2, nullptr, 1) != pdPASS) {
         s_playing = false;     // wait() would spin forever and the deck never boot
         freeTerm();

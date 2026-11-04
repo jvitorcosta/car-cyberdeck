@@ -3,7 +3,11 @@
 // sending both known ELK command variants. Turn the iPhone's Bluetooth off first (Settings).
 //   pio run -e bletest -t upload -t monitor
 #include <Arduino.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's headers;
+#pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
 #include <NimBLEDevice.h>
+#pragma GCC diagnostic pop
 #include <TFT_eSPI.h>
 #include "../config.h"  // LED_INSIDE_MAC, LED_OUTSIDE_MAC (include/config.example.h)
 
@@ -27,7 +31,7 @@ static void printHex(const uint8_t* data, size_t len) {
 
 static bool connect(Controller& c) {
     c.client = NimBLEDevice::createClient();
-    c.client->setConnectTimeout(5);
+    c.client->setConnectTimeout(5000);  // NimBLE 2: milliseconds
     NimBLEAddress addr(std::string(c.addr), BLE_ADDR_PUBLIC);
     bool ok = false;
     for (int attempt = 0; attempt < 3 && !ok; attempt++) ok = c.client->connect(addr);
@@ -36,9 +40,9 @@ static bool connect(Controller& c) {
         return false;
     }
     Serial.printf("[bletest] %s: connected\n", c.name);
-    for (NimBLERemoteService* svc : *c.client->getServices(true)) {
+    for (NimBLERemoteService* svc : c.client->getServices(true)) {
         Serial.printf("  service %s\n", svc->getUUID().toString().c_str());
-        for (NimBLERemoteCharacteristic* ch : *svc->getCharacteristics(true)) {
+        for (NimBLERemoteCharacteristic* ch : svc->getCharacteristics(true)) {
             Serial.printf("    char %s %s%s%s\n", ch->getUUID().toString().c_str(),
                           ch->canWrite() ? "write " : "", ch->canWriteNoResponse() ? "write-no-resp " : "",
                           ch->canNotify() ? "notify" : "");

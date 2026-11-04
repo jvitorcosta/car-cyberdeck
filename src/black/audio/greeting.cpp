@@ -6,6 +6,7 @@
 #include "../../util/black/loudness.h"
 #include "../../util/black/howl.h"
 #include "../../util/black/intropick.h"
+#include "../../util/black/sndroster.h"
 #include "../core/media.h"
 
 MEDIA_DECL(data_greeting_pcm);
@@ -15,6 +16,9 @@ MEDIA_DECL(data_intro_pcm);
 MEDIA_DECL(data_max_pcm);
 MEDIA_DECL(data_howl_pcm);
 MEDIA_DECL(data_greeting_alt_pcm);
+MEDIA_DECL(data_drive_snd);
+MEDIA_DECL(data_opener_snd);
+MEDIA_DECL(data_finale_snd);
 // In the app, so a deck with an empty media partition still boots with sound.
 EMBED(data_greeting_default_pcm);
 
@@ -39,6 +43,7 @@ struct Clips {
     Clip max;            // Max Verstappen's F1 intro, the other video opening
     Clip wolf;           // a real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none
     Clip greetingAlt;    // the second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot
+    media::Blob roster[3];   // per Slot: data/<slot>.snd (util/sndroster), {nullptr, 0} without one
 };
 
 // Looked up once, on first use (a function-local static: thread-safe).
@@ -55,6 +60,9 @@ static const Clips& clips() {
         k.wolf = clip(MEDIA(data_howl_pcm, "howl.pcm"), "howl", &audiosink::GREETING_VOLUME, INTRO_RATE);
         k.greetingAlt = clip(MEDIA(data_greeting_alt_pcm, "greeting_alt.pcm"), "greeting",
                              &audiosink::GREETING_VOLUME, CLIP_RATE);
+        k.roster[DRIVE] = MEDIA(data_drive_snd, "drive.snd");
+        k.roster[OPENER] = MEDIA(data_opener_snd, "opener.snd");
+        k.roster[FINALE] = MEDIA(data_finale_snd, "finale.snd");
         return k;
     }();
     return c;
@@ -70,12 +78,52 @@ static const Clip SILENT = {nullptr, 0, "greeting", &audiosink::GREETING_VOLUME,
 
 void choose(intropick::Greeting g) { s_choice = g; }
 
+// This boot's roster clips (pick()); static: a playing task keeps the pointer.
+static Clip s_picked[3];
+static bool s_hasPick[3] = {false, false, false};
+
+static bool rosterClip(Slot s, int i, sndroster::Clip* out) {
+    if (s > FINALE) return false;
+    const media::Blob& b = clips().roster[s];
+    return sndroster::at(b.data, b.size, i, out);
+}
+
+int rosterCount(Slot s) { return s > FINALE ? 0 : sndroster::count(clips().roster[s].data, clips().roster[s].size); }
+
+uint32_t rosterMs(Slot s, int i) {
+    sndroster::Clip c;
+    return rosterClip(s, i, &c) ? (uint32_t)((uint64_t)(c.bytes / 2) * 1000 / CLIP_RATE) : 0;
+}
+
+const char* rosterName(Slot s, int i) {
+    sndroster::Clip c;
+    return rosterClip(s, i, &c) ? c.name : "?";
+}
+
+void pick(Slot s, int i) {
+    if (s > FINALE) return;
+    static const char* const NAMES[3] = {"greeting", "opener", "finale"};
+    const int* volume = s == FINALE ? &audiosink::FINALE_VOLUME : &audiosink::GREETING_VOLUME;
+    sndroster::Clip c;
+    if (rosterClip(s, i, &c)) {
+        s_picked[s] = {c.data, c.bytes / 2, NAMES[s], volume, CLIP_RATE};
+        s_hasPick[s] = true;
+    } else {                         // with a roster, no fitting clip is no sound (not the single file)
+        s_picked[s] = {nullptr, 0, NAMES[s], volume, CLIP_RATE};
+        s_hasPick[s] = rosterCount(s) > 0;
+    }
+}
+
 // The clip play(), durationMs() and level() agree on (the boot scene's timing and car lights).
 static const Clip& greetingClip() {
     if (s_choice == intropick::NONE) return SILENT;
     if (s_choice == intropick::ALT && present(clips().greetingAlt)) return clips().greetingAlt;
+    if (s_hasPick[DRIVE] && present(s_picked[DRIVE])) return s_picked[DRIVE];
     return clips().greeting;
 }
+
+static const Clip& openerClip() { return s_hasPick[OPENER] ? s_picked[OPENER] : clips().opener; }
+static const Clip& finaleClip() { return s_hasPick[FINALE] ? s_picked[FINALE] : clips().finale; }
 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
 static std::atomic<int> s_playing{0};
@@ -85,6 +133,20 @@ static std::atomic<int> s_playing{0};
 static SemaphoreHandle_t output() {
     static SemaphoreHandle_t m = xSemaphoreCreateMutex();
     return m;
+}
+
+// The clip whose sound came out last and when (millis(), after the amp's wake): the pictures that
+// follow a sound (car lights, intro video) run on this clock, not on their own play() call's.
+static portMUX_TYPE s_heardMux = portMUX_INITIALIZER_UNLOCKED;
+static const Clip* s_heard = nullptr;
+static uint32_t s_heardAt = 0;
+static std::atomic<uint32_t> s_cuedAt{0};               // the last start(): for the log
+
+static uint32_t heardAt(const Clip* c) {
+    portENTER_CRITICAL(&s_heardMux);
+    const uint32_t at = s_heard == c ? s_heardAt : 0;
+    portEXIT_CRITICAL(&s_heardMux);
+    return at;
 }
 
 // The camera beeps cutting in over a clip (pauseFor / beginTones / endTones). The clip checks
@@ -116,6 +178,7 @@ static void task(void* arg) {
     const Clip* c = (const Clip*)arg;
     const int volume = *c->volume;
     xSemaphoreTake(output(), portMAX_DELAY);
+    const uint32_t cued = s_cuedAt.load();
     const uint32_t t0 = millis();
     if (!audiosink::open(c->rate)) {
         xSemaphoreGive(output());
@@ -123,6 +186,11 @@ static void task(void* arg) {
         vTaskDelete(nullptr);
     }
     s_openRate.store(c->rate);
+    const uint32_t out = millis();                       // the amp is awake: the first sample is out
+    portENTER_CRITICAL(&s_heardMux);
+    s_heard = c;
+    s_heardAt = out ? out : 1;
+    portEXIT_CRITICAL(&s_heardMux);
     int16_t buf[CHUNK];
     static howl::Synth synth;                            // one clip plays at a time (output())
     if (!c->data) synth = howl::Synth();
@@ -145,8 +213,8 @@ static void task(void* arg) {
     s_openRate.store(0);
     audiosink::close();
     xSemaphoreGive(output());
-    Serial.printf("[greeting] %s: played %u samples in ~%u ms (clip %u ms)\n", c->name,
-                  (unsigned)c->samples, (unsigned)(millis() - t0),
+    Serial.printf("[greeting] %s: out %u ms after its cue, played %u samples in ~%u ms (clip %u ms)\n",
+                  c->name, (unsigned)(out - cued), (unsigned)c->samples, (unsigned)(millis() - t0),
                   (unsigned)(c->samples * 1000 / c->rate));
     s_playing.fetch_sub(1);
     vTaskDelete(nullptr);
@@ -157,6 +225,7 @@ static void start(const Clip* c, const char* name) {
         Serial.printf("[greeting] %s: no memory for the output's lock\n", name);
         return;
     }
+    s_cuedAt.store(millis());
     s_playing.fetch_add(1);
     if (xTaskCreate(task, name, 3072, const_cast<Clip*>(c), 1, nullptr) != pdPASS) {
         s_playing.fetch_sub(1);              // never started: don't keep the boot scene waiting
@@ -174,25 +243,35 @@ void playHowl() {
     start(&HOWL, "howl");
 }
 
-void playFinale() { if (present(clips().finale)) start(&clips().finale, "finale"); }
+void playFinale() { if (present(finaleClip())) start(&finaleClip(), "finale"); }
 
-void playIntro(intropick::Opening o) {
+bool playIntro(intropick::Opening o) {
     const Clip& c = o == intropick::MAX ? clips().max : clips().intro;
-    if (present(c)) start(&c, "intro");
+    if (!present(c)) return false;
+    start(&c, "intro");
+    return true;
 }
 
-void playOpener() { if (present(clips().opener)) start(&clips().opener, "opener"); }
+uint32_t introStartedAt() {
+    const uint32_t a = heardAt(&clips().intro);
+    return a ? a : heardAt(&clips().max);
+}
 
-uint32_t openerMs() { return present(clips().opener) ? lengthMs(clips().opener) : 0; }
+void playOpener() { if (present(openerClip())) start(&openerClip(), "opener"); }
+
+uint32_t openerMs() { return present(openerClip()) ? lengthMs(openerClip()) : 0; }
 
 uint32_t durationMs() { return lengthMs(greetingClip()); }
 
 bool playing() { return s_playing.load() > 0; }
 
-uint32_t finaleMs() { return present(clips().finale) ? lengthMs(clips().finale) : 0; }
+uint32_t finaleMs() { return present(finaleClip()) ? lengthMs(finaleClip()) : 0; }
 
-uint8_t level(uint32_t ms) {
+uint8_t level() {
     const Clip& c = greetingClip();
+    const uint32_t heard = heardAt(&c);
+    if (!heard) return 0;                                // not out yet (or another clip since)
+    const uint32_t ms = millis() - heard;
     const size_t at = (size_t)((uint64_t)ms * c.rate / 1000);
     return loudness::loudness(c.data, c.samples, at, c.rate / 50);
 }
