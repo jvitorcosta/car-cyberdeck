@@ -1,7 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <cstdint>
-// The speed-camera list: data/cameras.csv text -> points in RAM. The deck stores the CSV as-is and
+// The speed-camera list: the radars.csv text of an open-radars-manaus release -> points in RAM. The deck stores the CSV as-is and
 // parses it at boot and after a push; a bad list is refused whole (with the line to fix) rather than
 // half loaded, so an alert never comes from a row the owner did not mean. PURE, host-tested.
 //
@@ -12,7 +12,7 @@ enum class Kind : uint8_t { Speed, Bump, RedLight };
 constexpr int MAX_POINTS = 96;
 // What the deck stores and accepts. NVS is 20 KB (5 pages, one kept free): a push writes the new
 // list before the old one goes, and OTA's `good`, `boot/last` and the WiFi keys live there too, so
-// 6 KB (twice that in flight) leaves them room. tools/cameras.py's MAX_BYTES follows it.
+// 6 KB (twice that in flight) leaves them room. tools/cameras.py's MAX_BYTES follows it (`tools/cameras.py push` sends a release).
 constexpr size_t MAX_CSV = 6144;
 constexpr uint8_t NO_LIMIT = 0;   // limit unknown (or none, for a red light)
 struct Point {

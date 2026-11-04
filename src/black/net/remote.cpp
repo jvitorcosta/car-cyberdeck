@@ -222,7 +222,7 @@ static void handleCamMark() {
     s_server->send(507, "text/plain", "not stored");   // NVS: the marks so far are kept
 }
 
-// The PC tool (tools/cameras.py push) with the bearer key, like /trip/reset. The body must be sent
+// The PC tool (tools/cameras.py push, which sends an open-radars-manaus release's radars.csv) with the bearer key, like /trip/reset. The body must be sent
 // as text/plain: WebServer turns a form-encoded body (curl's default) into params instead.
 static void handleCamList() {
     if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }

@@ -133,6 +133,20 @@ def test_push_download_failure_exits_2(monkeypatch, capsys):
     assert "release" in capsys.readouterr().err
 
 
+def test_push_download_http_exception_and_bad_encoding_exit_2(monkeypatch, capsys):
+    import http.client
+    monkeypatch.setattr(cam, "deck_call", lambda *a, **k: (_ for _ in ()).throw(AssertionError("must not post")))
+
+    def cut(req, timeout=None):
+        raise http.client.IncompleteRead(b"")
+    monkeypatch.setattr(cam.urllib.request, "urlopen", cut)
+    assert cam.main(["push"]) == 2
+    assert "no such release, or no network" in capsys.readouterr().err
+    monkeypatch.setattr(cam.urllib.request, "urlopen", lambda req, timeout=None: _Resp(b"\xff\xfe\x00bad"))
+    assert cam.main(["push"]) == 2
+    assert "not UTF-8 text" in capsys.readouterr().err
+
+
 def test_import_car_writes_marks_file(tmp_path, monkeypatch):
     calls = []
     marks = "123,-3.100000,-60.000000,271,55\n456,-3.2,-60.1,10,0\n"

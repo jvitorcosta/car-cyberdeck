@@ -20,6 +20,7 @@ The deck is cardeck.local (or --host, e.g. the hotspot's 172.20.10.10); the key 
 src/config.h (git-ignored, never printed). `validate` applies the rules of src/util/car/camlist.cpp.
 """
 import argparse
+import http.client
 import json
 import os
 import re
@@ -169,7 +170,10 @@ def cmd_push(a):
         url = release_url(a.release)
         try:
             text = download(url)
-        except (urllib.error.URLError, OSError, UnicodeDecodeError) as e:
+        except UnicodeDecodeError:
+            print("cameras: could not download %s: the release file is not UTF-8 text" % url, file=sys.stderr)
+            return 2
+        except (urllib.error.URLError, http.client.HTTPException, OSError) as e:
             print("cameras: could not download %s (%s): no such release, or no network" % (
                 url, getattr(e, "reason", e)), file=sys.stderr)
             return 2
