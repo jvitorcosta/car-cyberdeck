@@ -163,6 +163,27 @@ between the decks never silences an alarm.
 - **No fix:** a small `GPS --` tag in a corner; no band. Also when the deck can't run the alerts
   at all (no memory at boot).
 - **Muted:** `MUTE` on the band (a mute nobody meant must show where the driver looks).
+- **Sign panel** (added 2026-11-03, the owner approved a mockup): during Alert and Alarm the right
+  128 × 192 px above the band show the point as a Brazilian road sign, pictograms only, no words
+  (words that small can't be read at a glance). The screens below draw through a viewport of the
+  rest (left 192 px above the band), as they already do for the band.
+  - Speed camera: the round limit sign (R-19: white rim, red ring, white face, black number in
+    big bold digits, `km/h` under it; `--` when the limit is unknown) with a camera badge under it
+    (a white plate with a black camera).
+  - Speed bump: the same limit sign with the yellow bump diamond (A-18, black rim, bump shape)
+    under it.
+  - Red-light camera: the yellow diamond with a traffic light (A-14, black rim, red / yellow / green
+    lamps) with the camera badge under it.
+  - **The band** under it no longer repeats the limit: the kind word small (`RADAR`, `LOMBADA`,
+    `SINAL`, in the accent colour), the distance and the speed large, and along its top a 4 px
+    countdown bar that shrinks from the alert distance to 0 (yellow; orange for a red light; white
+    on the red alarm band). The countdown bar is the "countdown" the anti-goals allow.
+  - **Alarm:** the limit sign swaps colours at 2 Hz (normal ↔ red face with white digits, same size
+    and place: nothing moves), and under it how far over the limit you are (`+12`) replaces the
+    badge, in red. The band is solid red as before. Only the alarm blinks on the black deck; the
+    yellow deck's blinking speed stays as it is.
+  - Drawn with plain shapes and the built-in fonts (font 7's 7-segment digits for the numbers where
+    they fit), redrawn only on change, so the battle screen keeps its frame rate.
 
 ### Yellow deck (the dashboard)
 

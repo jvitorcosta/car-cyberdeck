@@ -303,3 +303,24 @@ Added 2026-11-03 after the owner listened to a simulated drive and approved the 
 - [ ] **Step 4: Run** `tools/run_tests.ps1`, `python -m pytest tools`, `pio run -e s3`, `pio run -e ledpanel` → all pass.
 - [ ] **Step 5:** BACKLOG bench gates: hear each call over the speaker and over a playing intro; volume against the beeps; `[mem]` 30-min check unchanged.
 - [ ] **Step 6: Commit** `feat(black): camera alerts speak (chime + voice, beeps as fallback)`.
+
+### Task 11: Sign panel on the black deck
+
+Added 2026-11-03 after the owner approved a mockup. Spec: "Black deck (the one that knows)", **Sign panel**.
+
+**Files:**
+- Modify: `src/black/ui/camband.cpp/.h` (the panel, the new band layout, the countdown bar, the alarm blink), `src/black/main.cpp` (the viewport leaves out the panel's columns while it shows)
+- Create if the maths wants tests: a PURE helper in `src/util/car/` (e.g. the countdown bar's width from distance and alert distance, the `+N` over-limit value, the blink phase), host-tested
+
+**Interfaces:**
+- `camband` gains a panel rect (`PANEL = {192, 0, 128, 192}` at the 320 × 240 landscape screen) and reports the area the screens must keep out of while it shows (the bottom BAND_H rows and the panel), so main.cpp can set one viewport `(0, 0, 192, 240 - BAND_H)`.
+- The countdown bar's full width is the point's alert distance (cameras.*: max(400 m, 20 s × speed) for speed / bump, 250 m for red-light, from when the alert began); it never grows back while the same alert lasts.
+- The alarm blink runs off millis() at 2 Hz, redrawing only the sign (not the band) at each flip.
+
+- [ ] **Step 1:** If you add the pure helper, write its failing host tests first (bar width at start / middle / 0 m, never growing; `+N` rounding and never under +1 in an alarm; blink phase).
+- [ ] **Step 2:** Implement the panel's three signs, the camera badge, the bump diamond, the `--` limit, the new band layout and the countdown bar; the alarm's colour swap and `+N`.
+- [ ] **Step 3:** main.cpp: one viewport that leaves out the band and the panel while they show; the screen redraws whole when they go (as now).
+- [ ] **Step 4: Run** `tools/run_tests.ps1`, `pio run -e s3`, `pio run -e ledpanel` → pass.
+- [ ] **Step 5:** BACKLOG bench gates: the signs read at arm's length in daylight; the blink is only on the sign; the battle screen's frame rate with the panel up; the panel over each screen (battle, lyrics, status).
+- [ ] **Step 6: Commit** `feat(black): camera alerts show the road sign`.
+
