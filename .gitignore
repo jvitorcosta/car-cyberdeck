@@ -57,6 +57,8 @@ data/tunes.txt
 # Pixel McQueen (a Disney/Pixar character): the art and the packed sprite stay local
 data/mcqueen.bin
 mcqueen*.png
+# The camera alerts' chime and voice lines (tools/gen_camvoice.py; amitaro's voice set): stay local
+data/camvoice.bin
 
 # Garmin watch app: the deck key, and build output
 garmin/carlights/source/Secrets.mc
