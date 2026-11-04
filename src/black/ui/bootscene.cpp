@@ -1,8 +1,11 @@
 #include "bootscene.h"
 #include <Arduino.h>
 #include "tjpgd.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
+#include <esp_heap_caps.h>
 #include "car_sprite.h"
 #include "carlook.h"
 #include "bootterm.h"
@@ -64,6 +67,15 @@ uint8_t s_haloLut[64];       // 140 x (1 - d)^1.5 for the underglow halo, d in 6
 uint8_t* s_wheelAng = nullptr;   // per wheel pixel (29 x 29): angle in 256 steps (heap, scene only)
 uint8_t* s_wheelRing = nullptr;  // per wheel pixel: 0 out, 1 tyre, 2 lip, 3 hub centre, 4 hub, 5 face, 6 face with spokes
 constexpr int WHEEL_D = 29;
+// Made once per scene (freed with the strip buffer), so a drive frame copies or looks them up
+// instead of drawing them: the static layers in PSRAM (copied: ~3 ms a frame, drawn: ~11), the
+// small alpha tables in internal RAM (PSRAM reads are too slow for a per-pixel lookup).
+uint16_t* s_static = nullptr;    // rows SKY_H-239 of the layers that never move (strip byte order)
+uint8_t* s_halo = nullptr;       // underglow halo alpha at full glow, HALO_ROWS x HALO_W by |dx|
+uint8_t* s_core = nullptr;       // underglow core alpha, same layout (s_halo's second half)
+uint8_t* s_pool = nullptr;       // a street lamp's light pool on the asphalt, POOL_ROWS x POOL_W
+constexpr int HALO_Y = 199, HALO_ROWS = 29, HALO_W = 127;
+constexpr int POOL_Y = 150, POOL_ROWS = 20, POOL_W = 86;
 
 // ---- strip drawing (everything clipped to the current strip) ----
 inline void put(int x, int y, uint16_t c) { s_buf[(y - s_y0) * W + x] = rgb565::be(c); }
@@ -153,15 +165,27 @@ void initTrees() {
 }
 
 // ---- the car park ----
-void drawBackground(uint32_t t) {
+// The layers that never move: sky band, tree line, verge, fence rail, asphalt grain.
+void drawStatic() {
     for (int y = SKY_H; y < 130; ++y) rect(0, y, W, 1, skyAt(y));         // sky continued
-    const uint16_t tree = hex(0x0A120E);                                // tree line (static)
+    const uint16_t tree = hex(0x0A120E);                                // tree line
     for (int y = s_y0 < 86 ? 86 : s_y0; y < s_y0 + STRIP_H && y < 126; ++y)
         for (int x = 0; x < W; ++x)
             if (y >= s_treeTop[x]) put(x, y, tree);
     rect(0, 126, W, 10, hex(0x09100C));
+    rect(0, 123, W, 1, hex(0x32643F));                                  // the fence's rail
+    for (int y = s_y0 < 140 ? 140 : s_y0; y < s_y0 + STRIP_H; ++y) {      // near-black asphalt
+        const uint16_t base = lerp565(hex(0x0E0F13), hex(0x12131A), y - 140, 99);
+        const uint16_t grain[4] = {bootanim::scale565(base, 225), base,
+                                   bootanim::blend565(WHITE, base, 5), bootanim::blend565(WHITE, base, 10)};
+        for (int x = 0; x < W; ++x) put(x, y, grain[((uint32_t)(x * 73856093u) ^ (uint32_t)(y * 19349663u)) >> 13 & 3]);
+    }
+}
+
+void drawBackground(uint32_t t) {
+    if (s_static && s_y0 >= SKY_H) memcpy(s_buf, s_static + (s_y0 - SKY_H) * W, W * STRIP_H * sizeof(uint16_t));
+    else drawStatic();
     const int fo = bootanim::scroll(t, FENCE_SPEED, 1000);                // chain-link fence
-    rect(0, 123, W, 1, hex(0x32643F));
     for (int y = s_y0 < 124 ? 124 : s_y0; y < s_y0 + STRIP_H && y < 140; ++y)
         for (int x = 0; x < W; ++x)
             if ((x + fo + y) % 5 == 0 || (x + fo - y + 1000) % 5 == 0) put(x, y, bootanim::blend565(hex(0x285A37), get(x, y), 90));
@@ -172,12 +196,6 @@ void drawBackground(uint32_t t) {
         rect(px + 6, 127, 20, 6, hex(0x1A1D24));
         rect(px + 1, 135, 1, 1, hex(0xC81E1E));
         rect(px + 32, 135, 1, 1, hex(0xC81E1E));
-    }
-    for (int y = s_y0 < 140 ? 140 : s_y0; y < s_y0 + STRIP_H; ++y) {      // near-black asphalt
-        const uint16_t base = lerp565(hex(0x0E0F13), hex(0x12131A), y - 140, 99);
-        const uint16_t grain[4] = {bootanim::scale565(base, 225), base,
-                                   bootanim::blend565(WHITE, base, 5), bootanim::blend565(WHITE, base, 10)};
-        for (int x = 0; x < W; ++x) put(x, y, grain[((uint32_t)(x * 73856093u) ^ (uint32_t)(y * 19349663u)) >> 13 & 3]);
     }
     const int bo = bootanim::scroll(t, ROAD_SPEED, BAY_PERIOD);           // parking-bay lines
     for (int bx = -BAY_PERIOD; bx < W + BAY_PERIOD; bx += BAY_PERIOD)
@@ -193,8 +211,13 @@ void drawBackground(uint32_t t) {
             const int hw = (y - 76) * 45 / 100;
             blendRect(lx + 13 - hw, y, 2 * hw + 1, 1, hex(0xE1EBFF), 13);
         }
-        for (int y = 150; y < 170; ++y) {
+        for (int y = POOL_Y; y < POOL_Y + POOL_ROWS; ++y) {
             if (y < s_y0 || y >= s_y0 + STRIP_H) continue;         // only this strip's rows
+            if (s_pool) {
+                const uint8_t* a = s_pool + (y - POOL_Y) * POOL_W;
+                for (int k = 0; k < POOL_W; ++k) blendPx(lx - 30 + k, y, hex(0xC8D2E6), a[k]);
+                continue;
+            }
             const float dy = (float)(y - 160) / 9.0f, dy2 = dy * dy;
             for (int x = lx - 30; x < lx + 56; ++x) {
                 const float dx = (float)(x - lx - 13) / 45.0f, dd = dx * dx + dy2;
@@ -294,8 +317,23 @@ void drawCar(const Car& c) {
     const float glow = bootanim::glowAlpha(c.e) / 217.0f;            // 0.53 at rest .. 1.0 loud
     rect(c.x + 24, GROUND_Y, 154, 2, hex(0x08090C));              // shadow
     const int cx = c.x + 100;                                         // underglow halo + core on the asphalt
-    for (int y = 199; y < 228; ++y) {
+    const int g = (int)(glow * 256.0f);
+    for (int y = HALO_Y; y < HALO_Y + HALO_ROWS; ++y) {
         if (y < s_y0 || y >= s_y0 + STRIP_H) continue;
+        if (s_halo) {
+            const uint8_t* h = s_halo + (y - HALO_Y) * HALO_W;
+            const uint8_t* k = s_core + (y - HALO_Y) * HALO_W;
+            const int xa = std::max({c.x - 26, cx - HALO_W + 1, 0}), xb = std::min({c.x + 226, cx + HALO_W, W});
+            for (int x = xa; x < xb; ++x) {                      // clipped once: no per-pixel checks
+                const int ax = abs(x - cx);
+                if (!h[ax] && !k[ax]) continue;
+                uint16_t px = get(x, y);
+                if (h[ax]) px = bootanim::blend565(UNDERGLOW, px, (uint8_t)(h[ax] * g >> 8));
+                if (k[ax]) px = bootanim::blend565(GLOW_CORE, px, (uint8_t)(k[ax] * g >> 8));
+                put(x, y, px);
+            }
+            continue;
+        }
         const float hy = (float)(y - 213) / 14.0f, hy2 = hy * hy, ky = (float)(y - 211) / 5.0f, ky2 = ky * ky;
         for (int x = c.x - 26; x < c.x + 226; ++x) {
             const float dx = (float)(x - cx);
@@ -389,6 +427,52 @@ void runWithoutScene(uint32_t t0) {
     }
 }
 
+void* psram(size_t n) { return heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); }
+
+// The per-scene caches above, drawn through the strip buffer (s_buf); one that doesn't fit is
+// drawn live each frame instead.
+void initCaches() {
+    s_static = (uint16_t*)psram((size_t)W * (H - SKY_H) * sizeof(uint16_t));
+    if (s_static)
+        for (int s = 0; s < STRIPS; ++s) {
+            s_y0 = SKY_H + s * STRIP_H;
+            drawStatic();
+            memcpy(s_static + (s_y0 - SKY_H) * W, s_buf, W * STRIP_H * sizeof(uint16_t));
+        }
+    s_halo = (uint8_t*)malloc(2 * HALO_ROWS * HALO_W);         // 7.4 KB
+    if (s_halo) {
+        s_core = s_halo + HALO_ROWS * HALO_W;
+        for (int r = 0; r < HALO_ROWS; ++r) {
+            const int y = HALO_Y + r;
+            const float hy = (float)(y - 213) / 14.0f, hy2 = hy * hy, ky = (float)(y - 211) / 5.0f, ky2 = ky * ky;
+            for (int ax = 0; ax < HALO_W; ++ax) {
+                const float dx = (float)ax;
+                const float d = dx * dx * (1.0f / (126.0f * 126.0f)) + hy2;
+                s_halo[r * HALO_W + ax] = d < 1.0f ? s_haloLut[(int)(d * 64.0f)] : 0;
+                const float k = dx * dx * (1.0f / (90.0f * 90.0f)) + ky2;
+                s_core[r * HALO_W + ax] = ky2 < 1.0f && k < 1.0f ? (uint8_t)(115.0f * (1.0f - k)) : 0;
+            }
+        }
+    }
+    s_pool = (uint8_t*)malloc(POOL_ROWS * POOL_W);             // 1.7 KB
+    if (s_pool)
+        for (int r = 0; r < POOL_ROWS; ++r) {
+            const float dy = (float)(POOL_Y + r - 160) / 9.0f, dy2 = dy * dy;
+            for (int k = 0; k < POOL_W; ++k) {
+                const float dx = (float)(k - 43) / 45.0f, dd = dx * dx + dy2;
+                s_pool[r * POOL_W + k] = dd < 1.0f ? (uint8_t)(26.0f * (1.0f - dd)) : 0;
+            }
+        }
+}
+
+void freeCaches() {
+    free(s_static);
+    free(s_halo);                // s_core is its second half
+    free(s_pool);
+    s_static = nullptr;
+    s_halo = s_core = s_pool = nullptr;
+}
+
 void task(void*) {
     mem::log("bootscene start");
     const uint32_t t0 = millis();
@@ -408,7 +492,10 @@ void task(void*) {
         Serial.println("[bootscene] no memory for the strip buffer: scene skipped");
         runWithoutScene(t0);
     } else {
-        if (s_opts.drive) drawSky();                             // no drive: black until the montage
+        if (s_opts.drive) {
+            initCaches();
+            drawSky();                                           // no drive: black until the montage
+        }
         uint32_t tHero = bootanim::NO_EXIT;
         bool skipBrake = false;
         int xc = 0, shown = -1;
@@ -486,6 +573,7 @@ void task(void*) {
                     if (shown < 0) {
                         spr.deleteSprite();                      // the strip isn't needed any more
                         s_buf = nullptr;
+                        freeCaches();
                         jpgWork = (uint8_t*)malloc(TJPGD_WORKSPACE_SIZE);
                         if (!jpgWork) break;                     // no memory: skip the montage
                     }
@@ -521,6 +609,7 @@ void task(void*) {
                       (unsigned)(frames[2] ? busyMs[2] / frames[2] : 0), (unsigned)frames[2], montage::count(),
                       (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     }
+    freeCaches();
     free(s_wheelAng);
     free(s_wheelRing);
     s_wheelAng = s_wheelRing = nullptr;

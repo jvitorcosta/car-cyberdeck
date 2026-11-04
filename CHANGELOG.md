@@ -15,6 +15,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   loudness of today's clips, so a dense one (the Bem-vindo over its music bed) no longer rasps.
 - **Fixed:** clips and the intro videos' sound no longer lose their first syllable: the speaker
   amp gets 60 ms to wake before the first sample.
+- **Changed:** a smoother boot. The night drive runs at ~19 fps (was ~16): the layers that never
+  move are drawn once, and the underglow and lamp light come from tables. The brake's dip to black is a backlight fade (10+ frames, was 6 dimmed ones).
+  The kiss video plays at 16 fps with every frame (it dropped 28 at 20), and both intro videos'
+  sound is levelled to the greetings' loudness (the kiss was twice as loud, Max quieter).
 - **Fixed:** boot sounds land on their picture. A sound is heard ~0.1 s after it's cued, so the
   intro videos now run on their sound's clock (lips match the voice), the car's lights follow the
   greeting as it's heard, the montage-start voice is cued in the brake's fade so it comes with the

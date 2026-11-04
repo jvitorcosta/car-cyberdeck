@@ -123,8 +123,12 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   light anchors, kinds and RGB565, from `tools/gen_mcqueen_sprite.py`), each with its own rims.
   `bootterm` is the on-board terminal (the BIOS log) shared with the intro. Without a drive (the
   kiss) the scene waits for WiFi and starts at the montage. Cruising: sky drawn once, y 72–239 re-rendered through one
-  320×24 strip (15 KB, freed before the montage); brake: whole-screen fade; montage: JPEG frames
-  from the embedded `data/montage.bin` decoded straight to the display (~10 fps); drive ~15 fps (67 ms/frame). `setup()`
+  320×24 strip (15 KB, freed before the montage) over a copy of the layers that never move (sky
+  band, trees, asphalt; 105 KB in PSRAM), the underglow and lamp light from alpha tables (9 KB);
+  brake: the same frame while the LEDC hardware fades the backlight (`backlight::fadeOut`; whole-screen
+  pixel fade without it), the first photo relights it; montage: JPEG frames from the embedded
+  `data/montage.bin` decoded straight to the display (~10 fps); drive ~19 fps (~52 ms/frame, 24 of
+  them the push at 40 MHz; 80 MHz corrupted the picture). `setup()`
   waits for it; `loop()` and the late-WiFi path wait while active.
 - **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
   Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
