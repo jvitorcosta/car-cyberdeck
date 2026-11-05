@@ -32,7 +32,7 @@ if not os.path.isfile(howl):
     with open(howl, "wb") as f:
         f.write(bytes(2))
     print("greeting_clip: no data/howl.pcm, the S3 synthesises its howl")
-for slot in ("drive", "opener", "finale"):      # the S3's boot sound rosters (tools/gen_rosters.py)
+for slot in ("drive", "opener", "finale", "connect"):      # the S3's boot sound rosters (tools/gen_rosters.py)
     roster = os.path.join(data, slot + ".snd")
     if not os.path.isfile(roster):
         with open(roster, "wb") as f:

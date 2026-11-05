@@ -19,6 +19,7 @@ MEDIA_DECL(data_greeting_alt_pcm);
 MEDIA_DECL(data_drive_snd);
 MEDIA_DECL(data_opener_snd);
 MEDIA_DECL(data_finale_snd);
+MEDIA_DECL(data_connect_snd);
 // In the app, so a deck with an empty media partition still boots with sound.
 EMBED(data_greeting_default_pcm);
 
@@ -43,7 +44,7 @@ struct Clips {
     Clip max;            // Max Verstappen's F1 intro, the other video opening
     Clip wolf;           // a real wolf (tools/gen_howl.py); the synthesised HOWL when the build has none
     Clip greetingAlt;    // the second greeting (McQueen's "Eu sou a velocidade"), picked at random at boot
-    media::Blob roster[3];   // per Slot: data/<slot>.snd (util/sndroster), {nullptr, 0} without one
+    media::Blob roster[4];   // per Slot: data/<slot>.snd (util/sndroster), {nullptr, 0} without one
 };
 
 // Looked up once, on first use (a function-local static: thread-safe).
@@ -63,6 +64,7 @@ static const Clips& clips() {
         k.roster[DRIVE] = MEDIA(data_drive_snd, "drive.snd");
         k.roster[OPENER] = MEDIA(data_opener_snd, "opener.snd");
         k.roster[FINALE] = MEDIA(data_finale_snd, "finale.snd");
+        k.roster[CONNECT] = MEDIA(data_connect_snd, "connect.snd");
         return k;
     }();
     return c;
@@ -79,16 +81,16 @@ static const Clip SILENT = {nullptr, 0, "greeting", &audiosink::GREETING_VOLUME,
 void choose(intropick::Greeting g) { s_choice = g; }
 
 // This boot's roster clips (pick()); static: a playing task keeps the pointer.
-static Clip s_picked[3];
-static bool s_hasPick[3] = {false, false, false};
+static Clip s_picked[4];
+static bool s_hasPick[4] = {false, false, false, false};
 
 static bool rosterClip(Slot s, int i, sndroster::Clip* out) {
-    if (s > FINALE) return false;
+    if (s > CONNECT) return false;
     const media::Blob& b = clips().roster[s];
     return sndroster::at(b.data, b.size, i, out);
 }
 
-int rosterCount(Slot s) { return s > FINALE ? 0 : sndroster::count(clips().roster[s].data, clips().roster[s].size); }
+int rosterCount(Slot s) { return s > CONNECT ? 0 : sndroster::count(clips().roster[s].data, clips().roster[s].size); }
 
 uint32_t rosterMs(Slot s, int i) {
     sndroster::Clip c;
@@ -101,8 +103,8 @@ const char* rosterName(Slot s, int i) {
 }
 
 void pick(Slot s, int i) {
-    if (s > FINALE) return;
-    static const char* const NAMES[3] = {"greeting", "opener", "finale"};
+    if (s > CONNECT) return;
+    static const char* const NAMES[4] = {"greeting", "opener", "finale", "connect"};
     const int* volume = s == FINALE ? &audiosink::FINALE_VOLUME : &audiosink::GREETING_VOLUME;
     sndroster::Clip c;
     if (rosterClip(s, i, &c)) {
@@ -224,11 +226,15 @@ uint32_t introStartedAt() {
 
 void playOpener() { if (present(openerClip())) start(&openerClip(), "opener"); }
 
+void playConnect() { if (s_hasPick[CONNECT] && present(s_picked[CONNECT])) start(&s_picked[CONNECT], "connect"); }
+
 uint32_t openerMs() { return present(openerClip()) ? lengthMs(openerClip()) : 0; }
 
 uint32_t durationMs() { return lengthMs(greetingClip()); }
 
 bool playing() { return s_playing.load() > 0; }
+
+bool warm() { return audiosink::warm(CLIP_RATE); }
 
 uint32_t finaleMs() { return present(finaleClip()) ? lengthMs(finaleClip()) : 0; }
 

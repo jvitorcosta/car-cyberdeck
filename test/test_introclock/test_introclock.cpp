@@ -26,6 +26,7 @@ void test_no_clip_is_done_at_once() {
 // until then, at most SOUND_WAIT_MS (a sound that never starts doesn't stall the video).
 void test_clock_follows_the_sound() {
     using introclock::elapsed;
+    TEST_ASSERT_EQUAL_UINT32(800, introclock::SOUND_WAIT_MS);   // a cold start's sound is out in ~0.45 s
     TEST_ASSERT_EQUAL_UINT32(0, elapsed(1050, 1000, 0, true));        // sound not out yet: hold
     TEST_ASSERT_EQUAL_UINT32(0, elapsed(1100, 1000, 1100, true));     // its first sample
     TEST_ASSERT_EQUAL_UINT32(400, elapsed(1500, 1000, 1100, true));

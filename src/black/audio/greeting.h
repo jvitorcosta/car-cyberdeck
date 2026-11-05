@@ -31,11 +31,18 @@ uint32_t introStartedAt();          // millis() of the intro sound's first sampl
 // the synthesised one while music mode's mic holds the port (the recording is 48 kHz).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
+// The audio output is still on from the last 16 kHz clip (audio/sink.h warm()): a clip cued now is
+// heard at once (bootanim::SOUND_LEAD_MS), not after the speaker's wake (COLD_SOUND_LEAD_MS).
+bool warm();
 
-// Boot sound rosters (data/drive.snd, opener.snd, finale.snd from tools/gen_rosters.py, git-ignored):
-// many clips per slot, one picked each boot by main.cpp (util/soundpick). A slot without a roster
-// plays its single file above (greeting.pcm, opener.pcm, finale.pcm).
-enum Slot : uint8_t { DRIVE = 0, OPENER = 1, FINALE = 2 };
+// WiFi-connected chime: this boot's CONNECT clip, played by the boot scene once the deck is online
+// and the greeting is over, just before the montage. Silent without a connect roster (no single file).
+void playConnect();
+
+// Boot sound rosters (data/drive.snd, opener.snd, finale.snd, connect.snd from tools/gen_rosters.py,
+// git-ignored): many clips per slot, one picked each boot by main.cpp (util/soundpick). A slot without
+// a roster plays its single file above (greeting.pcm, opener.pcm, finale.pcm; CONNECT has none).
+enum Slot : uint8_t { DRIVE = 0, OPENER = 1, FINALE = 2, CONNECT = 3 };
 int rosterCount(Slot s);                 // clips in the slot's roster; 0 = none
 uint32_t rosterMs(Slot s, int i);        // clip i's length; 0 when out of range
 const char* rosterName(Slot s, int i);   // clip i's name (logs); "?" when out of range

@@ -19,7 +19,7 @@ SIZES = os.path.join(DATA, "media_sizes.txt")
 FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin",
          "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "idle.bin",
          "mcqueen.bin", "backdrop.bin", "max.bin", "max.pcm", "shadow.bin",
-         "drive.snd", "opener.snd", "finale.snd"]
+         "drive.snd", "opener.snd", "finale.snd", "connect.snd"]
 MONTAGE_EMPTY = b"MTG1" + (0).to_bytes(2, "little") + (10).to_bytes(2, "little")
 # Stand-ins start with an empty header, so the firmware reads "no clip" and boots.
 HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "max.bin": MONTAGE_EMPTY,
