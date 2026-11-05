@@ -445,7 +445,7 @@ void loop() {
         camsvc::snapshot(&cam, &camPt, &camMute);
     }
     const int camRowsNow = camband::rows(cam);
-    const bool camTagNow = cam.stage == cameras::Stage::NoFix;
+    const bool camTagNow = cam.stage == cameras::Stage::NoFix || cam.stage == cameras::Stage::Off;
     if (camRowsNow < camRows || (camTag && !camTagNow)) lastMode = -1;
     camRows = camRowsNow;
     camTag = camTagNow;

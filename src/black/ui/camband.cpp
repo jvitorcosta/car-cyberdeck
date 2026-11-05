@@ -3,7 +3,7 @@
 #include <cstring>
 #include "../../util/car/camsign.h"
 #include "../../util/common/rgb565.h"
-#include "battle.h"
+#include "icons.h"
 #include "screen_now.h"
 #include "theme.h"
 
@@ -57,7 +57,7 @@ int rows(const cameras::Status& s) {
     switch (s.stage) {
     case Stage::Alert:
     case Stage::Alarm: return BAND_H;
-    case Stage::NoFix:   // a tag on the top strip, drawn after it
+    case Stage::NoFix:   // the GPS icon on the top strip, drawn after it
     case Stage::Off: break;
     }
     return 0;
@@ -197,30 +197,22 @@ static void band(TFT_eSPI& tft, bool alarm, Kind k, int barW, uint16_t dist, uin
     numbers(tft, y0, bg, dist, kmh);
 }
 
-// In the strip's own style (its title's colour and shadow), centred in its empty middle: the
-// smaller font when the device name leaves too little room.
-static void tag(TFT_eSPI& tft) {
-    static const char* const TEXT = "GPS --";
+// The GPS icon centred in the strip's empty middle, in the strip's icon colours (a 12 x 12 icon
+// fits any gap the device name leaves): the pin with a fix, struck through without one.
+static void tag(TFT_eSPI& tft, bool fix) {
     int x0, x1;
     ui::topGap(x0, x1);
-    const uint8_t font = tft.textWidth(TEXT, 2) <= x1 - x0 ? 2 : 1;
-    ui::shadowText(tft, TEXT, (x0 + x1) / 2, font == 2 ? 2 : 6, font, theme::pal().topText,
-                   theme::pal().boxBorder, TC_DATUM);
+    ui::drawIcon(tft, fix ? icons::Icon::Gps : icons::Icon::GpsOff, (x0 + x1 - icons::SIZE) / 2, 4,
+                 theme::pal().topText, theme::pal().top);
 }
 
 void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active, bool mute) {
     if (s.stage == Stage::Off || s.stage == Stage::NoFix) s_barOn = false;   // the next alert is new
-    if (s.stage == Stage::Off) {
-        s_shown.on = false;
-        s_shown.stage = Stage::Off;
-        return;
-    }
-    if (s.stage == Stage::NoFix) {
-        if (s_shown.on && s_shown.stage == Stage::NoFix) return;
-        tag(tft);
-        tft.setTextDatum(TL_DATUM);   // the screens draw with the default datum
+    if (s.stage == Stage::Off || s.stage == Stage::NoFix) {   // the icon only: it swaps in place
+        if (s_shown.on && s_shown.stage == s.stage) return;
+        tag(tft, s.stage == Stage::Off);
         s_shown.on = true;
-        s_shown.stage = Stage::NoFix;
+        s_shown.stage = s.stage;
         return;
     }
     const char* id = active ? active->id : "";
