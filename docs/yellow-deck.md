@@ -138,8 +138,28 @@ it Cyan. With cyan on the inside light the terminal takes the blue theme.
   the colour; say "preset four" for that one.
 - **Watch**: the PRESETS page (see [garmin/README.md](../garmin/README.md)).
 
-**Welcome:** the first time each light links after the deck starts, a lit light rises from black
-to your last look over about 3 s. A later reconnect sets the look straight away.
+**Welcome:** the first time each light links after the deck starts, a lit light plays a short
+intro in your last look. The inside light goes dark, then its strip fills with colour from both ends
+inwards over 4 s and takes your look. The outside light stays dark meanwhile, then rises through a
+peak (30 points brighter, at most 100 %) as the fill ends and settles on its look, about 6 s in all.
+The deck can't light single LEDs: the fill is the inside controller's own built-in curtain effect
+(`ledintro::FILL_MODE` and `FILL_SPEED`), started with its effect command, and the outside
+controller has no such effect. The curtain's colours are the controller's own, so for a look it
+has no colour for (orange, pink) the strip fills with the nearest and shifts to the look at the
+end. Each light ends on its look twice, so a lost write still lands on it. A light you left off
+stays off, music mode skips the intro, and a change, a preset or a song's colour takes over at
+once. A later reconnect sets the look straight away.
+
+Tuning the fill in the car: the effect numbers come from published notes on a sibling controller
+(MELK-OA10), which list 57 to 76 as the curtains without naming each one. If the inside strip
+doesn't fill from both ends inwards, try the other numbers in that range in `FILL_MODE`; if the
+fill doesn't finish in time, raise `FILL_SPEED` (0 to 100) or `FILL_MS`.
+
+Checking it on the desk: `python tools/intro_check.py COM14` sends `INTRO` over USB, which plays the
+welcome again on each lit light without a reboot, and holds the deck's `[intro]` log (each key,
+its time, `sent` or `no link`) to the timeline above: PASS or FAIL, and the timeline. In the car,
+the same command (or a reboot) plays it on the lights, and `>WELCOME` on the prompt line says it
+ran. It only checks the deck: how the controller draws the fill is seen in the car.
 
 ## Music mode: song colours
 

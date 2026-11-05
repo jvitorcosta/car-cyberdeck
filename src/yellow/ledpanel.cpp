@@ -123,6 +123,7 @@
 #include "../util/yellow/elkcmd.h"
 #include "../util/yellow/geoip.h"
 #include "../util/common/hotspotip.h"
+#include "../util/lights/ledintro.h"
 #include "../util/lights/ledlook.h"
 #include "../util/yellow/ledpresets.h"
 #include "../util/yellow/ledvoice.h"
@@ -316,11 +317,14 @@ static bool musicDriving = false;
 static Look musicLook[N_CTRL];
 static Look shownLook(int i) { return musicDriving ? musicLook[i] : looks[i + 1]; }
 
-// A running fade (see "A new music look" below; presets and the first link use it too). Loop-owned.
+// A running fade (see "A new music look" below; presets use it too), or the welcome's intro (see
+// startIntro): its keys in place of from..to, each at its time after `start`. Loop-owned.
 struct LightFade {
     songpalette::Rgb from{}, to{};
     int steps = 0, done = 0;  // done == steps: no fade
     uint32_t every = 0, at = 0;  // at: millis() of the last step written
+    ledintro::Track intro;  // intro.n > 0: the welcome (steps == intro.n)
+    uint32_t start = 0;
 };
 static LightFade lightFade[N_CTRL];
 
@@ -334,6 +338,7 @@ static songpalette::Rgb frameOf(const Look& l) {
 // The colour frame light i shows now: a fade's current step, else its look's.
 static songpalette::Rgb frameNow(int i) {
     const LightFade& f = lightFade[i];
+    if (f.done < f.steps && f.intro.n) return f.intro.k[f.done ? f.done - 1 : 0].c;
     if (f.done < f.steps) return musiclights::blend(f.from, f.to, f.done, f.steps);
     return frameOf(shownLook(i));
 }
@@ -346,6 +351,7 @@ static void writeFrame(int i, const songpalette::Rgb& c) {
 // the first step, so the light never shows its old colour; else the first step waits for its gap.
 static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rgb& to, bool powerOn, int steps, uint32_t every) {
     LightFade& f = lightFade[i];
+    f.intro.n = 0;  // a fade ends the welcome
     f.from = from;
     f.to = to;
     f.steps = steps;
@@ -356,6 +362,45 @@ static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rg
     f.done = 1;
     f.at = millis();
     writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+}
+
+// Key n of light i's welcome: its colour frame, or the start of the inside light's curtain fill
+// (its speed, then the effect; the MELK frames only, the ELK one ignores them). Each key is logged
+// with its time since the welcome began, sent or not (no link: the desk's INTRO replay), so
+// tools/intro_check.py can hold the firmware's timeline to ledintro's.
+static void writeKey(int i, int n) {
+    const LightFade& f = lightFade[i];
+    const ledintro::Key& k = f.intro.k[n];
+    const bool up = linkUp(controllers[i]);
+    if (k.fill) {
+        Serial.printf("[intro] %s +%u ms key %d/%d: fill speed %u effect %u, %s\n", controllers[i].label,
+                      static_cast<unsigned>(millis() - f.start), n + 1, f.intro.n,
+                      static_cast<unsigned>(ledintro::FILL_SPEED), static_cast<unsigned>(ledintro::FILL_MODE), up ? "sent" : "no link");
+        if (!up) return;
+        write(controllers[i], elkcmd::speed(ledintro::FILL_SPEED));
+        write(controllers[i], elkcmd::effect(ledintro::FILL_MODE));
+        return;
+    }
+    Serial.printf("[intro] %s +%u ms key %d/%d: colour %u,%u,%u, %s\n", controllers[i].label,
+                  static_cast<unsigned>(millis() - f.start), n + 1, f.intro.n, k.c.r, k.c.g, k.c.b, up ? "sent" : "no link");
+    if (up) writeFrame(i, k.c);
+}
+
+// The welcome, the first time since boot light i links lit (ledintro: the inside light's strip
+// fills from both ends inwards, then the outside light rises, ~6 s): its power-on and first key
+// (dark) now, the rest from fadeTick. A change, a preset or a song's look takes over from the key
+// it reached (its colour frame ends the fill); a reconnect gets its look (push).
+static void startIntro(int i) {
+    const Look l = shownLook(i);
+    const Rgb s = ledRgb(l.swatch);
+    LightFade& f = lightFade[i];
+    f = LightFade();
+    f.intro = ledintro::plan(i == 0, {s.r, s.g, s.b}, l.pct);
+    f.steps = f.intro.n;
+    f.start = f.at = millis();
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+    writeKey(i, 0);
+    f.done = 1;
 }
 
 // Controller i's look (power + dimmed colour), both header variants. Ends a running fade.
@@ -2794,7 +2839,15 @@ static void fadeTick() {
     const uint32_t now = millis();
     for (int i = 0; i < N_CTRL; i++) {
         LightFade& f = lightFade[i];
-        if (f.done >= f.steps || now - f.at < f.every) continue;
+        if (f.done >= f.steps) continue;
+        if (f.intro.n) {  // the welcome: its next key at its time
+            if (now - f.start < f.intro.k[f.done].at) continue;
+            f.at = now;
+            writeKey(i, f.done);
+            f.done++;
+            continue;
+        }
+        if (now - f.at < f.every) continue;
         f.done++;
         f.at = now;
         if (linkUp(controllers[i])) writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
@@ -3420,15 +3473,34 @@ static void shotRow(int y) {
     Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
 }
 
+// "INTRO\n" on the serial port plays the welcome again on each lit light (music mode skips it, as at
+// the first link), with no reboot and no car: unlinked lights log their keys as "no link"
+// (tools/intro_check.py checks them). ">WELCOME" shows on the prompt line.
+static void replayIntro() {
+    Serial.println("[intro] replay");
+    bool any = false;
+    for (int i = 0; i < N_CTRL; i++) {
+        if (shownLook(i).lit && !musicDriving) {
+            startIntro(i);
+            any = true;
+        } else {
+            Serial.printf("[intro] %s: skipped (%s)\n", controllers[i].label, musicDriving ? "music mode" : "off");
+        }
+    }
+    if (!any) return;
+    setMessage(">WELCOME");
+    drawMessage();
+}
+
 // "SHOT\n" on the serial port sends the panel to the PC (tools/deck_shot.py): "SHOT 320 240", a row
 // line each, "SHOT END". NimBLE's own error prints skip the serial lock and can land inside a row, so
 // the PC then asks again for the rows it lost ("R031\n", 2 s of silence or "Q" ends it). About 30 s at
 // 115200, in the loop: the screen holds still, touch and drawing wait (the 90 s watchdog doesn't
-// mind), the lights' link and the servers keep running.
+// mind), the lights' link and the servers keep running. "INTRO\n" is read here too (replayIntro).
 static void shotTick() {
-    static const char WORD[] = "SHOT\n";
-    static uint8_t matched = 0;
-    bool go = false;
+    static const char WORD[] = "SHOT\n", INTRO[] = "INTRO\n";
+    static uint8_t matched = 0, introMatched = 0;
+    bool go = false, intro = false;
 #ifdef NIGHT_TEST
     static char line[64];
     static uint8_t len = 0;
@@ -3450,7 +3522,13 @@ static void shotTick() {
             matched = 0;
             go = true;
         }
+        introMatched = c == INTRO[introMatched] ? introMatched + 1 : (c == INTRO[0] ? 1 : 0);
+        if (INTRO[introMatched] == 0) {
+            introMatched = 0;
+            intro = true;
+        }
     }
+    if (intro) replayIntro();
     if (!go) return;
     Serial.println("SHOT 320 240");
     for (int y = 0; y < 240; y++) shotRow(y);
@@ -3564,8 +3642,10 @@ void loop() {
     }
 
     // A controller that just came up gets its zone's look, so it matches what the deck remembers.
-    // The first time since boot a lit light rises to it from black over ~3 s, the welcome.
+    // The first time since boot a lit light plays the welcome to it instead (startIntro), and
+    // ">WELCOME" shows after the link message (it says more).
     static bool welcomed[N_CTRL] = {};
+    bool welcomedNow = false;
     static bool shown[N_CTRL] = {};
     static uint32_t edgeAt[N_CTRL] = {};  // when each light last changed link state, and which way
     static bool edgeUp[N_CTRL] = {};
@@ -3575,8 +3655,8 @@ void loop() {
         if (up && c.fresh) {
             c.fresh = false;
             if (!welcomed[i] && shownLook(i).lit && !musicDriving) {
-                const int steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
-                startFade(i, {0, 0, 0}, frameOf(shownLook(i)), true, steps, MUSIC_FADE_MS / static_cast<uint32_t>(steps));
+                startIntro(i);
+                welcomedNow = true;
             } else {
                 push(i);
             }
@@ -3597,6 +3677,10 @@ void loop() {
             drawLightState();  // STATUS on Lights (the message too), the lights band on the Menu: NO LINK while it's gone
             if (screen == Screen::Menu) drawMessage();
         }
+    }
+    if (welcomedNow && !(message[0] && messageMs > MESSAGE_MS && millis() - messageAt < messageMs)) {
+        setMessage(">WELCOME");
+        drawMessage();
     }
     updateTheme();  // a backstop: every path above has already called it
     publish();  // for /state and /status
