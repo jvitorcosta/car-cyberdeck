@@ -178,7 +178,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 | Task | Core | What it does |
 |---|---|---|
-| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the Xbox controller's input, the screens (Menu, Lights, Karaoke, the car-health Check and Parked: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night dimming (`util/daynight`, `ui/backlight`), saves to NVS |
+| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the Xbox controller's input, the screens (Menu, Lights, Karaoke, the car-health Check and Parked: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`, `util/termpal`'s night palette), saves to NVS |
 | `leds-link` | 0 | connects the two LED controllers (NimBLE 2; service FFF0, characteristic FFF3; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing; scans for the Xbox controller every 15 s while none is connected |
 | `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply; a fill-up phrase (`fuelbook::parsePhrase`) goes instead to the OBD deck's `/fill` (`carlink::fill`, ~2-3 s at most) and its answer is the reply |
 | `lyrics` | 1, idle | polls the black deck's `/state` (every second on the Lyrics page, every 5 s on the main screen, slower after ten misses: `util/pollpace`), parses it (`util/stateparse`), and keeps music mode alive (`GET /music?on=1` every 10 s) |
@@ -346,6 +346,6 @@ Build flags that are never set in `platformio.ini`; add one for a desk check, th
 |---|---|---|
 | `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) | black (`s3`) | Forces that boot opening (`main.cpp`, `util/intropick`). |
 | `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
-| `-D NIGHT_TEST` | yellow (`ledpanel`) | Night dimming whatever the time, synced clock or not: the backlight only (`ledpanel.cpp`). |
+| `-D NIGHT_TEST` | yellow (`ledpanel`) | Night whatever the time, synced clock or not: the night backlight and palette, with a serial tuner to try night colours and the backlight live (`docs/yellow-deck.md` "Night"; `ledpanel.cpp` `tuneLine`). |
 | `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |
 | `-D HEALTH_TEST=<a\|b\|c\|d>` | yellow (`ledpanel`) | Draws the car-health screens from a canned snapshot instead of the OBD deck's: `a` the pre-flight check, all OK (back to the Menu after 5 s), `b` the check with a battery problem (held until a tap), `c` driving on the Menu, km/L stepping every second (the trip band redraws only that figure: `[car] band: kml`), `d` trip complete (5 s after the Menu shows). The log says `[car] drew screen A/B/D` (`ledpanel.cpp`). |

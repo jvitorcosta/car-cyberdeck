@@ -3,4 +3,5 @@
 namespace backlight {
 void begin();            // after tft.init() (which drives the pin high); starts at day level
 void set(bool night);
+void setLevel(int level);  // 0..255 (the yellow deck's own night level)
 }

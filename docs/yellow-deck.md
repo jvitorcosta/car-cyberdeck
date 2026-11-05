@@ -10,7 +10,7 @@ lyrics, and in music mode gives the lights each song's colour.
 - [Presets](#presets)
 - [Music mode: song colours](#music-mode-song-colours)
 - [Theme: the inside light's colour](#theme-the-inside-lights-colour)
-- [Night dimming](#night-dimming)
+- [Night](#night)
 - [Voice and HTTP](#voice-and-http), [Siri Shortcuts](#siri-shortcuts)
 - [From the watch](#from-the-watch)
 - [Updates over WiFi](#updates-over-wifi)
@@ -44,8 +44,8 @@ The deck boots by typing the welcome (`WELCOME TO CYBERDECK`, about half a secon
 version (`FW 2.0.0`), then shows the **main screen**. The look is "Seegson" (Alien: Isolation):
 pale green on black, one hue at three brightnesses, and red kept for problems only (`-- NO LINK`,
 `>OFFLINE`, `>WRONG KEY`). Every screen has faint scanlines and all-caps
-labels. Every colour clears a contrast on black of at least 4.5:1 (WCAG;
-`src/util/yellow/termpal.h` lists each one's figure).
+labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; at night see
+[Night](#night); `src/util/yellow/termpal.h` lists each one's figure).
 
 - **Main screen**, top to bottom; it puts first what the car's panel and CarPlay don't show:
   - the header `CYBERDECK // HONDA CITY TOURING 2022`;
@@ -258,18 +258,51 @@ $env:PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6"; pio run -e ledpanel -t upload
 Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ```
 
-## Night dimming
+## Night
 
 From **18:00 to 06:00** local time (`TIMEZONE`), once the deck has the time over WiFi, the
-backlight drops to about a third. Only the brightness changes: the palette, the theme and the
-colour chips stay exactly as by day, and the lights are untouched. Without WiFi there is no clock,
-so the backlight stays full. The serial log says `[ui] night dim on` / `off`. To check it without
-waiting for evening, build with the `NIGHT_TEST` hook, then clear it:
+backlight drops to about a third (85 of 255) and the screen takes the **night palette**: each theme
+in its own hue at full saturation, so the colours stay vivid on the dimmed panel (the day's pale
+tints went grey there). The colour chips and the lights are untouched. Without WiFi there is no
+clock, so it stays day. The serial log says `[ui] night on` / `off`.
+
+Picked on the panel (TEXT / MID / DIM, then problems):
+
+| Theme | Night colours | Problems |
+|---|---|---|
+| red | `FF0000` `E00000` `BC0000` | white |
+| orange | `FF4600` `E03400` `BC2800` | white |
+| pink | `FF0040` `E00038` `BC0030` | white |
+| purple | `D200FF` `B800E0` `9A00BC` | red |
+| blue | `0046FF` `003CE0` `0032BC` (marine, like the inside light) | red |
+| green (and no theme) | `50FF46` `46E03C` `3ABC32` (phosphor terminal) | red |
+| white | `FFFFFF` `EBEBEB` `D2D2D2` | red |
+| yellow | `FFB400` at all three levels | red |
+
+What the panel taught: it pushes green, so the red, orange and pink carry little or none (a touch
+turns red orange and orange yellow), and blue turns pink purple; a darker yellow reads olive, so
+the yellow stays one colour. A pure red or blue can't reach the day's contrast, so night asks
+TEXT >= 3:1 and DIM >= 2:1 (`termpal.h`, `test/test_termpal`).
+
+To check it without waiting for evening, build with the `NIGHT_TEST` hook, then clear it:
 
 ```
 $env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
 Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ```
+
+That build also takes a line on the serial port (115200; opening it with DTR/RTS low keeps the CYD
+from resetting) to try colours live, no rebuild:
+
+| Line | Does |
+|---|---|
+| `N <theme -1..7> <TEXT> <MID> <DIM> [ALERT]` | that theme's night colours (hex `RRGGBB`), and shows it |
+| `T <theme -1..7>` | shows that theme (`T` alone the next one, `T X` back to the inside light's) |
+| `B <0..255>` | the night backlight |
+| `D` | day / night, to compare |
+| `P` | prints every theme's night colours and the backlight |
+
+A screen capture (`tools/deck_shot.py`) shows the RGB but not the backlight: judge on the panel.
 
 ## Voice and HTTP
 

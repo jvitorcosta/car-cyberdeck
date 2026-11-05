@@ -140,6 +140,79 @@ void test_theme_alert() {
     }
 }
 
+// ---- Night: each theme's own hue at full saturation (picked on the panel, 2026-11-05) ----
+
+// The owner's picks; -1 and out of range are the green theme's; night off is the day.
+void test_night_values() {
+    static const uint32_t PICKED[N_THEME][3] = {
+        {0xFF0000, 0xE00000, 0xBC0000}, {0xFF4600, 0xE03400, 0xBC2800}, {0xFF0040, 0xE00038, 0xBC0030},
+        {0xD200FF, 0xB800E0, 0x9A00BC}, {0x0046FF, 0x003CE0, 0x0032BC}, {0x50FF46, 0x46E03C, 0x3ABC32},
+        {0xFFFFFF, 0xEBEBEB, 0xD2D2D2}, {0xFFB400, 0xFFB400, 0xFFB400},
+    };
+    for (int t = 0; t < N_THEME; t++) {
+        for (int k = 0; k < 3; k++) TEST_ASSERT_EQUAL_HEX32(PICKED[t][k], rgb(static_cast<Role>(TEXT + k), t, true));
+    }
+    for (int r = BG; r <= ALERT; r++) {
+        const Role role = static_cast<Role>(r);
+        TEST_ASSERT_EQUAL_HEX32(rgb(role, GREEN_T, true), rgb(role, -1, true));
+        TEST_ASSERT_EQUAL_HEX32(rgb(role, GREEN_T, true), rgb(role, N_THEME, true));
+        for (int t = -1; t < N_THEME; t++) TEST_ASSERT_EQUAL_HEX32(rgb(role, t), rgb(role, t, false));
+    }
+}
+
+// BG black; TEXT >= 3:1, DIM >= 2:1, ALERT >= 4.5:1; TEXT >= MID >= DIM.
+void test_night_contrast() {
+    for (int t = -1; t < N_THEME; t++) {
+        TEST_ASSERT_EQUAL_HEX32(0, rgb(BG, t, true));
+        const double text = contrastOnBlack(rgb(TEXT, t, true)), mid = contrastOnBlack(rgb(MID, t, true)),
+                     dim = contrastOnBlack(rgb(DIM, t, true));
+        TEST_ASSERT_TRUE_MESSAGE(text >= 3.0, "TEXT contrast");
+        TEST_ASSERT_TRUE_MESSAGE(dim >= 2.0, "DIM contrast");
+        TEST_ASSERT_TRUE_MESSAGE(contrastOnBlack(rgb(ALERT, t, true)) >= 4.5, "ALERT contrast");
+        TEST_ASSERT_TRUE_MESSAGE(text >= mid && mid >= dim, "TEXT >= MID >= DIM");
+    }
+}
+
+// Each theme keeps its own hue, fully saturated: its weakest channel at most 0x46 (white aside).
+void test_night_hues() {
+    for (Role role : {TEXT, MID, DIM}) {
+        uint32_t c = rgb(role, RED_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(red(c) >= 0xB0 && green(c) == 0 && blue(c) == 0, "red: pure");
+        c = rgb(role, ORANGE_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(red(c) > green(c) && green(c) > blue(c), "orange");
+        c = rgb(role, PINK_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(red(c) > blue(c) && blue(c) > green(c), "pink");
+        c = rgb(role, PURPLE_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(blue(c) > red(c) && red(c) > green(c), "purple");
+        c = rgb(role, BLUE_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(blue(c) > green(c) && green(c) > red(c), "blue");
+        c = rgb(role, GREEN_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(green(c) > red(c) && red(c) > blue(c) && blue(c) < green(c) / 2, "green, not teal");
+        c = rgb(role, YELLOW_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(red(c) >= green(c) && green(c) > 2 * blue(c), "yellow");
+        c = rgb(role, WHITE_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(chanDiff(c, (red(c) << 16) | (red(c) << 8) | red(c)) == 0, "white: neutral");
+        for (int t = 0; t < N_THEME; t++) {
+            if (t == WHITE_T) continue;
+            c = rgb(role, t, true);
+            uint32_t lo = red(c);
+            if (green(c) < lo) lo = green(c);
+            if (blue(c) < lo) lo = blue(c);
+            TEST_ASSERT_TRUE_MESSAGE(lo <= 0x46, "saturated");
+        }
+    }
+}
+
+// ALERT as by day: white on the red / orange / pink themes, else red, a channel 0x60 or more from TEXT.
+void test_night_alert() {
+    for (int t = -1; t < N_THEME; t++) {
+        const uint32_t a = rgb(ALERT, t, true);
+        if (t >= 0 && warmAlertTheme(t)) TEST_ASSERT_EQUAL_HEX32(0xFFFFFF, a);
+        else TEST_ASSERT_TRUE_MESSAGE(red(a) >= 0xF0 && green(a) * 3 < red(a) && blue(a) * 3 < red(a), "red alert");
+        TEST_ASSERT_TRUE_MESSAGE(chanDiff(a, rgb(TEXT, t, true)) >= 0x60, "ALERT apart from TEXT");
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_values);
@@ -152,5 +225,9 @@ int main(int, char**) {
     RUN_TEST(test_theme_hues);
     RUN_TEST(test_theme_panel_guards);
     RUN_TEST(test_theme_alert);
+    RUN_TEST(test_night_values);
+    RUN_TEST(test_night_contrast);
+    RUN_TEST(test_night_hues);
+    RUN_TEST(test_night_alert);
     return UNITY_END();
 }

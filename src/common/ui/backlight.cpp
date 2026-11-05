@@ -18,4 +18,6 @@ void begin() {
 
 void set(bool night) { ledcWrite(CHANNEL, night ? NIGHT_LEVEL : DAY_LEVEL); }
 
+void setLevel(int level) { ledcWrite(CHANNEL, level < 0 ? 0 : level > DAY_LEVEL ? DAY_LEVEL : level); }
+
 }

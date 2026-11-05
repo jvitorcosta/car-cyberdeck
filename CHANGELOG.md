@@ -20,8 +20,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - **Changed:** music mode runs the outside light at 100 % at any hour.
 - **Changed:** presets fade in instead of jumping, and the lights rise to the last look when the
   deck starts.
-- **Changed:** night mode only dims. From 18:00 to 06:00, once the clock is synced, the backlight
-  drops to about a third; the colours (no more amber palette) stay as by day.
+- **Changed:** night mode keeps the colours vivid. From 18:00 to 06:00, once the clock is synced,
+  the backlight drops to about a third and every theme takes a night version of its own hue at full
+  saturation (pure red, a deep marine blue, a phosphor-terminal green, one yellow), picked on the
+  panel; the dimmed day colours looked washed out. Problems stay white on the red, orange and pink
+  themes and red on the rest. No amber palette: each theme keeps its colour.
 - **Changed:** the theme follows the inside look even when that light isn't connected, so a colour
   tapped away from the car still shows on the screen.
 

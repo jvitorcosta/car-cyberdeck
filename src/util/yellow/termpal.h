@@ -27,6 +27,25 @@ uint32_t rgb(Role r);
 //   white   D2D2C8 13.8 9C9C94 7.6  7C7C74 5.0  FF3C28 5.9
 //   yellow  FFDC5A 15.6 FF9900 9.8  D27E00 6.7  FF3C28 5.9
 uint32_t rgb(Role r, int theme);
+// The same at night (18:00-06:00, under the deck's night backlight): each theme's own hue at full
+// saturation, so it stays vivid on the dimmed panel (the day's pale tints go grey there). Picked by
+// eye on the panel on 2026-11-05. The rest of the day's rules stay (the hue's channel order, ALERT
+// white on red / orange / pink else red and a channel 0x60 or more from TEXT, TEXT >= MID >= DIM),
+// but not its contrast: a pure red or blue can't reach 7:1, so night asks TEXT >= 3:1 and DIM >= 2:1
+// (blue reads on the panel better than WCAG says). This panel turns a darker yellow olive, so the
+// yellow is one colour at all three levels, and pushes green: the red, orange and pink carry none or
+// little, or they turn orange or yellow, and the pink little blue, or it turns purple. -1 (or out of
+// range) is the green theme's. Contrast on black, TEXT / MID / DIM / ALERT:
+//   red     FF0000 5.3  E00000 4.2  BC0000 3.1  FFFFFF 21
+//   orange  FF4600 6.1  E03400 4.7  BC2800 3.4  FFFFFF 21
+//   pink    FF0040 5.3  E00038 4.2  BC0030 3.2  FFFFFF 21
+//   purple  D200FF 5.2  B800E0 4.1  9A00BC 3.1  FF0000 5.3
+//   blue    0046FF 3.3  003CE0 2.7  0032BC 2.2  FF0000 5.3
+//   green   50FF46 15.7 46E03C 12.0 3ABC32 8.4  FF0000 5.3
+//   white   FFFFFF 21   EBEBEB 17.6 D2D2D2 13.9 FF0000 5.3
+//   yellow  FFB400 11.8 FFB400 11.8 FFB400 11.8 FF0000 5.3
+// `night` false is rgb(r, theme).
+uint32_t rgb(Role r, int theme, bool night);
 // The scanline colour drawn over the screen.
 uint32_t scan();
 // WCAG 2.x contrast of 0xRRGGBB on black: (L + 0.05) / 0.05, L its relative luminance; 1 .. 21.

@@ -33,6 +33,25 @@ uint32_t rgb(Role r, int theme) {
     return THEMES[theme][r];
 }
 
+// Night, per theme as above, then the default (the green theme's); the figures in termpal.h.
+static const uint32_t NIGHT[9][5] = {
+    {0, 0xFF0000, 0xE00000, 0xBC0000, 0xFFFFFF},  // red
+    {0, 0xFF4600, 0xE03400, 0xBC2800, 0xFFFFFF},  // orange
+    {0, 0xFF0040, 0xE00038, 0xBC0030, 0xFFFFFF},  // pink
+    {0, 0xD200FF, 0xB800E0, 0x9A00BC, 0xFF0000},  // purple
+    {0, 0x0046FF, 0x003CE0, 0x0032BC, 0xFF0000},  // blue
+    {0, 0x50FF46, 0x46E03C, 0x3ABC32, 0xFF0000},  // green
+    {0, 0xFFFFFF, 0xEBEBEB, 0xD2D2D2, 0xFF0000},  // white
+    {0, 0xFFB400, 0xFFB400, 0xFFB400, 0xFF0000},  // yellow
+    {0, 0x50FF46, 0x46E03C, 0x3ABC32, 0xFF0000},  // default (green)
+};
+
+uint32_t rgb(Role r, int theme, bool night) {
+    if (!night) return rgb(r, theme);
+    if (r > ALERT) r = BG;
+    return NIGHT[theme < 0 || theme >= 8 ? 8 : theme][r];
+}
+
 uint32_t scan() { return 0x030503; }
 
 double contrastOnBlack(uint32_t c) {

@@ -50,9 +50,10 @@
 // calibration) takes its colour, termpal's three levels of it (problems show in white on the red,
 // orange and pink themes), linked or not: a colour tapped with the lights out of reach still shows.
 // The look off: the green again. The colour tiles and chips stay real.
-// Night dimming: 18:00-06:00 local time, once WiFi has synced the clock, the backlight drops to its
-// night level (ui/backlight). Only the brightness: the palette, theme and chips stay as by day.
-// Without REMOTE_TOKEN there is no WiFi, no clock, and the backlight stays full.
+// Night: 18:00-06:00 local time, once WiFi has synced the clock, the backlight drops to
+// NIGHT_BACKLIGHT and the terminal takes termpal's night palette, each theme's own hue at full
+// saturation (it stays vivid; the day's pale tints went grey on the dimmed panel). The chips stay
+// real. Without REMOTE_TOKEN there is no WiFi, no clock, and it stays day.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
 // (util/musiclights), steady, fading to the next song's over ~3 s, the inside at the owner's level under
@@ -63,8 +64,9 @@
 // change (touch, the Xbox controller, voice, the watch) ends the mode, then applies; turning it off
 // brings back the looks from before. Not kept over a reboot (see
 // "Music mode" below).
-// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") dims the
-// backlight whatever the time, to check it without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
+// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") is night
+// whatever the time, to check it without waiting for 18:00, with a serial tuner to try night colours
+// and the backlight live (see tuneLine); -D THEME_TEST=<swatch 0..7>
 // (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
 // the inside light does, to see it without the car's lights. Neither is set in platformio.ini (every
 // test hook: docs/ARCHITECTURE.md "Test hooks").
@@ -196,6 +198,15 @@ static void leaveHealth();
 // updateTheme() keeps it, from the looks.
 static int theme = -1;
 static bool updateTheme();
+// Night (see "Night" above): the backlight at nightBacklight and termpal's night palette. Loop-owned;
+// updateClock() keeps it.
+static bool night = false;
+static constexpr int NIGHT_BACKLIGHT = 85;  // of 255 (a third), picked on the panel with the night palette
+static int nightBacklight = NIGHT_BACKLIGHT;  // the tuner may change it
+#ifdef NIGHT_TEST
+static bool tuneNight = true;  // the tuner's "D" turns it off to compare with the day
+static int tuneTheme = -2;     // the tuner's forced theme; -2 none
+#endif
 
 // The outside weather (see "Weather" below): the weather task publishes each try under weatherMux
 // and raises weatherFresh; loop() copies it into `wx`, which is all the drawing reads.
@@ -587,7 +598,23 @@ static int textMarked(const char* s, int x, int y, Face f, uint8_t datum) {
 }
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
-static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme)); }
+#ifdef NIGHT_TEST
+// The night tuner's palette (see tuneLine): each theme's night colours (index theme + 1), live.
+static uint32_t tuned[9][5];
+static bool tunedReady = false;
+static uint32_t tunedRgb(termpal::Role r) {
+    if (!tunedReady) {
+        for (int t = -1; t < 8; t++) {
+            for (int k = termpal::BG; k <= termpal::ALERT; k++) tuned[t + 1][k] = termpal::rgb(static_cast<termpal::Role>(k), t, true);
+        }
+        tunedReady = true;
+    }
+    return tuned[theme < -1 || theme > 7 ? 0 : theme + 1][r];
+}
+static uint16_t pal(termpal::Role r) { return c565(night ? tunedRgb(r) : termpal::rgb(r, theme)); }
+#else
+static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme, night)); }
+#endif
 // A terminal message's colour: ALERT for a problem (a lost link, the wrong key, a car warning: alert),
 // else TEXT.
 static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
@@ -3224,10 +3251,11 @@ static void vividGamma() {
     for (uint8_t v : NEG) tft.writedata(v);
 }
 
-// The Menu's clock and night dimming. Polled each second (a time() call) so the clock turns over on
-// the minute; the backlight follows it, and only the backlight: nothing is redrawn.
+static void repaint();
+
+// The Menu's clock and night. Polled each second (a time() call) so the clock turns over on the
+// minute; night follows it: the backlight and a repaint in the night palette.
 static void updateClock() {
-    static bool dimmed = false;
     static uint32_t checkedAt = 0;
     static bool first = true;
     if (!first && millis() - checkedAt < 1000) return;
@@ -3245,18 +3273,22 @@ static void updateClock() {
         if (screen == Screen::Menu) drawClock();
         if (onHealth()) drawHealthClock();
     }
-    bool night = synced && daynight::isNight(m);
+    bool want = synced && daynight::isNight(m);
 #ifdef NIGHT_TEST
-    night = true;
+    want = tuneNight;
 #endif
-    if (night == dimmed) return;
-    dimmed = night;
-    backlight::set(night);
-    Serial.printf("[ui] night dim %s\n", night ? "on" : "off");
+    if (want == night) return;
+    night = want;
+    backlight::setLevel(night ? nightBacklight : 255);
+    Serial.printf("[ui] night %s\n", night ? "on" : "off");
+    repaint();
 }
 
 // The theme the INSIDE look asks for: its colour while it's on, linked or not, else -1.
 static int wantTheme() {
+#ifdef NIGHT_TEST
+    if (tuneTheme > -2) return tuneTheme;
+#endif
 #ifdef THEME_TEST
     return THEME_TEST;
 #else
@@ -3275,10 +3307,16 @@ static bool updateTheme() {
     if (want == theme) return false;
     theme = want;
     Serial.printf("[ui] theme %d\n", theme);
+    repaint();
+    return true;
+}
+
+// The current screen drawn again, with a button still under a finger or a controller press drawn
+// pressed again.
+static void repaint() {
     drawAll();
     if (tap.down && tap.id >= 0) drawButton(tap.id, true);
     if (padFlash >= 0) drawButton(padFlash, true);
-    return true;
 }
 
 void setup() {
@@ -3324,6 +3362,48 @@ void setup() {
     enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
 }
 
+#ifdef NIGHT_TEST
+// The night tuner, a line on the serial port (tools/deck_shot.py's port, 115200), live, no rebuild:
+//   N <theme -1..7> <TEXT> <MID> <DIM> [ALERT]  that theme's night colours (hex RRGGBB); shows it
+//   T <theme -1..7>   show that theme (T alone: the next one; T X back to the inside light's)
+//   B <0..255>        the night backlight
+//   D                 day / night, to compare
+//   P                 print every theme's night colours and the backlight
+static void tuneLine(const char* s) {
+    char cmd = 0;
+    int t = 0;
+    unsigned v[4] = {0, 0, 0, 0};
+    const int n = sscanf(s, " %c %d %x %x %x %x", &cmd, &t, &v[0], &v[1], &v[2], &v[3]);
+    if (n < 1) return;
+    if (cmd == 'N' && n >= 5 && t >= -1 && t < 8) {
+        tunedRgb(termpal::BG);  // filled from termpal first
+        for (int k = 0; k < n - 2; k++) tuned[t + 1][termpal::TEXT + k] = v[k] & 0xFFFFFF;
+        tuneTheme = t;
+        Serial.printf("[tune] theme %d: %06X %06X %06X %06X\n", t, tuned[t + 1][termpal::TEXT], tuned[t + 1][termpal::MID],
+                      tuned[t + 1][termpal::DIM], tuned[t + 1][termpal::ALERT]);
+        theme = -3;  // forces updateTheme's repaint, also when the theme is already shown
+    } else if (cmd == 'T') {
+        if (strchr(s, 'X')) tuneTheme = -2;
+        else if (n >= 2 && t >= -1 && t < 8) tuneTheme = t;
+        else tuneTheme = theme >= 7 ? -1 : theme + 1;
+        Serial.printf("[tune] theme %d\n", tuneTheme);
+    } else if (cmd == 'B' && n >= 2) {
+        nightBacklight = t < 0 ? 0 : t > 255 ? 255 : t;
+        if (night) backlight::setLevel(nightBacklight);
+        Serial.printf("[tune] backlight %d\n", nightBacklight);
+    } else if (cmd == 'D') {
+        tuneNight = !tuneNight;
+    } else if (cmd == 'P') {
+        tunedRgb(termpal::BG);
+        for (int k = -1; k < 8; k++) {
+            Serial.printf("[tune] N %d %06X %06X %06X %06X\n", k, tuned[k + 1][termpal::TEXT], tuned[k + 1][termpal::MID],
+                          tuned[k + 1][termpal::DIM], tuned[k + 1][termpal::ALERT]);
+        }
+        Serial.printf("[tune] B %d\n", nightBacklight);
+    }
+}
+#endif
+
 // One panel row to the PC: "R<yyy> <hex RGB565>".
 static void shotRow(int y) {
     static const char HEX_DIGITS[] = "0123456789abcdef";
@@ -3349,9 +3429,22 @@ static void shotTick() {
     static const char WORD[] = "SHOT\n";
     static uint8_t matched = 0;
     bool go = false;
+#ifdef NIGHT_TEST
+    static char line[64];
+    static uint8_t len = 0;
+#endif
     while (Serial.available()) {
         const char c = static_cast<char>(Serial.read());
         if (c == '\r') continue;
+#ifdef NIGHT_TEST
+        if (c == '\n') {
+            line[len] = 0;
+            len = 0;
+            tuneLine(line);
+        } else if (len < sizeof line - 1) {
+            line[len++] = c;
+        }
+#endif
         matched = c == WORD[matched] ? matched + 1 : (c == WORD[0] ? 1 : 0);
         if (WORD[matched] == 0) {
             matched = 0;

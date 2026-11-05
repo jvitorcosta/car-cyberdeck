@@ -38,7 +38,7 @@ The Pokéface watch face that used to live here moved to
   Japanese/Chinese text.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
 - **Night mode** from 18:00 to 06:00 in your time zone: the black deck takes a night palette and a
-  dimmer backlight; the yellow deck only dims, its colours unchanged.
+  dimmer backlight; the yellow deck dims and gives each theme a vivid, fully saturated night colour.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, then a
   montage of your own photos. Each boot picks one opening at random, never last boot's: your
   intro video with the log typed over it, the car's night drive, a pixel McQueen's drive, or a
