@@ -31,7 +31,8 @@
 //           the Menu shows (see "Lyrics" below)
 // Speed cameras (the black deck has the GPS and beeps; this deck shows): an alert or alarm from the
 // black deck's GET /cam is a band over the bottom third of any screen (a tap on it mutes the black
-// deck's beeps), "GPS --" / "CAM --" / "MUTED" a tag on the Menu's header; voice "mark camera",
+// deck's beeps), "CAM --" / "MUTED" a tag on the Menu's header (no GPS fix shows on the black deck's
+// own top strip); voice "mark camera",
 // "cameras mute" (see "Speed cameras" below).
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button; it shows as the bar with a ring cut in it (ui/presslook). After a screen or page
@@ -811,8 +812,8 @@ static void camBandTap();
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
 // The header: one MID line and its rule (the boot's welcome lines typed out before it); the camera
-// tag right-aligned on it in ALERT ("GPS --", "CAM --": the road isn't being watched; "MUTED": the
-// black deck won't beep). The title ends at x 259; each tag keeps 4 px clear of it (test_termfont).
+// tag right-aligned on it in ALERT ("CAM --": this deck can't show the alerts; "MUTED": the black deck
+// won't beep). The title ends at x 259; each tag keeps 4 px clear of it (test_termfont).
 static void drawHeader() {
     clearBg(deckmenu::HEADER);
     tft.setTextColor(pal(termpal::MID));
@@ -2253,9 +2254,10 @@ static void beginLyrics() {
 //     down, or a tap on it, arms tapGuard, so a tap meant for a button doesn't mute. It stays
 //     CAM_HOLD_MS after st leaves alert / alarm (frozen, not blinking), and through one or two
 //     missed polls.
-//   No fix: "GPS --" on the Menu's header line, no band. CAM_LOST_MISSES polls in a row without an
-//     answer, or CAM_UNSIGNED_MS without a clock to sign them: "CAM --" there instead, and no band
-//     (the black deck still beeps). Muted with no band up: "MUTED" there.
+//   No fix: no band and no tag here: the black deck's top strip shows it (its GPS icon struck
+//     through), next to the speaker that says it. CAM_LOST_MISSES polls in a row without an
+//     answer, or CAM_UNSIGNED_MS without a clock to sign them: "CAM --" on the Menu's header line,
+//     and no band (the black deck still beeps). Muted with no band up: "MUTED" there.
 // This deck never beeps. Voice ("mark camera", "cameras mute") is /say's (util/yellow/camvoice).
 static constexpr uint32_t CAM_HOLD_MS = 2000;
 static constexpr int CAM_LOST_MISSES = 3;
@@ -2538,7 +2540,6 @@ static void camTick() {
     // The header's tag, after the band: MUTED only while no band is up to say MUTE.
     const char* tag = lost ? CAM_TAG_LOST
                     : !camNow.heard ? ""
-                    : camNow.view.stage == cameras::Stage::NoFix ? CAM_TAG_NOFIX
                     : camNow.view.mute && !bandUp ? CAM_TAG_MUTE : "";
     if (strcmp(tag, camTag) != 0) {
         Serial.printf("[cam] tag \"%s\"\n", tag);

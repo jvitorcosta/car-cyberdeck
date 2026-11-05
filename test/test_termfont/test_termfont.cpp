@@ -210,7 +210,7 @@ void test_dash_header_fits() {
     fitsLeft(Face::SMALL, DASH_TITLE, DASH_X, 316);  // the rule's ends, 4 in
     // a camera tag, right-aligned at DASH_RIGHT, keeps MARGIN from the title's ink
     const int titleEnd = DASH_X + termfont::width(Face::SMALL, DASH_TITLE);
-    for (const char* tag : {CAM_TAG_NOFIX, CAM_TAG_LOST, CAM_TAG_MUTE})
+    for (const char* tag : {CAM_TAG_LOST, CAM_TAG_MUTE})
         TEST_ASSERT_TRUE_MESSAGE(titleEnd + MARGIN <= DASH_RIGHT - termfont::width(Face::SMALL, tag), tag);
     between(-1, fromCapTop(Face::SMALL, DASH_TITLE_Y), HEADER_RULE_Y, DASH_TITLE);
     TEST_ASSERT_TRUE(HEADER_RULE_Y < deckmenu::HEADER.y + deckmenu::HEADER.h);

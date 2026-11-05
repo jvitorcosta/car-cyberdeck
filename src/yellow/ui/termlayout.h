@@ -55,10 +55,10 @@ constexpr int DASH_X = 8, DASH_RIGHT = 312;
 // the header: one line (SMALL) and its rule
 constexpr const char* DASH_TITLE = "CYBERDECK // HONDA CITY TOURING 2022";
 constexpr int DASH_TITLE_Y = 5, HEADER_RULE_Y = 20;
-// the camera tag right-aligned on the header line (ledpanel's camTick): no GPS fix, the black deck's
-// /cam not answering, or (with no band up to say MUTE) the camera beeps muted. "CAM MUTE" would run
+// the camera tag right-aligned on the header line (ledpanel's camTick): the black deck's /cam not
+// answering, or (with no band up to say MUTE) the camera beeps muted. No GPS fix is the black deck's
+// to show (its top strip's GPS icon). "CAM MUTE" would run
 // into the title: 7 SMALL cells at most fit after it.
-constexpr const char* CAM_TAG_NOFIX = "GPS --";
 constexpr const char* CAM_TAG_LOST = "CAM --";
 constexpr const char* CAM_TAG_MUTE = "MUTED";
 // the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the temperature (BIG) with the
