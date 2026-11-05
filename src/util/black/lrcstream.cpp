@@ -1,4 +1,5 @@
 #include "lrcstream.h"
+#include "lrcmatch.h"
 #include <cstdlib>
 #include <cstring>
 
@@ -6,10 +7,10 @@ namespace lrcstream {
 
 static bool keyIs(const char* k, const char* name) { return strcmp(k, name) == 0; }
 
-Extractor::Extractor(lyricbuf::Lyrics& out, Mode mode, uint32_t durationMs)
-    : out_(out), mode_(mode), targetMs_(durationMs),
-      objDepth_(mode == Mode::Search ? 2 : 1) {
-    lyricbuf::reset(out_);
+Extractor::Extractor(lyricbuf::Lyrics& out, Mode mode, uint32_t durationMs, const char* title, bool keepPlain)
+    : out_(out), mode_(mode), targetMs_(durationMs), title_(title),
+      objDepth_(mode == Mode::Search ? 2 : 1), plainTaken_(keepPlain) {
+    if (!keepPlain) lyricbuf::reset(out_);
 }
 
 bool Extractor::accepted() const { return mode_ == Mode::Get || objMatch_; }
@@ -36,15 +37,23 @@ void Extractor::putCodepoint(uint32_t cp) {
     }
 }
 
+void Extractor::dropHeld() {
+    lyricbuf::dropFirst(out_, keepN_);
+    keepN_ = 0;
+    truncated_ = false;
+    out_.plainTotal = 0;
+}
+
 void Extractor::endLine() {
     if (str_ == Str::Synced) {
         if (lyricbuf::hasTag(line_, (size_t)len_)) {          // untagged lines are skipped
-            if (syncedLines_ == 0) {                          // synced replaces any plain lines
-                lyricbuf::reset(out_);
-                truncated_ = false;
+            bool ok = lyricbuf::addLine(out_, line_, (size_t)len_);
+            if (!ok && keepN_ > 0) {                          // full: the held lines make room
+                dropHeld();
+                ok = lyricbuf::addLine(out_, line_, (size_t)len_);
             }
-            if (lyricbuf::addLine(out_, line_, (size_t)len_)) ++syncedLines_;
-            else { truncated_ = true; done_ = true; }        // arena full: rest not needed
+            if (!ok) { truncated_ = true; done_ = true; }    // arena full: rest not needed
+            else if (++syncedLines_ == MIN_SYNCED_LINES) dropHeld();   // synced replaces them
         }
     } else if (str_ == Str::Plain) {
         if (!lyricbuf::addPlain(out_, line_, (size_t)len_)) truncated_ = true;   // still counted
@@ -57,9 +66,16 @@ void Extractor::beginValueString() {
     esc_ = Esc::None;
     len_ = 0;
     str_ = Str::Skip;
-    if (depth_ != objDepth_ || !accepted()) return;
+    if (depth_ != objDepth_) return;
+    if (title_ && mode_ == Mode::Search && keyIs(curKey_, "trackName")) {   // before "duration"
+        str_ = Str::Title;
+        return;
+    }
+    if (!accepted()) return;
     if (keyIs(curKey_, "syncedLyrics")) {
         str_ = Str::Synced;
+        keepN_ = out_.n;           // plain lines or an earlier stub, until this one proves full
+        syncedLines_ = 0;
     } else if (keyIs(curKey_, "plainLyrics") && syncedLines_ == 0 && !plainTaken_) {
         str_ = Str::Plain;
         plainTaken_ = true;
@@ -67,12 +83,21 @@ void Extractor::beginValueString() {
 }
 
 void Extractor::endValueString() {
+    if (str_ == Str::Title) {
+        line_[len_] = '\0';
+        titleOk_ = lrcmatch::sameTitle(title_, line_);
+        len_ = 0;
+    }
     if (len_ > 0) endLine();
     Str s = str_;
     inStr_ = false;
     expectValue_ = false;
     str_ = Str::None;
-    if (s == Str::Synced && syncedLines_ > 0) done_ = true;   // timed lyrics: nothing else needed
+    if (s == Str::Synced) {
+        if (syncedLines_ >= MIN_SYNCED_LINES) full_ = done_ = true;   // timed lyrics: nothing else needed
+        else if (keepN_ > 0) lyricbuf::keepFirst(out_, keepN_);       // a stub: what came before stays
+        keepN_ = 0;
+    }
     if (s == Str::Plain && out_.plainTotal == 0) plainTaken_ = false;   // "" counts as absent
 }
 
@@ -93,7 +118,7 @@ void Extractor::stringChar(char c) {
         if (str_ == Str::Key && keyLen_ < KEY_CAP - 1) key_[keyLen_++] = c;
         return;
     }
-    // Lyric text (Plain / Synced).
+    // Unescaped text (Title / Plain / Synced).
     if (esc_ == Esc::Unicode) {
         int v = (c >= '0' && c <= '9') ? c - '0'
               : (c >= 'a' && c <= 'f') ? c - 'a' + 10
@@ -142,12 +167,12 @@ void Extractor::endLiteral() {
         }
         uint32_t ms = (uint32_t)(s * 1000.0 + 0.5);
         uint32_t d = ms > targetMs_ ? ms - targetMs_ : targetMs_ - ms;
-        objMatch_ = d <= DURATION_TOL_MS;
+        objMatch_ = d <= DURATION_TOL_MS && titleOk_;
         return;
     }
     if (keyIs(curKey_, "instrumental") && strcmp(lit_, "true") == 0 && accepted()) {
         instrumental_ = true;
-        done_ = true;                 // instrumental wins over any text
+        if (mode_ == Mode::Get) done_ = true;   // wins over any text; a search reads on for synced
     }
 }
 
@@ -190,7 +215,7 @@ void Extractor::feed(char c) {
         case '{':
             ++depth_;
             expectValue_ = false;
-            if (depth_ == objDepth_) objMatch_ = false;   // new object: duration not seen yet
+            if (depth_ == objDepth_) { objMatch_ = false; titleOk_ = true; }   // new object: not seen yet
             break;
         case '[':
             ++depth_;
@@ -221,9 +246,11 @@ void Extractor::feed(char c) {
 
 int Extractor::finish() {
     if (inStr_ && (str_ == Str::Plain || str_ == Str::Synced) && len_ > 0) endLine();   // cut off mid-string
+    if (inStr_ && str_ == Str::Synced && syncedLines_ < MIN_SYNCED_LINES && keepN_ > 0)
+        lyricbuf::keepFirst(out_, keepN_);                 // cut off inside a stub
     lyricbuf::finish(out_);
-    if (instrumental_) kind_ = Kind::Instrumental;
-    else if (syncedLines_ > 0) kind_ = Kind::Synced;
+    if (full_ || syncedLines_ >= MIN_SYNCED_LINES) kind_ = Kind::Synced;
+    else if (instrumental_) kind_ = Kind::Instrumental;
     else if (out_.n > 0) kind_ = Kind::Plain;
     else kind_ = Kind::None;
     return out_.n;

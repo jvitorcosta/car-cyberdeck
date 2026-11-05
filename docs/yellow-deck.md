@@ -155,6 +155,12 @@ Tuning the fill in the car: the effect numbers come from published notes on a si
 doesn't fill from both ends inwards, try the other numbers in that range in `FILL_MODE`; if the
 fill doesn't finish in time, raise `FILL_SPEED` (0 to 100) or `FILL_MS`.
 
+Checking it on the desk: `python tools/intro_check.py COM14` sends `INTRO` over USB, which plays the
+welcome again on each lit light without a reboot, and holds the deck's `[intro]` log (each key,
+its time, `sent` or `no link`) to the timeline above: PASS or FAIL, and the timeline. In the car,
+the same command (or a reboot) plays it on the lights, and `>WELCOME` on the prompt line says it
+ran. It only checks the deck: how the controller draws the fill is seen in the car.
+
 ## Music mode: song colours
 
 `MUSIC MODE` on the main screen (a tap, or Xbox A on it), the voice word "music" ("music off" to
@@ -257,14 +263,15 @@ line per song with what it knew and which rule decided:
 
 ## Theme: the inside light's colour
 
-While the **INSIDE** light is on and linked, the terminal (main screen, Lights, Lyrics; not the
-boot typing or the touch calibration) takes that light's colour: the same three brightnesses in
+While the **INSIDE** light is on, the terminal (main screen, Lights, Lyrics; not the boot typing
+or the touch calibration) takes that light's colour: the same three brightnesses in
 its hue. Blue and purple are lighter shades so the text reads; white is a soft grey-white, held
 back so it doesn't glare. Problems stay red, except on the red,
 orange and pink themes, where they show in white. The colour tiles and chips keep their real
-colours. Cyan takes blue's theme. With the inside light off or out of reach the screen goes back
-to green. To see a theme without the car's lights, build with `THEME_TEST` (0..7: red, orange,
-pink, purple, blue, green, white, yellow), then clear it:
+colours. Cyan takes blue's theme. The theme follows the inside look as the deck has it, linked or
+not: a colour tapped with the lights out of reach still shows on the screen. With the inside light
+off the screen goes back to green. To force a theme whatever the look, build with `THEME_TEST`
+(0..7: red, orange, pink, purple, blue, green, white, yellow), then clear it:
 
 ```
 $env:PLATFORMIO_BUILD_FLAGS="-D THEME_TEST=6"; pio run -e ledpanel -t upload

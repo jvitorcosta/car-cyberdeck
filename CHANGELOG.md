@@ -5,15 +5,28 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
-### Changed
-- Yellow deck: the white theme is a softer grey-white.
-- Music mode: the outside light runs at 100 % at any hour.
-- Yellow deck: presets fade in instead of jumping.
-- Yellow deck: when the deck starts, the lights play a welcome in the last look's colour: the
-  inside strip fills from both ends inwards over 4 s (the controller's own curtain effect), then
-  the outside light rises, about 6 s in all.
-- Yellow deck: night mode only dims. From 18:00 to 06:00, once the clock is synced, the backlight
+### Black deck (S3)
+- **Fixed:** more songs get synced lyrics. A plain-only `/api/get` hit no longer ends the lookup:
+  the search runs too, and its synced lines replace the plain ones. The search drops title suffixes
+  (" - Remastered 2011", " (feat. X)", " - Ao Vivo") and skips entries of another song, reads up to
+  128 KB (LRCLIB's answers grew to ~230 KB, past the old 48 KB cap), still runs when `/api/get`
+  answers 5xx, and an instrumental entry no longer hides a later synced one. On 95 real songs, 75
+  had synced lyrics before and 89 now. The phone can still show lyrics LRCLIB doesn't have.
+- **Fixed:** a synced entry with fewer than 3 lines (one "Nightcall" entry holds only its first
+  line) counts as plain: the plain text read before it stays, and the search looks for a full one.
+
+### Yellow deck
+- **Changed:** the white theme is a softer grey-white.
+- **Changed:** music mode runs the outside light at 100 % at any hour.
+- **Changed:** presets fade in instead of jumping.
+- **Added:** when the deck starts, the lights play a welcome in the last look's colour: the inside
+  strip fills from both ends inwards over 4 s (the controller's own curtain effect), then the
+  outside light rises, about 6 s in all. ">WELCOME" shows when it plays, and "INTRO" on the serial
+  port replays it on the desk (`tools/intro_check.py` checks it).
+- **Changed:** night mode only dims. From 18:00 to 06:00, once the clock is synced, the backlight
   drops to about a third; the colours (no more amber palette) stay as by day.
+- **Changed:** the theme follows the inside look even when that light isn't connected, so a colour
+  tapped away from the car still shows on the screen.
 
 ## [2.0.0] - 2026-10-28
 
