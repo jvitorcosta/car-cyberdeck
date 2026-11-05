@@ -27,6 +27,11 @@ void set(bool night) {
     ledcWrite(CHANNEL, s_level);
 }
 
+void setLevel(int level) {
+    s_level = level < 0 ? 0 : level > DAY_LEVEL ? DAY_LEVEL : level;
+    ledcWrite(CHANNEL, s_level);
+}
+
 bool fadeOut(uint32_t ms) {
     if (!s_fades) s_fades = ledc_fade_func_install(0) == ESP_OK;
     return s_fades && ledc_set_fade_time_and_start(MODE, IDF_CHANNEL, 0, ms, LEDC_FADE_NO_WAIT) == ESP_OK;

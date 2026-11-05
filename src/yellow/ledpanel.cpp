@@ -1,5 +1,5 @@
 // The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
-// red only for problems, amber at night, faint scanlines, all caps) that drives the car's two
+// red only for problems, vivid at night, faint scanlines, all caps) that drives the car's two
 // ELK-family LED controllers. Three screens, laid out by util/deckmenu:
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands, for what the
 //           car's panel and CarPlay don't show: the trip and the lights. The header line
@@ -44,12 +44,13 @@
 // Menu; on Lights X is the next page, and on the look pages Y on/off, LB / RB - / + (see "Xbox
 // controller input" below).
 // Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
-// palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
+// palette goes to termpal's night colours (each theme's own hue at full saturation, a phosphor green
+// without one) and the backlight to NIGHT_BACKLIGHT. Without REMOTE_TOKEN
 // there is no WiFi, no clock, and the deck stays in day mode.
 // Theme: while the INSIDE light is on and linked, the terminal (Menu, Lights, Karaoke; not the boot
 // typing or the calibration) takes that light's colour, termpal's three levels of it, day and night
-// (white turns to the amber at night; problems show in white on the red, orange and pink themes).
-// The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
+// (problems show in white on the red, orange and pink themes).
+// The light off or unreachable: the green again. The colour tiles and chips stay real.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
 // (util/musiclights), steady, fading to the next song's over ~3 s, each at the owner's level under the
@@ -181,7 +182,8 @@ static bool onLights() { return screen == Screen::Lights || screen == Screen::Pr
 // The palette: every colour goes through termpal with this flag, so night mode only flips it and
 // redraws.
 static bool night = false;
-// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green / amber. Loop-owned, as
+static constexpr int NIGHT_BACKLIGHT = 85;  // of 255 (a third), picked on the panel with the night palette
+// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green. Loop-owned, as
 // `night`; updateTheme() keeps it, from the looks and `insideSeen`: the INSIDE light's link as loop()
 // last took it (its edge loop sets it before anything draws the change).
 static int theme = -1;
@@ -2803,7 +2805,7 @@ static void updateDayNight() {
     }
     if (want == night) return;
     night = want;
-    backlight::set(night);  // before the repaint
+    backlight::setLevel(night ? NIGHT_BACKLIGHT : 255);  // before the repaint
     Serial.printf("[ui] night mode %s\n", night ? "on" : "off");
     drawAll();
 }

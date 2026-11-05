@@ -37,7 +37,8 @@ The Pokéface watch face that used to live here moved to
 - **Synced lyrics** in the battle dialogue box, from LRCLIB, including accented Latin and
   Japanese/Chinese text.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
-- **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone.
+- **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone; on the yellow
+  deck every theme keeps its own colour, fully saturated.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, then a
   montage of your own photos. Each boot picks one opening at random, never last boot's: your
   intro video with the log typed over it, the car's night drive, a pixel McQueen's drive, or a
