@@ -21,6 +21,18 @@ int alarmRepeat(Note* out) {
     return n;
 }
 
+int markSaved(Note* out) {
+    out[0] = {1200, 60};
+    out[1] = {0, 40};
+    out[2] = {1800, 90};
+    return 3;
+}
+
+int markFailed(Note* out) {
+    out[0] = {400, 350};
+    return 1;
+}
+
 int onChange(cameras::Stage from, cameras::Stage to, camlist::Kind kind, Note* out) {
     using cameras::Stage;
     if (to == Stage::Alarm && from != Stage::Alarm) return alarmRepeat(out);

@@ -18,6 +18,7 @@
 #include "../../util/lights/tripclock.h"
 #include "../../util/black/interp.h"
 #include "../car/camsvc.h"
+#include "../car/camsound.h"
 #include "../../util/car/camwire.h"
 #include <WiFi.h>
 
@@ -214,7 +215,9 @@ static void handleCamMute() {
 
 static void handleCamMark() {
     if (!reqauth::pass(*s_server, s_gate, "/cam/mark", "wrong key")) return;
-    switch (camsvc::mark()) {
+    const camsvc::MarkResult r = camsvc::mark();
+    camsound::onMark(r == camsvc::MarkResult::Ok);   // heard in the car: no screen to look at
+    switch (r) {
     case camsvc::MarkResult::Ok: s_server->send(204); return;
     case camsvc::MarkResult::NoFix: s_server->send(409, "text/plain", "no fix"); return;
     case camsvc::MarkResult::Storage: break;

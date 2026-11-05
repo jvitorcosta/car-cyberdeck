@@ -40,6 +40,12 @@ void onStage(const camseq::Event& e) {
     xQueueSend(s_q, &e, 0);
 }
 
+void onMark(bool saved) {
+    camseq::Event e;
+    e.mark = saved ? camseq::MARK_SAVED : camseq::MARK_FAILED;
+    onStage(e);
+}
+
 // The queued events into the sequencer.
 static void drain() {
     camseq::Event e;

@@ -14,6 +14,10 @@ static void copyId(char* to, const char* from) {
 }
 
 void Seq::onEvent(const Event& e, uint32_t now) {
+    if (e.mark != MARK_NONE) {   // only the answer: the stage is untouched
+        mark_ = e.mark;
+        return;
+    }
     const bool was = active(stage_), is = active(e.to);
     const bool newPoint = is && (!was || strcmp(id_, e.id) != 0);
     if (was && (!is || newPoint)) {   // a point leaves Alert/Alarm: the short call counts from here
@@ -127,6 +131,12 @@ bool Seq::next(Stage live, const char* liveId, bool mute, uint32_t now, Step* ou
             return true;
         }
     }
+    if (mark_ != MARK_NONE) {
+        tones(out, GPS, false);
+        out->n = mark_ == MARK_SAVED ? camtone::markSaved(out->notes) : camtone::markFailed(out->notes);
+        mark_ = MARK_NONE;
+        return true;
+    }
     if (gps_ != Slot::COUNT) {
         const Slot s = gps_;
         gps_ = Slot::COUNT;
@@ -143,14 +153,14 @@ uint32_t Seq::waitMs(uint32_t now) const {
         const uint32_t since = now - alarmMs_;
         return since >= camtone::ALARM_REPEAT_MS ? 0 : camtone::ALARM_REPEAT_MS - since;
     }
-    return line_ < nLines_ || gps_ != Slot::COUNT ? 0 : UINT32_MAX;
+    return line_ < nLines_ || mark_ != MARK_NONE || gps_ != Slot::COUNT ? 0 : UINT32_MAX;
 }
 
 uint8_t Seq::top(uint32_t now) const {
     if (alarmDue(now)) return ALARM;
     if (alarmOn()) return NONE;
     if (line_ < nLines_) return ALERT;
-    if (gps_ != Slot::COUNT) return GPS;
+    if (mark_ != MARK_NONE || gps_ != Slot::COUNT) return GPS;
     return NONE;
 }
 

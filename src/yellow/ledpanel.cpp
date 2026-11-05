@@ -1775,6 +1775,14 @@ static void act() {
 //   B: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
 //   Lights only: X next page (BOTH, INSIDE, OUTSIDE, PRESETS, round)
 //   the look pages only: Y this page's lights on/off    LB / RB: - / +  (on PRESETS: nothing)
+//   RT (any screen, nothing drawn): mark a camera here. A firm pull (MARK_PULL of the travel) asks the
+//          black deck's /cam/mark through the cam task; the trigger must come back under MARK_LET_GO
+//          and MARK_GAP_MS pass before the next, so a shaky pull marks once. The black deck answers
+//          by sound (a chirp: saved; a low beep: no GPS fix), so the driver never looks.
+static constexpr uint16_t MARK_PULL = XboxControllerNotificationParser::maxTrig * 4 / 5;
+static constexpr uint16_t MARK_LET_GO = XboxControllerNotificationParser::maxTrig / 4;
+static constexpr uint32_t MARK_GAP_MS = 3000;
+static volatile bool camMarkAsk = false;   // RT pulled: the cam task sends /cam/mark
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
 // redrawn. On Lights, erasing the old ring can notch its button's edge, so that button is redrawn.
@@ -1854,6 +1862,18 @@ static void handlePad() {
     };
     const bool a = edge(n.btnA, pA), b = edge(n.btnB, pB), x = edge(n.btnX, pX), y = edge(n.btnY, pY);
     const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
+    static bool rtHeld = false;
+    static uint32_t markedAt = 0;
+    if (!rtHeld && n.trigRT >= MARK_PULL) {
+        rtHeld = true;
+        if (!markedAt || millis() - markedAt >= MARK_GAP_MS) {
+            markedAt = millis();
+            camMarkAsk = true;
+            Serial.println("[pad] RT: mark");
+        }
+    } else if (rtHeld && n.trigRT < MARK_LET_GO) {
+        rtHeld = false;
+    }
     const Screen was = screen;
     if (a) padPress(focus);
     if (screen != was) return;  // A changed the screen: the other buttons wait for their next press
@@ -2288,6 +2308,10 @@ static void camTask(void*) {
         if (ota::active()) {  // an update has the WiFi
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
+        }
+        if (camMarkAsk) {
+            camMarkAsk = false;
+            Serial.printf("[cam] mark: rc=%d\n", deckGet("/cam/mark", nullptr, 0, nullptr, 0));
         }
         const int8_t ask = camMuteAsk;
         if (ask >= 0) {

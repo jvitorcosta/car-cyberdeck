@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <Preferences.h>
 #include <freertos/semphr.h>
+#include <time.h>
 #include <new>
 #include "gps.h"
 #include "../core/mem.h"
@@ -194,24 +195,34 @@ void setMute(bool on) {
     Serial.printf("[cam] mute %d\n", on ? 1 : 0);
 }
 
-struct Mark {
-    uint32_t ms;
-    int32_t latE6, lonE6;
-    uint16_t course, kmh;
-};
-// In PSRAM, taken at the first use (512 B the deck needs only when marking): net/remote's task is
-// the only caller.
+using Mark = MarkRow;
+// In PSRAM, taken at the first use (512 B the deck needs only when marking), and the NVS keys
+// "marks2" / "msent" with it: under marksLock() (net/remote's task marks, the network task sends).
 static Mark* s_marks = nullptr;
+static SemaphoreHandle_t marksLock() {
+    static SemaphoreHandle_t m = xSemaphoreCreateMutex();
+    return m;
+}
+struct MarksLock {
+    bool held;
+    MarksLock() : held(marksLock() && xSemaphoreTake(marksLock(), pdMS_TO_TICKS(2000)) == pdTRUE) {}
+    ~MarksLock() { if (held) xSemaphoreGive(marksLock()); }
+};
+
+static uint32_t clockNow() {
+    const time_t t = time(nullptr);
+    return t > 1700000000 ? (uint32_t)t : 0;   // before NTP: 1970
+}
 
 // The stored marks into s_marks: their count, or -1 when they can't be read whole (no memory, a
 // short or failed read). mark() then refuses rather than write over the ones it couldn't read.
 static int loadMarks(Preferences& p) {
     if (!s_marks) s_marks = (Mark*)mem::bigAlloc(sizeof(Mark) * MAX_MARKS);
     if (!s_marks) return -1;
-    size_t len = p.getBytesLength("marks");
+    size_t len = p.getBytesLength("marks2");
     if (len > sizeof(Mark) * MAX_MARKS) len = sizeof(Mark) * MAX_MARKS;
     len -= len % sizeof(Mark);
-    if (len && p.getBytes("marks", s_marks, len) != len) return -1;
+    if (len && p.getBytes("marks2", s_marks, len) != len) return -1;
     return (int)(len / sizeof(Mark));
 }
 
@@ -223,6 +234,8 @@ MarkResult mark() {
         f = s_lastFix;
     }
     if (!f.valid || millis() - f.ms > cameras::NOFIX_MS) return MarkResult::NoFix;
+    MarksLock lock;
+    if (!lock.held) return MarkResult::Storage;
     Preferences p;
     if (!p.begin(NS, false)) {
         Serial.println("[cam] mark not stored (NVS)");
@@ -234,13 +247,15 @@ MarkResult mark() {
         Serial.println("[cam] mark not stored: the marks can't be read back");
         return MarkResult::Storage;
     }
-    if (n == MAX_MARKS) {   // full: the oldest goes (the PC tool should have collected it by now)
+    if (n == MAX_MARKS) {   // full: the oldest goes (sent by now, unless offline for 32 marks)
         memmove(s_marks, s_marks + 1, sizeof(Mark) * (MAX_MARKS - 1));
         n--;
+        const uint8_t sent = p.getUChar("msent", 0);
+        if (sent) p.putUChar("msent", sent - 1);
     }
-    s_marks[n++] = Mark{f.ms, f.latE6, f.lonE6, f.course, f.kmh};
+    s_marks[n++] = Mark{clockNow(), f.latE6, f.lonE6, f.course, f.kmh};
     const size_t len = sizeof(Mark) * n;
-    const bool ok = p.putBytes("marks", s_marks, len) == len;
+    const bool ok = p.putBytes("marks2", s_marks, len) == len;
     p.end();
     if (!ok) Serial.println("[cam] mark not stored (NVS)");
     else Serial.printf("[cam] mark %d saved\n", n);
@@ -254,9 +269,33 @@ static int fmtE6(char* out, size_t n, int32_t v) {
                     (unsigned long)(a % 1000000));
 }
 
+bool nextUnsent(MarkRow* out) {
+    MarksLock lock;
+    if (!lock.held) return false;
+    Preferences p;
+    if (!p.begin(NS, true)) return false;   // nothing stored yet
+    const int count = loadMarks(p);
+    const int sent = p.getUChar("msent", 0);
+    p.end();
+    if (count < 0 || sent >= count) return false;
+    *out = s_marks[sent];
+    return true;
+}
+
+void markSent() {
+    MarksLock lock;
+    if (!lock.held) return;
+    Preferences p;
+    if (!p.begin(NS, false)) return;
+    p.putUChar("msent", p.getUChar("msent", 0) + 1);
+    p.end();
+}
+
 size_t marksCsv(char* out, size_t n) {
     if (!n) return 0;
     out[0] = '\0';
+    MarksLock lock;
+    if (!lock.held) return 0;
     Preferences p;
     if (!p.begin(NS, true)) return 0;   // nothing stored yet
     const int count = loadMarks(p);
@@ -266,7 +305,7 @@ size_t marksCsv(char* out, size_t n) {
         char lat[16], lon[16], row[64];
         fmtE6(lat, sizeof lat, s_marks[i].latE6);
         fmtE6(lon, sizeof lon, s_marks[i].lonE6);
-        const int len = snprintf(row, sizeof row, "%lu,%s,%s,%u,%u\n", (unsigned long)s_marks[i].ms, lat,
+        const int len = snprintf(row, sizeof row, "%lu,%s,%s,%u,%u\n", (unsigned long)s_marks[i].epoch, lat,
                                  lon, (unsigned)s_marks[i].course, (unsigned)s_marks[i].kmh);
         if (len <= 0 || used + (size_t)len >= n) break;   // whole rows only
         memcpy(out + used, row, (size_t)len + 1);
@@ -276,9 +315,12 @@ size_t marksCsv(char* out, size_t n) {
 }
 
 void clearMarks() {
+    MarksLock lock;
     Preferences p;
     if (!p.begin(NS, false)) return;
-    p.remove("marks");
+    p.remove("marks");    // the old layout, before the clock time
+    p.remove("marks2");
+    p.remove("msent");
     p.end();
     Serial.println("[cam] marks cleared");
 }

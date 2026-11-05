@@ -22,6 +22,8 @@
 //   back line on the next fix only after the lost line played, the GPS clip on the first fix after
 //   power-on (once);
 // - priority ALARM > ALERT > GPS: cuts() tells the player to stop a clip for a higher step;
+// - a mark (Event::mark): camtone's mark chirp or low beep after the alert's lines, before a GPS line,
+//   at GPS rank and never muted (the driver pressed for it); an alarm's slots go first;
 // - mute: no chime, no voice (a line playing stops); the alarm's slots all beep;
 // - a slot the pack lacks: a missing chime plays the kind's old beep (camtone) in its place, a
 //   missing alarm line the triple beep; other missing lines are skipped (GPS lines have no beep).
@@ -32,6 +34,8 @@ constexpr uint32_t SHORT_CALL_MS = 20000;
 constexpr uint32_t ALARM_VOICE_MS = 6000;
 // A step's rank: a higher one cuts a lower one playing.
 constexpr uint8_t NONE = 0, GPS = 1, ALERT = 2, ALARM = 3;
+// Event::mark: no mark, a mark saved, a mark refused (no fix, storage).
+constexpr uint8_t MARK_NONE = 0, MARK_SAVED = 1, MARK_FAILED = 2;
 
 // What camsvc reports: a stage change, the active point changing within Alert/Alarm, or the first
 // fix (then from == to may hold). kind, id, limit: the point entered, or the one just left when
@@ -43,6 +47,7 @@ struct Event {
     uint8_t limit = camlist::NO_LIMIT;
     uint16_t lastKmh = 0;    // the last valid fix's speed (0: none yet), for the lost line
     bool firstFix = false;   // the first valid fix since power-on
+    uint8_t mark = MARK_NONE;   // a mark taken in the car: its answer, and nothing else in this event
 };
 
 struct Step {
@@ -108,5 +113,6 @@ private:
     camclip::Slot gps_ = camclip::Slot::COUNT;
     bool ngSaid_ = false;
     bool firstDone_ = false;
+    uint8_t mark_ = MARK_NONE;   // a mark's answer still to beep
 };
 }  // namespace camseq

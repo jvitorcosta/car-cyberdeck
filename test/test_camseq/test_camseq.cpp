@@ -543,6 +543,41 @@ void test_alarm_to_another_points_alert_is_a_short_call() {
     TEST_ASSERT_EQUAL_INT(NONE, next(q, Stage::Alert, "b", 3000));
 }
 
+// ---- marks ----
+
+static camseq::Event mark(uint8_t m) {
+    camseq::Event e;
+    e.mark = m;
+    return e;
+}
+
+void test_mark_answer_beeps_even_muted_and_leaves_the_stage() {
+    camseq::Seq q;
+    q.clips(ALL);
+    q.onEvent(ev(Stage::Off, Stage::Alert), 1000);
+    q.onEvent(mark(camseq::MARK_SAVED), 1100);
+    TEST_ASSERT_EQUAL_INT(S(Slot::Pon), next(q, Stage::Alert, "mao-1", 1100));   // the alert first
+    TEST_ASSERT_EQUAL_INT(S(Slot::Torishimari), next(q, Stage::Alert, "mao-1", 2000));
+    TEST_ASSERT_EQUAL_INT(S(Slot::L50), next(q, Stage::Alert, "mao-1", 3000));
+    TEST_ASSERT_EQUAL_INT(103, next(q, Stage::Alert, "mao-1", 4000));             // the chirp
+    TEST_ASSERT_FALSE(st.muteable);
+    TEST_ASSERT_EQUAL_INT(NONE, next(q, Stage::Alert, "mao-1", 4500));
+    q.onEvent(mark(camseq::MARK_FAILED), 5000);
+    TEST_ASSERT_EQUAL_UINT32(0, q.waitMs(5000));
+    TEST_ASSERT_EQUAL_INT(101, next(q, Stage::Alert, "mao-1", 5000, true));      // muted: still heard
+}
+
+void test_alarm_slot_goes_before_a_mark() {
+    camseq::Seq q;
+    q.clips(0);
+    q.onEvent(ev(Stage::Alert, Stage::Alarm), 1000);
+    q.onEvent(mark(camseq::MARK_SAVED), 1000);
+    TEST_ASSERT_EQUAL_INT(TRIPLE, next(q, Stage::Alarm, "mao-1", 1000));
+    TEST_ASSERT_EQUAL_INT(NONE, next(q, Stage::Alarm, "mao-1", 1200));          // between slots: waits
+    q.onEvent(ev(Stage::Alarm, Stage::Off), 1300);
+    TEST_ASSERT_EQUAL_INT(103, next(q, Stage::Off, "", 1300));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_speed_full_call);
@@ -583,5 +618,7 @@ int main() {
     RUN_TEST(test_same_point_back_into_alarm_beeps);
     RUN_TEST(test_gps_back_straight_into_alert);
     RUN_TEST(test_alarm_to_another_points_alert_is_a_short_call);
+    RUN_TEST(test_mark_answer_beeps_even_muted_and_leaves_the_stage);
+    RUN_TEST(test_alarm_slot_goes_before_a_mark);
     return UNITY_END();
 }

@@ -106,7 +106,8 @@ def validate(text):
 
 
 def parse_marks(text):
-    """GET /cam/marks rows 'ms,lat,lon,course,kmh' (ms is millis(), meaningless across boots)."""
+    """GET /cam/marks rows 'time,lat,lon,course,kmh' (time: UTC seconds at the mark, 0 when the deck's
+    clock wasn't set)."""
     items = []
     for n, line in enumerate(text.splitlines(), start=1):
         f = line.strip().split(",")

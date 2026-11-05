@@ -15,4 +15,6 @@ namespace camsound {
 void begin();   // the queue and the task; call once, before camsvc::begin()
 // camsvc::onStage's callback: queues the event and returns (the GPS task's 4 KB stack, any task).
 void onStage(const camseq::Event& e);
+// A mark's answer (net/remote's /cam/mark, any task): the chirp when saved, the low beep when not.
+void onMark(bool saved);
 }  // namespace camsound

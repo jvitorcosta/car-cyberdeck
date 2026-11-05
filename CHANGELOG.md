@@ -12,8 +12,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   last 100 m, going over the limit sounds the alarm until you slow down (red-light cameras never
   alarm). Alerts are a chime and a voice line, with beeps when there is no voice pack
   (`tools/gen_camvoice.py`), and they pause the intro or music. The road sign shows on screen.
-  `/cam/mute` silences them, and "mark camera" from the watch saves a spot to add later.
-  The list comes from the open-radars-manaus releases: `python tools/cameras.py push`.
+  `/cam/mute` silences them. The list comes from the open-radars-manaus releases:
+  `python tools/cameras.py push`.
+- **Added:** marking a camera from the car. Pull the Xbox controller's right trigger (or say "mark
+  camera"): the deck saves the spot and answers with a chirp, or a low beep when there's no GPS fix.
+  With `MARKS_REPO` and `MARKS_TOKEN` in `config.h`, each mark goes straight online as an issue in
+  that private GitHub repo (one sent later when there's no signal), ready for open-radars-manaus'
+  review map. The top strip shows a GPS pin, struck through while there's no fix.
 - **Added:** varied boot sounds. The Honda's drive greeting, the montage start and the Honda logo
   each pick one clip at random from their own roster at every boot, never last boot's: the drive
   says "Bem-vindo, moreno", the ETC voice or one of seven Japanese greetings, and the montage and
@@ -43,6 +48,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ### Yellow deck (CYD, `ledpanel`)
 - **Added:** the camera band. It follows the black deck's alerts within about a second, says the
   alerts out loud, and has a mute button.
+- **Added:** the Xbox controller's right trigger marks a camera (a firm pull, once per 3 s; nothing on
+  screen, the black deck answers by sound).
 
 ## [2.0.0] - 2026-10-28
 

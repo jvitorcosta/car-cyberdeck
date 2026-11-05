@@ -21,14 +21,26 @@ void snapshot(cameras::Status* s, camlist::Point* active, bool* mute);
 // or 0 when the CSV was fine but NVS (or memory) refused it. One caller at a time (net/remote's task).
 bool setList(const char* csv, size_t len, int* badLine);
 void setMute(bool on);  // RAM only: every start is unmuted
-// Appends the last valid fix (under cameras::NOFIX_MS old) to NVS ("cam"/"marks"), keeping the newest
-// MAX_MARKS. NoFix without a fix; Storage when NVS (or memory) fails, the marks read back short
-// included: those are kept as they are rather than overwritten.
+// Appends the last valid fix (under cameras::NOFIX_MS old) to NVS ("cam"/"marks2"), with the clock's
+// time (0 before it is set), keeping the newest MAX_MARKS. NoFix without a fix; Storage when NVS (or
+// memory) fails, the marks read back short included: those are kept as they are rather than
+// overwritten. The marks lock makes it safe beside the uploader (car/markpush, the network task).
 constexpr int MAX_MARKS = 32;
 enum class MarkResult : uint8_t { Ok, NoFix, Storage };
 MarkResult mark();
-// The marks as "ms,lat,lon,course,kmh\n" rows (ms = the deck's millis() at the fix, lat/lon in degrees
-// with 6 decimals), oldest first. Returns the length written; stops at whole rows that fit in n.
+struct MarkRow {
+    uint32_t epoch;            // UTC seconds at the mark; 0: the clock wasn't set
+    int32_t latE6, lonE6;
+    uint16_t course, kmh;
+};
+// The oldest mark not sent yet (NVS "cam"/"msent" counts the sent ones, oldest first); false when
+// every mark is sent. markSent() counts it as sent; a full list dropping its oldest keeps the count
+// right. Network task only.
+bool nextUnsent(MarkRow* out);
+void markSent();
+// The marks as "ms,lat,lon,course,kmh\n" rows (ms = UTC seconds at the mark, 0 when the clock
+// wasn't set; lat/lon in degrees with 6 decimals), oldest first. Returns the length written; stops
+// at whole rows that fit in n.
 size_t marksCsv(char* out, size_t n);
 void clearMarks();
 // For the sound (car/camsound): called on every stage change, in the order they happen: from the GPS

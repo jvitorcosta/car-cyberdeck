@@ -83,12 +83,20 @@ void test_alarm_repeat_is_the_triple() {
     TEST_ASSERT_EQUAL_INT(3, count(n, c, 1600));
 }
 
+void test_mark_sounds_differ_from_the_alerts() {
+    camtone::Note n[camtone::MAX_NOTES];
+    TEST_ASSERT_EQUAL_INT(3, camtone::markSaved(n));
+    TEST_ASSERT_TRUE(n[2].hz > n[0].hz);   // rising
+    TEST_ASSERT_EQUAL_INT(1, camtone::markFailed(n));
+    TEST_ASSERT_TRUE(n[0].hz < 600 && n[0].ms >= 300);   // lower and longer than any alert beep
+}
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_speed_alert_two_mid);
     RUN_TEST(test_alert_from_nofix_plays);
     RUN_TEST(test_bump_alert_two_low);
     RUN_TEST(test_redlight_one_long_high);
+    RUN_TEST(test_mark_sounds_differ_from_the_alerts);
     RUN_TEST(test_alert_to_alarm_triple);
     RUN_TEST(test_straight_to_alarm_triple);
     RUN_TEST(test_alarm_to_alert_silent);
