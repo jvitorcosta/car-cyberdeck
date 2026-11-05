@@ -3,8 +3,8 @@ greeting.pcm 203200
 opener.pcm 27100
 finale.pcm 120762
 montage.bin 479812
-intro.bin 1793840
-intro.pcm 1233600
+intro.bin 1438835
+intro.pcm 1236000
 greeting_alt.pcm 54502
 howl.pcm 624000
 idle.bin 2536
@@ -13,3 +13,7 @@ backdrop.bin 153608
 max.bin 1102328
 max.pcm 780000
 shadow.bin 7168
+drive.snd 430838
+opener.snd 393756
+finale.snd 561140
+connect.snd 32204

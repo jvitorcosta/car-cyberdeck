@@ -79,11 +79,34 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   (SNTP; `TIMEZONE` in `src/config.h`, daylight saving included): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
   The yellow deck uses the same schedule for its backlight only.
 - **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
-  16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task that frees the
-  driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
+  16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task. From cold the
+  speaker gets 400 ms to wake before the first sample (with 60 ms the deck's own mic heard a clip's
+  first ~0.3 s missing; `-D AUDIO_PROBE` logs that test); after a 16 kHz clip the output stays on,
+  sending silence, for 20 s, so the next clip starts at once; `tools/greeting_clip.py` falls back to the default chime at build time.
   The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
+- **Boot sound rosters** (`util/sndroster`, `util/soundpick`, `audio/greeting`) — the Honda's
+  drive greeting, the montage start and the Honda logo sound each come from a roster:
+  `data/drive.snd`, `opener.snd` and `finale.snd` (git-ignored), built by `tools/gen_rosters.py`
+  from the WAVs listed in `data/rosters.txt` (git-ignored; format in `data/rosters.example.txt`):
+  up to 32 clips of up to 4 s each, 16-bit mono 16 kHz, trimmed at -45 dB, faded out over 20 ms
+  and levelled to 0.12 RMS (peaks capped at 95 %). `setup()` (`pickSounds`) picks one per
+  slot at random, never last boot's (NVS `boot`/`drive`, `opener`, `finale`): the logo's first,
+  then a montage start among the clips that end before it starts (`bootscene::openerFits`, the
+  rule the scene applies); the drive's only for the Honda's opening. A slot without a roster plays
+  its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). A fourth roster, `connect.snd`
+  (NVS `connect`), is the WiFi-connected chime: the boot scene cues it (`greeting::playConnect`)
+  once it's online and the greeting is over, and leaves the cruise (or, after a video, starts the
+  montage) when it has played, at most 3 s later; it has no single file, so no roster means no
+  chime. Serial: `[boot] sounds: drive=… opener=… finale=… connect=…`.
+- **Sound timing** (`bootanim::SOUND_LEAD_MS`, `introclock::elapsed`, `greeting::level`) — a clip
+  is heard ~0.45 s after it's cued from cold (task, codec bring-up, the speaker's wake), ~10 ms
+  while the output is still on from the last clip (`greeting::warm`), so the pictures follow
+  the sound, not the cue: an intro video's frames run from its sound's first sample (frame 0 holds
+  up to 0.8 s for it), the drive's car lights follow the greeting as heard, the montage start is
+  cued that much (warm or cold) before the first photo (in the brake's fade) and the logo sound that much before
+  its frame. Serial: `[greeting] <clip>: out N ms after its cue`.
 - **Boot opening** (`util/intropick`) — `setup()` picks one of four openings each boot:
   your intro video ("kiss"), the Honda's night drive, McQueen's, or the second video ("max").
   Random, never last boot's (NVS `boot`/`last`), and only from what the build has (the clips,
@@ -108,8 +131,12 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   light anchors, kinds and RGB565, from `tools/gen_mcqueen_sprite.py`), each with its own rims.
   `bootterm` is the on-board terminal (the BIOS log) shared with the intro. Without a drive (the
   kiss) the scene waits for WiFi and starts at the montage. Cruising: sky drawn once, y 72–239 re-rendered through one
-  320×24 strip (15 KB, freed before the montage); brake: whole-screen fade; montage: JPEG frames
-  from the embedded `data/montage.bin` decoded straight to the display (~10 fps); drive ~15 fps (67 ms/frame). `setup()`
+  320×24 strip (15 KB, freed before the montage) over a copy of the layers that never move (sky
+  band, trees, asphalt; 105 KB in PSRAM), the underglow and lamp light from alpha tables (9 KB);
+  brake: the same frame while the LEDC hardware fades the backlight (`backlight::fadeOut`; whole-screen
+  pixel fade without it), the first photo relights it; montage: JPEG frames from the embedded
+  `data/montage.bin` decoded straight to the display (~10 fps); drive ~19 fps (~52 ms/frame, 24 of
+  them the push at 40 MHz; 80 MHz corrupted the picture). `setup()`
   waits for it; `loop()` and the late-WiFi path wait while active.
 - **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
   Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
@@ -322,7 +349,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
     genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,
-    intropick, linkstatus, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
+    intropick, linkstatus, sndroster, soundpick, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
     quietboot, ridersprite, songmood (+ songpicks.inc), termblend, walkanim, walkrect
   - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, geoip, httphead, karaoke,
     ledpresets, ledvoice, lightstatus, otapage, pollpace, tapguard, termpal, touchcal, touchguard,
@@ -345,6 +372,7 @@ Build flags that are never set in `platformio.ini`; add one for a desk check, th
 | Flag | Deck (env) | What it does |
 |---|---|---|
 | `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) | black (`s3`) | Forces that boot opening (`main.cpp`, `util/intropick`). |
+| `-D SOUND_FORCE=\"drive:3,opener:0,finale:11\"` (any subset) | black (`s3`) | Forces those boot sound roster indices (`main.cpp` `pickSounds`, `util/soundpick`). |
 | `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
 | `-D NIGHT_TEST` | yellow (`ledpanel`) | Night whatever the time, synced clock or not: the night backlight and palette, with a serial tuner to try night colours and the backlight live (`docs/yellow-deck.md` "Night"; `ledpanel.cpp` `tuneLine`). |
 | `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |

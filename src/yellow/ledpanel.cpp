@@ -1,5 +1,5 @@
 // The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
-// red only for problems, faint scanlines, all caps) that drives the car's two
+// red only for problems, vivid at night, faint scanlines, all caps) that drives the car's two
 // ELK-family LED controllers. Three screens (and the two car-health ones, see "Car health"), laid
 // out by util/deckmenu:
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands, for what the

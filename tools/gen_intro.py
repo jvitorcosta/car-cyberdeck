@@ -8,13 +8,13 @@ The Max Verstappen opening is the same kind of video, data/max.bin + max.pcm, fr
 (16:9, the whole frame kept under a black band for the terminal):
   python tools/gen_intro.py max-clip/max.mp4 --seg 0-99 --out max --letterbox --q 8 --fps 16
 (-q 8: ~9 KB a frame; the deck draws one in ~54 ms, so at 20 fps it dropped 24 of 163, at 16 fps
-it has 62 ms a frame.)
+it has 62 ms a frame.) The kiss is at the default 16 fps too (at 20 it dropped 28 of 257 frames).
 The clips and the built files are git-ignored. Needs ffmpeg.
 
 Format: the montage's "MTG1" (ui/montage): u16 count, u16 fps, count x (u32 offset, u32 size),
 then baseline JPEG frames, 320x240 (a centre 4:3 crop of the clip; --letterbox: the whole 16:9
 frame at 320x180 on the bottom, black above, where the boot terminal types). Sound: data/intro.pcm,
-16-bit mono 48 kHz, each segment cut to its frames' length so the seams stay in sync. Without a file the deck
+16-bit mono 48 kHz, levelled to the boot greetings' loudness (gen_rosters.level), each segment cut to its frames' length so the seams stay in sync. Without a file the deck
 boots straight to its night drive (tools/intro_clip.py writes an empty one for the build).
 """
 import argparse
@@ -26,9 +26,12 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen_rosters as gr  # noqa: E402
+
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
-FPS = 20                   # the default; the deck plays each clip at the rate in its header
+FPS = 16                   # the default (the deck draws a frame in ~54 ms); it plays each clip at its header rate
 RATE = 48000               # sound sample rate (the S3's ES8311 has a 48 kHz clock row)
 MAX_BYTES = 4_000_000      # the S3 has a 12 MB app partition; keep the video under ~4 MB
 QUALITY = 2                # ffmpeg -q:v (2 best .. 31 worst); raised automatically to fit
@@ -74,6 +77,16 @@ def sound_of(video, segments, counts, fps=FPS):
     return out
 
 
+def level(pcm):
+    """16-bit sound levelled to the boot rosters' loudness (gen_rosters.level); silence stays."""
+    n = len(pcm) // 2
+    x = [v / 32767 for v in struct.unpack("<%dh" % n, pcm[:2 * n])]
+    if not any(x):
+        return pcm
+    x = gr.level(x)
+    return struct.pack("<%dh" % n, *(max(-32768, min(32767, int(round(v * 32767)))) for v in x))
+
+
 CROP = "crop=ih*4/3:ih,scale=320:240:flags=lanczos"
 LETTERBOX = "scale=320:180:flags=lanczos,pad=320:240:0:60:black"   # below the terminal (60 px)
 
@@ -112,7 +125,7 @@ def main():
             if len(blob) <= MAX_BYTES or q >= 20:
                 break
             q += 2                                       # too big: lower the quality and retry
-        sound = sound_of(a.video, segments, [len(seg) for seg in per], a.fps)
+        sound = level(sound_of(a.video, segments, [len(seg) for seg in per], a.fps))
     except subprocess.CalledProcessError as e:
         sys.exit(f"gen_intro: ffmpeg failed ({e})")
     finally:
