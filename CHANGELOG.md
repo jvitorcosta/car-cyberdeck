@@ -5,6 +5,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Yellow deck
+- **Changed:** night mode keeps each theme's own colour, vivid, instead of turning the screen
+  amber. From 18:00 to 06:00 the backlight drops to about a third and every theme takes a fully
+  saturated night version of its hue (pure red, a deep marine blue, a phosphor-terminal green, one
+  yellow), picked on the panel; problems stay white on the red, orange and pink themes and red on
+  the rest. The scanlines lose their amber tint.
+
 ### Black deck (S3)
 - **Added:** a WiFi-connected chime at boot. Once the deck is online and the greeting is over, a
   short chime plays and then the montage starts, so the order is greeting, chime, montage start,
