@@ -49,6 +49,19 @@ constexpr uint32_t BRAKE_FADE_MS = bootanim::BRAKE_MS - 80;
 // (bootanim::SOUND_LEAD_MS), so the scene's own clock isn't enough.
 bool greetingDone(uint32_t t) { return t >= greeting::durationMs() && !greeting::playing(); }
 
+// The WiFi-connected chime (greeting::playConnect) bridges the cruise and the montage: cued the
+// first time this is asked (once the deck is online and the greeting is over), done when it has
+// played, or after CHIME_WAIT_MS if another clip (a video's sound) keeps the output busy.
+constexpr uint32_t CHIME_WAIT_MS = 3000;
+uint32_t s_chimeAt = 0;      // scene time + 1 the chime was cued; 0 = not yet
+bool chimeDone(uint32_t t) {
+    if (!s_chimeAt) {
+        s_chimeAt = t + 1;
+        greeting::playConnect();
+    }
+    return !greeting::playing() || t + 1 - s_chimeAt >= CHIME_WAIT_MS;
+}
+
 // The montage frame (of the parsed montage) that starts a finale of `ms`; -1 for no finale.
 int finaleFrame(uint32_t ms) {
     return !ms ? -1 : MONTAGE_SOUND_AT_START ? 0 : bootanim::finaleStartFrame(montage::count(), montage::fps(), ms);
@@ -422,7 +435,7 @@ void runWithoutScene(uint32_t t0) {
             s_tft->drawString(bootterm::caption(), 10, 10, 2);
         }
         const uint32_t t = millis() - t0;
-        if (bootanim::mayExit(t, greetingDone(t), s_online())) return;
+        if (bootanim::mayExit(t, greetingDone(t), s_online()) && chimeDone(t)) return;
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -509,11 +522,11 @@ void task(void*) {
         for (;;) {
             const uint32_t t = millis() - t0;
             if (!s_opts.drive && tHero == bootanim::NO_EXIT) {
-                if (!s_online()) { vTaskDelayUntil(&wake, pdMS_TO_TICKS(FRAME_MS)); continue; }
+                if (!s_online() || !chimeDone(t)) { vTaskDelayUntil(&wake, pdMS_TO_TICKS(FRAME_MS)); continue; }
                 tHero = t;
                 skipBrake = true;                        // straight to the montage
             }
-            if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, greetingDone(t), s_online())) {
+            if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, greetingDone(t), s_online()) && chimeDone(t)) {
                 tHero = t;
                 xc = bootanim::cruiseX(t);
             }
@@ -633,6 +646,7 @@ void start(TFT_eSPI& tft, bool (*online)(), const Opts& o) {
     s_car = o.car;
     s_tft = &tft;
     s_online = online;
+    s_chimeAt = 0;
     s_active = true;
     // 6 KB: 4 KB left 1.8 KB free at "bootscene end" (2026-10-21 serial session).
     if (xTaskCreatePinnedToCore(task, "bootscene", 6144, nullptr, 1, nullptr, 1) != pdPASS) {

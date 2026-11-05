@@ -91,8 +91,11 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   slot at random, never last boot's (NVS `boot`/`drive`, `opener`, `finale`): the logo's first,
   then a montage start among the clips that end before it starts (`bootscene::openerFits`, the
   rule the scene applies); the drive's only for the Honda's opening. A slot without a roster plays
-  its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). Serial: `[boot] sounds: drive=…
-  opener=… finale=…`.
+  its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). A fourth roster, `connect.snd`
+  (NVS `connect`), is the WiFi-connected chime: the boot scene cues it (`greeting::playConnect`)
+  once it's online and the greeting is over, and leaves the cruise (or, after a video, starts the
+  montage) when it has played, at most 3 s later; it has no single file, so no roster means no
+  chime. Serial: `[boot] sounds: drive=… opener=… finale=… connect=…`.
 - **Sound timing** (`bootanim::SOUND_LEAD_MS`, `introclock::elapsed`, `greeting::level`) — a clip
   is heard ~0.1 s after it's cued (task, codec bring-up, the amp's wake), so the pictures follow
   the sound, not the cue: an intro video's frames run from its sound's first sample (frame 0 holds

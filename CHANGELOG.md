@@ -6,6 +6,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck (S3)
+- **Added:** a WiFi-connected chime at boot. Once the deck is online and the greeting is over, a
+  short chime plays and then the montage starts, so the order is greeting, chime, montage start,
+  Honda logo. It comes from a fourth roster, `[connect]` in `data/rosters.txt`; with no
+  `[connect]` clips the boot stays silent there.
 - **Added:** varied boot sounds. The Honda's drive greeting, the montage start and the Honda logo
   each pick one clip at random from their own roster at every boot, never last boot's: the drive
   says "Bem-vindo, moreno", the ETC voice or one of seven Japanese greetings, and the montage and

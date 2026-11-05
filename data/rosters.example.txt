@@ -16,3 +16,7 @@
 [finale]
 # with the Honda logo, ending with the montage's fade (else data/finale.pcm)
 # drive_safe.wav
+
+[connect]
+# a short chime when the deck is online, just before the montage (else none)
+# chime.wav
