@@ -46,6 +46,22 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - **Fixed:** a synced entry with fewer than 3 lines (one "Nightcall" entry holds only its first
   line) counts as plain: the plain text read before it stays, and the search looks for a full one.
 
+### Yellow deck
+- **Changed:** the white theme is a softer grey-white.
+- **Changed:** music mode runs the outside light at 100 % at any hour.
+- **Changed:** presets fade in instead of jumping.
+- **Added:** when the deck starts, the lights play a welcome in the last look's colour: the inside
+  strip fills from both ends inwards over 4 s (the controller's own curtain effect), then the
+  outside light rises, about 6 s in all. ">WELCOME" shows when it plays, and "INTRO" on the serial
+  port replays it on the desk (`tools/intro_check.py` checks it).
+- **Changed:** night mode keeps the colours vivid. From 18:00 to 06:00, once the clock is synced,
+  the backlight drops to about a third and every theme takes a night version of its own hue at full
+  saturation (pure red, a deep marine blue, a phosphor-terminal green, one yellow), picked on the
+  panel; the dimmed day colours looked washed out. Problems stay white on the red, orange and pink
+  themes and red on the rest. No amber palette: each theme keeps its colour.
+- **Changed:** the theme follows the inside look even when that light isn't connected, so a colour
+  tapped away from the car still shows on the screen.
+
 ## [2.0.0] - 2026-10-28
 
 The CYD became the **yellow deck**, which drives the car's LED lights, and a Garmin watch app

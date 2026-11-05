@@ -20,6 +20,14 @@ void test_power_frames_match_what_worked_in_the_car() {
     expectFrame(on0, elkcmd::power(elkcmd::V0, true));
     expectFrame(off1, elkcmd::power(elkcmd::V1, false));
 }
+void test_effect_and_speed_frames_follow_the_melk_notes() {
+    const uint8_t curtain[9] = {0x7E, 0x07, 0x03, 0x3A, 0xFF, 0xFF, 0xFF, 0x00, 0xEF};
+    const uint8_t half[9] = {0x7E, 0x04, 0x02, 0x32, 0xFF, 0xFF, 0xFF, 0x00, 0xEF};
+    const uint8_t full[9] = {0x7E, 0x04, 0x02, 0x64, 0xFF, 0xFF, 0xFF, 0x00, 0xEF};
+    expectFrame(curtain, elkcmd::effect(58));
+    expectFrame(half, elkcmd::speed(50));
+    expectFrame(full, elkcmd::speed(200));  // capped at 100
+}
 void test_dim_follows_a_perceptual_curve() {
     TEST_ASSERT_EQUAL_UINT8(255, elkcmd::dim(255, 100));
     TEST_ASSERT_EQUAL_UINT8(64, elkcmd::dim(255, 50));   // half the look, a quarter of the PWM
@@ -35,6 +43,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_color_frames_in_both_variants);
     RUN_TEST(test_power_frames_match_what_worked_in_the_car);
+    RUN_TEST(test_effect_and_speed_frames_follow_the_melk_notes);
     RUN_TEST(test_dim_follows_a_perceptual_curve);
     RUN_TEST(test_dim_keeps_a_lit_channel_lit);
     return UNITY_END();
