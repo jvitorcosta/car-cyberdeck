@@ -85,7 +85,7 @@ static Clip s_picked[4];
 static bool s_hasPick[4] = {false, false, false, false};
 
 static bool rosterClip(Slot s, int i, sndroster::Clip* out) {
-    if (s > FINALE) return false;
+    if (s > CONNECT) return false;
     const media::Blob& b = clips().roster[s];
     return sndroster::at(b.data, b.size, i, out);
 }
@@ -103,7 +103,7 @@ const char* rosterName(Slot s, int i) {
 }
 
 void pick(Slot s, int i) {
-    if (s > FINALE) return;
+    if (s > CONNECT) return;
     static const char* const NAMES[4] = {"greeting", "opener", "finale", "connect"};
     const int* volume = s == FINALE ? &audiosink::FINALE_VOLUME : &audiosink::GREETING_VOLUME;
     sndroster::Clip c;
