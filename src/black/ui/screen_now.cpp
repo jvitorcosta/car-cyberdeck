@@ -35,6 +35,12 @@ static constexpr int DLG_X = 4, DLG_Y = 198, DLG_W = 312, DLG_H = 41;
 static constexpr int CD_CY = 10;
 
 static int s_cdX = 100;   // set by drawTopStrip from the title width
+static int s_gapX0 = 120, s_gapX1 = 200;   // the strip's empty middle (topGap)
+
+void topGap(int& x0, int& x1) {
+    x0 = s_gapX0;
+    x1 = s_gapX1;
+}
 
 void drawCdFrame(TFT_eSPI& t, int frame) { drawCd(t, s_cdX, CD_CY, frame, theme::pal().top); }
 
@@ -58,6 +64,8 @@ void drawTopStrip(TFT_eSPI& t, const AppState& st) {
     }
     drawIcon(t, icons::Icon::Shuffle, shufX, 4,
              st.shuffle ? theme::pal().topText : theme::pal().iconOff, theme::pal().top);
+    s_gapX0 = s_cdX + 8 + 4;   // past the CD (radius 7) ...
+    s_gapX1 = shufX - 4;       // ... up to the shuffle icon
 }
 
 // Spinning Poke Ball left of the time (it replaced the "HP " prefix); position follows the
@@ -323,6 +331,8 @@ void drawOffline(TFT_eSPI& t, const char* msg, const char* detail, const statuss
     topStrip(t);
     // Small at the top right: after an update over WiFi, which firmware came up.
     shadowText(t, FW_LABEL, 314, 6, 1, theme::pal().topText, theme::pal().boxBorder, TR_DATUM);
+    s_gapX0 = 6;
+    s_gapX1 = 314 - t.textWidth(FW_LABEL, 1) - 6;
     drawOfflineText(t, msg, detail);
     drawOfflineScene(t, look, animMs, true);
     if (qr) drawQrCard(t, look, animMs, qr);

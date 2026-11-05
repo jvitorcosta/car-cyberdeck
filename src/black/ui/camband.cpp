@@ -3,6 +3,9 @@
 #include <cstring>
 #include "../../util/car/camsign.h"
 #include "../../util/common/rgb565.h"
+#include "battle.h"
+#include "screen_now.h"
+#include "theme.h"
 
 namespace camband {
 
@@ -54,7 +57,7 @@ int rows(const cameras::Status& s) {
     switch (s.stage) {
     case Stage::Alert:
     case Stage::Alarm: return BAND_H;
-    case Stage::NoFix:   // a corner tag over the screen, drawn after it (TAG)
+    case Stage::NoFix:   // a tag on the top strip, drawn after it
     case Stage::Off: break;
     }
     return 0;
@@ -194,13 +197,15 @@ static void band(TFT_eSPI& tft, bool alarm, Kind k, int barW, uint16_t dist, uin
     numbers(tft, y0, bg, dist, kmh);
 }
 
+// In the strip's own style (its title's colour and shadow), centred in its empty middle: the
+// smaller font when the device name leaves too little room.
 static void tag(TFT_eSPI& tft) {
-    int w = tft.textWidth("GPS --", 2) + 8;
-    if (w > TAG.w) w = TAG.w;
-    tft.fillRoundRect(TAG.x, TAG.y, w, TAG.h, 3, TFT_BLACK);
-    tft.setTextDatum(ML_DATUM);
-    tft.setTextColor(ORANGE, TFT_BLACK);
-    tft.drawString("GPS --", TAG.x + 4, TAG.y + TAG.h / 2, 2);
+    static const char* const TEXT = "GPS --";
+    int x0, x1;
+    ui::topGap(x0, x1);
+    const uint8_t font = tft.textWidth(TEXT, 2) <= x1 - x0 ? 2 : 1;
+    ui::shadowText(tft, TEXT, (x0 + x1) / 2, font == 2 ? 2 : 6, font, theme::pal().topText,
+                   theme::pal().boxBorder, TC_DATUM);
 }
 
 void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active, bool mute) {
