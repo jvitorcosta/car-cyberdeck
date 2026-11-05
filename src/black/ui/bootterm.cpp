@@ -133,7 +133,7 @@ void events(uint32_t t, bool braking) {
         }
     }
     if (t >= 4800 && !s_engine) s_engine = bios::termSet(s_term, "ENGINE", "RUNNING", bios::OK, t);
-    // The greeting is heard ~0.1 s after the scene starts (bootanim::SOUND_LEAD_MS): DONE once it
+    // The greeting is heard up to ~0.45 s after the scene starts (bootanim::COLD_SOUND_LEAD_MS): DONE once it
     // has really stopped, not at its length on the scene's clock.
     const bool heard = t >= greeting::durationMs() && !greeting::playing();
     if (t >= 5300 && !s_greet && !heard)

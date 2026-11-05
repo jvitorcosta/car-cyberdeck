@@ -234,6 +234,8 @@ uint32_t durationMs() { return lengthMs(greetingClip()); }
 
 bool playing() { return s_playing.load() > 0; }
 
+bool warm() { return audiosink::warm(CLIP_RATE); }
+
 uint32_t finaleMs() { return present(finaleClip()) ? lengthMs(finaleClip()) : 0; }
 
 uint8_t level() {

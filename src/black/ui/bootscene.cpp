@@ -45,8 +45,8 @@ constexpr bool MONTAGE_SOUND_AT_START = false;
 // is drawn (the backlight comes back on at once, with the photo).
 constexpr uint32_t BRAKE_FADE_MS = bootanim::BRAKE_MS - 80;
 
-// The greeting has been heard to its end: it comes out ~0.1 s after the scene starts
-// (bootanim::SOUND_LEAD_MS), so the scene's own clock isn't enough.
+// The greeting has been heard to its end: it comes out up to ~0.45 s after the scene starts
+// (bootanim::COLD_SOUND_LEAD_MS), so the scene's own clock isn't enough.
 bool greetingDone(uint32_t t) { return t >= greeting::durationMs() && !greeting::playing(); }
 
 // The WiFi-connected chime (greeting::playConnect) bridges the cruise and the montage: cued the
@@ -63,8 +63,8 @@ bool chimeDone(uint32_t t) {
 }
 
 // The montage frame (of the parsed montage) that starts a finale of `ms`; -1 for no finale.
-int finaleFrame(uint32_t ms) {
-    return !ms ? -1 : MONTAGE_SOUND_AT_START ? 0 : bootanim::finaleStartFrame(montage::count(), montage::fps(), ms);
+int finaleFrame(uint32_t ms, uint32_t leadMs = bootanim::SOUND_LEAD_MS) {
+    return !ms ? -1 : MONTAGE_SOUND_AT_START ? 0 : bootanim::finaleStartFrame(montage::count(), montage::fps(), ms, leadMs);
 }
 
 TFT_eSPI* s_tft = nullptr;
@@ -532,11 +532,17 @@ void task(void*) {
             }
             const uint32_t u = tHero == bootanim::NO_EXIT ? 0
                              : t - tHero + (skipBrake ? bootanim::BRAKE_MS : 0);
-            if (tHero != bootanim::NO_EXIT && !openerCued && bootanim::openerDue(u)) {
+            // A clip is out ~10 ms after its cue while the audio path is still on from the last
+            // one (the greeting or chime), ~0.45 s from cold: each is cued that early.
+            const bool warm = greeting::warm();
+            const uint32_t lead = warm ? bootanim::SOUND_LEAD_MS : bootanim::COLD_SOUND_LEAD_MS;
+            if (tHero != bootanim::NO_EXIT && !openerCued && bootanim::openerDue(u, lead)) {
                 openerCued = true;                               // in the brake's fade: heard with the first photo
-                finaleAt = finaleFrame(greeting::finaleMs());
+                finaleAt = finaleFrame(greeting::finaleMs());    // after the opener the path is on
                 if (bootanim::openerFits(finaleAt, montage::fps(), greeting::openerMs()))
                     greeting::playOpener();                      // the montage's first sound
+                else if (!warm)
+                    finaleAt = finaleFrame(greeting::finaleMs(), bootanim::COLD_SOUND_LEAD_MS);
             }
             const uint32_t f0 = millis();
             const uint8_t e = greeting::level();                // the lights follow the voice

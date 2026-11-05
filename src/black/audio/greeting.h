@@ -31,6 +31,9 @@ uint32_t introStartedAt();          // millis() of the intro sound's first sampl
 // the synthesised one while music mode's mic holds the port (the recording is 48 kHz).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
+// The audio output is still on from the last 16 kHz clip (audio/sink.h warm()): a clip cued now is
+// heard at once (bootanim::SOUND_LEAD_MS), not after the speaker's wake (COLD_SOUND_LEAD_MS).
+bool warm();
 
 // WiFi-connected chime: this boot's CONNECT clip, played by the boot scene once the deck is online
 // and the greeting is over, just before the montage. Silent without a connect roster (no single file).
