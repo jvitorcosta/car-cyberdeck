@@ -17,6 +17,9 @@
 #include "../../util/common/version.h"
 #include "../../util/lights/tripclock.h"
 #include "../../util/black/interp.h"
+#include "../car/camsvc.h"
+#include "../car/camsound.h"
+#include "../../util/car/camwire.h"
 #include <WiFi.h>
 
 
@@ -185,6 +188,72 @@ static void handleMusicDebug() {
     s_server->send(200, "application/json", out);
 }
 
+// Speed cameras (car/camsvc). GET /cam is what the yellow deck draws its band from (signed, like
+// /state); mute and mark come from the yellow deck (voice, touch) and the watch, signed as well.
+static void handleCam() {
+    if (!reqauth::pass(*s_server, s_gate, "/cam", "wrong key")) return;
+    cameras::Status st;
+    static camlist::Point pt;   // static: off this task's 4 KB stack (one request at a time)
+    bool mute = false;
+    camsvc::snapshot(&st, &pt, &mute);
+    char out[camwire::MAX_JSON];
+    if (!camwire::write(st, st.index >= 0 ? &pt : nullptr, mute, out, sizeof out)) {
+        s_server->send(500, "text/plain", "cam too big");
+        return;
+    }
+    s_server->sendHeader("Cache-Control", "no-store");
+    s_server->send(200, "application/json", out);
+}
+
+static void handleCamMute() {
+    if (!reqauth::pass(*s_server, s_gate, "/cam/mute", "wrong key")) return;
+    const String on = s_server->arg("on");
+    if (on != "1" && on != "0") { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
+    camsvc::setMute(on == "1");
+    s_server->send(204);
+}
+
+static void handleCamMark() {
+    if (!reqauth::pass(*s_server, s_gate, "/cam/mark", "wrong key")) return;
+    const camsvc::MarkResult r = camsvc::mark();
+    camsound::onMark(r == camsvc::MarkResult::Ok);   // heard in the car: no screen to look at
+    switch (r) {
+    case camsvc::MarkResult::Ok: s_server->send(204); return;
+    case camsvc::MarkResult::NoFix: s_server->send(409, "text/plain", "no fix"); return;
+    case camsvc::MarkResult::Storage: break;
+    }
+    s_server->send(507, "text/plain", "not stored");   // NVS: the marks so far are kept
+}
+
+// The PC tool (tools/cameras.py push, which sends an open-radars-manaus release's radars.csv) with the bearer key, like /trip/reset. The body must be sent
+// as text/plain: WebServer turns a form-encoded body (curl's default) into params instead.
+static void handleCamList() {
+    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    if (!s_server->hasArg("plain")) { s_server->send(400, "text/plain", "send the CSV as text/plain"); return; }
+    const String& csv = s_server->arg("plain");
+    if (csv.length() > camlist::MAX_CSV) { s_server->send(413, "text/plain", "list too big"); return; }
+    int bad = 0;
+    if (camsvc::setList(csv.c_str(), csv.length(), &bad)) { s_server->send(204); return; }
+    if (bad > 0) {
+        char msg[24];
+        snprintf(msg, sizeof msg, "line %d", bad);
+        s_server->send(400, "text/plain", msg);
+        return;
+    }
+    s_server->send(507, "text/plain", "not stored");   // the old list stays, in RAM and NVS
+}
+
+static void handleCamMarks() {
+    if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+    // A row is 45 B at most. In PSRAM, kept after the first call: only the CPU touches it.
+    constexpr size_t N = camsvc::MAX_MARKS * 48;
+    static char* out = (char*)mem::bigAlloc(N);
+    if (!out) { s_server->send(500, "text/plain", "no memory"); return; }
+    camsvc::marksCsv(out, N);
+    s_server->sendHeader("Cache-Control", "no-store");
+    s_server->send(200, "text/csv", out);
+}
+
 // Own task at idle priority on the UI core: WebServer reads a request with blocking reads (a
 // slow or half-sent request holds it for seconds), so it must never run on the UI loop. At
 // priority 0 it only gets the CPU the display leaves free.
@@ -220,6 +289,16 @@ void begin(bool (*hold)()) {
         if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
         s_trip.reset(millis());
         Serial.println("[remote] trip reset");
+        s_server->send(204);
+    });
+    s_server->on("/cam", HTTP_GET, handleCam);
+    s_server->on("/cam/mute", HTTP_GET, handleCamMute);
+    s_server->on("/cam/mark", HTTP_GET, handleCamMark);
+    s_server->on("/cam/list", HTTP_POST, handleCamList);
+    s_server->on("/cam/marks", HTTP_GET, handleCamMarks);
+    s_server->on("/cam/marks/clear", HTTP_POST, [] {
+        if (!s_gate.keyOk(s_server->arg("k").c_str())) { s_server->send(403, "text/plain", "wrong key"); return; }
+        camsvc::clearMarks();
         s_server->send(204);
     });
     s_server->on("/icon.png", HTTP_GET, [] {   // Home Screen icon: public, like any favicon

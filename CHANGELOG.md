@@ -13,6 +13,19 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the rest. The scanlines lose their amber tint.
 
 ### Black deck (S3)
+- **Added:** camera alerts for fixed speed cameras, electronic speed bumps and red-light cameras.
+  Speed comes from the iPhone's GPS (GPS 2 IP over the hotspot). A speed camera or bump is
+  announced at 200 m or 12 s ahead, whichever is further; a red-light camera at 200 m. In the
+  last 100 m, going over the limit sounds the alarm until you slow down (red-light cameras never
+  alarm). Alerts are a chime and a voice line, with beeps when there is no voice pack
+  (`tools/gen_camvoice.py`), and they pause the intro or music. The road sign shows on screen.
+  `/cam/mute` silences them. The list comes from the open-radars-manaus releases:
+  `python tools/cameras.py push`.
+- **Added:** marking a camera from the car. Pull the Xbox controller's right trigger (or say "mark
+  camera"): the deck saves the spot and answers with a chirp, or a low beep when there's no GPS fix.
+  With `MARKS_REPO` and `MARKS_TOKEN` in `config.h`, each mark goes straight online as an issue in
+  that private GitHub repo (one sent later when there's no signal), ready for open-radars-manaus'
+  review map. The top strip shows a GPS pin, struck through while there's no fix.
 - **Added:** a WiFi-connected chime at boot. Once the deck is online and the greeting is over, a
   short chime plays and then the montage starts, so the order is greeting, chime, montage start,
   Honda logo. It comes from a fourth roster, `[connect]` in `data/rosters.txt`; with no
@@ -45,6 +58,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   had synced lyrics before and 89 now. The phone can still show lyrics LRCLIB doesn't have.
 - **Fixed:** a synced entry with fewer than 3 lines (one "Nightcall" entry holds only its first
   line) counts as plain: the plain text read before it stays, and the search looks for a full one.
+
+### Yellow deck (CYD, `ledpanel`)
+- **Added:** the camera band. It follows the black deck's alerts within about a second, says the
+  alerts out loud, and has a mute button.
+- **Added:** the Xbox controller's right trigger marks a camera (a firm pull, once per 3 s; nothing on
+  screen, the black deck answers by sound).
 
 ## [2.0.0] - 2026-10-28
 

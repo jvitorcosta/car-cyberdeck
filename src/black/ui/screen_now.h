@@ -17,6 +17,9 @@ void drawArtistRow(TFT_eSPI& t, const AppState& st, uint8_t genre);
 void drawTopStrip(TFT_eSPI& t, const AppState& st);
 // Spinning CD after "NOW PLAYING" (frame 0..3).
 void drawCdFrame(TFT_eSPI& t, int frame);
+// The top strip's empty middle as the last strip drawn left it: between the CD and the shuffle
+// icon on the deck, left of the firmware label on the status screens. For the camera GPS tag.
+void topGap(int& x0, int& x1);
 // Spinning Poke Ball before the time (frame 0..pokeball::FRAMES-1).
 void drawPokeballFrame(TFT_eSPI& t, int frame);
 // Poke Ball + time text + HP bar + EXP (volume) bar, repainted in place.

@@ -94,6 +94,11 @@ git-ignored: copy `include/config.example.h` there first. Both decks build from 
 2. **Configure** `src/config.h`: your WiFi networks (the phone hotspot **first**, see
    [On the hotspot](#on-the-hotspot)), the app's client ID and secret, and your time zone.
    For the phone remote and the yellow deck, set `REMOTE_TOKEN` to a long random string.
+   For speed-camera alerts, the deck reads the iPhone's GPS 2 IP app at `GPS_HOST` / `GPS_PORT`
+   (default `172.20.10.1` / `11123`, the phone on its own hotspot; optional). The camera list is
+   not in this repo: it is built and released in https://github.com/jvitorcosta/open-radars-manaus; `python tools/cameras.py push`
+   sends its latest release to the deck (`--release VERSION` pins one), and `python tools/cameras.py import-car`
+   saves the points you marked in the car for that repo's review map.
 3. **Authorize:** `python tools/spotify_auth.py`. It opens the browser and writes a refresh
    token into `src/config.h`.
 4. **Flash** over USB: `pio run -e s3 -t upload` (add `--upload-port <port>` if needed;

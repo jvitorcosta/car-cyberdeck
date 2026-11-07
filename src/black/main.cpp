@@ -28,6 +28,9 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "../util/common/daynight.h"
 #include "../util/black/linkstatus.h"
 #include "net/remote.h"
+#include "car/camsvc.h"
+#include "car/camsound.h"
+#include "ui/camband.h"
 #include "../common/net/remote_config.h"
 #include "../common/net/ota.h"
 #include "ui/otascreen.h"
@@ -226,6 +229,12 @@ void setup() {
     } else {
         playOpening();
     }
+    // Speed cameras (car/camsvc): the list from NVS and the phone's GPS on its own small task; it
+    // runs with the remote off too (the speaker needs no web page). The sound (car/camsound) listens
+    // from before the first fix.
+    camsound::begin();
+    camsvc::onStage(camsound::onStage);
+    camsvc::begin();
     remote::begin(bootscene::active);
     ota::begin(REMOTE_NAME, bootscene::active);
     // The UI loop is watched from here (the core feeds it before each loop()); setup()'s waits for
@@ -416,10 +425,37 @@ void loop() {
         shownPct = ov.pct;
         shownPhase = ov.phase;
         lastMode = -2;     // no screen's mode: the one it covered comes back in full
+        camband::invalidate();   // and the camera band over it
         delay(20);
         return;
     }
     if (lastMode == -2) lastMode = -1;
+
+    // Speed cameras (car/camsvc, ui/camband): while the band and its sign panel show, the screens
+    // below draw through a viewport over the rest (camband::screens: left of the panel, above the
+    // band), so they never flicker under their frames. The GPS -- tag takes no rows: it sits on the
+    // top strip's title and is drawn again after the strip (topDrawn). When the band and panel go,
+    // or the tag goes, the screen redraws whole to take it all back.
+    static cameras::Status cam;
+    static camlist::Point camPt;
+    static bool camMute = false;   // the band's MUTE tag
+    static uint32_t camAt = 0;
+    static int camRows = 0;
+    static bool camTag = false;
+    if (millis() - camAt >= 100) {   // the GPS changes it once a second: no need to lock per frame
+        camAt = millis();
+        camsvc::snapshot(&cam, &camPt, &camMute);
+    }
+    const int camRowsNow = camband::rows(cam);
+    const bool camTagNow = cam.stage == cameras::Stage::NoFix || cam.stage == cameras::Stage::Off;
+    if (camRowsNow < camRows || (camTag && !camTagNow)) lastMode = -1;
+    camRows = camRowsNow;
+    camTag = camTagNow;
+    if (camRows) {
+        const camband::Rect v = camband::screens(cam, s_tft.width(), s_tft.height());
+        s_tft.setViewport(v.x, v.y, v.w, v.h, false);
+    }
+    bool topDrawn = false;   // a screen drew its top strip this loop (over the GPS -- tag)
 
     static uint32_t shownGen = 0;
     static bool walkerOn = false;
@@ -453,6 +489,7 @@ void loop() {
             shownKey = statusscene::frameKey(0, look);
             shownQrGen = s_qrGen;
             ui::drawOffline(s_tft, title, detail, look, 0, qr);
+            topDrawn = true;
         } else if (strcmp(text, shownText) != 0) {   // new text (countdown, phone hint)
             const char* shownDetail = strchr(shownText, '|');   // same two-line layout as before?
             if (strcmp(title, shownTitle) == 0 && detail[0] && shownDetail && shownDetail[1])
@@ -491,6 +528,7 @@ void loop() {
         uint8_t cached;   // a cached badge is posted with the track change: draw it with the title
         if (shared::takeGenre(shownGen, &cached)) shownGenre = cached;
         ui::drawNow(s_tft, view, shownGenre);
+        topDrawn = true;
         s_topSig[0] = '\0';
         pushArtIfValid(shownGen);   // back from a status screen: same track's art is still valid
         drawDialogue(view, shownGen);
@@ -519,6 +557,7 @@ void loop() {
         if (strcmp(sig, s_topSig) != 0) {
             strcpy(s_topSig, sig);
             ui::drawTopStrip(s_tft, st);
+            topDrawn = true;
         }
         if (st.isPlaying && now - lastCd >= CD_FRAME_MS) {   // spinning CD ~6 fps
             lastCd = now;
@@ -550,5 +589,8 @@ void loop() {
             ui::drawWalker(s_tft, view, animMs, walkStep);
         }
     }
+    s_tft.resetViewport();
+    if (topDrawn && camTag) camband::invalidate();
+    camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr, camMute);
     delay(10);
 }
