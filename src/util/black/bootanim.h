@@ -43,14 +43,15 @@ uint8_t brakeLevel(uint32_t u);                  // whole-frame brightness 255 -
 
 // ---- v3 montage: frame to show u ms after tHero (-1 while braking, count when finished) ----
 int montageFrame(uint32_t u, int fps, int count);
-// A cued clip reaches the speaker this long after its play() call: task start, I2S + codec
-// bring-up (~30 ms) and the amp's wake (60 ms, board/s3/sink_es8311). Sounds are cued that early.
-constexpr uint32_t SOUND_LEAD_MS = 100;
+// A cued clip reaches the speaker this long after its play() call: ~10 ms while the audio path is
+// still on from the last 16 kHz clip (board/s3/sink_es8311 keeps it on between clips), ~450 ms from
+// cold (I2S + codec bring-up and the speaker's 400 ms wake). Sounds are cued that early.
+constexpr uint32_t SOUND_LEAD_MS = 10, COLD_SOUND_LEAD_MS = 450;
 // Montage frame at which the finale sound must be cued so it ends with the last frame (the fade
 // to black); 0 if it's longer than the montage, -1 when there's no montage or no finale.
-int finaleStartFrame(int count, int fps, uint32_t finaleMs);
-// The opener (the montage-start sound) is cued SOUND_LEAD_MS before the first photo.
-bool openerDue(uint32_t u);
+int finaleStartFrame(int count, int fps, uint32_t finaleMs, uint32_t leadMs = SOUND_LEAD_MS);
+// The opener (the montage-start sound) is cued leadMs before the first photo.
+bool openerDue(uint32_t u, uint32_t leadMs = SOUND_LEAD_MS);
 // Whether the opener sound (heard from the first montage frame) ends before the finale starts at
 // montage frame finaleAt (-1 = no finale); false when there's no opener clip.
 bool openerFits(int finaleAt, int fps, uint32_t openerMs);

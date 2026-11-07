@@ -23,7 +23,8 @@ class ParseTest(unittest.TestCase):
     def test_parse(self):
         text = "# picks\n[drive]\na.wav\n\n  b_16k.wav  # the clean cut\n[opener]\nlisten/c.wav\n[finale]\n"
         self.assertEqual(gr.parse(text), {"drive": ["a.wav", "b_16k.wav"], "opener": ["listen/c.wav"],
-                                          "finale": []})
+                                          "finale": [], "connect": []})
+        self.assertEqual(gr.parse("[connect]\nchime_16k.wav\n")["connect"], ["chime_16k.wav"])
         with self.assertRaises(SystemExit):
             gr.parse("[intro]\na.wav\n")
         with self.assertRaises(SystemExit):

@@ -232,10 +232,30 @@ line per song with what it knew and which rule decided:
 
 ## Night mode
 
-From **18:00 to 06:00** local time (`TIMEZONE`), once the deck has the time over WiFi, the screen
-goes to an amber palette and the backlight to about a third. It changes only the screen, never
-the lights. Without WiFi there is no clock, so the deck stays in day mode. To check it without
-waiting for evening, build with the `NIGHT_TEST` hook, then clear it:
+From **18:00 to 06:00** local time (`TIMEZONE`), once the deck has the time over WiFi, the
+backlight drops to about a third (85 of 255) and the screen takes the **night palette**: each theme
+in its own hue at full saturation, so the colours stay vivid on the dimmed panel (pale tints go
+grey there). It changes only the screen, never the lights. Without WiFi there is no clock, so the
+deck stays in day mode.
+
+Picked on the panel (TEXT / MID / DIM, then problems):
+
+| Theme | Night colours | Problems |
+|---|---|---|
+| red | `FF0000` `E00000` `BC0000` | white |
+| orange | `FF4600` `E03400` `BC2800` | white |
+| pink | `FF0040` `E00038` `BC0030` | white |
+| purple | `D200FF` `B800E0` `9A00BC` | red |
+| blue | `0046FF` `003CE0` `0032BC` (marine, like the inside light) | red |
+| green (and no theme) | `50FF46` `46E03C` `3ABC32` (phosphor terminal) | red |
+| white | `FFFFFF` `EBEBEB` `D2D2D2` | red |
+| yellow | `FFB400` at all three levels | red |
+
+What the panel taught: it pushes green, so the red, orange and pink carry little or none (a touch
+turns red orange and orange yellow), blue turns pink purple, and a darker yellow reads olive, so the
+yellow stays one colour. A pure red or blue can't reach the day's contrast, so night asks TEXT 3:1
+and DIM 2:1 (`termpal.h`, `test/test_termpal`). To check it without waiting for evening, build with
+the `NIGHT_TEST` hook, then clear it:
 
 ```
 $env:PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST"; pio run -e ledpanel -t upload
@@ -246,11 +266,11 @@ Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 
 While the **INSIDE** light is on and linked, the terminal (main screen, Lights, Lyrics; not the
 boot typing or the touch calibration) takes that light's colour: the same three brightnesses in
-its hue, by day and darker at night. Blue and purple are lighter shades so the text reads; white
-is a pale grey-white by day and the usual amber at night. Problems stay red, except on the red,
+its hue, by day and fully saturated at night (see the table above). By day blue and purple are
+lighter shades so the text reads and white is a pale grey-white. Problems stay red, except on the red,
 orange and pink themes, where they show in white. The colour tiles and chips keep their real
 colours. Cyan takes blue's theme. With the inside light off or out of reach the screen goes back
-to green / amber. `-D THEME_TEST=<0..7>` (red, orange, pink, purple, blue, green, white, yellow)
+to green. `-D THEME_TEST=<0..7>` (red, orange, pink, purple, blue, green, white, yellow)
 forces a theme the same way as `NIGHT_TEST`.
 
 ## Voice and HTTP

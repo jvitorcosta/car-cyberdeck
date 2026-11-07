@@ -77,8 +77,10 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
 - **Night mode** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
   (SNTP; `TIMEZONE` in `src/config.h`, daylight saving included): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
 - **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
-  16 kHz) played through the ES8311 (`board/s3/sink_es8311`, which gives the amp 60 ms to wake
-  before the first sample) in a one-shot task that frees the driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
+  16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task. From cold the
+  speaker gets 400 ms to wake before the first sample (with 60 ms the deck's own mic heard a clip's
+  first ~0.3 s missing; `-D AUDIO_PROBE` logs that test); after a 16 kHz clip the output stays on,
+  sending silence, for 20 s, so the next clip starts at once; `tools/greeting_clip.py` falls back to the default chime at build time.
   The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
@@ -91,13 +93,17 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   slot at random, never last boot's (NVS `boot`/`drive`, `opener`, `finale`): the logo's first,
   then a montage start among the clips that end before it starts (`bootscene::openerFits`, the
   rule the scene applies); the drive's only for the Honda's opening. A slot without a roster plays
-  its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). Serial: `[boot] sounds: drive=…
-  opener=… finale=…`.
+  its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). A fourth roster, `connect.snd`
+  (NVS `connect`), is the WiFi-connected chime: the boot scene cues it (`greeting::playConnect`)
+  once it's online and the greeting is over, and leaves the cruise (or, after a video, starts the
+  montage) when it has played, at most 3 s later; it has no single file, so no roster means no
+  chime. Serial: `[boot] sounds: drive=… opener=… finale=… connect=…`.
 - **Sound timing** (`bootanim::SOUND_LEAD_MS`, `introclock::elapsed`, `greeting::level`) — a clip
-  is heard ~0.1 s after it's cued (task, codec bring-up, the amp's wake), so the pictures follow
+  is heard ~0.45 s after it's cued from cold (task, codec bring-up, the speaker's wake), ~10 ms
+  while the output is still on from the last clip (`greeting::warm`), so the pictures follow
   the sound, not the cue: an intro video's frames run from its sound's first sample (frame 0 holds
-  up to 0.5 s for it), the drive's car lights follow the greeting as heard, the montage start is
-  cued that much before the first photo (in the brake's fade) and the logo sound that much before
+  up to 0.8 s for it), the drive's car lights follow the greeting as heard, the montage start is
+  cued that much (warm or cold) before the first photo (in the brake's fade) and the logo sound that much before
   its frame. Serial: `[greeting] <clip>: out N ms after its cue`.
 - **Boot opening** (`util/intropick`) — `setup()` picks one of four openings each boot:
   your intro video ("kiss"), the Honda's night drive, McQueen's, or the second video ("max").

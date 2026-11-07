@@ -9,8 +9,9 @@ inline int frameAt(uint32_t ms, int fps, int count) {
     const uint32_t i = (uint32_t)((uint64_t)ms * (uint32_t)fps / 1000u);
     return i >= (uint32_t)count ? count : (int)i;
 }
-// The longest frame 0 waits for the video's sound (it's out ~0.1 s after the cue).
-constexpr uint32_t SOUND_WAIT_MS = 500;
+// The longest frame 0 waits for the video's sound (out ~0.45 s after the cue: a 48 kHz clip always
+// starts the audio path cold, bootanim::COLD_SOUND_LEAD_MS).
+constexpr uint32_t SOUND_WAIT_MS = 800;
 // The video's clock at `now`: ms since its sound's first sample (soundAt, millis(); 0 = not yet,
 // one before t0 is an older clip's), so the lips match the voice; 0 (frame 0) until it starts. A
 // sound that hasn't started SOUND_WAIT_MS after t0, or a silent video, runs from t0 instead.

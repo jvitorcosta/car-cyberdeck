@@ -13,7 +13,8 @@ backdrop.bin 153608
 max.bin 1102328
 max.pcm 780000
 shadow.bin 7168
-drive.snd 452298
-opener.snd 486776
-finale.snd 689840
+drive.snd 430838
+opener.snd 393756
+finale.snd 561140
 camvoice.bin 758036
+connect.snd 32204

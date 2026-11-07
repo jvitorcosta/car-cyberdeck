@@ -16,6 +16,14 @@ Gen-3 Pokémon battle, and the car's LED lights by touch, voice, gamepad or watc
 
 </div>
 
+**Status:** finished. It runs in my car; new features still land now and then.
+
+Photos and the story of the build are on the [case study page](https://jvitorcosta.github.io/projects/car-cyberdeck.html).
+
+## Why I built it
+
+I wanted the car to have a Spotify screen that looks like a Pokémon battle, and its LED lights under my control by touch, voice, gamepad or watch. Everything runs on the phone's hotspot, so it needs no server.
+
 CarDeck is firmware for two cheap 2.8" ESP32 touchscreens and a Connect IQ app for a Garmin
 watch. All three meet on the phone's WiFi hotspot; nothing needs a server.
 
@@ -37,7 +45,8 @@ The Pokéface watch face that used to live here moved to
 - **Synced lyrics** in the battle dialogue box, from LRCLIB, including accented Latin and
   Japanese/Chinese text.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
-- **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone.
+- **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone; on the yellow
+  deck every theme keeps its own colour, fully saturated.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, then a
   montage of your own photos. Each boot picks one opening at random, never last boot's: your
   intro video with the log typed over it, the car's night drive, a pixel McQueen's drive, or a

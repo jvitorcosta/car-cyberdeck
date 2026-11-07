@@ -127,17 +127,18 @@ static intropick::Opening pickOpening(bool haveKiss, bool haveMcQueen, bool have
     return (intropick::Opening)o;
 }
 
-// This boot's drive greeting, montage start and Honda logo sounds (util/soundpick): one clip of
-// each roster (data/drive.snd, opener.snd, finale.snd), never last boot's (NVS "boot"/"drive",
-// "opener", "finale"); the montage start only among the clips that end before the logo's starts.
+// This boot's drive greeting, montage start, Honda logo and WiFi-connected sounds (util/soundpick):
+// one clip of each roster (data/drive.snd, opener.snd, finale.snd, connect.snd), never last boot's
+// (NVS "boot"/"drive", "opener", "finale", "connect"); the montage start only among the clips that
+// end before the logo's starts.
 // The drive's is picked only for the Honda's opening. -D SOUND_FORCE=\"drive:3,opener:0\" forces
 // roster indices for testing. A slot without a roster plays its single file (audio/greeting).
 static void pickSounds(intropick::Opening opening) {
     using greeting::Slot;
-    static const char* const KEYS[3] = {"drive", "opener", "finale"};
+    static const char* const KEYS[4] = {"drive", "opener", "finale", "connect"};
     Preferences p;
     p.begin("boot", false);
-    int picked[3] = {-1, -1, -1};
+    int picked[4] = {-1, -1, -1, -1};
     const auto choose = [&](Slot s, const bool* ok) {
         const int n = greeting::rosterCount(s);
         int i = soundpick::pick(esp_random(), p.getInt(KEYS[s], -1), n, ok);
@@ -156,12 +157,13 @@ static void pickSounds(intropick::Opening opening) {
         fits[i] = bootscene::openerFits(greeting::rosterMs(greeting::OPENER, i), greeting::finaleMs());
     choose(greeting::OPENER, fits);
     if (opening == intropick::HONDA) choose(greeting::DRIVE, nullptr);
+    choose(greeting::CONNECT, nullptr);
     p.end();
     const auto label = [&](Slot s) {
         return !greeting::rosterCount(s) ? "file" : picked[s] < 0 ? "-" : greeting::rosterName(s, picked[s]);
     };
-    Serial.printf("[boot] sounds: drive=%s opener=%s finale=%s\n", label(greeting::DRIVE),
-                  label(greeting::OPENER), label(greeting::FINALE));
+    Serial.printf("[boot] sounds: drive=%s opener=%s finale=%s connect=%s\n", label(greeting::DRIVE),
+                  label(greeting::OPENER), label(greeting::FINALE), label(greeting::CONNECT));
 }
 
 static void playOpening();
