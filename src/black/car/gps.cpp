@@ -1,5 +1,4 @@
 #include "gps.h"
-// Before Arduino.h: its newlib <limits.h> defines LINE_MAX as a macro, the name of nmea::Reader's buffer size.
 #include "../../util/car/nmea.h"
 #include <Arduino.h>
 #include <WiFi.h>

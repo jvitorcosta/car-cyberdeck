@@ -15,8 +15,8 @@ public:
     bool feed(char c, uint32_t ms, cameras::Fix* out);
 
 private:
-    static constexpr size_t LINE_MAX = 120;  // an RMC line is ~70 bytes; longer is garbage
-    char line_[LINE_MAX];
+    static constexpr size_t MAX_LINE = 120;  // an RMC line is ~70 bytes; longer is garbage
+    char line_[MAX_LINE];
     size_t len_ = 0;
     bool inLine_ = false;
     uint16_t course_ = 0;

@@ -56,7 +56,7 @@ bool Reader::feed(char c, uint32_t ms, cameras::Fix* out) {
         return parse(ms, out);
     }
     if (c == '\r') return false;
-    if (len_ >= LINE_MAX - 1) {  // overlong: drop it and wait for the next '$'
+    if (len_ >= MAX_LINE - 1) {  // overlong: drop it and wait for the next '$'
         inLine_ = false;
         return false;
     }
