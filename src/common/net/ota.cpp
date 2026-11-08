@@ -181,7 +181,11 @@ bool active() {
 }
 int progress() { return active() ? view().pct : -1; }
 
+#ifdef NO_WIFI_UPDATES  // the yellow deck: USB only (its heap went to Bluedroid), whatever OTA_PASSWORD says
+bool enabled() { return false; }
+#else
 bool enabled() { return OTA_PASSWORD[0] != 0; }
+#endif
 bool listening() { return s_listening.load(); }
 unsigned stackLeft() { return s_task ? (unsigned)uxTaskGetStackHighWaterMark(s_task) : 0u; }
 

@@ -46,7 +46,7 @@ instead, with steps to reproduce and the board and version (first serial line,
   it. Someone who takes a deck's hotspot address, or sniffs the hotspot, learns nothing reusable from
   them. Before a deck's first SNTP answer it can't check a signature (503), and the yellow deck sends
   nothing to the black deck until its own clock is set: it never falls back to the token. The
-  bearer `?k=` stays accepted on those routes because **Siri Shortcuts and the Home Screen page can't
+  bearer `?k=` stays accepted on those routes because **a plain link and the Home Screen page can't
   compute an HMAC**; those still put the token in plain-HTTP URLs, and anyone who sniffs one of them
   on the hotspot has it. The responses aren't signed (they carry nothing secret). On the hotspot the
   yellow deck looks the black deck up by mDNS when its fixed address stops answering as the deck.
@@ -72,9 +72,6 @@ instead, with steps to reproduce and the board and version (first serial line,
   expiry is not checked (the board has no trusted clock during the handshake).
 - **Lyrics, genres and sprites are fetched without certificate checks** (`setInsecure()`):
   they are public data and carry no credentials, and a full check would cost RAM.
-- **The yellow deck's weather is plain HTTP**: ip-api.com (where the car is, from the hotspot's
-  public IP) and Open-Meteo. No credentials go out, but ip-api.com and anyone on the path see the
-  approximate location and the lookups.
 - **The LED controllers have no pairing or password**: they take commands from any Bluetooth LE
   device that connects. While the yellow deck holds their link nobody else can connect (each takes
   one link at a time); while it doesn't, the controllers' own phone app or anyone nearby can.

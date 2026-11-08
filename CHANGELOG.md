@@ -18,6 +18,16 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Removed:** the weather, the speed-camera band, the car-health screens (pre-flight check, trip
+  complete, the trip band and the car's warnings), fill-ups by voice and updates over WiFi. With
+  the PS3 controller on Bluedroid's dual mode the deck had ~16 KB of heap left and crashed (lwIP
+  out of memory) once WiFi joined; without them it keeps ~37 KB (low-water ~30 KB). The deck now
+  does the lights, karaoke, music mode, the PS3 controller and the watch's routes; the car's
+  health is for the OBD deck's own display. Every update goes over USB
+  (`pio run -e ledpanel -t upload`; `ledpanel_ota` is gone); the boot guard stays.
+- **Changed:** the main screen shows the trip's time (`0:16`, over `TRIP`) right of the clock, and
+  the lyrics button and page are called KARAOKE (`[KARAOKE]`, `>KARAOKE: NO SIGNAL`, the log's
+  `[karaoke]`). The link and voice tasks' stacks are smaller (8 → 5 KB, 6 → 4 KB).
 - **Changed:** night mode keeps each theme's own colour, vivid, instead of turning the screen
   amber. From 18:00 to 06:00 the backlight drops to about a third and every theme takes a fully
   saturated night version of its hue (pure red, a deep marine blue, a phosphor-terminal green, one
