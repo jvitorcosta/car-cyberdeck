@@ -107,16 +107,33 @@ bool connectAny() {
     return ok;
 }
 
+// Whether network i is in range (a ~1.6 s scan). A move only goes where this says: in the car
+// the home WiFi isn't, and a blind switch dropped the hotspot for 10-20 s each time the black deck
+// was late.
+static bool inRange(int i) {
+    const int n = WiFi.scanNetworks(false, false, false, 120);
+    bool seen = false;
+    for (int k = 0; k < n && !seen; ++k) seen = WiFi.SSID(k) == WIFI_NETWORKS[i].ssid;
+    WiFi.scanDelete();
+    return seen;
+}
+
+// On a fallback (home WiFi): move to the hotspot once a scan finds it (util/roam).
+static void lookForHotspot() {
+    static uint32_t lookedAt = 0;
+    if (!isOnline() || !roam::lookForPreferred(s_index, millis() - lookedAt)) return;
+    lookedAt = millis();
+    if (!inRange(0)) return;
+    Serial.printf("[wifi] %s is in range, moving to it\n", WIFI_NETWORKS[0].ssid);
+    WiFi.disconnect();
+    if (join(0, 1)) s_rejoin.onResult(true, millis());
+    else connectAny();                       // it went again: back to whatever is there
+}
+
 bool switchNetwork() {
     if (WIFI_NETWORK_COUNT < 2) return false;
     const int next = (s_index < 0 ? 0 : s_index + 1) % WIFI_NETWORK_COUNT;
-    // Only when it's actually in range (a ~1.6 s scan): in the car the home WiFi isn't, and a
-    // blind switch dropped the hotspot for 10-20 s each time the black deck was late.
-    const int n = WiFi.scanNetworks(false, false, false, 120);
-    bool seen = false;
-    for (int k = 0; k < n && !seen; ++k) seen = WiFi.SSID(k) == WIFI_NETWORKS[next].ssid;
-    WiFi.scanDelete();
-    if (!seen) {
+    if (!inRange(next)) {
         Serial.printf("[wifi] %s not in range, staying\n", WIFI_NETWORKS[next].ssid);
         return false;
     }
@@ -167,6 +184,7 @@ void loop() {
     static netup::Watch watch;
     if (!watch.reconnect(WiFi.status() == WL_CONNECTED, (uint32_t)WiFi.localIP())) {
         if (isOnline()) s_rejoin.onResult(true, millis());   // back by itself (the driver's own reconnect)
+        lookForHotspot();
         return;
     }
     if (BACK_OFF && !s_rejoin.due(millis())) return;

@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 namespace net {
-bool connectAny();             // config.h order (the hotspot first; two tries after a drop from it)
+bool connectAny();             // config.h order (the hotspot first; util/roam: how many tries)
 // Move to the next saved network (falls back to connectAny if it isn't there). The retired
 // companion used it to follow the black deck onto its network; nothing calls it now.
 bool switchNetwork();
