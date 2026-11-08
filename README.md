@@ -31,7 +31,7 @@ watch. All three meet on the phone's WiFi hotspot; nothing needs a server.
 | Device | Board | Build | What it does | Manual |
 |---|---|---|---|---|
 | **Black deck** | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | Spotify now playing as a FireRed/Emerald battle: album art, a walking Pokémon, synced lyrics, genre badge; picks each song's colour for the lights | this page, [Architecture](docs/ARCHITECTURE.md) |
-| **Yellow deck** | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `ledpanel` | Drives the car's two LED controllers over Bluetooth: a terminal-style dashboard (clock, weather, trip), colours and presets, the black deck's lyrics, music mode; Siri, PS3 controller and watch control | [docs/yellow-deck.md](docs/yellow-deck.md) |
+| **Yellow deck** | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `ledpanel` | Drives the car's two LED controllers over Bluetooth: a terminal-style dashboard (clock, trip time), colours and presets, karaoke (the black deck's lyrics), music mode; PS3 controller and watch control | [docs/yellow-deck.md](docs/yellow-deck.md) |
 | **Honda City** watch app | Garmin Forerunner 255 | `garmin/carlights` | The lights from the wrist: each zone's colour and level, the presets, music mode, a glance card; and a Spotify playlist picker (through the black deck) | [garmin/README.md](garmin/README.md) |
 
 The yellow deck is optional: the black deck works alone. The watch app needs the yellow deck for
@@ -138,21 +138,16 @@ colours, backlight and audio.
    one is inside is easiest to tell by switching one off.
 2. **Configure** the same `src/config.h`: `LED_INSIDE_MAC` and `LED_OUTSIDE_MAC` (from step 1),
    `WIFI_NETWORKS` (hotspot first), `TIMEZONE`, `REMOTE_TOKEN` (the black deck's; the yellow deck
-   joins WiFi only with it), `OTA_PASSWORD`, and `BLACK_DECK_ADDR` (`172.20.10.10`, the black
+   joins WiFi only with it) and `BLACK_DECK_ADDR` (`172.20.10.10`, the black
    deck's fixed address on the iPhone hotspot; a `config.h` that still says `COMPANION_DECK`
    works too).
-3. **Flash once over USB:** `pio run -e ledpanel -t upload`. This also writes the two-slot
-   partition table; after that, updates go over WiFi from a PC on the hotspot:
-   `pio run -e ledpanel_ota -t upload` (keep the deck powered for a minute after, as above).
+3. **Flash over USB:** `pio run -e ledpanel -t upload`, for every update (the yellow deck takes no
+   updates over WiFi: its heap goes to the two Bluetooth stacks).
 4. **Calibrate the touch:** on the first boot the deck asks you to tap five crosses with the
    pen. To redo it later, hold **BOOT** at power-up or for 2 s at any time.
 5. **Pair a PS3 controller** (optional; DualShock 3): plug it into the PC and write the deck's
    Bluetooth address into it, `python tools/ds3_pair.py <address>` (the boot log's
    `[pad] deck address`). Unplug it and press **PS**.
-6. **Siri:** make a Shortcut that sends what you say to
-   `http://172.20.10.11/say?k=<REMOTE_TOKEN>&text=<words>` and speaks the reply; the steps are in
-   [docs/yellow-deck.md](docs/yellow-deck.md#siri-shortcuts).
-
 To check a new CYD without the lights, flash `hwcheck`: display, colours, orientation, touch.
 
 ### Watch app

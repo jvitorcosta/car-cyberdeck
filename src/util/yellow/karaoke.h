@@ -16,7 +16,7 @@ int cells(uint32_t pos, uint32_t dur, int n);
 // line known (the current one, or the next one's start).
 bool available(bool answered, bool playing, const stateparse::Deck& d);
 // The KARAOKE screen's word in place of the lyrics: ">WRONG KEY" (the deck turned the key down),
-// ">LYRICS: NO SIGNAL" (no state came), ">NOTHING PLAYING" (paused, or no track), ">NO SYNCED
+// ">KARAOKE: NO SIGNAL" (no state came), ">NOTHING PLAYING" (paused, or no track), ">NO SYNCED
 // LYRICS", or "" (sing). The same words whyNot() gives.
 const char* state(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d);
 // Why the Menu's LYRICS item doesn't open, on the Menu's prompt line: ">WRONG KEY", ">LYRICS: NO

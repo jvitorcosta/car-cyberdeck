@@ -7,16 +7,16 @@ CarDeck is three programs that meet on the phone's hotspot: the **black deck** (
 Code the decks share lives in `src/common/` and `src/util/`. See [HISTORY.md](HISTORY.md) for why it is built this way.
 
 ```
-Spotify, LRCLIB, iTunes, PokéAPI (HTTPS)        ip-api.com, Open-Meteo (HTTP)
-               |                                          |
+Spotify, LRCLIB, iTunes, PokéAPI (HTTPS)
+               |
         +-------------+   GET /state, /music (signed)  +-------------+   BLE    +-----------------+
         | black deck  | <----------------------------- | yellow deck | -------> | 2 LED controllers|
         | ESP32-S3    |                                | ESP32 CYD   | <------- | PS3 controller  |
         | env s3      | -----------------------------> | env ledpanel|   BLE    +-----------------+
         +-------------+   UDP 4210 palettes (signed)   +-------------+
                ^                                         ^         ^
-               | phone page, k=                          | k=      | signed, via Garmin Connect
-         iPhone (Safari, Home Screen)            Siri Shortcut    Honda City watch app
+               | phone page, k=                                    | signed, via Garmin Connect
+         iPhone (Safari, Home Screen)                         Honda City watch app
 ```
 
 Paths below drop the deck folder: on the black deck `core/nettask.cpp` is
@@ -218,40 +218,35 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 | Task | Core | What it does |
 |---|---|---|
-| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the screens (Menu, Lights, Karaoke, the car-health Check and Parked: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`, `util/termpal`'s night palette), saves to NVS |
+| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the screens (Menu, Lights, Karaoke: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`, `util/termpal`'s night palette), saves to NVS |
 | `leds-link` | 0 | connects the two LED controllers (`yellow/elklink` on Bluedroid's GATT client, sharing the stack with the PS3 controller's Bluetooth Classic; service FFF0, characteristic FFF3, written by handle; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing. The PS3 controller connects by itself (PS button) |
-| `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply; a fill-up phrase (`fuelbook::parsePhrase`) goes instead to the OBD deck's `/fill` (`carlink::fill`, ~2-3 s at most) and its answer is the reply |
-| `lyrics` | 1, idle | polls the black deck's `/state` (every second on the Lyrics page, every 5 s on the main screen, slower after ten misses: `util/pollpace`), parses it (`util/stateparse`), and keeps music mode alive (`GET /music?on=1` every 10 s) |
+| `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply |
+| `karaoke` | 1, idle | polls the black deck's `/state` (every second on the Karaoke page, every 5 s on the main screen, slower after ten misses: `util/pollpace`), parses it (`util/stateparse`), and keeps music mode alive (`GET /music?on=1` every 10 s) |
 | `music` | 1, idle | while music mode is on: a UDP socket on port 4210 that takes the black deck's signed palettes (`util/wire/musicwire`) |
-| `car` | 1, idle | polls the OBD deck's `/car` (signed; `yellow/carlink`, `util/car/carwire`): every second while it answers, backing off 2, 5, then 10 s while it doesn't; at `172.20.10.12` on the hotspot, by mDNS (`cardeck-obd`) elsewhere (`util/deckaddr`) |
-| `weather` | 1, idle | one per try, every 15 min: the place by IP (`util/geoip`, ip-api.com), then Open-Meteo (`util/weather`), plain HTTP into a 2 KB buffer |
-| `ota` | 0 | the update listener (`net/ota`); the screen shows `util/otapage` |
+
+The deck does lights, karaoke, music mode and the watch's routes only: Bluedroid's dual mode
+(Classic for the PS3 controller, LE for the lights) leaves it ~30 KB of heap with WiFi up, so the
+weather, speed cameras, car health and updates over WiFi were taken off it (the car's health is the
+OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks.
 
 - **Looks** (`util/ledlook`, `util/bothlook`): each page (BOTH, INSIDE, OUTSIDE) has a colour
   swatch, a level and on/off. The swatch table (`ledlook::SWATCHES`) holds each colour's LED mix
   and screen colour: the grid's eight, then the preset-only cyan. Presets: `util/ledpresets`.
   Voice: `util/ledvoice`. Replies and link words: `util/lightstatus`.
-- **Main screen** (`util/dashtext`, `util/tripmeter`, `util/lights/tripclock`): clock, weather,
-  trip, both lights, the prompt line and three buttons.
-- **Lyrics** (`util/karaoke`, `yellow/ui/lyricrun`): the line at the black deck's progress,
+- **Main screen** (`util/dashtext`, `util/tripmeter`, `util/lights/tripclock`): clock and date,
+  the trip's time, both lights, the prompt line and three buttons.
+- **Karaoke** (`util/karaoke`, `yellow/ui/lyricrun`): the line at the black deck's progress,
   Latin-1 in VT323 and Japanese from `data/jp16.bin`.
 - **Music mode** (`util/lights/musiclights`): the palette's main colour snapped to one of the
   grid's eight, the inside light at its level under the palette's cap (40 % floor), the outside at 100 %, a ~3 s fade per new
   song. The pages' looks are never saved over while it runs. On and off from the button, voice
   ("music") or the watch; `/status` says `music=on|off`.
-- **Car health** (`util/car/healthview`): the pre-flight check (A / B) once per power-on when the
-  first fresh snapshot has `checkReady` and the Menu shows (5 s, or held until a tap on a problem),
-  and trip complete (D: `healthview::ParkGate`, only from the Menu; a snapshot with no new `seq` for
-  3 s is an unknown speed). A tap, or the PS3 controller's cross, circle or PS, goes back to the Menu
-  (`deckmenu::Screen::Check` / `Parked`). The Menu's trip band shows `healthview::band` from a
-  fresh snapshot (`--` without one), and `healthview::Warnings` puts a problem on the prompt line in
-  ALERT (critical while moving, any when stopped, each once per 2 min). Without an OBD deck neither
-  screen shows, the band reads `--` and nothing else changes.
 - **Network** (`net/wifi`, `util/{roam,netup,hotspotip,deckaddr}`): the black deck at
   `BLACK_DECK_ADDR` on the hotspot, by mDNS (`cardeck`) elsewhere, kept through blips.
-- **Memory**: no PSRAM, so everything that downloads uses fixed buffers (2 KB for the weather,
-  `statejson::MAX_JSON` for `/state`) and plain HTTP (no TLS next to Bluetooth and WiFi).
-- **Flash**: `min_spiffs.csv`, two 1.9 MB app slots for updates over WiFi; NVS keeps the touch
+- **Memory**: no PSRAM, so everything that downloads uses fixed buffers
+  (`statejson::MAX_JSON` for `/state`) and plain HTTP (no TLS next to Bluetooth and WiFi).
+- **Flash**: `min_spiffs.csv`, two 1.9 MB app slots for the boot guard (updates go over USB only,
+  `NO_WIFI_UPDATES`); NVS keeps the touch
   calibration (`touch`), the looks and the trip (`leds`).
 
 ## OBD deck
@@ -272,7 +267,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
   WiFi, no `/car` and `/fill`, no updates over WiFi (`[net] off (REMOTE_TOKEN empty)`). It still
   reads the car and logs the trips; updates go over USB only.
 - **Bench build** (`obddeck_bench`): `obd/benchlink.cpp` stands in for `obdlink` with a simulated
-  drive (`util/car/benchdrive`). `/car` carries `"sim":1` and the yellow deck marks it SIM; NVS is
+  drive (`util/car/benchdrive`). `/car` carries `"sim":1`; NVS is
   `carsim` and there's no trip log, so a real deck's records stay.
 - **Read-only**: every write to the adapter goes through `obd::allowed()` (mode 01, 03, 07 and the
   adapter's setup; never mode 04 or `ATH1`).
@@ -300,15 +295,14 @@ It answers the yellow deck over the hotspot and never writes to the car.
 | black → yellow | UDP port 4210: the song's palette (v2: boot id, rising counter, 8-byte HMAC tag) | `util/wire/musicwire`, `util/wire/songpalette`; the colour is `util/black/songmood`'s |
 | watch → yellow | `GET /say`, `/state`, `/presets`, `/status` (signed) | replies from `util/lightstatus`, `util/ledpresets` (wire lines), `util/ledvoice` |
 | watch → black | `GET /playlists?offset=N` (a page: `playlists <total> <next>`, then `<id> <name>` lines), `GET /playlists/play?id=` (signed); `502` + Spotify's refusal in words | `util/black/playlists`; read by the watch's `Tunes.mc` |
-| Siri → yellow | `GET /say?k=<REMOTE_TOKEN>&text=...` | bearer key, plain HTTP |
-| yellow → OBD | `GET /car` (signed only, no `k=`): the car snapshot; `GET /fill?p=6.49` (or no `p`; signed only): a full tank, noted whatever the price; answers `ok 6.49` (price taken), `ok none` (none said, the old one stays) or `refused <p as sent>` (outside 3.00-15.00 R$/L, the old one stays) | `util/car/carwire`; `fuelbook::fillUp`; `remotegate::Accept::SignedOnly` |
+| a link → yellow | `GET /say?k=<REMOTE_TOKEN>&text=...` | bearer key, plain HTTP |
 | phone → black | the page `/?k=`, then `/state` and `POST /play` with `k=` | bearer key, plain HTTP |
 
 - **Signing** (`util/wire/sigreq`, `util/wire/hmac256`, `common/net/reqauth`; on the watch
   `Sign.mc`): `t=<unix s>&n=<nonce>&sig=`, the first 16 bytes of HMAC-SHA256 with `REMOTE_TOKEN`
   over `GET|path|sorted params|t|n`. A deck accepts a signature within 2 minutes of its clock,
   once (a ring of the last 32 nonces). Devices never send the key. **The bearer `k=` is still
-  accepted** on the same routes, because Siri Shortcuts and the Home Screen page can't compute an
+  accepted** on the same routes, because a plain link and the Home Screen page can't compute an
   HMAC. Details and limits: [SECURITY.md](../SECURITY.md).
 - **Addresses**: on the iPhone hotspot the black deck pins `172.20.10.10`, the yellow deck
   `172.20.10.11` and the OBD deck `172.20.10.12` (`util/hotspotip`); elsewhere `cardeck.local`,
@@ -326,7 +320,8 @@ It answers the yellow deck over the hotspot and never writes to the car.
   through blips (`deckaddr`). Online means connected with an address; "connected
   without an address" reconnects on the second check in a row (`netup`).
 - **Firmware updates** (`net/ota`, `util/otaview`, `util/bootguard`) — ArduinoOTA on port 3232 on
-  both decks, password `OTA_PASSWORD` (off without one), its own task. The upload writes the other
+  the black deck and the OBD deck (the yellow deck takes USB only, `NO_WIFI_UPDATES`, and keeps
+  the boot guard), password `OTA_PASSWORD` (off without one), its own task. The upload writes the other
   app slot and switches only once its SHA-256 checks out. The bootloader holds new firmware
   pending (IDF app rollback) until it has run a minute online with its listener up
   (`ota::onOnline`, `[ota] update confirmed`): **keep a deck powered for about a minute after an
@@ -335,8 +330,8 @@ It answers the yellow deck over the hotspot and never writes to the car.
   yellow deck: a check while online) and goes back after 3 in a row (`[ota] rolled back`).
 - **Watchdogs** (`common/core/watchdog`) — the task watchdog with a 90 s timeout, above the
   longest legitimate wait (an S3 request's DNS, connect, TLS and body; a BLE connect plus a GATT
-  discovery). The black deck's network task and the yellow deck's link, voice, lyrics, car, music
-  and weather tasks are watched; both `loop()`s use the core's loop watchdog. A hang reboots the deck
+  discovery). The black deck's network task and the yellow deck's link, voice, karaoke and music
+  tasks are watched; both `loop()`s use the core's loop watchdog. A hang reboots the deck
   within 90 s.
 - **Back-offs** — the black deck waits out Spotify's 429 (`netplan::PollBackoff`) and retries a
   refused login 4 s, 8 s, ... up to every 5 min (`netplan::LoginBackoff`); the yellow deck retries
@@ -358,7 +353,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
   - `wire/` (the contracts between the decks): hmac256, lyricstatus, musicwire, sigreq,
     songpalette, statejson, stateparse
   - `lights/` (the LED domain, both decks): hue, ledlook, musiclights, tripclock
-  - `car/` (the car health check: the OBD deck; carwire and healthview also the yellow deck):
+  - `car/` (the car health check: the OBD deck):
     carhealth, carwire, fuelbook, fueleco, healthview, obd, obdble, obdpick, obdplan, triplog, tripsum
   - `common/` (both decks): bootguard, daynight, hotspotip, jsonflat, jsonpath, netdiag, netup,
     otaview, readguard, remotegate, rgb565, roam, text, version
@@ -366,9 +361,9 @@ It answers the yellow deck over the hotspot and never writes to the car.
     genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,
     intropick, linkstatus, sndroster, soundpick, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
     quietboot, ridersprite, songmood (+ songpicks.inc), termblend, walkanim, walkrect
-  - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, geoip, httphead, karaoke,
-    ledpresets, ledvoice, lightstatus, otapage, pollpace, tapguard, termpal, touchcal, touchguard,
-    touchmap, tripmeter, weather
+  - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, httphead, karaoke,
+    ledpresets, ledvoice, lightstatus, pollpace, tapguard, termpal, touchcal, touchguard,
+    touchmap, tripmeter
 - **Host tests** (`test/`, one Unity suite per module, `tools/run_tests.ps1`): every module in
   `src/util/` (`lyricstatus` is tested in `netplan`'s suite, `version` in `bios`'s), plus the pure
   drawing and data modules `black/ui/{accents,car_sprite,carlook,cjkfont,emojifont,icon_map,
@@ -389,4 +384,4 @@ Build flags that are never set in `platformio.ini`; add one for a desk check, th
 | `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
 | `-D NIGHT_TEST` | yellow (`ledpanel`) | Night whatever the time, synced clock or not: the night backlight and palette, with a serial tuner to try night colours and the backlight live (`docs/yellow-deck.md` "Night"; `ledpanel.cpp` `tuneLine`). |
 | `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |
-| `-D HEALTH_TEST=<a\|b\|c\|d>` | yellow (`ledpanel`) | Draws the car-health screens from a canned snapshot instead of the OBD deck's: `a` the pre-flight check, all OK (back to the Menu after 5 s), `b` the check with a battery problem (held until a tap), `c` driving on the Menu, km/L stepping every second (the trip band redraws only that figure: `[car] band: kml`), `d` trip complete (5 s after the Menu shows). The log says `[car] drew screen A/B/D` (`ledpanel.cpp`). |
+

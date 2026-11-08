@@ -10,10 +10,10 @@ namespace termlayout {
 // The Menu's three items (100 px wide), in deckmenu::Item order: the label (BODY) top left, its caps'
 // top ROW_TEXT_Y and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
 // it has one (SMALL, an inverted mini-label: TAG_PAD px of fill around the caps, TAG_RIGHT in from
-// the item's right edge, TAG_BOTTOM up from its bottom): LYRICS's LIVE while it opens, MUSIC MODE's ON
-// or OFF (always one of them). "[LYRICS]" and LIVE side by side don't fit 100 px, so the tag goes under
+// the item's right edge, TAG_BOTTOM up from its bottom): KARAOKE's LIVE while it opens, MUSIC MODE's ON
+// or OFF (always one of them). "[KARAOKE]" and LIVE side by side don't fit 100 px, so the tag goes under
 // the label, and the label always sits high (it doesn't jump when a tag comes).
-constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[LYRICS]", "MUSIC MODE"};
+constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[KARAOKE]", "MUSIC MODE"};
 constexpr int N_MENU_ITEMS = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
 constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 7;
 constexpr const char* LIVE_TAG = "LIVE";
@@ -46,7 +46,7 @@ constexpr const char* BOOT_LINES[] = {"WELCOME TO CYBERDECK", ">SET TERMINAL/INQ
 constexpr int N_BOOT = sizeof(BOOT_LINES) / sizeof(BOOT_LINES[0]);
 constexpr int BOOT_X = 8, BOOT_Y0 = 2, BOOT_DY = 13;
 
-// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, TRIP_BAND, LIGHTS_BAND,
+// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, LIGHTS_BAND,
 // PROMPT_BAND, then the items at the bottom), each band but the prompt line under a MID rule from x 4
 // to 315 (from the clock band down, the next band's first row). Text starts at DASH_X; right-aligned
 // text ends at DASH_RIGHT. A _Y is the caps' top row, a _BASE the baseline (the row under the caps),
@@ -62,24 +62,11 @@ constexpr const char* PAD_LABEL = "PAD";
 constexpr int PAD_GAP = 4, PAD_ICON_W = 19, PAD_NUB_W = 2, PAD_NUB_H = 4, PAD_CELL_W = 3, PAD_CELL_GAP = 1;
 // The header's PAD part, label to nub, from its left edge to DASH_RIGHT.
 inline int padWidth() { return termfont::width(termfont::Face::SMALL, PAD_LABEL) + PAD_GAP + PAD_ICON_W + PAD_NUB_W; }
-// the camera tag right-aligned on the header line (ledpanel's camTick): the black deck's /cam not
-// answering, or (with no band up to say MUTE) the camera beeps muted. No GPS fix is the black deck's
-// to show (its top strip's GPS icon). "CAM MUTE" would run
-// into the title: 7 SMALL cells at most fit after it.
-constexpr const char* CAM_TAG_LOST = "CAM --";
-constexpr const char* CAM_TAG_MUTE = "MUTED";
-// the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the temperature (BIG) with the
-// sky in words (SMALL) under it right of it, right-aligned; then the band's last row, on HILO_BASE:
-// the HI / LO line (SMALL) right-aligned. The caps sit 8 rows apart: rule, clock, date, row, rule.
+// the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the trip's time (BIG) with
+// TRIP_LABEL (SMALL) under it right of it, right-aligned; the band ends at TRIP_RULE_Y.
 constexpr int DASH_SPLIT = 160;
-constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, HILO_BASE = 86, CLOCK_RULE_Y = 94;
-// the trip (util/car/healthview::band): three figures (TITLE, on BAND_FIG_BASE), the trip km from
-// DASH_X, km/L now from BAND_KML_X, the range right-aligned; under them the small line (SMALL, on
-// BAND_SMALL_BASE: the time, R$, volts, coolant) from DASH_X. The figures' caps sit as far under the
-// clock band's rule as the small line's above the band's own (+-1). Each part is redrawn alone in its
-// own box (only what changed, so nothing flashes while driving): the figures' rows split at BAND_KML_X
-// and BAND_RANGE_X (trip | km/L | range), the small line's rows across.
-constexpr int BAND_FIG_BASE = 113, BAND_KML_X = 92, BAND_RANGE_X = 187, BAND_SMALL_BASE = 130, TRIP_RULE_Y = 135;
+constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, TRIP_RULE_Y = 135;
+constexpr const char* TRIP_LABEL = "TRIP";
 // the lights on one row (BODY, on LIGHT_ROW_BASE, the caps centred between the rules): INSIDE left of
 // a vertical MID rule at LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: its label, a chip
 // of its colour as tall as the caps (LIGHT_CHIP_W wide) LIGHT_GAP after it, and LIGHT_GAP after that
@@ -96,15 +83,11 @@ constexpr int PROMPT_BASE = 185;
 // music mode's line: once the song's palette came, MUSIC_PROMPT and its swatch as a MUSIC_CHIP px
 // square (SMALL's caps, on the baseline) MUSIC_CHIP_GAP after it and the swatch's name MUSIC_CHIP_GAP
 // after that (">MUSIC [chip] PINK"); before, MUSIC_WAITING alone; with no palette for a while,
-// MUSIC_NO_SIGNAL alone (not LYRICS's ">LYRICS: NO SIGNAL")
+// MUSIC_NO_SIGNAL alone (not KARAOKE's ">KARAOKE: NO SIGNAL")
 constexpr const char* MUSIC_PROMPT = ">MUSIC";
 constexpr const char* MUSIC_WAITING = ">MUSIC: WAITING";
 constexpr const char* MUSIC_NO_SIGNAL = ">MUSIC: NO SIGNAL";
 constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 5;
-
-// Whether the HI / LO line `s`, right-aligned at DASH_RIGHT, fits the row from DASH_X. When not,
-// ledpanel shows it without its city.
-inline bool hiLoFits(const char* s) { return DASH_X <= DASH_RIGHT - termfont::width(termfont::Face::SMALL, s); }
 
 // Music mode's swatch chip and its name on the prompt line.
 inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, MUSIC_PROMPT) + MUSIC_CHIP_GAP; }
@@ -128,14 +111,5 @@ constexpr int KARAOKE_BIG_CLEAR_Y = 44, KARAOKE_BIG_CLEAR_END = 147;
 constexpr int KARAOKE_NEXT_Y = 156, KARAOKE_NEXT_H = 40, KARAOKE_NEXT_DY = 20;
 // The row of a big-area block's first line's tallest ASCII glyph: n lines dy apart, centred.
 constexpr int karaokeBlockY(int n, int dy) { return KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2; }
-
-// The update page (an update over WiFi, util/otapage), the whole screen: the dashboard's header and
-// its rule, the title (BIG, centred, caps top UPDATE_TITLE_Y), the 10-cell block bar (UPDATE_CELL px
-// cells UPDATE_GAP apart, UPDATE_BAR_H tall, top UPDATE_BAR_Y, centred) and the % under it (TITLE,
-// centred, caps top UPDATE_PCT_Y).
-constexpr int UPDATE_TITLE_Y = 62;
-constexpr int UPDATE_CELL = 22, UPDATE_GAP = 6, UPDATE_BAR_W = 10 * (UPDATE_CELL + UPDATE_GAP) - UPDATE_GAP;
-constexpr int UPDATE_BAR_Y = 120, UPDATE_BAR_H = 28;
-constexpr int UPDATE_PCT_Y = 166;
 
 }  // namespace termlayout

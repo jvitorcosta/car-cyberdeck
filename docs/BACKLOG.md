@@ -4,6 +4,11 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Done (moved out of the lists below)
 
+- **Yellow deck slimmed to lights, karaoke, music mode, the PS3 controller and the watch**
+  (2026-11-08): Bluedroid's dual mode for the PS3 controller left ~16 KB of heap and lwIP aborted
+  once WiFi joined. The weather, speed cameras, car health (screens, trip band, warnings, fill-ups)
+  and updates over WiFi came off it, with Siri's docs; the stacks were trimmed. A desk run with
+  WiFi up: 37 KB free, low-water 30 KB. The car-health screens move to the new display deck.
 - **Yellow deck** (the CYD as the car's light panel): the car LEDs over BLE by touch, voice, the
   controller (Xbox until 2026-11-06, now PS3) and the watch (#13, tested in the car 2026-10-22); the CYBERDECK dashboard, presets,
   LYRICS, weather, trip and themes (#18, tested in the car 2026-10-24: "works great");
@@ -29,9 +34,8 @@ Open items, not scheduled. Newest decisions first within each section.
 - **`blescan` / `bletest` on NimBLE 2** (#31, only compiled): `blescan` lists the LED controllers
   with their addresses; `bletest` connects to both and cycles the colours. Flash `ledpanel` back
   afterwards; no flash erase should be needed any more.
-- **A cut update, by eye** (both decks): stop the PC's upload mid-way. Yellow: `>UPDATE FAILED`
-  for ~3 s, then the screen that was showing, with the lights, lyrics and weather carrying on;
-  also see the `>UPDATING` page on a normal update. Black: grey rail and "Update failed" for ~3 s,
+- **A cut update, by eye** (the black deck; the yellow deck is USB only since 2026-11-08): stop the
+  PC's upload mid-way. Black: grey rail and "Update failed" for ~3 s,
   then the deck polling again. Windows moves the PC back to the home WiFi on its own: check it is
   still on the hotspot before an upload.
 - **Rollback on the device**: upload a build that crashes early (an `abort()` in `setup()`);
@@ -46,15 +50,8 @@ Open items, not scheduled. Newest decisions first within each section.
   home).
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
-- **Car-health screens, by eye** (yellow deck, built 2026-10-29, only the serial log seen): look at
-  screens A, B and D with `-D HEALTH_TEST=a|b|d` and compare with the mockups (the brainstorm's
-  health moments A, B, D): spacing, colours (B's battery lines in ALERT), nothing past 316 px. A
-  shows for 5 s after the boot (RESET to see it again); B holds until a tap; D comes 5 s after the
-  Menu. Then with the OBD deck: A on a real power-on, D after a real stop. Each screen can be saved
-  as a PNG over USB with `python tools/deck_shot.py <port> <out.png>` (about 30 s, touch waits).
-  Captured on the deck on 2026-10-30 and read against the mockups: layout and colours match, nothing
-  past the edge. B's advice lines and A's fuel-trim figure were added after and captured too. Open:
-  the clock in the title wasn't seen (no clock set in those builds).
+- **Car-health screens** came off the yellow deck on 2026-11-08 (its heap); they are for the new
+  display deck. Their layout and mockups stay in git history (`util/car/healthview` is kept).
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
@@ -62,8 +59,8 @@ Open items, not scheduled. Newest decisions first within each section.
   host-tested):
   - With GPS 2 IP closed, both decks show `GPS --` within ~5 s of the hotspot; kill the app while
     parked, drive off: the tag appears.
-  - A 30-min drive with Spotify and the yellow deck's `/cam` poll: `[mem]` largest ≥ 102 KB; free
-    stack ≥ 512 B on the `gps`, `camsnd`, `remote` and the yellow deck's `cam` tasks.
+  - A 30-min drive with Spotify: `[mem]` largest ≥ 102 KB; free stack ≥ 512 B on the `gps`,
+    `camsnd` and `remote` tasks (the yellow deck no longer polls `/cam`).
   - Push a list near 6 KB twice, then an OTA (confirmed) and a reboot: both succeed (NVS room).
   - The alarm over the intro, over the music box and with music mode's mic on: the beeps cut in,
     the clip resumes, the alarm stops once under the limit.
@@ -98,9 +95,8 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Code health
 
-- **Split `src/yellow/ledpanel.cpp`** (~3 000 lines): the link task, the web server, the lyrics
-  and music tasks and the weather are each a candidate file under `src/yellow/`. Wait until the car
-  health work (`feat/car-health`, which adds screens to this file) is merged.
+- **Split `src/yellow/ledpanel.cpp`** (~2 800 lines): the link task, the web server, the karaoke
+  and music tasks are each a candidate file under `src/yellow/`.
 - **`feat/obd`** predates the 2026-10-28 reorganisation and ran on the retired companion. Its OBD
   core moves to the OBD deck in `feat/car-health` (`src/util/car/`); retire the branch once that
   merges. (`feat/voice-agent` is already on the new layout.)
@@ -181,11 +177,12 @@ black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the m
 
 A simulated 10 min drive (`util/car/benchdrive`) in place of the adapter, on a real board: start-up,
 stops for screen D, an overheat at 4:00, a low battery from 7:20, a stored code and the MIL from
-8:50. `/car` says `"sim":1`, and the yellow deck writes SIM on the check, the trip summary and the
-band's small line. Its NVS namespace is `carsim` and it keeps no trip log, so a real deck's records
+8:50. `/car` says `"sim":1` (the yellow deck no longer reads `/car`; the new display deck will show SIM). Its NVS namespace is `carsim` and it keeps no trip log, so a real deck's records
 stay; the trip log is therefore only tested by the normal build. Reflash `obddeck` before the car.
 
 ## Both decks on the hotspot, 30 min, OBD deck without adapter
+
+Stale since 2026-11-08: the yellow deck no longer polls `/car`. Redo it with the new display deck.
 
 Before the car: the yellow deck and the OBD deck on the hotspot together for 30 min, no Vgate.
 - Yellow `[mem]`: the minimum free heap stays above 78 KB with the car task polling `/car`; note
@@ -336,13 +333,18 @@ Portuguese voice commands for the black deck through a cloud agent (spec
 
 ## Ideas
 
+- **Updates over WiFi for a future deck** (taken off the yellow deck 2026-11-08, its heap went to
+  Bluedroid): `net/ota` still serves the black deck and the OBD deck, and a new deck with heap to
+  spare can take it back (drop `NO_WIFI_UPDATES`, add an `_ota` env like `s3_ota`, and the
+  `>UPDATING` page from git history, `util/yellow/otapage`).
+
 - **Camera alerts, next** (`feat/camera-alerts`): MARK and MUTE items on the watch's menu (the
   black deck's `/cam/mark` and `/cam/mute` are ready, signed); the alarm on OBD speed once the OBD
   deck exists (what the dash shows; GPS lags in tunnels and on bridges).
 
 - **Car lights from CarPlay** (researched 2026-10-23, wireless CarPlay in the City). In order:
-  (1) Siri from the steering-wheel button running the voice Shortcut. Nothing to build, so try
-  it on the next drive. Wireless CarPlay uses 5 GHz and the decks 2.4 GHz, so the hotspot should
+  (1) Siri dropped with the yellow deck's slim-down (2026-11-08; an assistant of its own is
+  planned instead). Wireless CarPlay uses 5 GHz and the decks 2.4 GHz, so the hotspot should
   hold; keep Maximize Compatibility on. (2) Tap buttons via a Shortcuts widget on the CarPlay
   dashboard (iOS 26 widgets). This is unproven: Apple's CarPlay guide says a widget can't open a
   non-CarPlay app, and only in-widget buttons work. Test with one shortcut (Get Contents of
@@ -351,8 +353,6 @@ Portuguese voice commands for the black deck through a cloud agent (spec
   Apple's approval of the CarPlay entitlement, and offers only fixed list/grid templates.
 - **Yellow deck, more pages** (spec `docs/superpowers/specs/2026-10-23-yellow-deck-menu-design.md`):
   Car over BLE (once a BLE OBD adapter arrives), Heart, LED effects.
-- **When Siri gets "Sorry"**, the Shortcut asks Claude to turn the phrase into a command
-  ("something cozy" → "purple 30") and sends that instead.
 - **Phone remote, more buttons** (Howl built 2026-10-13): another sound, skip/pause through the
   deck, a screen flash.
 - **Musixmatch as a second lyrics source** (parked 2026-10-07). Official API free plan: API

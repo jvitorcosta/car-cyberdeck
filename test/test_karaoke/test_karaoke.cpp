@@ -86,7 +86,7 @@ void test_state_words() {
     TEST_ASSERT_EQUAL_STRING("", karaoke::state(true, false, true, d));  // sing
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::state(false, true, true, d));
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::state(true, true, true, d));
-    TEST_ASSERT_EQUAL_STRING(">LYRICS: NO SIGNAL", karaoke::state(false, false, true, d));
+    TEST_ASSERT_EQUAL_STRING(">KARAOKE: NO SIGNAL", karaoke::state(false, false, true, d));
     TEST_ASSERT_EQUAL_STRING(">NOTHING PLAYING", karaoke::state(true, false, false, d));  // paused
     stateparse::Deck e = d;
     e.track[0] = 0;
@@ -98,7 +98,7 @@ void test_state_words() {
 
 void test_why_not() {
     stateparse::Deck d = synced();
-    TEST_ASSERT_EQUAL_STRING(">LYRICS: NO SIGNAL", karaoke::whyNot(false, false, true, d));  // not MUSIC's
+    TEST_ASSERT_EQUAL_STRING(">KARAOKE: NO SIGNAL", karaoke::whyNot(false, false, true, d));  // not MUSIC's
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::whyNot(false, true, true, d));
     TEST_ASSERT_EQUAL_STRING(">WRONG KEY", karaoke::whyNot(true, true, true, d));
     TEST_ASSERT_EQUAL_STRING(">NOTHING PLAYING", karaoke::whyNot(true, false, false, d));  // paused

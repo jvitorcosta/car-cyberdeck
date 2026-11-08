@@ -23,7 +23,7 @@ bool available(bool answered, bool playing, const stateparse::Deck& d) {
 
 const char* state(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d) {
     if (wrongKey) return ">WRONG KEY";
-    if (!answered) return ">LYRICS: NO SIGNAL";
+    if (!answered) return ">KARAOKE: NO SIGNAL";
     if (!playing || !d.track[0]) return ">NOTHING PLAYING";
     if (!available(answered, playing, d)) return ">NO SYNCED LYRICS";
     return "";
@@ -31,7 +31,7 @@ const char* state(bool answered, bool wrongKey, bool playing, const stateparse::
 
 const char* whyNot(bool answered, bool wrongKey, bool playing, const stateparse::Deck& d) {
     if (wrongKey) return ">WRONG KEY";
-    if (!answered) return ">LYRICS: NO SIGNAL";
+    if (!answered) return ">KARAOKE: NO SIGNAL";
     if (!playing || !d.track[0]) return ">NOTHING PLAYING";
     return ">NO SYNCED LYRICS";
 }

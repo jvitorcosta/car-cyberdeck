@@ -11,11 +11,8 @@
 #include "../../src/util/yellow/karaoke.h"
 #include "../../src/util/lights/ledlook.h"
 #include "../../src/util/yellow/ledpresets.h"
-#include "../../src/util/yellow/otapage.h"
 #include "../../src/util/yellow/tripmeter.h"
 #include "../../src/util/common/version.h"
-#include "../../src/util/car/healthview.h"
-#include "../../src/util/yellow/weather.h"
 
 using termfont::Face;
 using namespace termlayout;
@@ -143,7 +140,7 @@ void test_menu_items_fit() {
             TEST_ASSERT_TRUE_MESSAGE(ink.bottom + 1 < r.h - TAG_BOTTOM - tagH, label);
         }
     }
-    TEST_ASSERT_EQUAL_STRING("[LYRICS]", MENU_ITEMS[deckmenu::KARAOKE]);
+    TEST_ASSERT_EQUAL_STRING("[KARAOKE]", MENU_ITEMS[deckmenu::KARAOKE]);
     TEST_ASSERT_EQUAL_STRING("MUSIC MODE", MENU_ITEMS[deckmenu::MUSIC]);
 }
 
@@ -209,10 +206,6 @@ void test_boot_lines_fit() {
 
 void test_dash_header_fits() {
     fitsLeft(Face::SMALL, DASH_TITLE, DASH_X, 316);  // the rule's ends, 4 in
-    // a camera tag, right-aligned at DASH_RIGHT, keeps MARGIN from the title's ink
-    const int titleEnd = DASH_X + termfont::width(Face::SMALL, DASH_TITLE);
-    for (const char* tag : {CAM_TAG_LOST, CAM_TAG_MUTE})
-        TEST_ASSERT_TRUE_MESSAGE(titleEnd + MARGIN <= DASH_RIGHT - termfont::width(Face::SMALL, tag), tag);
     between(-1, fromCapTop(Face::SMALL, DASH_TITLE_Y), HEADER_RULE_Y, DASH_TITLE);
     // the PS3 controller's battery: right of the title with a gap, its icon's cells inside the outline
     TEST_ASSERT_LESS_OR_EQUAL_INT(DASH_RIGHT - termlayout::padWidth() - 4,
@@ -221,85 +214,25 @@ void test_dash_header_fits() {
     TEST_ASSERT_TRUE(HEADER_RULE_Y < deckmenu::HEADER.y + deckmenu::HEADER.h);
 }
 
-void test_dash_clock_and_weather_fit() {
+void test_dash_clock_and_trip_fit() {
     // the clock (BIG) and the date (SMALL) left of DASH_SPLIT, whatever the digits / the day
     for (const char* s : {"--:--", "00:00", "23:59", "18:47", "20:08", "11:11"}) fitsLeft(Face::BIG, s, DASH_X, DASH_SPLIT);
     for (const char* s : {"--- -- ---", "WED 23 SEP", "THU 30 NOV", "SAT 28 MAY"}) fitsLeft(Face::SMALL, s, DASH_X, DASH_SPLIT);
-    // the temperature (BIG) and the sky (SMALL) right of it
-    for (const char* s : {"--\xB0" "C", "-10\xB0" "C", "32\xB0" "C", "40\xB0" "C"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
-    for (int code : {0, 1, 3, 45, 51, 61, 71, 80, 85, 95, 999}) fitsRight(Face::SMALL, weather::words(code), DASH_RIGHT, DASH_SPLIT);
-    for (const char* s : {"PARTLY CLOUDY", "THUNDERSTORM", "SNOW SHOWERS"}) fitsRight(Face::SMALL, s, DASH_RIGHT, DASH_SPLIT);
-    // rows: the clock over the date, both over the band's last row (HI / LO), all
-    // between the header rule and the band's
+    // the trip's time (BIG, hours:minutes) and its label (SMALL) right of it
+    for (const char* s : {"0:00", "9:59", "99:59"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
+    fitsRight(Face::SMALL, TRIP_LABEL, DASH_RIGHT, DASH_SPLIT);
+    // rows: the clock over the date, the time over its label, all between the header rule and the band's
     const Rows clock = fromCapTop(Face::BIG, CLOCK_Y), date = fromCapTop(Face::SMALL, DATE_Y);
-    const Rows words = fromCapTop(Face::SMALL, WORDS_Y), row = fromBase(Face::SMALL, HILO_BASE);
-    between(HEADER_RULE_Y, clock, CLOCK_RULE_Y, "clock");
+    const Rows label = fromCapTop(Face::SMALL, WORDS_Y);
+    between(HEADER_RULE_Y, clock, TRIP_RULE_Y, "clock");
     above(clock, date, "clock over the date");
-    above(clock, words, "temperature over the sky");
-    above(date, row, "date over the HI / LO row");
-    above(words, row, "sky over the HI / LO row");
-    between(HEADER_RULE_Y, row, CLOCK_RULE_Y, "HI / LO row");
-    // the band's rule is the first row of the trip band under it (each band starts on the rule above)
-    TEST_ASSERT_EQUAL_INT(deckmenu::TRIP_BAND.y, CLOCK_RULE_Y);
-    // the caps spaced evenly: rule, clock, date, row, rule (within a row of each other)
-    const int gaps[] = {CLOCK_Y - (HEADER_RULE_Y + 1), DATE_Y - (CLOCK_Y + termfont::capHeight(Face::BIG)),
-                        (HILO_BASE - termfont::capHeight(Face::SMALL)) - (DATE_Y + termfont::capHeight(Face::SMALL)),
-                        CLOCK_RULE_Y - HILO_BASE};
-    for (int g : gaps) {
-        for (int h : gaps) TEST_ASSERT_TRUE(g - h <= 1 && h - g <= 1);
-    }
-    // the split clears: the left column's clear ends before the right column's ink starts
-    TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "-10\xB0" "C"));
-    // the HI / LO row's clear reaches up to an accented capital in the HI / LO city ("SÃO PAULO") and
-    // still starts under the date's and the sky's ink (capitals: nothing below their baseline)
-    TEST_ASSERT_TRUE(HILO_BASE - termfont::accentAscent(Face::SMALL) > DATE_Y + termfont::capHeight(Face::SMALL) - 1);
-    TEST_ASSERT_TRUE(HILO_BASE - termfont::accentAscent(Face::SMALL) > WORDS_Y + termfont::capHeight(Face::SMALL) - 1);
-}
-
-// The HI / LO row (the clock band's last): right-aligned, alone on its row, so even the longest
-// city a reading holds (23 characters) fits with the coldest day's temperatures; hiLoFits still
-// guards it (ledpanel drops the city when it says no).
-void test_dash_hilo_row_fits() {
-    char s[48];
-    dashtext::hiLo(true, -10, -20, "ABCDEFGHIJKLMNOPQRSTUVW", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI -10 LO -20  ABCDEFGHIJKLMNOPQRSTUVW", s);
-    TEST_ASSERT_TRUE(hiLoFits(s));
-    fitsRight(Face::SMALL, s, DASH_RIGHT, DASH_X - MARGIN);
-    dashtext::hiLo(true, -10, -20, nullptr, s, sizeof(s));
-    TEST_ASSERT_TRUE(hiLoFits(s));
-    for (const char* w : {"HI -- LO --", ">OFFLINE"}) TEST_ASSERT_TRUE_MESSAGE(hiLoFits(w), w);
-    TEST_ASSERT_FALSE(hiLoFits("HI -10 LO -20  ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGH"));  // what it guards
-}
-
-// The trip band (the driving screen's three figures, util/car/healthview::band): the trip km left,
-// km/L now from BAND_KML_X, the range right-aligned (TITLE, on BAND_FIG_BASE), and under them the
-// small line (SMALL, on BAND_SMALL_BASE: the time, R$, volts, coolant). The widest texts band() can
-// write keep the margin between them; both lines stay between the clock band's rule and the band's
-// own, the figures' caps as far from the rule above as the small line's from the rule below (+-1).
-void test_dash_trip_band_fits() {
-    const healthview::Band wide = healthview::band(9999.0f, 99.9f, 9999.0f, 999U * 3600U + 59U * 60U, 999.99f, 99.9f, 999.0f);
-    TEST_ASSERT_EQUAL_STRING("9999 KM", wide.trip);
-    TEST_ASSERT_EQUAL_STRING("9999 KM LEFT", wide.range);
-    TEST_ASSERT_EQUAL_STRING("999:59  R$ 999,99  99.9V  999C", wide.small);
-    const healthview::Band none = healthview::band(NAN, NAN, NAN, 0, NAN, NAN, NAN);
-    for (const healthview::Band* b : {&wide, &none}) {
-        const int tripEnd = DASH_X + termfont::width(Face::TITLE, b->trip);
-        TEST_ASSERT_TRUE_MESSAGE(BAND_KML_X >= tripEnd + MARGIN, b->trip);
-        fitsRight(Face::TITLE, b->range, DASH_RIGHT, BAND_KML_X + termfont::width(Face::TITLE, b->kmlNow));
-        // each figure's ink inside its own box (the boxes split at BAND_KML_X and BAND_RANGE_X)
-        TEST_ASSERT_TRUE_MESSAGE(BAND_KML_X + termfont::width(Face::TITLE, b->kmlNow) < BAND_RANGE_X, b->kmlNow);
-        TEST_ASSERT_TRUE_MESSAGE(DASH_RIGHT - termfont::width(Face::TITLE, b->range) > BAND_RANGE_X, b->range);
-        TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::width(Face::SMALL, b->small) <= DASH_RIGHT, b->small);
-    }
-    const Rows fig = fromBase(Face::TITLE, BAND_FIG_BASE), small = fromBase(Face::SMALL, BAND_SMALL_BASE);
-    between(CLOCK_RULE_Y, fig, TRIP_RULE_Y, "trip figures");
-    between(CLOCK_RULE_Y, small, TRIP_RULE_Y, "trip small line");
-    above(fig, small, "figures over the small line");
-    TEST_ASSERT_EQUAL_INT(deckmenu::TRIP_BAND.y, CLOCK_RULE_Y);
+    above(clock, label, "trip time over its label");
+    between(HEADER_RULE_Y, date, TRIP_RULE_Y, "date");
+    // the band's rule is the first row of the lights band under it (each band starts on the rule above)
+    TEST_ASSERT_EQUAL_INT(deckmenu::CLOCK_BAND.y + deckmenu::CLOCK_BAND.h, TRIP_RULE_Y);
     TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, TRIP_RULE_Y);
-    const int gapTop = (BAND_FIG_BASE - termfont::capHeight(Face::TITLE)) - (CLOCK_RULE_Y + 1);
-    const int gapBottom = TRIP_RULE_Y - BAND_SMALL_BASE;
-    TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
+    // the split clears: the left column's clear ends before the right column's ink starts
+    TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "99:59"));
 }
 
 // The lights row: IN left, OUT right of the vertical rule at LIGHTS_SPLIT, each its label (BODY), a
@@ -357,11 +290,8 @@ void test_dash_prompt_fits() {
     tripmeter::last(t, last, sizeof(last));
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", last);
     for (const char* m : {static_cast<const char*>(last), PROMPT_IDLE, ">NO SYNCED LYRICS", ">INSIDE: NO LINK", ">OUTSIDE: LINKED",
-                          ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">WRONG KEY", ">LYRICS: NO SIGNAL", ">NOTHING PLAYING",
-                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL,
-                          // the car's warnings (healthview::Warnings: ">" and a problem's why)
-                          ">BATTERY LOW WHILE RUNNING", ">CHECK ENGINE LIGHT ON", ">FUEL TRIM +25% THIS TRIP",
-                          ">ENGINE HOT 130C", ">12 STORED CODES"}) {
+                          ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">WRONG KEY", ">KARAOKE: NO SIGNAL", ">NOTHING PLAYING",
+                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
     const deckmenu::Rect& band = deckmenu::PROMPT_BAND;
@@ -408,7 +338,7 @@ void test_status_fits() {
     const termfont::Font& f = termfont::font(Face::SMALL);
     for (const char* s : {"LINK 2/2", "OUTSIDE: NO LINK", "INSIDE: NO LINK", "NO LINK", ">PURPURA APPLIED", ">INSIDE: NO LINK",
                           ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">NO SYNCED LYRICS", ">WRONG KEY", ">NOTHING PLAYING",
-                          ">LYRICS: NO SIGNAL"}) {
+                          ">KARAOKE: NO SIGNAL"}) {
         for (const char* p = s; *p; p++) {
             const termfont::Glyph& g = f.glyph[static_cast<unsigned char>(*p) - f.first];
             if (g.height == 0) continue;
@@ -428,7 +358,7 @@ void test_karaoke_pitches() {
     fitsCentred(Face::BIG, ">NO SYNCED LYRICS", KARAOKE_W + 2 * MARGIN);
     fitsCentred(Face::BIG, ">WRONG KEY", KARAOKE_W + 2 * MARGIN);
     fitsCentred(Face::BIG, ">NOTHING PLAYING", KARAOKE_W + 2 * MARGIN);  // the state words, on one line
-    fitsCentred(Face::BIG, ">LYRICS: NO SIGNAL", KARAOKE_W + 2 * MARGIN);
+    fitsCentred(Face::BIG, ">KARAOKE: NO SIGNAL", KARAOKE_W + 2 * MARGIN);
     // ledpanel clears a lyric area from as high as its face's accented capitals rise over its first
     // line: the big area (BIG or TITLE, from y 56) into the 12 rows under the body's top (y 44), the
     // next line's (BODY, from y 156) into the 10 rows under the big area (to y 146)
@@ -497,19 +427,6 @@ void test_wrap_with_a_face() {
     }
 }
 
-// The update page (an update over WiFi): under the dashboard's header, the title (BIG, centred) over
-// the 10-cell bar over the % (TITLE, centred), all on the 320x240 screen.
-void test_update_page_fits() {
-    for (otaview::Phase p : {otaview::Phase::Receiving, otaview::Phase::Done, otaview::Phase::Failed}) {
-        fitsCentred(Face::BIG, otapage::title(p), 320);
-    }
-    for (const char* s : {"0%", "57%", "100%"}) fitsCentred(Face::TITLE, s, 320);
-    between(HEADER_RULE_Y, fromCapTop(Face::BIG, UPDATE_TITLE_Y), UPDATE_BAR_Y, "update title");
-    TEST_ASSERT_TRUE(UPDATE_BAR_W == otapage::CELLS * (UPDATE_CELL + UPDATE_GAP) - UPDATE_GAP);
-    TEST_ASSERT_TRUE(UPDATE_BAR_W <= 320 - 2 * DASH_X);
-    between(UPDATE_BAR_Y + UPDATE_BAR_H - 1, fromCapTop(Face::TITLE, UPDATE_PCT_Y), 240, "update %");
-}
-
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_width_follows_tft_espi);
@@ -522,9 +439,7 @@ int main() {
     RUN_TEST(test_chrome_fits);
     RUN_TEST(test_boot_lines_fit);
     RUN_TEST(test_dash_header_fits);
-    RUN_TEST(test_dash_clock_and_weather_fit);
-    RUN_TEST(test_dash_hilo_row_fits);
-    RUN_TEST(test_dash_trip_band_fits);
+    RUN_TEST(test_dash_clock_and_trip_fit);
     RUN_TEST(test_dash_lights_fit);
     RUN_TEST(test_dash_prompt_fits);
     RUN_TEST(test_song_colours_fit);
@@ -532,6 +447,5 @@ int main() {
     RUN_TEST(test_karaoke_pitches);
     RUN_TEST(test_karaoke_japanese_fits);
     RUN_TEST(test_wrap_with_a_face);
-    RUN_TEST(test_update_page_fits);
     return UNITY_END();
 }

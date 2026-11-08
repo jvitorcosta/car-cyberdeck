@@ -39,42 +39,9 @@ void test_date() {
     TEST_ASSERT_EQUAL_STRING("FRI 2", small);  // cut, still terminated
 }
 
-void test_temp() {
-    char s[8];
-    dashtext::temp(true, 31.6, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("32\xB0" "C", s);  // the degree sign, Latin-1 0xB0
-    dashtext::temp(true, -9.5, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("-10\xB0" "C", s);
-    dashtext::temp(true, -0.4, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("0\xB0" "C", s);
-    dashtext::temp(false, 31.6, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("--\xB0" "C", s);
-}
-
-void test_hi_lo() {
-    char s[48];
-    dashtext::hiLo(true, 32.4, 25.6, "Manaus", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI 32 LO 26  MANAUS", s);
-    dashtext::hiLo(true, -9.2, -12.0, "S\xC3\xA3o Paulo", s, sizeof(s));  // "São Paulo": Latin-1, accent kept
-    TEST_ASSERT_EQUAL_STRING("HI -9 LO -12  S\xC3O PAULO", s);
-    dashtext::hiLo(true, 30, 20, "Bras\xC3\xADlia \xE2\x80\x94 DF", s, sizeof(s));  // "Brasília — DF": the dash folded
-    TEST_ASSERT_EQUAL_STRING("HI 30 LO 20  BRAS\xCDLIA - DF", s);
-    dashtext::hiLo(false, 0, 0, "Manaus", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI -- LO --  MANAUS", s);
-    dashtext::hiLo(true, 32.4, 25.6, "", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI 32 LO 26", s);
-    dashtext::hiLo(false, 0, 0, nullptr, s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI -- LO --", s);
-    // the longest city the reading holds (23 characters) still comes whole
-    dashtext::hiLo(true, -9, -12, "abcdefghijklmnopqrstuvw", s, sizeof(s));
-    TEST_ASSERT_EQUAL_STRING("HI -9 LO -12  ABCDEFGHIJKLMNOPQRSTUVW", s);
-}
-
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_weekday);
     RUN_TEST(test_date);
-    RUN_TEST(test_temp);
-    RUN_TEST(test_hi_lo);
     return UNITY_END();
 }

@@ -1,4 +1,4 @@
-# PlatformIO post script for the OTA envs (s3_ota, ledpanel_ota): espota's password is the deck's
+# PlatformIO post script for the OTA envs (s3_ota, obddeck_ota): espota's password is the deck's
 # OTA_PASSWORD, read from src/config.h (git-ignored), so it never sits in platformio.ini.
 Import("env")  # noqa: F821 (provided by PlatformIO/SCons)
 import os
