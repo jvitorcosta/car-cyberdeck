@@ -130,8 +130,13 @@ static const Clip& finaleClip() { return s_hasPick[FINALE] ? s_picked[FINALE] : 
 // Clips playing (task alive, audio output open). Atomic: callers on core 1, clip tasks on either core.
 static std::atomic<int> s_playing{0};
 // One clip at a time on the audio output (audiosink's contract): a clip that starts while another
-// still plays waits here instead of colliding with it. Created by the first play*() call (setup()).
-static SemaphoreHandle_t s_output = nullptr;
+// still plays waits here instead of colliding with it, and so do the camera beeps (beginTones) when
+// no clip plays. Created on first use (a function-local static: thread-safe).
+static SemaphoreHandle_t output() {
+    static SemaphoreHandle_t m = xSemaphoreCreateMutex();
+    return m;
+}
+
 // The clip whose sound came out last and when (millis(), after the amp's wake): the pictures that
 // follow a sound (car lights, intro video) run on this clock, not on their own play() call's.
 static portMUX_TYPE s_heardMux = portMUX_INITIALIZER_UNLOCKED;
@@ -146,25 +151,50 @@ static uint32_t heardAt(const Clip* c) {
     return at;
 }
 
+// The camera beeps cutting in over a clip (pauseFor / beginTones / endTones). The clip checks
+// between its 128-sample writes; parked, it writes nothing (the port plays silence on underflow)
+// and keeps its output open for the beeps. One spinlock over the lot, so a clip can't resume in the
+// instant the beeps take its output.
+static portMUX_TYPE s_parkMux = portMUX_INITIALIZER_UNLOCKED;
+static bool s_paused = false;           // pauseFor() asked, until s_pauseUntil
+static uint32_t s_pauseUntil = 0;
+static bool s_borrowed = false;         // the beeps write on the parked clip's open output
+static int s_parkedRate = 0;            // a clip is parked, its output open at this rate; 0 = none
+static std::atomic<int> s_openRate{0};  // a clip has its output open (parked or not); 0 = none
+static bool s_ownTones = false;         // beginTones opened the output itself (no clip played)
+
+static void holdWhilePaused(int rate) {
+    for (;;) {
+        const uint32_t now = millis();
+        portENTER_CRITICAL(&s_parkMux);
+        const bool hold = s_borrowed || (s_paused && (int32_t)(s_pauseUntil - now) > 0);
+        if (!hold) s_paused = false;
+        s_parkedRate = hold ? rate : 0;
+        portEXIT_CRITICAL(&s_parkMux);
+        if (!hold) return;
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
 
 static void task(void* arg) {
     const Clip* c = (const Clip*)arg;
     const int volume = *c->volume;
-    xSemaphoreTake(s_output, portMAX_DELAY);
+    xSemaphoreTake(output(), portMAX_DELAY);
     const uint32_t cued = s_cuedAt.load();
     const uint32_t t0 = millis();
     if (!audiosink::open(c->rate)) {
-        xSemaphoreGive(s_output);
+        xSemaphoreGive(output());
         s_playing.fetch_sub(1);
         vTaskDelete(nullptr);
     }
+    s_openRate.store(c->rate);
     const uint32_t out = millis();                       // the amp is awake: the first sample is out
     portENTER_CRITICAL(&s_heardMux);
     s_heard = c;
     s_heardAt = out ? out : 1;
     portEXIT_CRITICAL(&s_heardMux);
     int16_t buf[CHUNK];
-    static howl::Synth synth;                            // one clip plays at a time (s_output)
+    static howl::Synth synth;                            // one clip plays at a time (output())
     if (!c->data) synth = howl::Synth();
     for (size_t i = 0; i < c->samples;) {
         size_t n = 0;
@@ -179,10 +209,12 @@ static void task(void* arg) {
             memcpy(&s, c->data + 2 * i, 2);              // embedded data has no alignment guarantee
             buf[n] = (int16_t)((int32_t)s * volume / 100);
         }
+        holdWhilePaused(c->rate);                        // a camera beep goes first
         audiosink::write(buf, n);
     }
+    s_openRate.store(0);
     audiosink::close();
-    xSemaphoreGive(s_output);
+    xSemaphoreGive(output());
     Serial.printf("[greeting] %s: out %u ms after its cue, played %u samples in ~%u ms (clip %u ms)\n",
                   c->name, (unsigned)(out - cued), (unsigned)c->samples, (unsigned)(millis() - t0),
                   (unsigned)(c->samples * 1000 / c->rate));
@@ -191,7 +223,10 @@ static void task(void* arg) {
 }
 
 static void start(const Clip* c, const char* name) {
-    if (!s_output) s_output = xSemaphoreCreateMutex();
+    if (!output()) {
+        Serial.printf("[greeting] %s: no memory for the output's lock\n", name);
+        return;
+    }
     s_cuedAt.store(millis());
     s_playing.fetch_add(1);
     if (xTaskCreate(task, name, 3072, const_cast<Clip*>(c), 1, nullptr) != pdPASS) {
@@ -246,5 +281,62 @@ uint8_t level() {
     const size_t at = (size_t)((uint64_t)ms * c.rate / 1000);
     return loudness::loudness(c.data, c.samples, at, c.rate / 50);
 }
+
+void pauseFor(uint32_t ms) {
+    const uint32_t now = millis();
+    portENTER_CRITICAL(&s_parkMux);
+    s_paused = true;
+    s_pauseUntil = now + ms;
+    portEXIT_CRITICAL(&s_parkMux);
+    // Back once a clip with its output open has stopped writing: it checks every 128 samples
+    // (3-8 ms), so 200 ms is only a bound against a stuck write.
+    for (int k = 0; k < 40; ++k) {
+        portENTER_CRITICAL(&s_parkMux);
+        const bool parked = s_parkedRate != 0;
+        portEXIT_CRITICAL(&s_parkMux);
+        if (parked || s_openRate.load() == 0) return;
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
+
+int beginTones() {
+    if (s_ownTones) return CLIP_RATE;    // still open from the last beep (endTones(true))
+    int rate = 0;
+    portENTER_CRITICAL(&s_parkMux);
+    if (s_parkedRate) {
+        s_borrowed = true;               // keeps the clip parked until endTones, whatever pauseFor said
+        rate = s_parkedRate;
+    }
+    portEXIT_CRITICAL(&s_parkMux);
+    if (rate) return rate;
+    // No clip parked. The lock free means none plays: open the output at the clips' rate (the mic's
+    // too, so music mode's mic can share the port). Taken means a clip is opening or closing it.
+    if (!output() || xSemaphoreTake(output(), 0) != pdTRUE) return 0;
+    if (!audiosink::open(CLIP_RATE)) {
+        xSemaphoreGive(output());
+        return 0;
+    }
+    s_ownTones = true;
+    return CLIP_RATE;
+}
+
+void releaseTones() {
+    if (!s_ownTones) return;
+    s_ownTones = false;
+    audiosink::close();                  // plays out the queued beep first
+    xSemaphoreGive(output());
+}
+
+void endTones(bool keepOpen) {
+    // Kept open, the port plays silence between beeps (tx_desc_auto_clear); a clip waiting for the
+    // output (counted in s_playing from its start) gets it now instead.
+    if (!keepOpen || clipWaiting()) releaseTones();
+    portENTER_CRITICAL(&s_parkMux);
+    s_borrowed = false;                  // a parked clip carries on behind the beep in the DMA queue
+    s_paused = false;
+    portEXIT_CRITICAL(&s_parkMux);
+}
+
+bool clipWaiting() { return s_ownTones && s_playing.load() > 0; }
 
 }

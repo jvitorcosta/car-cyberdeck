@@ -16,6 +16,14 @@ Gen-3 Pokémon battle, and the car's LED lights by touch, voice, gamepad or watc
 
 </div>
 
+**Status:** finished. It runs in my car; new features still land now and then.
+
+Photos and the story of the build are on the [case study page](https://jvitorcosta.github.io/projects/car-cyberdeck.html).
+
+## Why I built it
+
+I wanted the car to have a Spotify screen that looks like a Pokémon battle, and its LED lights under my control by touch, voice, gamepad or watch. Everything runs on the phone's hotspot, so it needs no server.
+
 CarDeck is firmware for two cheap 2.8" ESP32 touchscreens and a Connect IQ app for a Garmin
 watch. All three meet on the phone's WiFi hotspot; nothing needs a server.
 
@@ -86,6 +94,11 @@ git-ignored: copy `include/config.example.h` there first. Both decks build from 
 2. **Configure** `src/config.h`: your WiFi networks (the phone hotspot **first**, see
    [On the hotspot](#on-the-hotspot)), the app's client ID and secret, and your time zone.
    For the phone remote and the yellow deck, set `REMOTE_TOKEN` to a long random string.
+   For speed-camera alerts, the deck reads the iPhone's GPS 2 IP app at `GPS_HOST` / `GPS_PORT`
+   (default `172.20.10.1` / `11123`, the phone on its own hotspot; optional). The camera list is
+   not in this repo: it is built and released in https://github.com/jvitorcosta/open-radars-manaus; `python tools/cameras.py push`
+   sends its latest release to the deck (`--release VERSION` pins one), and `python tools/cameras.py import-car`
+   saves the points you marked in the car for that repo's review map.
 3. **Authorize:** `python tools/spotify_auth.py`. It opens the browser and writes a refresh
    token into `src/config.h`.
 4. **Flash** over USB: `pio run -e s3 -t upload` (add `--upload-port <port>` if needed;

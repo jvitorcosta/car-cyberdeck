@@ -31,6 +31,9 @@ inline void secure(WiFiClientSecure& c) {
 // Spotify requests carry the client secret and tokens: the server must chain to one of the
 // bundled roots (src/common/net/ca_bundle.inc, tools/gen_ca_bundle.py). Bounded handshake.
 void spotify(WiFiClientSecure& c);
+// The camera marks' uploads carry a GitHub token: the same check, against the same bundle (its
+// USERTrust roots are GitHub's).
+inline void github(WiFiClientSecure& c) { spotify(c); }
 // True, and logged once per call, when c's last connect failed because the server's
 // certificate didn't chain to a bundled root (Spotify changed CA: regenerate the bundle).
 bool certRejected(WiFiClientSecure& c, const char* host);

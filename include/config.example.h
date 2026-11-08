@@ -42,6 +42,17 @@ static const int WIFI_NETWORK_COUNT = 2;
 // (Called COMPANION_DECK before 2026-10-28; that name still works.)
 #define BLACK_DECK_ADDR       "172.20.10.10"
 
+// Speed-camera alerts (black deck): the iPhone's GPS 2 IP app serves NMEA over TCP here. The
+// defaults are the phone itself on its hotspot; on the bench, point GPS_HOST at a PC running
+// tools/nmea_replay.py.
+// #define GPS_HOST           "172.20.10.1"
+// #define GPS_PORT           11123
+// Camera marks (the yellow deck's right trigger) go online at once: each becomes an issue in this
+// private repo, over the hotspot. MARKS_TOKEN is a fine-grained GitHub token for that repo alone,
+// with Issues: read and write and nothing else. Empty: the marks stay on the deck (import-car).
+// #define MARKS_REPO         "owner/radar-marks"
+// #define MARKS_TOKEN        ""
+
 // The yellow deck's two LED controllers (ELK-BLEDDM / MELK-... over Bluetooth LE): their addresses,
 // lowercase. To find them, turn the phone's Bluetooth off (a controller takes one link at a time)
 // and run `pio run -e blescan -t upload -t monitor`: it lists every advertiser by name and address.

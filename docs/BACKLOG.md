@@ -58,6 +58,44 @@ Open items, not scheduled. Newest decisions first within each section.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
+- **Camera alerts, owed on the bench** (`feat/camera-alerts`, built 2026-11-03, only compiled and
+  host-tested):
+  - With GPS 2 IP closed, both decks show `GPS --` within ~5 s of the hotspot; kill the app while
+    parked, drive off: the tag appears.
+  - A 30-min drive with Spotify and the yellow deck's `/cam` poll: `[mem]` largest ≥ 102 KB; free
+    stack ≥ 512 B on the `gps`, `camsnd`, `remote` and the yellow deck's `cam` tasks.
+  - Push a list near 6 KB twice, then an OTA (confirmed) and a reboot: both succeed (NVS room).
+  - The alarm over the intro, over the music box and with music mode's mic on: the beeps cut in,
+    the clip resumes, the alarm stops once under the limit.
+  - GPS 2 IP in background mode still sends `$GPRMC`; check its course while stopped.
+  - The OSM tiles load on the place page served from 127.0.0.1.
+  - Mute: a tap on the yellow band shows `MUTE` on both bands and `MUTED` on the Menu's header
+    with no band up; a tap on a Menu item as the band comes up mutes nothing.
+  - Voice (Task 10; `python tools/gen_camvoice.py <WAV dir>`, then `uploadmedia`): the boot log
+    says `[cam] voice: 14 of 14 clips`. Over `tools/nmea_replay.py`, hear each call on the speaker:
+    speed (pōn → 取り締まり → limit), bump and red light (pōn → ご注意), a short call and a limit
+    change between two close points, the alarm (its line, triple beeps, its line again after 6 s,
+    silence once under the limit), GPS lost while driving / back, and the GPS clip at the first fix.
+  - The same calls over a playing intro (48 kHz: the voice resampled, the intro resumes after) and
+    over the music box; an alarm cutting an alert line mid-word; mute mid-line stops it, and the
+    alarm still beeps muted.
+  - Volume: the voice against the beeps (GREETING_VOLUME vs camsound's LEVEL) and over road noise.
+  - Without `camvoice.bin` in the pack: the old beeps for every alert and the alarm, no GPS lines.
+  - `[mem]` 30-min check unchanged with the voice (the clips are read in place from the media
+    pack); `camsnd` free stack (`[cam] sound: ... stackfree=`) ≥ 512 B on its 3 KB.
+  - Sign panel (Task 11; `tools/nmea_replay.py`): the signs read at arm's length in daylight (R-19
+    with two digits in font 7, a 100+ limit in font 4, `--`; the camera badge; the bump diamond; the
+    red-light diamond); the countdown bar shrinks from full and never grows back; `MUTE` under the
+    kind word.
+  - The alarm: only the sign blinks (2 Hz, red face ↔ normal, the digits don't move), `+N` in red
+    under it, the band solid red and steady.
+  - The battle screen's frame rate (walker, CD, notes) with the panel up; the panel and band over
+    each screen (battle, lyrics, status): nothing draws into them, and the screen comes back whole
+    when they go.
+  - Two points a few metres apart on the same heading (a speed camera beside a red light): GPS jitter
+    can swap the active point each fix, and with it the sign and the countdown bar's full width. If
+    a real pair flickers, add hysteresis to the active-point switch.
+
 ## Code health
 
 - **Split `src/yellow/ledpanel.cpp`** (~3 000 lines): the link task, the web server, the lyrics
@@ -305,6 +343,10 @@ it is one or the other.
   deck with that screen open is what works; in the car only the hotspot exists.
 
 ## Ideas
+
+- **Camera alerts, next** (`feat/camera-alerts`): MARK and MUTE items on the watch's menu (the
+  black deck's `/cam/mark` and `/cam/mute` are ready, signed); the alarm on OBD speed once the OBD
+  deck exists (what the dash shows; GPS lags in tunnels and on bridges).
 
 - **Car lights from CarPlay** (researched 2026-10-23, wireless CarPlay in the City). In order:
   (1) Siri from the steering-wheel button running the voice Shortcut. Nothing to build, so try

@@ -1,4 +1,4 @@
-"""Generate src/common/net/ca_bundle.inc: the root certificates the deck trusts for Spotify, in the
+"""Generate src/common/net/ca_bundle.inc: the root certificates the deck trusts for Spotify and GitHub, in the
 format of the ESP32's bundle checker (WiFiClientSecure::setCACertBundle, esp_crt_bundle.c):
   u16 count, then per root: u16 subject length, u16 key length, subject DER, public key DER
 (big-endian), sorted by subject because the checker finds a root by binary search.
@@ -25,6 +25,8 @@ ROOTS = [
     "Certainly Root E1",
     "ISRG Root X1",
     "GTS Root R1",
+    "USERTrust ECC Certification Authority",      # api.github.com via Sectigo E46 (2026-11): camera marks
+    "USERTrust RSA Certification Authority",      # Sectigo's RSA chain, the likeliest switch
 ]
 URL = "https://curl.se/ca/cacert.pem"
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "common", "net", "ca_bundle.inc")
@@ -62,7 +64,8 @@ def subject_and_key(cert):
 def load(pem_text):
     """{name: DER} for every certificate in a curl-style bundle (name on the line before)."""
     out = {}
-    for m in re.finditer(r"^([^\n#=][^\n]*)\n=+\n-----BEGIN CERTIFICATE-----\n(.*?)-----END CERTIFICATE-----",
+    # Since 2026 a "# Fingerprint" comment may sit between the name's rule and the certificate.
+    for m in re.finditer(r"^([^\n#=][^\n]*)\n=+\n(?:#[^\n]*\n)*-----BEGIN CERTIFICATE-----\n(.*?)-----END CERTIFICATE-----",
                          pem_text, re.S | re.M):
         out[m.group(1).strip()] = base64.b64decode("".join(m.group(2).split()))
     return out
