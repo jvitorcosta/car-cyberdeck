@@ -10,6 +10,9 @@
 #include "../../util/black/playerjson.h"
 #include "../../util/common/text.h"
 #include "../../util/black/netplan.h"
+#include "../../util/black/playlists.h"
+#include "../core/mem.h"
+#include <freertos/semphr.h>
 
 // Spotify Web API client: one request per poll (GET /v1/me/player: the song, its progress and the
 // device) on a connection kept open between polls, so a poll costs a request instead of a TLS
@@ -106,6 +109,17 @@ static int refreshToken() {
             jsonpath::num(s_body, "expires_in", &expiresS);
             if (expiresS < 2 * (long)TOKEN_MARGIN_S) expiresS = 2 * TOKEN_MARGIN_S;
             s_tokenExpiry = millis() + (uint32_t)(expiresS - TOKEN_MARGIN_S) * 1000;
+            // The watch's picker lists private playlists only with these (tools/spotify_auth.py's
+            // SCOPES since 2026-11-02): said once, at the first login.
+            static bool told = false;
+            char scope[256];
+            if (!told && jsonpath::str(s_body, "scope", scope, sizeof scope)) {
+                told = true;
+                const bool priv = strstr(scope, "playlist-read-private"), collab = strstr(scope, "playlist-read-collaborative");
+                if (!priv || !collab)
+                    Serial.printf("[spotify] token lacks%s%s: public playlists only, re-run tools/spotify_auth.py\n",
+                                  priv ? "" : " playlist-read-private", collab ? "" : " playlist-read-collaborative");
+            }
         }
     }
     https.end();
@@ -133,13 +147,15 @@ static int login() {
     return rc;
 }
 
-// GET API + path with the access token, on the kept-open connection. Returns the HTTP status
-// (< 0: no answer; a failed token refresh answers with its own status). A 200's body is in
-// s_body; a 429's Retry-After (seconds) in *retryAfterS, else -1.
-static int apiGet(const char* path, int* retryAfterS = nullptr) {
+// METHOD API + path with the access token, on the kept-open connection (body: a PUT's JSON, else
+// nullptr). Returns the HTTP status (< 0: no answer; a failed token refresh answers with its own
+// status). A 200's body is in s_body, and a PUT's error body too (the reason Spotify gives); a
+// 429's Retry-After (seconds) in *retryAfterS, else -1.
+static int apiCall(const char* method, const char* path, const char* body, int* retryAfterS) {
     if (retryAfterS) *retryAfterS = -1;
     s_loginFail = false;
     if (!s_body) return -1;
+    s_body[0] = '\0';
     if (!tokenFresh()) {
         int rc = login();
         if (rc != 200) return rc;
@@ -147,13 +163,15 @@ static int apiGet(const char* path, int* retryAfterS = nullptr) {
     char url[256];
     snprintf(url, sizeof url, "%s%s", API, path);
     static const char* KEYS[] = {"Retry-After"};
+    const bool get = strcmp(method, "GET") == 0;
     for (int attempt = 0; attempt < 2; ++attempt) {
         const bool reused = s_api.connected();
         if (!s_http.begin(s_api, url)) return -1;
         s_http.addHeader("Authorization", s_auth);
+        if (body) s_http.addHeader("Content-Type", "application/json");
         s_http.collectHeaders(KEYS, 1);
         watchdog::feed();
-        int rc = s_http.GET();
+        int rc = get ? s_http.GET() : s_http.sendRequest(method, body ? body : "");
         if (rc < 0 && reused && attempt == 0) {      // the kept connection had gone stale: once more
             s_http.end();
             s_api.stop();
@@ -169,6 +187,8 @@ static int apiGet(const char* path, int* retryAfterS = nullptr) {
         if (rc < 0) netcfg::certRejected(s_api, "api.spotify.com");
         bool keep = rc == 200 || rc == 204;          // bodies we read to the end (or none)
         if (rc == 200 && !readBody(s_http)) { rc = -1; keep = false; }
+        if (!get && rc >= 400 && s_http.getSize() != 0) keep = readBody(s_http);   // small: the reason
+        else if (!get && (rc == 201 || rc == 202)) keep = s_http.getSize() == 0 || readBody(s_http);
         if (rc == 429 && retryAfterS) *retryAfterS = netplan::parseRetryAfter(s_http.header("Retry-After").c_str());
         s_http.end();
         if (!keep) s_api.stop();                     // unread error bodies would poison the next answer
@@ -176,6 +196,8 @@ static int apiGet(const char* path, int* retryAfterS = nullptr) {
     }
     return -1;
 }
+
+static int apiGet(const char* path, int* retryAfterS = nullptr) { return apiCall("GET", path, nullptr, retryAfterS); }
 
 void begin() {
     netcfg::spotify(s_api);
@@ -297,6 +319,120 @@ void poll(AppState& st) {
         }
         txt::copy(st.context, cachedName, sizeof(st.context));
     }
+}
+
+// The watch's playlist picker. The remote task leaves one request here and waits; the network task
+// runs it between its own requests (serveWatch), on the kept-open connection, so it costs no TLS
+// handshake of its own. A request the network task hasn't started when the wait ends is withdrawn;
+// one it has started finishes, and its answer is dropped (seq tells answers apart).
+enum class Job : uint8_t { None, Page, Play };
+constexpr uint32_t WATCH_WAIT_MS = 15000;   // a poll and one per-track step (lyrics: up to ~8 s) at worst
+static portMUX_TYPE s_jobMux = portMUX_INITIALIZER_UNLOCKED;
+static SemaphoreHandle_t s_jobDone = nullptr;
+static Job s_job = Job::None;               // waiting for the network task
+static bool s_jobRunning = false;
+static uint32_t s_jobSeq = 0, s_doneSeq = 0;
+static int s_jobOffset = 0;
+static char s_jobId[playlists::ID_LEN + 1];
+static char s_reply[playlists::REPLY_MAX];
+static int s_replyCode = 0;
+
+static int watchRequest(Job job, int offset, const char* id, char* out, size_t n) {
+    if (n) out[0] = '\0';
+    if (!hasToken()) { txt::copy(out, "No Spotify login", n); return 502; }
+    if (!s_jobDone) s_jobDone = xSemaphoreCreateBinary();   // this task only; serveWatch needs a job first
+    portENTER_CRITICAL(&s_jobMux);
+    const bool busy = !s_jobDone || s_job != Job::None || s_jobRunning;
+    uint32_t seq = 0;
+    if (!busy) {
+        s_job = job;
+        s_jobOffset = offset;
+        txt::copy(s_jobId, id ? id : "", sizeof s_jobId);
+        seq = ++s_jobSeq;
+    }
+    portEXIT_CRITICAL(&s_jobMux);
+    if (busy) { txt::copy(out, "busy", n); return 503; }
+    const uint32_t start = millis();
+    for (;;) {
+        const uint32_t spent = millis() - start;
+        if (spent >= WATCH_WAIT_MS) break;
+        xSemaphoreTake(s_jobDone, pdMS_TO_TICKS(WATCH_WAIT_MS - spent));   // a dropped answer's signal too
+        portENTER_CRITICAL(&s_jobMux);
+        const bool done = s_doneSeq == seq;
+        portEXIT_CRITICAL(&s_jobMux);
+        if (done) {   // nothing writes s_reply until the next request, which this task makes
+            txt::copy(out, s_reply, n);
+            return s_replyCode;
+        }
+    }
+    portENTER_CRITICAL(&s_jobMux);
+    if (s_job != Job::None && s_jobSeq == seq) s_job = Job::None;   // not started: withdrawn
+    portEXIT_CRITICAL(&s_jobMux);
+    txt::copy(out, "Spotify slow: retry", n);
+    return 504;
+}
+
+int watchPlaylists(int offset, char* out, size_t n) { return watchRequest(Job::Page, offset, nullptr, out, n); }
+int watchPlay(const char* id, char* out, size_t n) { return watchRequest(Job::Play, 0, id, out, n); }
+
+static void answer(int code, const char* text) {
+    s_replyCode = code;
+    txt::copy(s_reply, text, sizeof s_reply);
+}
+
+// One page of /v1/me/playlists into s_reply. A page too big for the answer buffer (long
+// descriptions) is asked again at half the size.
+static void runPage(int offset) {
+    for (int limit = playlists::PAGE; limit >= playlists::PAGE / 2; limit /= 2) {
+        char path[64];
+        snprintf(path, sizeof path, "/v1/me/playlists?limit=%d&offset=%d", limit, offset);
+        const int rc = apiGet(path);
+        if (rc == -1 && s_sink.overflow) continue;
+        if (rc == 200 && playlists::writePage(s_body, offset, s_reply, sizeof s_reply) >= 0) {
+            s_replyCode = 200;
+            return;
+        }
+        Serial.printf("[spotify] playlists offset %d: HTTP %d\n", offset, rc);
+        answer(502, rc == 200 ? "Spotify error" : playlists::why(rc, "", false));   // 200: not a page
+        return;
+    }
+    Serial.printf("[spotify] playlists offset %d: page too big\n", offset);
+    answer(502, "Spotify error");
+}
+
+static void runPlay(const char* id) {
+    char body[64];
+    if (!playlists::playBody(id, body, sizeof body)) { answer(400, "bad id"); return; }
+    const int rc = apiCall("PUT", "/v1/me/player/play", body, nullptr);
+    Serial.printf("[spotify] play playlist %s: HTTP %d\n", id, rc);
+    if (rc == 200 || rc == 202 || rc == 204) { answer(200, "playing"); return; }
+    answer(502, playlists::why(rc, s_body, true));
+}
+
+void serveWatch(bool rateLimited) {
+    portENTER_CRITICAL(&s_jobMux);
+    const Job job = s_job;
+    const uint32_t seq = s_jobSeq;
+    const int offset = s_jobOffset;
+    char id[sizeof s_jobId];
+    memcpy(id, s_jobId, sizeof id);
+    if (job != Job::None) { s_job = Job::None; s_jobRunning = true; }
+    portEXIT_CRITICAL(&s_jobMux);
+    if (job == Job::None) return;
+    if (rateLimited) {
+        answer(502, playlists::why(429, "", false));   // asking now would only stretch the wait
+    } else if (!s_api.connected() && mem::byteLargest() < netplan::TLS_NEED) {
+        answer(503, "low memory");   // a handshake now could starve the next poll's
+    } else if (job == Job::Page) {
+        runPage(offset);
+    } else {
+        runPlay(id);
+    }
+    portENTER_CRITICAL(&s_jobMux);
+    s_doneSeq = seq;
+    s_jobRunning = false;
+    portEXIT_CRITICAL(&s_jobMux);
+    xSemaphoreGive(s_jobDone);
 }
 
 }

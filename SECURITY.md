@@ -24,8 +24,9 @@ instead, with steps to reproduce and the board and version (first serial line,
 - **The phone remote is plain HTTP on the local network.** Its token travels in the URL and
   the request, readable by anyone on the same WiFi or hotspot. It gates more than a sound
   effect: on the black deck it guards `GET /state` (now playing, lyrics, the deck's status,
-  network name and trip), `POST /play` (sounds), `POST /trip/reset`, `GET /music` (music mode)
-  and `GET /music/debug`; on the yellow deck `/say`, `/state`, `/presets` and `/status` (the
+  network name and trip), `POST /play` (sounds), `POST /trip/reset`, `GET /music` (music mode),
+  `GET /music/debug`, and `GET /playlists` and `/playlists/play` (the owner's playlist names, and
+  starting one on their Spotify); on the yellow deck `/say`, `/state`, `/presets` and `/status` (the
   car's lights and music mode). The page itself and the Home Screen
   icon are public; they carry no data of their own. The remote is off unless
   `REMOTE_TOKEN` is set; use a long random token and don't reuse it, and only on networks you
@@ -38,7 +39,7 @@ instead, with steps to reproduce and the board and version (first serial line,
   back out, so make it long and random and don't reuse it. Updates aren't signed.
 - **Devices sign; only the phone sends the token.** The yellow deck's requests to the black deck
   (`/state`, `/music`) and the Garmin app's to the yellow deck (`/say`, `/state`, `/presets`,
-  `/status`) carry `t=<unix s>&n=<nonce>&sig=<HMAC-SHA256(REMOTE_TOKEN, method|path|params|t|n),
+  `/status`) and to the black deck (`/playlists`, `/playlists/play`) carry `t=<unix s>&n=<nonce>&sig=<HMAC-SHA256(REMOTE_TOKEN, method|path|params|t|n),
   16 bytes>` instead of the token (`src/util/wire/sigreq.h`, checked against RFC 4231 in
   `test/test_hmac256`). A deck accepts a signature within 2 minutes of its own clock, once (a ring of
   the last 32 nonces; older times are refused outright), compares it in constant time and never logs

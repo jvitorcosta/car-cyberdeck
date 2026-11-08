@@ -32,9 +32,10 @@ watch. All three meet on the phone's WiFi hotspot; nothing needs a server.
 |---|---|---|---|---|
 | **Black deck** | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | Spotify now playing as a FireRed/Emerald battle: album art, a walking Pokémon, synced lyrics, genre badge; picks each song's colour for the lights | this page, [Architecture](docs/ARCHITECTURE.md) |
 | **Yellow deck** | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `ledpanel` | Drives the car's two LED controllers over Bluetooth: a terminal-style dashboard (clock, weather, trip), colours and presets, the black deck's lyrics, music mode; Siri, Xbox pad and watch control | [docs/yellow-deck.md](docs/yellow-deck.md) |
-| **Honda City** watch app | Garmin Forerunner 255 | `garmin/carlights` | The lights from the wrist: each zone's colour and level, the presets, music mode, a glance card | [garmin/README.md](garmin/README.md) |
+| **Honda City** watch app | Garmin Forerunner 255 | `garmin/carlights` | The lights from the wrist: each zone's colour and level, the presets, music mode, a glance card; and a Spotify playlist picker (through the black deck) | [garmin/README.md](garmin/README.md) |
 
-The yellow deck is optional: the black deck works alone. The watch app needs the yellow deck.
+The yellow deck is optional: the black deck works alone. The watch app needs the yellow deck for
+the lights and the black deck for its playlists.
 The Pokéface watch face that used to live here moved to
 [jvitorcosta/garmin-watchfaces](https://github.com/jvitorcosta/garmin-watchfaces).
 
@@ -61,6 +62,9 @@ The Pokéface watch face that used to live here moved to
 - **Phone remote:** with `REMOTE_TOKEN` set, `http://cardeck.local/?k=<token>` on a phone on the
   same network shows what's playing, the deck's status and a Howl button. Add it to the Home
   Screen for a full-screen app. "Waiting for a song..." shows the link as a QR code.
+- **Playlists from the watch:** the Honda City app's PLAYLISTS page lists your Spotify playlists
+  through the black deck (`GET /playlists`, signed) and plays the one you pick on the phone's
+  Spotify (`GET /playlists/play`). Needs Spotify Premium and a phone with Spotify open.
 - **Song colours for the lights:** while the yellow deck's music mode is on, the black deck picks
   each song's colour (your picks, colour words, playlist tags, mood and cover) and sends it
   signed over UDP.
@@ -101,7 +105,9 @@ git-ignored: copy `include/config.example.h` there first. Both decks build from 
    sends its latest release to the deck (`--release VERSION` pins one), and `python tools/cameras.py import-car`
    saves the points you marked in the car for that repo's review map.
 3. **Authorize:** `python tools/spotify_auth.py`. It opens the browser and writes a refresh
-   token into `src/config.h`.
+   token into `src/config.h`. A token made before 2026-11-02 lacks the playlist scopes the watch's
+   picker needs for private and collaborative playlists: run it again, flash, and the boot log stops
+   saying `[spotify] token lacks playlist-read-...`.
 4. **Flash** over USB: `pio run -e s3 -t upload` (add `--upload-port <port>` if needed;
    `pio device list` shows the ports). The S3 keeps its media (see [Make it yours](#make-it-yours))
    in a flash partition of their own: flash them once with `pio run -e s3 -t uploadmedia`, and

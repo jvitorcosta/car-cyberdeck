@@ -11,6 +11,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the hotspot once a minute's scan finds it. Before, a hotspot that wasn't advertising yet lost to
   the home WiFi and the deck stayed there.
 
+### Watch app
+- **Added:** a PLAYLISTS page (the fifth): START lists your Spotify playlists (a page at a time,
+  More for the next, up to 60) and START on one plays it on the phone's Spotify; the page then
+  shows "Playing" and its name, or what went wrong ("Open Spotify on phone", "Needs Spotify
+  Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
+
 ### Yellow deck
 - **Changed:** night mode keeps each theme's own colour, vivid, instead of turning the screen
   amber. From 18:00 to 06:00 the backlight drops to about a third and every theme takes a fully
@@ -19,6 +25,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the rest. The scanlines lose their amber tint.
 
 ### Black deck (S3)
+- **Added:** `GET /playlists?offset=N` and `GET /playlists/play?id=<playlist id>` for the watch,
+  signed like `/state`: one page of `/v1/me/playlists` as text, and start-playback with the
+  playlist as context. Spotify is asked on the network task, on the kept-open connection.
+- **Changed:** `tools/spotify_auth.py` asks for `playlist-read-private` and
+  `playlist-read-collaborative` too; the boot log says when the token lacks them.
 - **Added:** camera alerts for fixed speed cameras, electronic speed bumps and red-light cameras.
   Speed comes from the iPhone's GPS (GPS 2 IP over the hotspot). A speed camera or bump is
   announced at 200 m or 12 s ahead, whichever is further; a red-light camera at 200 m. In the
@@ -84,6 +95,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   themes and red on the rest. No amber palette: each theme keeps its colour.
 - **Changed:** the theme follows the inside look even when that light isn't connected, so a colour
   tapped away from the car still shows on the screen.
+
+### Upgrading
+- To see private and collaborative playlists on the watch, run `python tools/spotify_auth.py`
+  again (it replaces `SPOTIFY_REFRESH_TOKEN` in `src/config.h`) and flash the black deck. Without
+  it the list has your public playlists only.
+- Rebuild the watch app; the yellow deck is unchanged.
 
 ## [2.0.0] - 2026-10-28
 

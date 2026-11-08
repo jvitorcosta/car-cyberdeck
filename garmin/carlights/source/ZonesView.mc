@@ -5,16 +5,19 @@ import Toybox.WatchUi;
 
 // The zone pages, all in the "filled" look (see Fill): BOTH shows inside (left) and outside
 // (right) as two columns filled up to their brightness; INSIDE and OUTSIDE fill the whole face.
-// A fourth page shows the deck's named presets as bars (see PresetBar). A controller that isn't
-// linked says "No link" (the yellow deck's NO LINK).
+// A fourth page shows the deck's named presets as bars (see PresetBar), a fifth the Spotify playlist
+// last started from the watch (Tunes). A controller that isn't linked says "No link" (the yellow
+// deck's NO LINK).
 // Page dots on the right; the status shows while something is being sent or failed.
 class ZonesView extends WatchUi.View {
     var page as Number = BOTH;  // opens on BOTH: every zone is one press away from it
     private var _deck as Deck;
+    private var _tunes as Tunes;
 
-    function initialize(deck as Deck) {
+    function initialize(deck as Deck, tunes as Tunes) {
         View.initialize();
         _deck = deck;
+        _tunes = tunes;
     }
 
     function onUpdate(dc as Dc) as Void {
@@ -43,6 +46,8 @@ class ZonesView extends WatchUi.View {
                  busy || note.length() > 0 ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
         } else if (page == PRESETS) {
             presets(dc, cx, h);
+        } else if (page == PLAYLISTS) {
+            playlists(dc, w, cx, h);
         } else {
             // one zone: its colour filled up from the bottom to its brightness
             var l = _deck.look(page);
@@ -54,14 +59,47 @@ class ZonesView extends WatchUi.View {
                       busy ? _deck.status : gone ? "No link" : "START: change", busy || gone);
         }
 
-        // page dots on the right: BOTH, INSIDE, OUTSIDE, PRESETS from top to bottom
+        // page dots on the right: BOTH, INSIDE, OUTSIDE, PRESETS, PLAYLISTS from top to bottom
         // (black-rimmed, so they read on a coloured half too)
-        for (var i = 0; i < 4; i++) {
+        for (var i = 0; i < PAGES; i++) {
             dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
-            dc.fillCircle(w - 14, cy - 21 + i * 14, 6);
+            dc.fillCircle(w - 14, cy - 28 + i * 14, 6);
             dc.setColor(i == page ? Graphics.COLOR_WHITE : Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.fillCircle(w - 14, cy - 21 + i * 14, 4);
+            dc.fillCircle(w - 14, cy - 28 + i * 14, 4);
         }
+    }
+
+    // The Playlists page: PLAYLISTS on top, the playlist last started from here (or how many there
+    // are, or "Spotify" before the black deck has answered) and the hint or status at the bottom.
+    private function playlists(dc as Dc, w as Number, cx as Number, h as Number) as Void {
+        pill(dc, cx, 40, "PLAYLISTS", Graphics.COLOR_WHITE);
+        var cy = h / 2;
+        var mid = Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER;
+        if (_tunes.playing.length() > 0) {
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, cy - 20, Graphics.FONT_XTINY, "Playing", mid);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, cy + 6, Graphics.FONT_SMALL, fit(dc, _tunes.playing, Graphics.FONT_SMALL, w - 60), mid);
+        } else {
+            var n = _tunes.list.size();
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, cy, Graphics.FONT_SMALL,
+                        n > 0 ? n + (_tunes.more() ? "+" : "") + " playlists" : "Spotify", mid);
+        }
+        var bad = _tunes.status.length() > 0;
+        pill(dc, cx, h - 32, bad ? _tunes.status : "START: pick", bad ? Graphics.COLOR_ORANGE : Graphics.COLOR_WHITE);
+    }
+
+    // text cut (with "...") to fit in maxW pixels.
+    private function fit(dc as Dc, text as String, font as Graphics.FontType, maxW as Number) as String {
+        if (dc.getTextWidthInPixels(text, font) <= maxW) {
+            return text;
+        }
+        var n = text.length();
+        while (n > 1 && dc.getTextWidthInPixels(text.substring(0, n) + "...", font) > maxW) {
+            n--;
+        }
+        return text.substring(0, n) + "...";
     }
 
     // The Presets page: PRESETS on top, each preset's bar as the list will show it (PresetBar; up

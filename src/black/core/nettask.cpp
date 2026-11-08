@@ -296,6 +296,7 @@ static void run(void*) {
             if (s_gen.update(id)) onTrackChange();
             else shared::publish(s_st);
         } else {
+            spclient::serveWatch(s_backoff.active());   // the watch's playlist picker, if it asked
             netplan::Step step = netplan::next(s_work, s_lyricsRetry.ready(now), s_artRetry.ready(now));
             static bool deferred = false;
             if (step != netplan::Step::None) {

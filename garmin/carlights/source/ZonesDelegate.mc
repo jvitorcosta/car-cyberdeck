@@ -5,27 +5,36 @@ import Toybox.Timer;
 import Toybox.WatchUi;
 
 // The zone pages' buttons:
-//   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE -> PRESETS
+//   UP / DOWN: previous / next page, looping BOTH -> INSIDE -> OUTSIDE -> PRESETS -> PLAYLISTS
 //   START:     that zone's list (colours, Brightness >, Off; on BOTH also Music mode); on PRESETS the deck's presets as
-//              bars, START on one applies it                     BACK: leave
+//              bars, START on one applies it; on PLAYLISTS the owner's Spotify playlists, START on one plays it
+//                                                                 BACK: leave
 class ZonesDelegate extends WatchUi.BehaviorDelegate {
     private var _deck as Deck;
+    private var _tunes as Tunes;
     private var _view as ZonesView;
 
-    function initialize(deck as Deck, view as ZonesView) {
+    function initialize(deck as Deck, tunes as Tunes, view as ZonesView) {
         BehaviorDelegate.initialize();
         _deck = deck;
+        _tunes = tunes;
         _view = view;
     }
 
     function onNextPage() as Boolean {
-        _view.page = (_view.page + 1) % 4;
-        WatchUi.requestUpdate();
-        return true;
+        return turn(_view.page + 1);
     }
 
     function onPreviousPage() as Boolean {
-        _view.page = (_view.page + 3) % 4;
+        return turn(_view.page + PAGES - 1);
+    }
+
+    // To page p (mod PAGES). The playlists are asked for the first time their page shows.
+    private function turn(p as Number) as Boolean {
+        _view.page = p % PAGES;
+        if (_view.page == PLAYLISTS && _tunes.total < 0 && _tunes.status.length() == 0) {
+            _tunes.load();
+        }
         WatchUi.requestUpdate();
         return true;
     }
@@ -34,6 +43,9 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
         var zone = _view.page;
         if (zone == PRESETS) {
             return presets();
+        }
+        if (zone == PLAYLISTS) {
+            return playlists();
         }
         var menu = new WatchUi.Menu2({:title => ["Both", "Inside", "Outside"][zone] as String});
         for (var i = 0; i < N_PICK; i++) {
@@ -67,6 +79,101 @@ class ZonesDelegate extends WatchUi.BehaviorDelegate {
         }
         WatchUi.pushView(menu, new PresetMenuDelegate(_deck), WatchUi.SLIDE_LEFT);
         return true;
+    }
+
+    // The Playlists list: each playlist by name, then More while Spotify has more. With none yet
+    // (the black deck didn't answer), START asks again.
+    private function playlists() as Boolean {
+        if (_tunes.list.size() == 0) {
+            _tunes.load();
+            return true;
+        }
+        var menu = new WatchUi.Menu2({:title => "Playlists"});
+        for (var i = 0; i < _tunes.list.size(); i++) {
+            menu.addItem(new WatchUi.MenuItem(_tunes.list[i][1], null, i, {}));
+        }
+        if (_tunes.more()) {
+            menu.addItem(new WatchUi.MenuItem("More", null, :more, {}));
+        }
+        var focus = _tunes.list.size() - 1;  // back on the one last played, else the top
+        while (focus > 0 && !_tunes.list[focus][1].equals(_tunes.playing)) {
+            focus--;
+        }
+        menu.setFocus(focus);
+        WatchUi.pushView(menu, new PlaylistMenuDelegate(_tunes, menu), WatchUi.SLIDE_LEFT);
+        return true;
+    }
+}
+
+// The Playlists list: START on a playlist plays it on the phone's Spotify (through the black deck),
+// buzzes, says "Starting..." under it for STARTING_MS and returns to the pages, where the reply shows
+// ("Playing" and its name, or what went wrong). START on More adds the next page in place.
+class PlaylistMenuDelegate extends WatchUi.Menu2InputDelegate {
+    private const STARTING_MS = 1000;
+    private var _tunes as Tunes;
+    private var _menu as WatchUi.Menu2;
+    private var _timer as Timer.Timer = new Timer.Timer();
+    private var _starting as Boolean = false;
+
+    function initialize(tunes as Tunes, menu as WatchUi.Menu2) {
+        Menu2InputDelegate.initialize();
+        _tunes = tunes;
+        _menu = menu;
+    }
+
+    function onSelect(item as WatchUi.MenuItem) as Void {
+        if (_starting) {
+            return;  // one playlist per visit: the list is on its way out
+        }
+        if (item.getId() == :more) {
+            if (_tunes.page()) {
+                _tunes.onPage = method(:onPage);
+                item.setLabel("Loading...");
+                WatchUi.requestUpdate();
+            }
+            return;
+        }
+        if (!_tunes.play(item.getId() as Number)) {
+            return;  // a page is still loading
+        }
+        _starting = true;
+        if (Attention has :vibrate) {
+            Attention.vibrate([new Attention.VibeProfile(50, 120)]);
+        }
+        item.setSubLabel("Starting...");
+        WatchUi.requestUpdate();
+        _timer.start(method(:leave), STARTING_MS, false);
+    }
+
+    // A page landed (or failed): its playlists replace the More row, which comes back last while
+    // Spotify has more (with the error under it, if the page failed).
+    function onPage() as Void {
+        _tunes.onPage = null;
+        var at = _menu.findItemById(:more);
+        if (at >= 0) {
+            _menu.deleteItem(at);
+        }
+        var from = 0;
+        while (_menu.getItem(from) != null) {
+            from++;
+        }
+        for (var i = from; i < _tunes.list.size(); i++) {
+            _menu.addItem(new WatchUi.MenuItem(_tunes.list[i][1], null, i, {}));
+        }
+        if (_tunes.more()) {
+            _menu.addItem(new WatchUi.MenuItem("More", _tunes.status.length() > 0 ? _tunes.status : null, :more, {}));
+        }
+        WatchUi.requestUpdate();
+    }
+
+    function onBack() as Void {
+        _timer.stop();  // or it would pop the pages too
+        _tunes.onPage = null;
+        leave();
+    }
+
+    function leave() as Void {
+        WatchUi.popView(WatchUi.SLIDE_RIGHT);
     }
 }
 

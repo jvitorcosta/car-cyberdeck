@@ -10,6 +10,8 @@
 //   PresetBar: a preset as a bar, inside and outside filled to their levels; the list's rows
 //   LevelView / LevelDelegate: a zone's brightness, UP/DOWN in 10 % steps
 //   Deck: both lights' state, the presets, the controllers' links, music mode + the request queue
+//   Tunes: the owner's Spotify playlists from the black deck (the PLAYLISTS page); START plays one
+//          (PlaylistMenuDelegate)
 //   HondaGlance: the card in the watch's glance loop (last state the app saw)
 import Toybox.Application;
 import Toybox.Lang;
@@ -30,7 +32,8 @@ class CarLightsApp extends Application.AppBase {
     function getInitialView() as [WatchUi.Views] or [WatchUi.Views, WatchUi.InputDelegates] {
         var deck = new Deck();
         deck.sync();  // show the lights as they are, not a default
-        var view = new ZonesView(deck);
-        return [view, new ZonesDelegate(deck, view)];
+        var tunes = new Tunes();  // asked when its page first shows: the black deck may be off
+        var view = new ZonesView(deck, tunes);
+        return [view, new ZonesDelegate(deck, tunes, view)];
     }
 }
