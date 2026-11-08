@@ -234,7 +234,7 @@ OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks
   and screen colour: the grid's eight, then the preset-only cyan. Presets: `util/ledpresets`.
   Voice: `util/ledvoice`. Replies and link words: `util/lightstatus`.
 - **Main screen** (`util/dashtext`, `util/tripmeter`, `util/lights/tripclock`): clock and date,
-  the trip's time, both lights, the prompt line and three buttons.
+  the trip's time, what the black deck plays (from the karaoke poll), both lights, the prompt line and three buttons.
 - **Karaoke** (`util/karaoke`, `yellow/ui/lyricrun`): the line at the black deck's progress,
   Latin-1 in VT323 and Japanese from `data/jp16.bin`.
 - **Music mode** (`util/lights/musiclights`): the palette's main colour snapped to one of the

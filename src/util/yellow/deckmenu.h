@@ -35,10 +35,10 @@ Rect rect(Screen s, int id);
 
 // Display only: never a hit, never a neighbour.
 // The Menu's bands, top to bottom, each from the rule above it: the header line, the clock and the
-// trip's time, the two lights on one row, the prompt line (the messages, music mode's line), then
-// (the items). A tap in a band doesn't snap to an item; the 4
+// trip's time, what the black deck plays, the two lights on one row, the prompt line (the messages,
+// music mode's line), then (the items). A tap in a band doesn't snap to an item; the 4
 // rows between the prompt line and the items, and those under them, do.
-constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 113};                               // menu
+constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 54}, NOW_BAND{0, 76, 320, 59};       // menu
 constexpr Rect LIGHTS_BAND{0, 135, 320, 31}, PROMPT_BAND{0, 166, 320, 22};                        // menu
 constexpr Rect STATUS{4, 40, 312, 12}, LEVEL{106, 190, 108, 46};  // lights (STATUS: presets too)
 constexpr Rect KARAOKE_BODY{0, 44, 320, 196};                                                    // karaoke

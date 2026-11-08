@@ -12,7 +12,7 @@ bool inside(const Rect& r, int x, int y) { return x >= r.x && x < r.x + r.w && y
 
 bool displayOnly(Screen s, int x, int y) {
     if (s == Screen::Menu) {
-        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(LIGHTS_BAND, x, y) ||
+        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(NOW_BAND, x, y) || inside(LIGHTS_BAND, x, y) ||
                inside(PROMPT_BAND, x, y);
     }
     if (s == Screen::Karaoke) return inside(KARAOKE_BODY, x, y);

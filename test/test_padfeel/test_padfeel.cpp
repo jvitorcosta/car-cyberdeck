@@ -17,10 +17,10 @@ void test_two_buzzes_when_one_it_was_for_is_down() {
 }
 
 void test_leds_show_the_links_and_a_low_battery() {
-    TEST_ASSERT_EQUAL_UINT8(0, padfeel::leds(false, false, false));
-    TEST_ASSERT_EQUAL_UINT8(1, padfeel::leds(true, false, false));
-    TEST_ASSERT_EQUAL_UINT8(3, padfeel::leds(true, true, false));
-    TEST_ASSERT_EQUAL_UINT8(10, padfeel::leds(false, true, true));
+    TEST_ASSERT_EQUAL_UINT8(1, padfeel::leds(false, false, false));  // LED 1: connected, whatever else
+    TEST_ASSERT_EQUAL_UINT8(3, padfeel::leds(true, false, false));
+    TEST_ASSERT_EQUAL_UINT8(7, padfeel::leds(true, true, false));
+    TEST_ASSERT_EQUAL_UINT8(13, padfeel::leds(false, true, true));
 }
 
 void test_buzzes_come_apart_then_stop() {

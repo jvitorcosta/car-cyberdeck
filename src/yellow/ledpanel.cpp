@@ -51,7 +51,7 @@
 // ring on Lights and Karaoke; none is drawn while no controller is connected), cross presses, circle
 // goes back to the Menu; on Lights square is the next page, and on the look pages triangle on/off,
 // L1 / R1 - / +. On any screen START, L2 / R2, SELECT, L1 / R1 and PS are shortcuts for both lights,
-// answered by a buzz, and the pad's LEDs show the links (see "PS3 controller input" below).
+// answered by a buzz, and the pad's LEDs show it is connected and the links (see "PS3 controller input" below).
 // Theme: while the INSIDE look is on, the terminal (Menu, Lights, Karaoke; not the boot typing or the
 // calibration) takes its colour, termpal's three levels of it (problems show in white on the red,
 // orange and pink themes), linked or not: a colour tapped with the lights out of reach still shows.
@@ -885,8 +885,7 @@ static void drawPadBattery() {
 }
 
 // The header: one MID line and its rule (the boot's welcome lines typed out before it), and the
-// controller's battery right-aligned on it. The title ends at x 259; the battery keeps 4 px clear of
-// it (test_termfont).
+// controller's battery right-aligned on it, well clear of the title (test_termfont).
 static void drawHeader() {
     clearBg(deckmenu::HEADER);
     tft.setTextColor(pal(termpal::MID));
@@ -909,7 +908,7 @@ static void drawClock() {
     char date[16];
     dashtext::date(clockMin >= 0, clockY, clockMonth, clockDay, date, sizeof(date));
     const int top = HEADER_RULE_Y + 1;
-    clearBg(RULE_X0, top, DASH_SPLIT - RULE_X0, TRIP_RULE_Y - top);  // down to the band's rule
+    clearBg(RULE_X0, top, DASH_SPLIT - RULE_X0, CLOCK_RULE_Y - top);  // down to the band's rule
     tft.setTextColor(pal(termpal::TEXT));
     text(s, DASH_X, CLOCK_Y, Face::BIG, TL_DATUM);
     tft.setTextColor(pal(termpal::MID));
@@ -928,7 +927,7 @@ static void drawTripTime() {
     char s[16];
     snprintf(s, sizeof(s), "%u:%02u", static_cast<unsigned>(tripShown / 60U), static_cast<unsigned>(tripShown % 60U));
     const int top = HEADER_RULE_Y + 1;
-    clearBg(DASH_SPLIT, top, RULE_X1 - DASH_SPLIT, TRIP_RULE_Y - top);
+    clearBg(DASH_SPLIT, top, RULE_X1 - DASH_SPLIT, CLOCK_RULE_Y - top);
     tft.setTextColor(pal(termpal::TEXT));
     text(s, DASH_RIGHT, CLOCK_Y, Face::BIG, TR_DATUM);
     tft.setTextColor(pal(termpal::MID));
@@ -942,7 +941,7 @@ static void drawTripTime() {
 // light it has lost shows).
 static_assert(N_CTRL == N_LIGHT_LABELS, "a label per light");
 static void drawLightsBand() {
-    const int top = TRIP_RULE_Y + 1;
+    const int top = NOW_RULE_Y + 1;
     clearBg(RULE_X0, top, RULE_X1 - RULE_X0, LIGHTS_RULE_Y - top);
     tft.drawFastVLine(LIGHTS_SPLIT, top, LIGHTS_RULE_Y - top, pal(termpal::MID));
     for (int i = 0; i < N_CTRL; i++) {
@@ -1030,12 +1029,16 @@ static void drawPrompt() {
     placeCursor(songNameX() + text(name, songNameX(), PROMPT_BASE, Face::SMALL, BL_DATUM));
 }
 
+static void drawNowPlaying(bool all);  // with the KARAOKE screen's text drawing, below
+
 // The whole dashboard but its three items (drawAll draws those as buttons).
 static void drawDash() {
     drawHeader();
     drawClock();
     drawTripTime();
-    drawRule(TRIP_RULE_Y);
+    drawRule(CLOCK_RULE_Y);
+    drawNowPlaying(true);
+    drawRule(NOW_RULE_Y);
     drawLightsBand();
     drawRule(LIGHTS_RULE_Y);
     drawPrompt();
@@ -1343,6 +1346,69 @@ static void drawKaraokeBody(bool all) {
         if (px < KARAOKE_W) {
             clearBg(KARAOKE_X + px, KARAOKE_BAR_Y, KARAOKE_W - px, KARAOKE_BAR_H);
             tft.drawFastHLine(KARAOKE_X + px, KARAOKE_BAR_Y + KARAOKE_BAR_H / 2, KARAOKE_W - px, pal(termpal::DIM));
+        }
+    }
+}
+
+// The Menu's now-playing band (termlayout NOW_*), from the same state as KARAOKE: the track and the
+// artist redrawn when the song (or the word shown instead) changes, the time and the progress line
+// when they move (lyricsTick looks every second; the position runs on between polls).
+static char nowShownText[sizeof(stateparse::Deck::track) + sizeof(stateparse::Deck::artist) + 2];
+static char nowShownTime[48];  // room for any two times, so -Wformat-truncation stays quiet
+static int nowShownBar = -1;
+static bool nowShownLive = false;
+
+static void drawNowPlaying(bool all) {
+    const uint32_t now = millis();
+    const bool heard = lyricsHeard();
+    const stateparse::Deck& d = song.deck;
+    const bool hasTrack = heard && !song.wrongKey && d.track[0];
+    const char* say = song.wrongKey ? NOW_WRONG_KEY : !heard ? NOW_NO_SIGNAL : !hasTrack ? NOW_NOTHING : "";
+    static char shown[sizeof(nowShownText)];
+    if (say[0]) snprintf(shown, sizeof(shown), "%s", say);
+    else snprintf(shown, sizeof(shown), "%s|%s", d.track, d.artist);
+    const int textTop = CLOCK_RULE_Y + 1, w = DASH_RIGHT - DASH_X;
+    if (all || strcmp(shown, nowShownText) != 0) {
+        snprintf(nowShownText, sizeof(nowShownText), "%s", shown);
+        clearBg(RULE_X0, textTop, RULE_X1 - RULE_X0, NOW_BAR_Y - textTop);  // the time's box too
+        nowShownTime[0] = 0;
+        if (say[0]) {
+            tft.setTextColor(pal(say == NOW_WRONG_KEY ? termpal::ALERT : termpal::DIM));
+            text(say, DASH_X, NOW_TRACK_Y, Face::TITLE, TL_DATUM);
+        } else {
+            tft.setTextColor(pal(termpal::TEXT));
+            int n = lyricrun::wrap(karaokeItems, karaokeDecode(d.track, true), Face::TITLE, w, 1, karaokeLines);
+            if (n > 0) drawSpan(karaokeLines[0], DASH_X, NOW_TRACK_Y, Face::TITLE, TL_DATUM);
+            tft.setTextColor(pal(termpal::MID));
+            n = lyricrun::wrap(karaokeItems, karaokeDecode(d.artist, true), Face::SMALL, nowArtistW(), 1, karaokeLines);
+            if (n > 0) drawSpan(karaokeLines[0], DASH_X, NOW_ARTIST_Y, Face::SMALL, TL_DATUM);
+        }
+    }
+    const uint32_t pos = hasTrack ? static_cast<uint32_t>(karaoke::progressMs(d, now - song.at)) : 0;
+    char t[sizeof(nowShownTime)];
+    t[0] = 0;
+    if (hasTrack && !d.playing) {
+        snprintf(t, sizeof(t), "%s", NOW_PAUSED);
+    } else if (hasTrack && d.durationMs > 0) {
+        const unsigned p = pos / 1000U, l = d.durationMs / 1000U;
+        snprintf(t, sizeof(t), "%u:%02u / %u:%02u", p / 60U, p % 60U, l / 60U, l % 60U);
+    }
+    if (strcmp(t, nowShownTime) != 0 || (all && t[0])) {
+        snprintf(nowShownTime, sizeof(nowShownTime), "%s", t);
+        const int x0 = DASH_RIGHT - nowTimeW();
+        clearBg(x0, NOW_ARTIST_Y - 2, RULE_X1 - x0, termfont::capHeight(Face::SMALL) + 2 + termfont::descent(Face::SMALL));
+        tft.setTextColor(pal(termpal::DIM));
+        if (t[0]) text(t, DASH_RIGHT, NOW_ARTIST_Y, Face::SMALL, TR_DATUM);
+    }
+    const int px = karaoke::cells(pos, hasTrack ? d.durationMs : 0, w);
+    const bool live = hasTrack && d.playing;
+    if (all || px != nowShownBar || live != nowShownLive) {
+        nowShownBar = px;
+        nowShownLive = live;
+        if (px > 0) tft.fillRect(DASH_X, NOW_BAR_Y, px, NOW_BAR_H, pal(live ? termpal::TEXT : termpal::MID));
+        if (px < w) {
+            clearBg(DASH_X + px, NOW_BAR_Y, w - px, NOW_BAR_H);
+            tft.drawFastHLine(DASH_X + px, NOW_BAR_Y + NOW_BAR_H / 2, w - px, pal(termpal::DIM));
         }
     }
 }
@@ -1756,7 +1822,7 @@ static void act() {
 // Shortcuts, on any screen (both lights; padfeel buzzes once, twice when a light isn't linked):
 //   START: lights on / off    L2 / R2: previous / next preset    SELECT: music mode on / off
 //   L1 / R1 (off the look pages): both lights - / +    PS: back to the Menu
-// The player LEDs: 1 the inside light linked, 2 the outside one, 4 the pad's battery low.
+// The player LEDs: 1 connected, 2 the inside light linked, 3 the outside one, 4 the pad's battery low.
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
 // redrawn. On Lights, erasing the old ring can notch its button's edge, so that button is redrawn.
@@ -2252,6 +2318,11 @@ static void lyricsTick() {
     if (screen == Screen::Menu) {
         const int item = M_ITEM0 + deckmenu::KARAOKE;
         if (karaokeReady() != karaokeShownReady) drawButton(item, pressedNow(item));
+        static uint32_t nowAt = 0;
+        if (fresh || millis() - nowAt >= 1000) {
+            nowAt = millis();
+            drawNowPlaying(false);
+        }
         return;
     }
     if (screen != Screen::Karaoke) return;

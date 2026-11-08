@@ -51,10 +51,15 @@ labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; 
 [Night](#night); `src/util/yellow/termpal.h` lists each one's figure).
 
 - **Main screen**, top to bottom; it puts first what the car's panel and CarPlay don't show:
-  - the header `CYBERDECK // HONDA CITY TOURING 2022`;
+  - the header `HONDA CITY TOURING`, with the PS3 controller's battery at the right;
   - the clock big with the date under it (`FRI 23 OCT`; `--:--` until WiFi has synced the
     clock), and on the right the trip's time big (`0:16`, hours:minutes since the deck started)
     over `TRIP` (dim);
+  - what the black deck plays: the track (in capitals) over the artist (dim), the time on the
+    artist's row (`1:23 / 3:45`, `PAUSED` while paused) and a progress line under them. Without a
+    song it reads `>NOTHING PLAYING`, `>NO SIGNAL` (the black deck doesn't answer) or `>WRONG KEY`
+    (red). It comes from the same poll as karaoke (every 5 s on this screen; the time runs on
+    between polls);
   - both lights on one row: `IN`, a chip of its colour, its name and level (`ROSE 40%`) on the
     left, `OUT` the same on the right; `OFF` (dim) for a light that is off, `-- NO LINK` (red)
     when the deck has no link to it;
@@ -100,8 +105,8 @@ labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; 
 - **PS3 shortcuts**, on any screen, for both lights: **START** on / off, **L2 / R2** the previous /
   next preset, **SELECT** music mode on / off, **L1 / R1** `-` / `+` (on a look page they stay that
   page's), **PS** back to the main screen. The controller buzzes once when a shortcut went out, twice
-  when a light isn't connected. Its LEDs: **1** the inside light connected, **2** the outside one,
-  **4** its own battery low. Its battery shows at the top right of the main screen ("PAD" and four
+  when a light isn't connected. Its LEDs: **1** connected to the deck (always lit while it is),
+  **2** the inside light connected, **3** the outside one, **4** its own battery low. Its battery shows at the top right of the main screen ("PAD" and four
   cells; red when it's dying, filling round while it charges).
 
 ## Presets
