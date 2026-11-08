@@ -12,11 +12,10 @@
 //  - the S3 network task, one request (fed before each): DNS up to 15 s (lwIP's own limit) +
 //    connect 5 s (HTTPClient) + TLS handshake 8 s (netcfg) + the head 8 s + an image body's 20 s
 //    deadline = 56 s;
-//  - the yellow deck's link task, one light (fed before each): connect ~13 s (4 s x 3 tries) + one
-//    GATT discovery that runs into the 30 s ATT timeout = ~45 s; the Xbox controller (fed after):
-//    two connects of ~16 s (5 s x 3) + one discovery into the ATT timeout = ~62 s;
+//  - the yellow deck's link task, one light (fed before each): a connect waited on up to 35 s (the
+//    stack's own 30 s timeout) + a discovery waited on up to 10 s = ~45 s (yellow/elklink);
 //  - a WiFi join (fed before each try): 8 s + ~1.2 s of pings.
-// 90 s leaves over 1.4x on the worst of them (1.6x on the S3's), so a slow hotspot or a slow light
+// 90 s leaves over 1.6x on the worst of them (the S3's), so a slow hotspot or a slow light
 // never trips it; a real hang reboots the deck within 90 s instead of never.
 namespace watchdog {
 constexpr uint32_t TIMEOUT_S = 90;

@@ -32,6 +32,19 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - **Fixed:** a synced entry with fewer than 3 lines (one "Nightcall" entry holds only its first
   line) counts as plain: the plain text read before it stays, and the search looks for a full one.
 
+### Yellow deck (CYD, `ledpanel`)
+- **Changed:** a PS3 controller (DualShock 3) replaces the Xbox controller. Same layout: the D-pad
+  moves the focus, cross presses, circle goes back, square is the next page, triangle on/off,
+  L1 / R1 `-` / `+`. It speaks Bluetooth Classic, so the deck moved from NimBLE to Bluedroid in
+  dual mode, and the lights' BLE link is now `yellow/elklink` on Bluedroid's GATT client.
+  `tools/ds3_pair.py` writes the deck's address into the controller over USB.
+- **Added:** controller shortcuts on any screen: START lights on / off, L2 / R2 previous / next
+  preset, SELECT music mode, L1 / R1 both lights `-` / `+`, PS back to the main screen. The
+  controller buzzes once when a shortcut went out (twice when a light isn't connected), and its LEDs
+  show which lights are connected (1 inside, 2 outside; 4 its battery low).
+- **Added:** the controller's battery on the main screen's header ("PAD" and four cells).
+- **Removed:** Xbox controller support, `lib/xboxpad` and the `xboxtest` diagnostic.
+
 ## [2.0.0] - 2026-10-28
 
 The CYD became the **yellow deck**, which drives the car's LED lights, and a Garmin watch app

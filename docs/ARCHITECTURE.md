@@ -10,7 +10,7 @@ Spotify, LRCLIB, iTunes, PokéAPI (HTTPS)        ip-api.com, Open-Meteo (HTTP)
                |                                          |
         +-------------+   GET /state, /music (signed)  +-------------+   BLE    +-----------------+
         | black deck  | <----------------------------- | yellow deck | -------> | 2 LED controllers|
-        | ESP32-S3    |                                | ESP32 CYD   | <------- | Xbox controller |
+        | ESP32-S3    |                                | ESP32 CYD   | <------- | PS3 controller  |
         | env s3      | -----------------------------> | env ledpanel|   BLE    +-----------------+
         +-------------+   UDP 4210 palettes (signed)   +-------------+
                ^                                         ^         ^
@@ -197,8 +197,8 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 | Task | Core | What it does |
 |---|---|---|
-| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the Xbox controller's input, the three screens (`util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, night mode and the theme (`util/termpal`), saves to NVS |
-| `leds-link` | 0 | connects the two LED controllers (NimBLE 2; service FFF0, characteristic FFF3; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing; scans for the Xbox controller every 15 s while none is connected |
+| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the three screens (`util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, night mode and the theme (`util/termpal`), saves to NVS |
+| `leds-link` | 0 | connects the two LED controllers (`yellow/elklink` on Bluedroid's GATT client, sharing the stack with the PS3 controller's Bluetooth Classic; service FFF0, characteristic FFF3, written by handle; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing. The PS3 controller connects by itself (PS button) |
 | `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply |
 | `lyrics` | 1, idle | polls the black deck's `/state` (every second on the Lyrics page, every 5 s on the main screen, slower after ten misses: `util/pollpace`), parses it (`util/stateparse`), and keeps music mode alive (`GET /music?on=1` every 10 s) |
 | `music` | 1, idle | while music mode is on: a UDP socket on port 4210 that takes the black deck's signed palettes (`util/wire/musicwire`) |
@@ -220,9 +220,9 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 - **Network** (`net/wifi`, `util/{roam,netup,hotspotip,deckaddr}`): the black deck at
   `BLACK_DECK_ADDR` on the hotspot, by mDNS (`cardeck`) elsewhere, kept through blips.
 - **Memory**: no PSRAM, so everything that downloads uses fixed buffers (2 KB for the weather,
-  `statejson::MAX_JSON` for `/state`) and plain HTTP (no TLS next to NimBLE and WiFi).
+  `statejson::MAX_JSON` for `/state`) and plain HTTP (no TLS next to Bluetooth and WiFi).
 - **Flash**: `min_spiffs.csv`, two 1.9 MB app slots for updates over WiFi; NVS keeps the touch
-  calibration (`touch`), the looks and the trip (`leds`) and the Xbox controller's bond.
+  calibration (`touch`), the looks and the trip (`leds`).
 
 ## Between the devices
 
@@ -278,7 +278,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   `src/common/` (`net/`, `ui/backlight`, `board/board.h`, `core/embed.h`, `core/watchdog.h`) and its
   util groups (allow-list `build_src_filter` in `platformio.ini`), so a call into the other deck's
   code fails to link. `src/diag/` holds the standalone checks, one env each (`hwcheck`,
-  `hwcheck_s3`, `blescan`, `bletest`, `xboxtest`, `ps3test`).
+  `hwcheck_s3`, `blescan`, `bletest`, `ps3test`).
 - `src/black/board/s3/` — everything board-specific on the black deck (display bus, audio path,
   backlight); pins in `include/pins.h`.
 - `src/util/` has no Arduino dependency, so it builds and tests on a PC; `src/util/`,
@@ -302,8 +302,6 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   lyricmsg,montage,pokeball,qrcard,status_sprite,statusscene,sunset,theme,typebadge}`,
   `black/pokemon/dex`, `yellow/ui/{gojiraname,jpfont,lyricrun,presslook,termfont}` and the CA
   bundle.
-- `lib/xboxpad/` — asukiaaa's Xbox controller library, vendored with a shorter connect timeout
-  and a gentler unbond (MIT, its own `LICENSE`).
 - `garmin/carlights/` — the watch app ([garmin/README.md](../garmin/README.md)).
 
 ## Test hooks

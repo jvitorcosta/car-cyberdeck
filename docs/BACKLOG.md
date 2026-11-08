@@ -4,8 +4,8 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Done (moved out of the lists below)
 
-- **Yellow deck** (the CYD as the car's light panel): the car LEDs over BLE by touch, voice, Xbox
-  controller and the watch (#13, tested in the car 2026-10-22); the CYBERDECK dashboard, presets,
+- **Yellow deck** (the CYD as the car's light panel): the car LEDs over BLE by touch, voice, the
+  controller (Xbox until 2026-11-06, now PS3) and the watch (#13, tested in the car 2026-10-22); the CYBERDECK dashboard, presets,
   LYRICS, weather, trip, themes and night mode (#18, tested in the car 2026-10-24: "works great");
   Japanese lyrics (#21).
 - **Updates over WiFi** on both decks (#9, #19; the yellow deck's first OTA went through on
@@ -41,8 +41,8 @@ Open items, not scheduled. Newest decisions first within each section.
   `data/backdrop.bin` and `data/shadow.bin`, an update over WiFi shows Green Hill, the rail filling
   red with Shadow at its tip, a red flash at 100 %, the reboot.
 - **Car LEDs, the rest**: the LED colours (orange, pink, purple, white and yellow are guesses for
-  RGB LEDs) and whether the 10 % brightness steps look even; the Xbox controller with the lights
-  connected; memory over a long drive (the heap's low point drifted 130 → 123 KB over 25 min at
+  RGB LEDs) and whether the 10 % brightness steps look even; the PS3 controller with the lights
+  connected (Bluedroid dual mode: watch the heap); memory over a long drive (the heap's low point drifted 130 → 123 KB over 25 min at
   home).
 - **Animated status screens**: seen on the S3 (Spotify busy + countdown); the no-WiFi /
   no-internet / certificate screens only from host renders.
@@ -59,7 +59,7 @@ Open items, not scheduled. Newest decisions first within each section.
   merges. (`feat/voice-agent` is already on the new layout.)
 - **CI doesn't build the diagnostics**: only `ledpanel` and `s3` are in the firmware matrix, so
   `blescan` / `bletest` stopped linking without anyone noticing. Add `blescan`, `bletest`,
-  `xboxtest`, `ps3test` and `hwcheck` / `hwcheck_s3` (and the mic envs once the voice agent merges),
+  `ps3test` and `hwcheck` / `hwcheck_s3` (and the mic envs once the voice agent merges),
   or a weekly job that builds them.
 
 ## Investigate
@@ -125,14 +125,6 @@ Portuguese voice commands for the black deck through a cloud agent (spec
   (`docs/superpowers/README.md` maps them).
 - **Live steps still owed:** the API key, the Spotify `--agent` token, the slow-path smoke test and
   the eval baselines.
-
-## Parked: PS3 controller (2026-10-22, waiting on a battery)
-
-A DualShock 3 over Bluetooth Classic (`ps3test`, Bluedroid): it is already paired to the yellow
-deck over USB (its master address set to the CYD's Bluetooth address, no SixaxisPairTool), but its
-battery is dead, and a genuine DS3 powers on only from a USB host. Next: a new LIP1472 (3.7 V
-570 mAh), charge, unplug, press PS. Bluedroid can't share a firmware with the lights' NimBLE, so
-it is one or the other.
 
 ## Accepted as is
 
