@@ -10,9 +10,10 @@ Gen-3 Pokémon battle, and the car's LED lights by touch, voice, gamepad or watc
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Boards: ESP32 / ESP32-S3](https://img.shields.io/badge/boards-ESP32%20%7C%20ESP32--S3-informational)
 
-<!-- Photo: the decks on the dashboard. Add docs/images/hero.jpg, then uncomment:
-<img src="docs/images/hero.jpg" alt="CarDeck on a car dashboard" width="640">
--->
+<img src="docs/images/dashboard.jpg" alt="Both decks running in the car at night: the yellow deck on the dash, the black deck in its Game Boy Advance shell by the windshield" width="780">
+
+<img src="docs/images/black-deck.jpg" alt="Black deck in a Game Boy Advance shell, playing a song as a Pokémon battle" width="430">
+<img src="docs/images/yellow-deck.jpg" alt="Yellow deck at night, showing the terminal-style dashboard" width="340">
 
 </div>
 
