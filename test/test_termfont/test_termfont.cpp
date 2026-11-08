@@ -214,6 +214,10 @@ void test_dash_header_fits() {
     for (const char* tag : {CAM_TAG_LOST, CAM_TAG_MUTE})
         TEST_ASSERT_TRUE_MESSAGE(titleEnd + MARGIN <= DASH_RIGHT - termfont::width(Face::SMALL, tag), tag);
     between(-1, fromCapTop(Face::SMALL, DASH_TITLE_Y), HEADER_RULE_Y, DASH_TITLE);
+    // the PS3 controller's battery: right of the title with a gap, its icon's cells inside the outline
+    TEST_ASSERT_LESS_OR_EQUAL_INT(DASH_RIGHT - termlayout::padWidth() - 4,
+                                  DASH_X + termfont::width(Face::SMALL, DASH_TITLE));
+    TEST_ASSERT_EQUAL_INT(PAD_ICON_W, 2 * 2 + 4 * PAD_CELL_W + 3 * PAD_CELL_GAP);  // 1 px border + 1 px margin each side
     TEST_ASSERT_TRUE(HEADER_RULE_Y < deckmenu::HEADER.y + deckmenu::HEADER.h);
 }
 

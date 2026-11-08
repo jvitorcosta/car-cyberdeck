@@ -27,9 +27,8 @@ approach before you spend time on it.
 | `src/yellow/` | the yellow deck (CYD, env `ledpanel`): `ledpanel.cpp`, its touch layer, fonts and drawing helpers (`ui/`) |
 | `src/common/` | Arduino code both decks build: WiFi, clock, HTTP, OTA, remote settings (`net/`), backlight, `board/board.h`, `core/embed.h` |
 | `src/util/` | pure logic, no Arduino: parsers, timing, layout; tested on the PC. Grouped by who uses it: `wire/` (the contracts between the decks), `lights/` (the LED domain, both decks), `common/` (both decks), `black/`, `yellow/` |
-| `src/diag/` | standalone hardware and Bluetooth checks, one env each (`hwcheck`, `hwcheck_s3`, `blescan`, `bletest`, `xboxtest`, `ps3test`) |
+| `src/diag/` | standalone hardware and Bluetooth checks, one env each (`hwcheck`, `hwcheck_s3`, `blescan`, `bletest`, `ps3test`) |
 | `include/` | `config.example.h` (copy it to the git-ignored `src/config.h`), `pins.h`, the black deck's `app_state.h` |
-| `lib/xboxpad/` | the Xbox controller library, vendored for the yellow deck |
 | `garmin/carlights/` | the Honda City watch app (Connect IQ, Monkey C; [garmin/README.md](garmin/README.md)) |
 | `test/` | one Unity suite per pure module |
 | `tools/` | generators for bundled data, test runners, session analysis |

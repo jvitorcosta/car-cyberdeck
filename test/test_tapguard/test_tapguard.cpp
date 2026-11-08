@@ -46,7 +46,7 @@ void test_a_quick_second_touch_is_ignored_and_restarts_the_wait() {
     TEST_ASSERT_FALSE(g.update(false, 200 + tapguard::QUIET_MS));
     TEST_ASSERT_FALSE(g.armed());
 }
-// Armed with no finger on the panel (the Xbox controller changed the screen): QUIET_MS from the
+// Armed with no finger on the panel (the PS3 controller changed the screen): QUIET_MS from the
 // first released reading.
 void test_armed_without_a_finger() {
     tapguard::Guard g;

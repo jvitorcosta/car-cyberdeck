@@ -55,6 +55,13 @@ constexpr int DASH_X = 8, DASH_RIGHT = 312;
 // the header: one line (SMALL) and its rule
 constexpr const char* DASH_TITLE = "CYBERDECK // HONDA CITY TOURING 2022";
 constexpr int DASH_TITLE_Y = 5, HEADER_RULE_Y = 20;
+// right-aligned on the title's row while a PS3 controller is connected: PAD_LABEL (SMALL, MID), then
+// PAD_GAP after it a battery icon as tall as the caps (PAD_ICON_W wide, a PAD_NUB_W x PAD_NUB_H nub on
+// its right), PAD_CELL_W px cells PAD_CELL_GAP apart inside it (util/yellow/padbattery)
+constexpr const char* PAD_LABEL = "PAD";
+constexpr int PAD_GAP = 4, PAD_ICON_W = 19, PAD_NUB_W = 2, PAD_NUB_H = 4, PAD_CELL_W = 3, PAD_CELL_GAP = 1;
+// The header's PAD part, label to nub, from its left edge to DASH_RIGHT.
+inline int padWidth() { return termfont::width(termfont::Face::SMALL, PAD_LABEL) + PAD_GAP + PAD_ICON_W + PAD_NUB_W; }
 // the camera tag right-aligned on the header line (ledpanel's camTick): the black deck's /cam not
 // answering, or (with no band up to say MUTE) the camera beeps muted. No GPS fix is the black deck's
 // to show (its top strip's GPS icon). "CAM MUTE" would run

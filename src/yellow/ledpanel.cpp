@@ -46,11 +46,12 @@
 // Each page's colour, intensity and power and the page last shown survive a reboot (NVS); the deck
 // still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
-// /presets and /status over WiFi (see "Voice" below), on either screen. An Xbox controller (BLE)
-// drives it too: the D-pad moves the focus (an inverted bar on the Menu's three items, a TEXT ring on
-// Lights and Karaoke; none is drawn while no controller is connected), A presses, B goes back to the
-// Menu; on Lights X is the next page, and on the look pages Y on/off, LB / RB - / + (see "Xbox
-// controller input" below).
+// /presets and /status over WiFi (see "Voice" below), on either screen. A PS3 controller (Bluetooth
+// Classic) drives it too: the D-pad moves the focus (an inverted bar on the Menu's three items, a TEXT
+// ring on Lights and Karaoke; none is drawn while no controller is connected), cross presses, circle
+// goes back to the Menu; on Lights square is the next page, and on the look pages triangle on/off,
+// L1 / R1 - / +. On any screen START, L2 / R2, SELECT, L1 / R1 and PS are shortcuts for both lights,
+// answered by a buzz, and the pad's LEDs show the links (see "PS3 controller input" below).
 // Theme: while the INSIDE look is on, the terminal (Menu, Lights, Karaoke; not the boot typing or the
 // calibration) takes its colour, termpal's three levels of it (problems show in white on the red,
 // orange and pink themes), linked or not: a colour tapped with the lights out of reach still shows.
@@ -66,7 +67,7 @@
 // off is switched on. The theme follows the swatch. The prompt line shows ">MUSIC", a chip and the
 // swatch's name (">MUSIC: WAITING" before the first palette), or ">MUSIC: NO SIGNAL" when no palette
 // came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). Any manual
-// change (touch, the Xbox controller, voice, the watch) ends the mode, then applies; turning it off
+// change (touch, the PS3 controller, voice, the watch) ends the mode, then applies; turning it off
 // brings back the looks from before. Not kept over a reboot (see
 // "Music mode" below).
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") is night
@@ -89,12 +90,7 @@
 #include <WiFi.h>
 #include <cstddef>
 #include <type_traits>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wshadow"            // NimBLE 2's and the Xbox library's headers;
-#pragma GCC diagnostic ignored "-Wdouble-promotion"  // src/ builds with -Werror
-#include <NimBLEDevice.h>
-#include <XboxPad.hpp>  // lib/xboxpad: asukiaaa's Xbox library, vendored with shorter timeouts
-#pragma GCC diagnostic pop
+#include <Ps3Controller.h>  // esp32-ps3: the DualShock 3 over Bluedroid's Bluetooth Classic
 #include <Preferences.h>
 #include <TFT_eSPI.h>
 #include <WebServer.h>
@@ -103,6 +99,8 @@
 #include "../common/ui/backlight.h"
 #include "../common/core/embed.h"
 #include "../common/core/watchdog.h"
+#include "elklink.h"
+#include "padhid.h"
 #include "ui/gojiraname.h"
 #include "ui/jpfont.h"
 #include "ui/lyricrun.h"
@@ -138,6 +136,8 @@
 #include "../util/wire/musicwire.h"
 #include "../util/yellow/otapage.h"
 #include "../util/yellow/lightstatus.h"
+#include "../util/yellow/padbattery.h"
+#include "../util/yellow/padfeel.h"
 #include "../util/yellow/pollpace.h"
 #include "../util/yellow/karaoke.h"
 #include "../util/common/remotegate.h"
@@ -276,15 +276,13 @@ static bool musicYield();
 
 // ---- BLE ----
 
-// The link task (core 0) connects; the loop (core 1) writes. `tx` is set once, on the first
-// connect, and the client keeps its attributes across reconnects (connect(.., false)), so the
-// characteristic it points to is never freed under the loop's feet.
+// The link task (core 0) connects; the loop (core 1) writes. Both go through yellow/elklink
+// (Bluedroid's GATT client, shared with the PS3 controller), which writes by handle, so nothing
+// the loop holds is freed by a reconnect.
 struct Controller {
     const char* label;
     const char* addr;
-    NimBLEClient* client = nullptr;
-    NimBLERemoteCharacteristic* volatile tx = nullptr;  // FFF3, once discovered
-    volatile bool fresh = false;                         // just connected: needs the current state
+    volatile bool fresh = false;  // just connected: needs the current state
 };
 
 // The two controllers' BLE addresses come from src/config.h (include/config.example.h says how to
@@ -300,11 +298,13 @@ static Controller controllers[] = {
 };
 static constexpr int N_CTRL = sizeof(controllers) / sizeof(controllers[0]);
 
-static bool linkUp(const Controller& c) { return c.client && c.client->isConnected() && c.tx; }
+static_assert(N_CTRL <= elklink::MAX, "a link per controller");
+static int indexOf(const Controller& c) { return static_cast<int>(&c - controllers); }
+
+static bool linkUp(const Controller& c) { return elklink::up(indexOf(c)); }
 
 static void write(Controller& c, const elkcmd::Frame& f) {
-    NimBLERemoteCharacteristic* tx = c.tx;  // one read: the link task may be reconnecting
-    if (tx && c.client && c.client->isConnected() && !tx->writeValue(f.b, sizeof(f.b), false)) {
+    if (linkUp(c) && !elklink::write(indexOf(c), f.b, sizeof(f.b))) {
         Serial.printf("[leds] %s: write failed\n", c.label);
     }
 }
@@ -436,70 +436,37 @@ static void change(Target page, const bothlook::Change& c) {
 }
 
 static bool connect(Controller& c) {
-    if (!c.client) {
-        c.client = NimBLEDevice::createClient();
-        c.client->setConnectTimeout(4000);  // NimBLE 2: milliseconds
-    }
-    // false: keep the discovered attributes, so `tx` stays valid for the loop across reconnects
-    if (!c.client->isConnected() && !c.client->connect(NimBLEAddress(std::string(c.addr), BLE_ADDR_PUBLIC), false)) {
-        Serial.printf("[leds] %s: connect failed\n", c.label);
-        return false;
-    }
-    if (!c.tx) {
-        NimBLERemoteService* svc = c.client->getService(NimBLEUUID(static_cast<uint16_t>(0xFFF0)));
-        if (svc) c.tx = svc->getCharacteristic(NimBLEUUID(static_cast<uint16_t>(0xFFF3)));
-    }
-    if (!c.tx) {  // connected but discovery failed (e.g. a GATT timeout): drop it, try again later
-        Serial.printf("[leds] %s: no FFF3, disconnecting\n", c.label);
-        c.client->disconnect();
-        return false;
-    }
+    if (!elklink::connect(indexOf(c), c.label)) return false;
     Serial.printf("[leds] %s: connected\n", c.label);
     c.fresh = true;
     return true;
 }
 
-// The Xbox controller (Series X|S / One 1708+, over BLE): the first one found in pairing mode,
-// or the bonded one when it's switched on.
-static XboxSeriesXControllerESP32_asukiaaa::Core xbox;
+// The PS3 controller (DualShock 3, Bluetooth Classic): it connects to the deck by itself when
+// its PS button is pressed, to the address stored in it (its "master", written over USB: the
+// boot log's "[pad] deck address"). Nothing to scan or tick here; its reports come in callbacks.
+// Its LEDs are set by the loop once it's up (padSend), not Ps3.setPlayer (a 4 KB buffer).
 
-// All connecting runs here on core 0, so the touch loop (core 1) never waits on it. Connects and
-// scans keep the radio, which WiFi shares, busy: with the lights out of range (the deck at home),
-// 5 s retries starved WiFi until the deck didn't even answer ping. So:
-//  - lights: only while one is missing, rounds of connects 5 s apart, doubling after each failed
-//    round up to 60 s, back to 5 s (at once) when a connected light drops. A connect pauses a
-//    running controller scan by itself (NimBLE stops it on EBUSY);
-//  - controller: while connected (or mid-pairing) the library runs every tick; otherwise one of
-//    its 4 s scans every 15 s (it scans flat out);
-//  - an update over WiFi (net/ota) has the radio: no connects and no scan (a running one stops)
-//    until it ends. Connected lights and a connected controller stay as they are (the library
-//    needs no tick for that: its reports come in callbacks).
-static constexpr uint32_t PAD_SCAN_EVERY_MS = 15000;
+// All connecting runs here on core 0, so the touch loop (core 1) never waits on it. Connects keep
+// the radio, which WiFi shares, busy: with the lights out of range (the deck at home), 5 s retries
+// starved WiFi until the deck didn't even answer ping. So the lights connect only while one is
+// missing, in rounds 5 s apart, doubling after each failed round up to 60 s, back to 5 s (at once)
+// when a connected light drops. An update over WiFi (net/ota) has the radio: no connects until it
+// ends; connected lights and the controller stay as they are.
 static TaskHandle_t linkHandle = nullptr;
 
 static void linkTask(void*) {
-    uint32_t waitMs = 5000, nextLights = 0, lastPadScan = 0;
-    watchdog::watch();  // a NimBLE wait that never returns reboots the deck (common/core/watchdog)
+    uint32_t waitMs = 5000, nextLights = 0;
+    watchdog::watch();  // a Bluetooth wait that never returns reboots the deck (common/core/watchdog)
     for (;;) {
         watchdog::feed();
         if (ota::active()) {
-            NimBLEScan* scan = NimBLEDevice::getScan();
-            if (scan->isScanning()) scan->stop();
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
         const uint32_t now = millis();
-        const bool padBusy = xbox.isConnected() || XboxSeriesXControllerESP32_asukiaaa::advDevice != nullptr ||
-                             NimBLEDevice::getScan()->isScanning();
-        if (padBusy) {
-            xbox.onLoop();
-        } else if (now - lastPadScan > PAD_SCAN_EVERY_MS) {
-            lastPadScan = now;
-            xbox.onLoop();  // starts a scan
-        }
-        watchdog::feed();  // the controller's connect and discovery: ~62 s at worst
 
-        // lost: a light that was up last tick and isn't now (`tx` outlives the link, so it can't tell)
+        // lost: a light that was up last tick and isn't now
         static bool wasUp[N_CTRL] = {};
         bool lost = false, missing = false;
         for (int i = 0; i < N_CTRL; i++) {
@@ -537,10 +504,10 @@ static_assert(static_cast<int>(deckmenu::TAB_BOTH) == BOTH && static_cast<int>(d
 
 static bool built(int id) { return deckmenu::rect(screen, id).w > 0; }
 
-// The button the Xbox controller points at; -1 while none is connected. On the Menu it is drawn as
+// The button the PS3 controller points at; -1 while none is connected. On the Menu it is drawn as
 // an inverted bar, on Lights as a TEXT ring around the button (the lit colour is the bar there).
 static int focus = -1;
-static bool padUp = false;  // an Xbox controller is connected and reporting
+static bool padUp = false;  // a PS3 controller is connected
 static void drawFocus(int id, bool on);
 
 // Where the focus starts on each screen: the first item, the first preset, or the colour the page
@@ -669,7 +636,9 @@ static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme, night)
 #endif
 // A terminal message's colour: ALERT for a problem (a lost link, the wrong key, a car warning: alert),
 // else TEXT.
-static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
+static bool isAlertMsg(const char* m) {
+    return lightstatus::isAlert(m) || karaoke::isAlert(m) || padbattery::isAlert(m);
+}
 static uint16_t msgInk(const char* m, bool alert) { return pal(alert || isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
 
 static void clearBg(int x, int y, int w, int h) {
@@ -718,7 +687,7 @@ static void drawChrome(const Rect& r, const char* s, Face f, bool pressed, bool 
 }
 
 // A Menu item ("[LIGHTS]"): a MID outline (it stands among the dashboard's text), the text top left;
-// the inverted bar when focused. Only the Xbox controller focuses (focus is -1 without it), so
+// the inverted bar when focused. Only the PS3 controller focuses (focus is -1 without it), so
 // without one the items look alike and the clock and the lights band lead. Dimmed (an item that
 // won't open now): DIM text in a DIM border, the bar in DIM; a press keeps that look (only a second
 // DIM outline inside the border), since it won't open: the message is the feedback. `tag` (LYRICS's
@@ -760,7 +729,7 @@ static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
 }
 
 // A preset on the PRESETS tab (100x60): the name (TITLE) over two chips big enough to tell apart at
-// a glance (inside, outside); drawBox's pressed look. The Xbox focus is the ring around it.
+// a glance (inside, outside); drawBox's pressed look. The controller's focus is the ring around it.
 static void drawPresetSlot(const Rect& r, int slot, bool pressed) {
     const ledpresets::Preset& p = ledpresets::PRESETS[slot];
     const uint16_t ink = drawBox(r, pressed, false, 1, pal(termpal::TEXT));
@@ -775,7 +744,7 @@ static void drawPresetSlot(const Rect& r, int slot, bool pressed) {
 
 // A colour button: a box with a MID border, a tall chip of the colour (left, centred) and its name
 // (BODY: "YELLOW" is 47 px, what the 75 px button has right of the chip).
-// The lit colour is the inverted bar, chip kept; the Xbox focus is a separate ring around it.
+// The lit colour is the inverted bar, chip kept; the controller's focus is a separate ring around it.
 static void drawTile(const Rect& r, int swatch, bool pressed) {
     const Swatch& s = SWATCHES[swatch];
     const bool sel = !bothMixed() && cur().lit && swatch == cur().swatch;
@@ -936,9 +905,34 @@ static void camBandTap();
 
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
+// The PS3 controller's battery at the header's right while one is connected (padUp) and no camera tag
+// takes the corner (the tag is an alert, and both don't fit after the title): "PAD" (MID)
+// and a battery icon on the title's caps, its outline MID and 0-4 cells TEXT (both ALERT when it
+// is dying), cycling while it charges (util/yellow/padbattery). Nothing without a controller.
+static padbattery::Look padBattery;  // what the controller last reported; loop-owned
+static void drawPadBattery() {
+    if (camTag[0]) return;  // drawHeader drew the tag there
+    const int x0 = DASH_RIGHT - termlayout::padWidth();
+    clearBg(x0, 0, RULE_X1 - x0, HEADER_RULE_Y);
+    if (!padUp) return;
+    tft.setTextColor(pal(termpal::MID));
+    const int ix = x0 + termfont::width(Face::SMALL, PAD_LABEL) + PAD_GAP;
+    text(PAD_LABEL, x0, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    const int h = termfont::capHeight(Face::SMALL), y = DASH_TITLE_Y;
+    const uint16_t edge = pal(padBattery.alert ? termpal::ALERT : termpal::MID);
+    const uint16_t fill = pal(padBattery.alert ? termpal::ALERT : termpal::TEXT);
+    tft.drawRect(ix, y, PAD_ICON_W, h, edge);
+    tft.fillRect(ix + PAD_ICON_W, y + (h - PAD_NUB_H) / 2, PAD_NUB_W, PAD_NUB_H, edge);
+    const int cells = padbattery::shownCells(padBattery, millis());
+    for (int k = 0; k < cells; k++) {
+        tft.fillRect(ix + 2 + k * (PAD_CELL_W + PAD_CELL_GAP), y + 2, PAD_CELL_W, h - 4, fill);
+    }
+}
+
 // The header: one MID line and its rule (the boot's welcome lines typed out before it); the camera
 // tag right-aligned on it in ALERT ("CAM --": this deck can't show the alerts; "MUTED": the black deck
-// won't beep). The title ends at x 259; each tag keeps 4 px clear of it (test_termfont).
+// won't beep), or the controller's battery there instead. The title ends at x 259; each keeps 4 px
+// clear of it (test_termfont).
 static void drawHeader() {
     clearBg(deckmenu::HEADER);
     tft.setTextColor(pal(termpal::MID));
@@ -948,6 +942,7 @@ static void drawHeader() {
         text(camTag, DASH_RIGHT, DASH_TITLE_Y, Face::SMALL, TR_DATUM);
     }
     drawRule(HEADER_RULE_Y);
+    drawPadBattery();
 }
 
 // The clock band's last row (HI / LO): the first row its ink reaches (an accented capital in the
@@ -1913,6 +1908,7 @@ static void pressLights(int id) {
 }
 
 static void setMusic(bool on, bool restore = true);
+static void drawMusicItem();
 
 // One settled tap on a button of the current screen.
 static void press(int id) {
@@ -1961,20 +1957,23 @@ static void act() {
     if (screen == was) drawButton(tap.id, true);  // else show() redrew all and cleared tap.id
 }
 
-// ---- Xbox controller input ----
+// ---- PS3 controller input ----
+// Moving around (the screen's buttons):
 //   D-pad: move the focus (held: repeats; the sticks are ignored; on the Menu left / right along
-//          its three items, no wrap)    A: press the focused button
-//   B: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
-//   Lights only: X next page (BOTH, INSIDE, OUTSIDE, PRESETS, round)
-//   the look pages only: Y this page's lights on/off    LB / RB: - / +  (on PRESETS: nothing)
-//   RT (any screen, nothing drawn): mark a camera here. A firm pull (MARK_PULL of the travel) asks the
-//          black deck's /cam/mark through the cam task; the trigger must come back under MARK_LET_GO
-//          and MARK_GAP_MS pass before the next, so a shaky pull marks once. The black deck answers
-//          by sound (a chirp: saved; a low beep: no GPS fix), so the driver never looks.
-static constexpr uint16_t MARK_PULL = XboxControllerNotificationParser::maxTrig * 4 / 5;
-static constexpr uint16_t MARK_LET_GO = XboxControllerNotificationParser::maxTrig / 4;
+//          its three items, no wrap)    cross: press the focused button
+//   circle: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
+//   Lights only: square next page (BOTH, INSIDE, OUTSIDE, PRESETS, round)
+//   the look pages only: triangle this page's lights on/off    L1 / R1: this page's - / +
+// Shortcuts, on any screen (both lights; padfeel buzzes once, twice when a light isn't linked):
+//   START: lights on / off    L2 / R2: previous / next preset    SELECT: music mode on / off
+//   L1 / R1 (off the look pages): both lights - / +    PS: back to the Menu
+// The player LEDs: 1 the inside light linked, 2 the outside one, 4 the pad's battery low.
+//   R3 (press the right stick in; any screen, nothing drawn): mark a camera here. It asks the black
+//          deck's /cam/mark through the cam task, at most once per MARK_GAP_MS, so a double click
+//          marks once. The black deck answers by sound (a chirp: saved; a low beep: no GPS fix), so
+//          the driver never looks.
 static constexpr uint32_t MARK_GAP_MS = 3000;
-static volatile bool camMarkAsk = false;   // RT pulled: the cam task sends /cam/mark
+static volatile bool camMarkAsk = false;   // R3 pressed: the cam task sends /cam/mark
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
 // redrawn. On Lights, erasing the old ring can notch its button's edge, so that button is redrawn.
@@ -2012,12 +2011,101 @@ static void padPress(int id) {
     padFlashAt = millis();
 }
 
+// The battery from the controller's reports: the header redrawn on a change (and every 500 ms
+// while it charges, a cell more each time); ">PAD: BATTERY LOW" (ALERT) once as it starts dying.
+static void padBatteryTick() {
+    const uint8_t raw = static_cast<uint8_t>(Ps3.data.status.battery);
+    const padbattery::Look now = padbattery::next(padBattery, raw);
+    static uint32_t frameAt = 0;
+    const bool frame = now.charging && millis() - frameAt >= 500;
+    if (now == padBattery && !frame) return;
+    if (now.alert && !padBattery.alert) {
+        setMessage(padbattery::LOW_MESSAGE);
+        drawMessage();
+    }
+    if (now != padBattery) Serial.printf("[pad] battery %d cells%s (0x%02x)\n", now.cells, now.charging ? ", charging" : "", raw);
+    padBattery = now;
+    frameAt = millis();
+    if (screen == Screen::Menu) drawPadBattery();
+}
+
+// The controller's rumble and LEDs go out together (one output report carries both, yellow/padhid),
+// so every buzz re-sends the LEDs. padLeds: what they last showed; -1 forces the next send (a new
+// connection, or a report that didn't go out).
+static padfeel::Buzz padBuzz;
+static int padLeds = -1;
+
+static uint32_t padRetryAt = 0;  // after a report that didn't go out: the LEDs' next try
+
+static void padSend(bool rumble) {
+    const uint8_t bits = padfeel::leds(linkUp(controllers[0]), linkUp(controllers[1]), padBattery.alert);
+    if (padhid::send(bits, rumble ? padfeel::BUZZ_MS : 0, 200)) {
+        padLeds = bits;
+    } else {  // the LEDs try again in 500 ms; a lost buzz is just lost
+        padLeds = -1;
+        padRetryAt = millis() + 500;
+    }
+}
+
+// The buzz for a shortcut that went to both lights.
+static void padFelt() {
+    padBuzz.start(padfeel::buzzes(true, true, linkUp(controllers[0]), linkUp(controllers[1])), millis());
+}
+
+// Each tick while connected: a due buzz, else the LEDs when a link or the battery changed them.
+static void padFeelTick() {
+    if (padBuzz.due(millis())) {
+        Serial.println("[pad] buzz");
+        padSend(true);
+        return;
+    }
+    const int bits = padfeel::leds(linkUp(controllers[0]), linkUp(controllers[1]), padBattery.alert);
+    if (bits != padLeds && static_cast<int32_t>(millis() - padRetryAt) >= 0) padSend(false);
+}
+
+// START: both lights on, or off if either is on.
+static void padLightsPower() {
+    bothlook::Change c;
+    c.power = looks[INSIDE].lit || looks[OUTSIDE].lit ? 0 : 1;
+    change(BOTH, c);
+    save();
+    setMessage(c.power ? ">LIGHTS ON" : ">LIGHTS OFF");
+    if (!drawLooks()) drawMessage();
+    padFelt();
+}
+
+// L1 / R1 off the look pages: both lights a step down / up.
+static void padLevel(int step) {
+    bothlook::Change c;
+    c.step = step;
+    change(BOTH, c);
+    save();
+    drawLooks();
+    padFelt();
+}
+
+// L2 / R2: the previous / next preset, round; the first press goes to the first (R2) or last (L2).
+static void padPreset(int dir) {
+    static int slot = -1;
+    slot = slot < 0 ? (dir > 0 ? 0 : ledpresets::N - 1) : (slot + dir + ledpresets::N) % ledpresets::N;
+    applyPreset(slot);
+    padFelt();
+}
+
 static void handlePad() {
-    const bool is = xbox.isConnected() && !xbox.isWaitingForFirstNotification();
+    const bool is = Ps3.isConnected();
     if (is != padUp) {
         padUp = is;
         Serial.printf("[pad] %s\n", is ? "connected" : "gone");
         setFocus(is ? homeFocus() : -1);
+        if (!is) padBattery = padbattery::Look{};  // the next controller starts unknown
+        padLeds = -1;  // a new connection shows the links (and stops the four LEDs blinking)
+        padBuzz = padfeel::Buzz{};
+        if (screen == Screen::Menu) drawPadBattery();
+    }
+    if (is) {
+        padBatteryTick();
+        padFeelTick();
     }
     if (padFlash >= 0 && millis() - padFlashAt > PAD_FLASH_MS) {
         drawButton(padFlash);
@@ -2025,18 +2113,21 @@ static void handlePad() {
     }
     if (!is) return;
 
-    const XboxControllerNotificationParser& n = xbox.xboxNotif;
-    // D-pad only: João's controller has left-stick drift, which wandered the ring on its own.
-    int dx = (n.btnDirRight ? 1 : 0) - (n.btnDirLeft ? 1 : 0);
-    int dy = (n.btnDirDown ? 1 : 0) - (n.btnDirUp ? 1 : 0);
+    // the held buttons, as the last report left them (the Bluetooth task writes Ps3.data)
+    const auto& n = Ps3.data.button;
+    // D-pad only: the sticks drift, which would wander the ring on its own.
+    int dx = (n.right ? 1 : 0) - (n.left ? 1 : 0);
+    int dy = (n.down ? 1 : 0) - (n.up ? 1 : 0);
     if (dx && dy) dy = 0;  // diagonals: horizontal wins
     static int lastDx = 0, lastDy = 0;
     static uint32_t repeatAt = 0;
     if (dx || dy) {
         if (dx != lastDx || dy != lastDy) {
+            Serial.printf("[pad] d-pad %d,%d\n", dx, dy);
             moveFocus(dx, dy);
             repeatAt = millis() + 400;
         } else if (static_cast<int32_t>(millis() - repeatAt) >= 0) {
+            Serial.printf("[pad] d-pad repeat %d,%d\n", dx, dy);
             moveFocus(dx, dy);
             repeatAt = millis() + 150;
         }
@@ -2047,29 +2138,60 @@ static void handlePad() {
     // buttons act on the press, once; every edge is taken on both screens, so a button held across
     // a screen change doesn't fire on the next one
     static bool pA = false, pB = false, pX = false, pY = false, pLB = false, pRB = false;
+    static bool pSt = false, pSe = false, pL2 = false, pR2 = false, pPs = false, pR3 = false;
     auto edge = [](bool now, bool& prev) {
         const bool down = now && !prev;
         prev = now;
         return down;
     };
-    const bool a = edge(n.btnA, pA), b = edge(n.btnB, pB), x = edge(n.btnX, pX), y = edge(n.btnY, pY);
-    const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
-    static bool rtHeld = false;
-    static uint32_t markedAt = 0;
-    if (!rtHeld && n.trigRT >= MARK_PULL) {
-        rtHeld = true;
+    const bool a = edge(n.cross, pA), b = edge(n.circle, pB), x = edge(n.square, pX), y = edge(n.triangle, pY);
+    const bool lb = edge(n.l1, pLB), rb = edge(n.r1, pRB);
+    const bool start = edge(n.start, pSt), select = edge(n.select, pSe), l2 = edge(n.l2, pL2), r2 = edge(n.r2, pR2);
+    const bool home = edge(n.ps, pPs), mark = edge(n.r3, pR3);
+    // every press in the log, to tell a real press from the deck acting by itself
+    if (a || b || x || y || lb || rb || start || select || l2 || r2 || home) {
+        Serial.printf("[pad] press%s%s%s%s%s%s%s%s%s%s%s\n", a ? " cross" : "", b ? " circle" : "", x ? " square" : "",
+                      y ? " triangle" : "", lb ? " L1" : "", rb ? " R1" : "", start ? " START" : "",
+                      select ? " SELECT" : "", l2 ? " L2" : "", r2 ? " R2" : "", home ? " PS" : "");
+    }
+
+    if (mark) {
+        static uint32_t markedAt = 0;
         if (!markedAt || millis() - markedAt >= MARK_GAP_MS) {
             markedAt = millis();
             camMarkAsk = true;
-            Serial.println("[pad] RT: mark");
+            Serial.println("[pad] R3: mark");
         }
-    } else if (rtHeld && n.trigRT < MARK_LET_GO) {
-        rtHeld = false;
     }
-    if (onHealth()) {  // A or B: back to the Menu, as a tap
-        if (a || b) leaveHealth();
+    if (onHealth()) {  // cross, circle or PS: back to the Menu, as a tap
+        if (a || b || home) leaveHealth();
         return;
     }
+
+    // the shortcuts, on any screen; one per tick, before the screen's own buttons
+    if (home) {
+        if (screen != Screen::Menu) show(Screen::Menu);
+        return;
+    }
+    if (start) {
+        padLightsPower();
+        return;
+    }
+    if (l2 || r2) {
+        padPreset(r2 ? 1 : -1);
+        return;
+    }
+    if (select) {
+        setMusic(!musicOn);
+        drawMusicItem();
+        padFelt();
+        return;
+    }
+    if ((lb || rb) && screen != Screen::Lights) {  // on a look page they are its own - / + (below)
+        padLevel(rb ? 1 : -1);
+        return;
+    }
+
     const Screen was = screen;
     if (a) padPress(focus);
     if (screen != was) return;  // A changed the screen: the other buttons wait for their next press
@@ -2096,7 +2218,7 @@ static void handlePad() {
 // blocks) that ends when the try does, so its 6 KB stack isn't held for the 15 min between tries:
 // the voice task starts one once WiFi is up, then every 15 min (weatherTick). A try GETs the place
 // (once per boot, again while it fails), then the weather, both plain http (no TLS on a heap shared
-// with NimBLE, WiFi and the server), 5 s timeouts, the body into a fixed 2 KB buffer. Each try is
+// with Bluetooth, WiFi and the server), 5 s timeouts, the body into a fixed 2 KB buffer. Each try is
 // published under weatherMux; a failed try keeps the last good reading and comes again in 2 min.
 // loop() polls weatherFresh to redraw. The place is the phone's public IP's: approximate (the
 // operator's city, sometimes a neighbour's), which is fine for the weather.
@@ -2816,7 +2938,7 @@ static void lyricsTick() {
 //           while the Menu or D shows (D comes only from the Menu); a stale snapshot (no new seq for
 //           carlink::STALE_MS) is an unknown speed, so it never counts as stopped. It hides when the
 //           car moves.
-// A tap anywhere, or the Xbox controller's A or B, goes back to the Menu (on D: ParkGate::dismiss()).
+// A tap anywhere, or the PS3 controller's cross, circle or PS, goes back to the Menu (on D: ParkGate::dismiss()).
 // On the Menu and Lights a fresh snapshot can also bring a warning (healthview::Warnings: critical
 // while moving, any problem when stopped, each at most once per 2 minutes) as the message, in ALERT;
 // never over A, B or D. Each fresh snapshot's speed feeds the trip meter, and its figures the band.
@@ -3306,7 +3428,7 @@ static void drawMusicItem() {
     drawButton(item, pressedNow(item));
 }
 
-// A manual change (a tap, the Xbox controller, voice, the watch) while music mode is on: the mode
+// A manual change (a tap, the PS3 controller, voice, the watch) while music mode is on: the mode
 // ends first (the MUSIC item shows OFF), then the change applies to the pages' looks. True when the
 // lights showed the song: the caller pushes both lights (the one it doesn't change goes back too).
 static bool musicYield() {
@@ -3800,16 +3922,19 @@ void setup() {
     weatherOff = !gate.enabled();  // no REMOTE_TOKEN, no WiFi: the first draw already says >OFFLINE
     theme = wantTheme();  // after the typing (always green): the saved inside look's colour, no link needed
     drawAll();
-    // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
-    // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
-    xbox.begin();
+    // Bluedroid in dual mode: the PS3 library starts the controller and the stack (Classic for the
+    // pad), then the lights' GATT client registers on the same stack (yellow/elklink).
+    if (!Ps3.begin()) Serial.println("[pad] Bluetooth didn't start");
+    Serial.printf("[pad] deck address %s (the PS3 controller's master)\n", Ps3.getAddress().c_str());
+    elklink::begin();
     for (const Controller& c : controllers) {
+        elklink::setAddress(indexOf(c), c.addr);
         if (strcmp(c.addr, NO_MAC) == 0) {
             Serial.printf("[leds] %s: no address in config.h (LED_%s_MAC)\n", c.label, c.label);
         }
     }
-    // 8 KB: the Xbox library's connect, discovery and subscribe (std::function, std::string) run on
-    // this task too; the [mem] line shows what's left.
+    // 8 KB: the lights' connects only wait on the stack (yellow/elklink); the [mem] line shows
+    // what's left.
     xTaskCreatePinnedToCore(linkTask, "leds-link", 8192, nullptr, 1, &linkHandle, 0);
     publish();
     beginVoice();
@@ -3894,7 +4019,7 @@ static void replayIntro() {
 }
 
 // "SHOT\n" on the serial port sends the panel to the PC (tools/deck_shot.py): "SHOT 320 240", a row
-// line each, "SHOT END". NimBLE's own error prints skip the serial lock and can land inside a row, so
+// line each, "SHOT END". Bluedroid's own error prints skip the serial lock and can land inside a row, so
 // the PC then asks again for the rows it lost ("R031\n", 2 s of silence or "Q" ends it). About 30 s at
 // 115200, in the loop: the screen holds still, touch and drawing wait (the 90 s watchdog doesn't
 // mind), the lights' link and the servers keep running. "INTRO\n" is read here too (replayIntro).

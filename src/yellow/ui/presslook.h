@@ -1,7 +1,7 @@
 #pragma once
 // How the yellow deck's terminal buttons show a press, in the theme's own colours so it shows on
 // every theme. Idle: a box (MID border). Selected (the lit colour, the current tab,
-// the Xbox focus on the Menu): the solid TEXT bar. Pressed (under the finger, or a controller's
+// the controller's focus on the Menu): the solid TEXT bar. Pressed (under the finger, or a controller's
 // flash), selected or not: the TEXT bar with a BG ring RING px thick cut in INSET px from the edge,
 // so it differs from both (a tap acts while the finger is down, so the tile it lights is already
 // selected when it is drawn pressed). PURE, host-tested (test_presslook).

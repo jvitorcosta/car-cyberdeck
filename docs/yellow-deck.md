@@ -2,7 +2,7 @@
 
 The yellow deck is a Cheap Yellow Display (ESP32-2432S028R, build `ledpanel`) that runs the car's
 two LED controllers (inside and outside) over Bluetooth LE. It shows a terminal-style dashboard,
-sets the lights by touch, an Xbox controller, Siri or the Garmin watch, shows the black deck's
+sets the lights by touch, a PS3 controller, Siri or the Garmin watch, shows the black deck's
 lyrics, and in music mode gives the lights each song's colour.
 
 - [Set up](#set-up)
@@ -25,14 +25,15 @@ controllers' addresses with `blescan`, fill `src/config.h` (`LED_INSIDE_MAC`, `L
 - **Touch calibration.** The first boot shows "Touch calibration": tap the five crosses with the
   pen. The fit is kept in NVS, through reboots and updates. Hold **BOOT** at power-up, or for 2 s
   at any time, to run it again.
-- **Xbox controller** (Series X|S, or One model 1708 and later): hold its pair button until the
-  logo flashes fast. The deck takes the first controller it finds in pairing mode and reconnects
-  to that one whenever it is switched on.
+- **PS3 controller** (DualShock 3, Bluetooth Classic): it connects to the address stored in it,
+  so write the deck's there once over USB (the boot log's `[pad] deck address`, with
+  `tools/ds3_pair.py <address>`; the controller must be on a libusb-compatible driver such as
+  libusbK). Then press **PS**: player LED 1 lights when it's connected.
 - **The phone's Bluetooth off.** A controller holds one link at a time: if the phone's app (or
   anything else) is connected to it, the deck can't reach it. The hotspot is WiFi, so Siri and the
   watch still reach the deck.
 - **Without `REMOTE_TOKEN`** the deck never joins WiFi: no clock, weather, lyrics, music mode,
-  voice, watch or updates over WiFi. The lights, touch and the Xbox controller still work.
+  voice, watch or updates over WiFi. The lights, touch and the PS3 controller still work.
 
 Address: on the iPhone hotspot the deck is always `172.20.10.11` (elsewhere
 `cardeck-leds.local`). It reads the black deck at `BLACK_DECK_ADDR`, or by its mDNS name off the
@@ -99,10 +100,17 @@ labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; 
 - **Taps**: a pressed button is the solid bar with a ring cut into it. After a screen or page
   change the deck waits for the finger to lift and a quarter second to pass, so a double tap on
   `[LIGHTS]` can't press a button on the next screen.
-- **Xbox controller**: the D-pad moves the focus (an inverted bar on the main screen's buttons, a
-  ring on Lights), **A** presses, **B** goes back to the main screen. On Lights only: **X** next
-  page (BOTH, INSIDE, OUTSIDE, PRESETS, round again); on the look pages **Y** this page's lights
-  on/off and **LB / RB** `-` / `+`. The focus shows only while a controller is connected.
+- **PS3 controller**: the D-pad moves the focus (an inverted bar on the main screen's buttons, a
+  ring on Lights), **cross** presses, **circle** goes back to the main screen. On Lights only:
+  **square** next page (BOTH, INSIDE, OUTSIDE, PRESETS, round again); on the look pages
+  **triangle** this page's lights on/off and **L1 / R1** `-` / `+`. The focus shows only while a
+  controller is connected.
+- **PS3 shortcuts**, on any screen, for both lights: **START** on / off, **L2 / R2** the previous /
+  next preset, **SELECT** music mode on / off, **L1 / R1** `-` / `+` (on a look page they stay that
+  page's), **PS** back to the main screen. The controller buzzes once when a shortcut went out, twice
+  when a light isn't connected. Its LEDs: **1** the inside light connected, **2** the outside one,
+  **4** its own battery low. Its battery shows at the top right of the main screen ("PAD" and four
+  cells; red when it's dying, filling round while it charges).
 
 ## Presets
 
@@ -129,7 +137,7 @@ It is not on the Lights page's grid, and song colours never snap to it. Voice se
 "light blue", "azul claro"); the deck, Siri's replies, `/state`, `/presets` and the watch all call
 it Cyan. With cyan on the inside light the terminal takes the blue theme.
 
-- **Apply**: tap a preset on the PRESETS tab, or Xbox A on it. The lights fade to it: the inside
+- **Apply**: tap a preset on the PRESETS tab, or cross on the PS3 controller. The lights fade to it: the inside
   over about a second, the outside in two steps a second apart (its controller is slow).
 - **Voice**: "rose", "fire", "gojira" (or "godzilla"), "purpura", "civic", "ocean", or "preset
   one" … "preset six" (also `favourite` / `favorite`, and digits: "preset 2"). It applies to both
@@ -163,7 +171,7 @@ ran. It only checks the deck: how the controller draws the fill is seen in the c
 
 ## Music mode: song colours
 
-`MUSIC MODE` on the main screen (a tap, or Xbox A on it), the voice word "music" ("music off" to
+`MUSIC MODE` on the main screen (a tap, or cross on the PS3 controller), the voice word "music" ("music off" to
 stop) or the watch's **Music mode** item turns it on or off; the tag under the button says `ON`
 or `OFF`, and `>MUSIC ON` / `>MUSIC OFF` shows on the prompt line. It is never kept over a
 reboot. There is no microphone: the black deck picks the current song's colour (one of the grid's
@@ -181,7 +189,7 @@ reboot. There is no microphone: the black deck picks the current song's colour (
   show; the prompt line shows `>MUSIC [chip] PINK`, `>MUSIC: WAITING` until the first palette
   comes, and `>MUSIC: NO SIGNAL` when none came for 15 s (the lights keep the last colour).
 - **Ending it**: any other change from anywhere (a colour, preset, level or on/off by touch, the
-  Xbox controller, Siri or the watch) ends the mode, then applies to your own looks. Turning the
+  PS3 controller, Siri or the watch) ends the mode, then applies to your own looks. Turning the
   mode off brings back the looks from before it started; they are never saved over while it
   runs, so a reboot brings them back too.
 - **`/state`, `/status` and the watch**: while the mode drives the lights, `/state` reports what

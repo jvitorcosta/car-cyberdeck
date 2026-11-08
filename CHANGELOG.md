@@ -38,7 +38,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   (`tools/gen_camvoice.py`), and they pause the intro or music. The road sign shows on screen.
   `/cam/mute` silences them. The list comes from the open-radars-manaus releases:
   `python tools/cameras.py push`.
-- **Added:** marking a camera from the car. Pull the Xbox controller's right trigger (or say "mark
+- **Added:** marking a camera from the car. Press the PS3 controller's right stick in, R3 (or say "mark
   camera"): the deck saves the spot and answers with a chirp, or a low beep when there's no GPS fix.
   With `MARKS_REPO` and `MARKS_TOKEN` in `config.h`, each mark goes straight online as an issue in
   that private GitHub repo (one sent later when there's no signal), ready for open-radars-manaus'
@@ -77,10 +77,21 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   line) counts as plain: the plain text read before it stays, and the search looks for a full one.
 
 ### Yellow deck (CYD, `ledpanel`)
+- **Changed:** a PS3 controller (DualShock 3) replaces the Xbox controller. Same layout: the D-pad
+  moves the focus, cross presses, circle goes back, square is the next page, triangle on/off,
+  L1 / R1 `-` / `+`. It speaks Bluetooth Classic, so the deck moved from NimBLE to Bluedroid in
+  dual mode, and the lights' BLE link is now `yellow/elklink` on Bluedroid's GATT client.
+  `tools/ds3_pair.py` writes the deck's address into the controller over USB.
+- **Added:** controller shortcuts on any screen: START lights on / off, L2 / R2 previous / next
+  preset, SELECT music mode, L1 / R1 both lights `-` / `+`, PS back to the main screen. The
+  controller buzzes once when a shortcut went out (twice when a light isn't connected), and its LEDs
+  show which lights are connected (1 inside, 2 outside; 4 its battery low).
+- **Added:** the controller's battery on the main screen's header ("PAD" and four cells).
+- **Removed:** Xbox controller support, `lib/xboxpad` and the `xboxtest` diagnostic.
 - **Added:** the camera band. It follows the black deck's alerts within about a second, says the
   alerts out loud, and has a mute button.
-- **Added:** the Xbox controller's right trigger marks a camera (a firm pull, once per 3 s; nothing on
-  screen, the black deck answers by sound).
+- **Added:** pressing the PS3 controller's right stick in (R3) marks a camera (once per 3 s; nothing
+  on screen, the black deck answers by sound).
 - **Changed:** the white theme is a softer grey-white.
 - **Changed:** music mode runs the outside light at 100 % at any hour.
 - **Changed:** presets fade in instead of jumping.
