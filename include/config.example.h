@@ -47,7 +47,7 @@ static const int WIFI_NETWORK_COUNT = 2;
 // tools/nmea_replay.py.
 // #define GPS_HOST           "172.20.10.1"
 // #define GPS_PORT           11123
-// Camera marks (the yellow deck's R3) go online at once: each becomes an issue in this
+// Camera marks ("mark camera" said to the yellow deck) go online at once: each becomes an issue in this
 // private repo, over the hotspot. MARKS_TOKEN is a fine-grained GitHub token for that repo alone,
 // with Issues: read and write and nothing else. Empty: the marks stay on the deck (import-car).
 // #define MARKS_REPO         "owner/radar-marks"

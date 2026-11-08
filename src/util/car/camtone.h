@@ -18,7 +18,7 @@ constexpr uint32_t ALARM_REPEAT_MS = 1500;
 // Returns the count.
 int onChange(cameras::Stage from, cameras::Stage to, camlist::Kind kind, Note* out);
 int alarmRepeat(Note* out);  // the triple beep again
-// A mark from the car (the yellow deck's R3): saved, a short rising chirp unlike any
+// A mark from the car ("mark camera" said to the yellow deck): saved, a short rising chirp unlike any
 // alert's beeps; not saved (no GPS fix, storage), one long low beep.
 int markSaved(Note* out);
 int markFailed(Note* out);
