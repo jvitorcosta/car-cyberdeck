@@ -148,6 +148,12 @@ Tuning the fill in the car: the effect numbers come from published notes on a si
 doesn't fill from both ends inwards, try the other numbers in that range in `FILL_MODE`; if the
 fill doesn't finish in time, raise `FILL_SPEED` (0 to 100) or `FILL_MS`.
 
+Checking it on the desk: `python tools/intro_check.py <port>` sends `INTRO` over USB, which plays the
+welcome again on each lit light without a reboot, and holds the deck's `[intro]` log (each key,
+its time, `sent` or `no link`) to the timeline above: PASS or FAIL, and the timeline. In the car,
+the same command (or a reboot) plays it on the lights, and `>WELCOME` on the prompt line says it
+ran. It only checks the deck: how the controller draws the fill is seen in the car.
+
 ## Music mode: song colours
 
 `MUSIC MODE` on the main screen (a tap, or Xbox A on it), the voice word "music" ("music off" to
