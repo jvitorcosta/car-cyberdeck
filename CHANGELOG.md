@@ -5,6 +5,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Both decks
+- **Changed:** the decks wait longer for the iPhone hotspot at boot (three 8 s tries, time to
+  unlock the phone) before falling back to another network, and a deck on the fallback moves to
+  the hotspot once a minute's scan finds it. Before, a hotspot that wasn't advertising yet lost to
+  the home WiFi and the deck stayed there.
+
 ### Watch app
 - **Added:** a PLAYLISTS page (the fifth): START lists your Spotify playlists (a page at a time,
   More for the next, up to 60) and START on one plays it on the phone's Spotify; the page then

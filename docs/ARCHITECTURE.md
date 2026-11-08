@@ -320,9 +320,10 @@ It answers the yellow deck over the hotspot and never writes to the car.
 ## Shared: network, updates and staying up
 
 - **Network choice** (`net/wifi`, `util/{roam,deckaddr,netup,hotspotip}`) — config.h
-  order (the hotspot first; two tries after a drop from it, `roam`), then a deck stays put. The
-  yellow deck reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`) and keeps that
-  address through blips (`deckaddr`). Online means connected with an address; "connected
+  order (the hotspot first: three tries at boot, two after a drop from it, `roam`); on a fallback
+  a deck scans for the hotspot once a minute and moves to it when it's in range. The yellow deck
+  reaches the S3 at its fixed hotspot address or by mDNS (`cardeck`) and keeps that address
+  through blips (`deckaddr`). Online means connected with an address; "connected
   without an address" reconnects on the second check in a row (`netup`).
 - **Firmware updates** (`net/ota`, `util/otaview`, `util/bootguard`) — ArduinoOTA on port 3232 on
   both decks, password `OTA_PASSWORD` (off without one), its own task. The upload writes the other
