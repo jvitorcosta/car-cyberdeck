@@ -1968,12 +1968,6 @@ static void act() {
 //   START: lights on / off    L2 / R2: previous / next preset    SELECT: music mode on / off
 //   L1 / R1 (off the look pages): both lights - / +    PS: back to the Menu
 // The player LEDs: 1 the inside light linked, 2 the outside one, 4 the pad's battery low.
-//   R3 (press the right stick in; any screen, nothing drawn): mark a camera here. It asks the black
-//          deck's /cam/mark through the cam task, at most once per MARK_GAP_MS, so a double click
-//          marks once. The black deck answers by sound (a chirp: saved; a low beep: no GPS fix), so
-//          the driver never looks.
-static constexpr uint32_t MARK_GAP_MS = 3000;
-static volatile bool camMarkAsk = false;   // R3 pressed: the cam task sends /cam/mark
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
 // redrawn. On Lights, erasing the old ring can notch its button's edge, so that button is redrawn.
@@ -2138,7 +2132,7 @@ static void handlePad() {
     // buttons act on the press, once; every edge is taken on both screens, so a button held across
     // a screen change doesn't fire on the next one
     static bool pA = false, pB = false, pX = false, pY = false, pLB = false, pRB = false;
-    static bool pSt = false, pSe = false, pL2 = false, pR2 = false, pPs = false, pR3 = false;
+    static bool pSt = false, pSe = false, pL2 = false, pR2 = false, pPs = false;
     auto edge = [](bool now, bool& prev) {
         const bool down = now && !prev;
         prev = now;
@@ -2147,7 +2141,7 @@ static void handlePad() {
     const bool a = edge(n.cross, pA), b = edge(n.circle, pB), x = edge(n.square, pX), y = edge(n.triangle, pY);
     const bool lb = edge(n.l1, pLB), rb = edge(n.r1, pRB);
     const bool start = edge(n.start, pSt), select = edge(n.select, pSe), l2 = edge(n.l2, pL2), r2 = edge(n.r2, pR2);
-    const bool home = edge(n.ps, pPs), mark = edge(n.r3, pR3);
+    const bool home = edge(n.ps, pPs);
     // every press in the log, to tell a real press from the deck acting by itself
     if (a || b || x || y || lb || rb || start || select || l2 || r2 || home) {
         Serial.printf("[pad] press%s%s%s%s%s%s%s%s%s%s%s\n", a ? " cross" : "", b ? " circle" : "", x ? " square" : "",
@@ -2155,14 +2149,6 @@ static void handlePad() {
                       select ? " SELECT" : "", l2 ? " L2" : "", r2 ? " R2" : "", home ? " PS" : "");
     }
 
-    if (mark) {
-        static uint32_t markedAt = 0;
-        if (!markedAt || millis() - markedAt >= MARK_GAP_MS) {
-            markedAt = millis();
-            camMarkAsk = true;
-            Serial.println("[pad] R3: mark");
-        }
-    }
     if (onHealth()) {  // cross, circle or PS: back to the Menu, as a tap
         if (a || b || home) leaveHealth();
         return;
@@ -2637,10 +2623,6 @@ static void camTask(void*) {
         if (ota::active()) {  // an update has the WiFi
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
-        }
-        if (camMarkAsk) {
-            camMarkAsk = false;
-            Serial.printf("[cam] mark: rc=%d\n", deckGet("/cam/mark", nullptr, 0, nullptr, 0));
         }
         const int8_t ask = camMuteAsk;
         if (ask >= 0) {
