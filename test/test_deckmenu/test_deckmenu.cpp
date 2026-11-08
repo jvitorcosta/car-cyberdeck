@@ -32,10 +32,10 @@ static void check_screen(Screen s, const Rect* shown, int nShown) {
 }
 
 void test_rects_inside_screen_and_apart() {
-    const Rect menu[] = {HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND};
+    const Rect menu[] = {HEADER, CLOCK_BAND, NOW_BAND, LIGHTS_BAND, PROMPT_BAND};
     const Rect lights[] = {STATUS, LEVEL};
     const Rect karaoke[] = {KARAOKE_BODY};
-    check_screen(Screen::Menu, menu, 4);
+    check_screen(Screen::Menu, menu, 5);
     check_screen(Screen::Lights, lights, 2);
     check_screen(Screen::Karaoke, karaoke, 1);
     check_screen(Screen::Presets, lights, 1);  // STATUS only: no level row on the PRESETS tab
@@ -127,12 +127,12 @@ void test_presets_tab() {
     TEST_ASSERT_TRUE(down >= P_PRE0 && down < P_N);
 }
 
-// The dashboard: header, clock + the trip's time, the lights, the prompt
+// The dashboard: header, clock + the trip's time, now playing, the lights, the prompt
 // line, then the three items at the bottom, top to bottom, each band right under the one before.
 void test_menu_bands_stack() {
-    const Rect bands[] = {HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND};
+    const Rect bands[] = {HEADER, CLOCK_BAND, NOW_BAND, LIGHTS_BAND, PROMPT_BAND};
     TEST_ASSERT_EQUAL_INT(0, HEADER.y);
-    for (int i = 1; i < 4; i++) TEST_ASSERT_EQUAL_INT(bands[i - 1].y + bands[i - 1].h, bands[i].y);
+    for (int i = 1; i < 5; i++) TEST_ASSERT_EQUAL_INT(bands[i - 1].y + bands[i - 1].h, bands[i].y);
     for (const Rect& r : bands) TEST_ASSERT_TRUE(r.x == 0 && r.w == 320 && r.h > 0);
     const Rect items = rect(Screen::Menu, M_ITEM0);
     TEST_ASSERT_EQUAL_INT(items.y - 4, PROMPT_BAND.y + PROMPT_BAND.h);  // 4 rows that snap to the items
@@ -186,7 +186,7 @@ void test_hit_snaps_and_ignores_display_rects() {
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, LEVEL.x + 50, LEVEL.y + 20));
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, STATUS.x + 50, STATUS.y + 5));
     // The dashboard's bands are display only, even the rows next to the items.
-    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND}) {
+    for (const Rect& r : {HEADER, CLOCK_BAND, NOW_BAND, LIGHTS_BAND, PROMPT_BAND}) {
         for (int y = r.y; y < r.y + r.h; y++)
             for (int x = 0; x < 320; x += 7) TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, x, y));
     }

@@ -46,14 +46,14 @@ constexpr const char* BOOT_LINES[] = {"WELCOME TO CYBERDECK", ">SET TERMINAL/INQ
 constexpr int N_BOOT = sizeof(BOOT_LINES) / sizeof(BOOT_LINES[0]);
 constexpr int BOOT_X = 8, BOOT_Y0 = 2, BOOT_DY = 13;
 
-// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, LIGHTS_BAND,
+// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, NOW_BAND, LIGHTS_BAND,
 // PROMPT_BAND, then the items at the bottom), each band but the prompt line under a MID rule from x 4
 // to 315 (from the clock band down, the next band's first row). Text starts at DASH_X; right-aligned
 // text ends at DASH_RIGHT. A _Y is the caps' top row, a _BASE the baseline (the row under the caps),
 // as ledpanel's text() places them.
 constexpr int DASH_X = 8, DASH_RIGHT = 312;
 // the header: one line (SMALL) and its rule
-constexpr const char* DASH_TITLE = "CYBERDECK // HONDA CITY TOURING 2022";
+constexpr const char* DASH_TITLE = "HONDA CITY TOURING";
 constexpr int DASH_TITLE_Y = 5, HEADER_RULE_Y = 20;
 // right-aligned on the title's row while a PS3 controller is connected: PAD_LABEL (SMALL, MID), then
 // PAD_GAP after it a battery icon as tall as the caps (PAD_ICON_W wide, a PAD_NUB_W x PAD_NUB_H nub on
@@ -63,10 +63,24 @@ constexpr int PAD_GAP = 4, PAD_ICON_W = 19, PAD_NUB_W = 2, PAD_NUB_H = 4, PAD_CE
 // The header's PAD part, label to nub, from its left edge to DASH_RIGHT.
 inline int padWidth() { return termfont::width(termfont::Face::SMALL, PAD_LABEL) + PAD_GAP + PAD_ICON_W + PAD_NUB_W; }
 // the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the trip's time (BIG) with
-// TRIP_LABEL (SMALL) under it right of it, right-aligned; the band ends at TRIP_RULE_Y.
+// TRIP_LABEL (SMALL) under it right of it, right-aligned; the band ends at CLOCK_RULE_Y.
 constexpr int DASH_SPLIT = 160;
-constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, TRIP_RULE_Y = 135;
+constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, CLOCK_RULE_Y = 76;
 constexpr const char* TRIP_LABEL = "TRIP";
+// What the black deck plays, down to NOW_RULE_Y: the track (TITLE, TEXT) over the artist (SMALL, MID)
+// with the time right-aligned on the artist's row (SMALL, DIM: "1:23 / 3:45", NOW_PAUSED while
+// paused; the artist stops NOW_TIME_GAP short of NOW_TIME_W, the widest time), then the progress
+// line NOW_BAR_H tall (the played part solid, the rest a DIM hairline). Without a song, one word on
+// the track's row (TITLE, DIM; ALERT for the wrong key) and the hairline.
+constexpr int NOW_TRACK_Y = 85, NOW_ARTIST_Y = 107, NOW_BAR_Y = 124, NOW_BAR_H = 3, NOW_RULE_Y = 135;
+constexpr int NOW_TIME_GAP = 8;
+constexpr const char* NOW_TIME_WIDEST = "88:88 / 88:88";
+constexpr const char* NOW_PAUSED = "PAUSED";
+constexpr const char* NOW_NOTHING = ">NOTHING PLAYING";
+constexpr const char* NOW_NO_SIGNAL = ">NO SIGNAL";
+constexpr const char* NOW_WRONG_KEY = ">WRONG KEY";
+inline int nowTimeW() { return termfont::width(termfont::Face::SMALL, NOW_TIME_WIDEST); }
+inline int nowArtistW() { return DASH_RIGHT - DASH_X - nowTimeW() - NOW_TIME_GAP; }
 // the lights on one row (BODY, on LIGHT_ROW_BASE, the caps centred between the rules): INSIDE left of
 // a vertical MID rule at LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: its label, a chip
 // of its colour as tall as the caps (LIGHT_CHIP_W wide) LIGHT_GAP after it, and LIGHT_GAP after that

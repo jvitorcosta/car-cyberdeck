@@ -207,8 +207,9 @@ void test_boot_lines_fit() {
 void test_dash_header_fits() {
     fitsLeft(Face::SMALL, DASH_TITLE, DASH_X, 316);  // the rule's ends, 4 in
     between(-1, fromCapTop(Face::SMALL, DASH_TITLE_Y), HEADER_RULE_Y, DASH_TITLE);
-    // the PS3 controller's battery: right of the title with a gap, its icon's cells inside the outline
-    TEST_ASSERT_LESS_OR_EQUAL_INT(DASH_RIGHT - termlayout::padWidth() - 4,
+    // the PS3 controller's battery: right of the title with room to breathe (8 cells), its icon's cells
+    // inside the outline
+    TEST_ASSERT_LESS_OR_EQUAL_INT(DASH_RIGHT - termlayout::padWidth() - 8 * termfont::cell(Face::SMALL),
                                   DASH_X + termfont::width(Face::SMALL, DASH_TITLE));
     TEST_ASSERT_EQUAL_INT(PAD_ICON_W, 2 * 2 + 4 * PAD_CELL_W + 3 * PAD_CELL_GAP);  // 1 px border + 1 px margin each side
     TEST_ASSERT_TRUE(HEADER_RULE_Y < deckmenu::HEADER.y + deckmenu::HEADER.h);
@@ -224,15 +225,42 @@ void test_dash_clock_and_trip_fit() {
     // rows: the clock over the date, the time over its label, all between the header rule and the band's
     const Rows clock = fromCapTop(Face::BIG, CLOCK_Y), date = fromCapTop(Face::SMALL, DATE_Y);
     const Rows label = fromCapTop(Face::SMALL, WORDS_Y);
-    between(HEADER_RULE_Y, clock, TRIP_RULE_Y, "clock");
+    between(HEADER_RULE_Y, clock, CLOCK_RULE_Y, "clock");
     above(clock, date, "clock over the date");
     above(clock, label, "trip time over its label");
-    between(HEADER_RULE_Y, date, TRIP_RULE_Y, "date");
-    // the band's rule is the first row of the lights band under it (each band starts on the rule above)
-    TEST_ASSERT_EQUAL_INT(deckmenu::CLOCK_BAND.y + deckmenu::CLOCK_BAND.h, TRIP_RULE_Y);
-    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, TRIP_RULE_Y);
+    between(HEADER_RULE_Y, date, CLOCK_RULE_Y, "date");
+    // the caps as far from the header rule as the date's from the band's rule (+-1)
+    const int gapTop = CLOCK_Y - (HEADER_RULE_Y + 1), gapBottom = CLOCK_RULE_Y - (DATE_Y + termfont::capHeight(Face::SMALL));
+    TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
+    // the band's rule is the first row of the now-playing band under it (each band starts on the rule above)
+    TEST_ASSERT_EQUAL_INT(deckmenu::CLOCK_BAND.y + deckmenu::CLOCK_BAND.h, CLOCK_RULE_Y);
+    TEST_ASSERT_EQUAL_INT(deckmenu::NOW_BAND.y, CLOCK_RULE_Y);
     // the split clears: the left column's clear ends before the right column's ink starts
     TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "99:59"));
+}
+
+// The now-playing band: the track (TITLE) over the artist (SMALL) and the time right of it, then the
+// progress line, spaced evenly between the clock band's rule and its own (+-1); an accented capital
+// stays under the rule above; the words without a song fit; the artist never reaches the time.
+void test_dash_now_playing_fits() {
+    const Rows track = fromCapTop(Face::TITLE, NOW_TRACK_Y), artist = fromCapTop(Face::SMALL, NOW_ARTIST_Y);
+    between(CLOCK_RULE_Y, track, NOW_RULE_Y, "track");
+    above(track, artist, "track over the artist");
+    TEST_ASSERT_TRUE(NOW_TRACK_Y - (termfont::accentAscent(Face::TITLE) - termfont::capHeight(Face::TITLE)) > CLOCK_RULE_Y);
+    TEST_ASSERT_TRUE(NOW_ARTIST_Y + termfont::capHeight(Face::SMALL) + termfont::descent(Face::SMALL) <= NOW_BAR_Y);
+    const int gaps[] = {NOW_TRACK_Y - (CLOCK_RULE_Y + 1),
+                        NOW_ARTIST_Y - (NOW_TRACK_Y + termfont::capHeight(Face::TITLE)),
+                        NOW_BAR_Y - (NOW_ARTIST_Y + termfont::capHeight(Face::SMALL)),
+                        NOW_RULE_Y - (NOW_BAR_Y + NOW_BAR_H)};
+    for (int g : gaps)
+        for (int h : gaps) TEST_ASSERT_TRUE(g - h <= 1 && h - g <= 1);
+    for (const char* s : {NOW_NOTHING, NOW_NO_SIGNAL, NOW_WRONG_KEY}) fitsLeft(Face::TITLE, s, DASH_X, DASH_RIGHT + MARGIN);
+    for (const char* s : {NOW_TIME_WIDEST, "3:45 / 12:07", NOW_PAUSED})
+        TEST_ASSERT_TRUE_MESSAGE(termfont::width(Face::SMALL, s) <= nowTimeW(), s);
+    TEST_ASSERT_TRUE(DASH_X + nowArtistW() + NOW_TIME_GAP <= DASH_RIGHT - nowTimeW());
+    TEST_ASSERT_TRUE(nowArtistW() >= 180);  // room for most artists
+    TEST_ASSERT_EQUAL_INT(deckmenu::NOW_BAND.y + deckmenu::NOW_BAND.h, NOW_RULE_Y);
+    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, NOW_RULE_Y);
 }
 
 // The lights row: IN left, OUT right of the vertical rule at LIGHTS_SPLIT, each its label (BODY), a
@@ -266,15 +294,15 @@ void test_dash_lights_fit() {
     const int outRow = lightTextX(1) + termfont::width(Face::BODY, "YELLOW 100%") - lightX(1);
     TEST_ASSERT_TRUE(outRow >= 130 && outRow <= 140);
     TEST_ASSERT_TRUE(lightX(1) + outRow <= DASH_RIGHT);
-    // the row between the trip band's rule and its own, caps centred; the clear reaches an accented
+    // the row between the now-playing band's rule and its own, caps centred; the clear reaches an accented
     // capital's top; the band's rule starts the prompt line's band
     const Rows row = fromBase(Face::BODY, LIGHT_ROW_BASE);
-    between(TRIP_RULE_Y, row, LIGHTS_RULE_Y, "lights");
-    TEST_ASSERT_TRUE(LIGHT_ROW_BASE - termfont::accentAscent(Face::BODY) > TRIP_RULE_Y);
-    const int gapTop = (LIGHT_ROW_BASE - termfont::capHeight(Face::BODY)) - (TRIP_RULE_Y + 1);
+    between(NOW_RULE_Y, row, LIGHTS_RULE_Y, "lights");
+    TEST_ASSERT_TRUE(LIGHT_ROW_BASE - termfont::accentAscent(Face::BODY) > NOW_RULE_Y);
+    const int gapTop = (LIGHT_ROW_BASE - termfont::capHeight(Face::BODY)) - (NOW_RULE_Y + 1);
     const int gapBottom = LIGHTS_RULE_Y - LIGHT_ROW_BASE;
     TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
-    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, TRIP_RULE_Y);
+    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, NOW_RULE_Y);
     TEST_ASSERT_EQUAL_INT(deckmenu::PROMPT_BAND.y, LIGHTS_RULE_Y);
 }
 
@@ -440,6 +468,7 @@ int main() {
     RUN_TEST(test_boot_lines_fit);
     RUN_TEST(test_dash_header_fits);
     RUN_TEST(test_dash_clock_and_trip_fit);
+    RUN_TEST(test_dash_now_playing_fits);
     RUN_TEST(test_dash_lights_fit);
     RUN_TEST(test_dash_prompt_fits);
     RUN_TEST(test_song_colours_fit);
