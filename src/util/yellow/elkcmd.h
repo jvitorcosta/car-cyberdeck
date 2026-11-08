@@ -19,6 +19,14 @@ inline Frame power(Variant v, bool on) {
     return {{0x7E, static_cast<uint8_t>(v == V0 ? 0x00 : 0x04), 0x04, s, 0x00, t, 0xFF, 0x00, 0xEF}};
 }
 
+// The MELK controllers' built-in effects (lotus-lamp-python's notes on a MELK-OA10, whose colour
+// frame is V1's byte for byte): effect `mode` (0..212; 57..76 the curtains), and their speed
+// (0..100). The controller runs the effect along its strip on its own; a colour frame ends it.
+inline Frame effect(uint8_t mode) { return {{0x7E, 0x07, 0x03, mode, 0xFF, 0xFF, 0xFF, 0x00, 0xEF}}; }
+inline Frame speed(uint8_t pct) {
+    return {{0x7E, 0x04, 0x02, static_cast<uint8_t>(pct > 100 ? 100 : pct), 0xFF, 0xFF, 0xFF, 0x00, 0xEF}};
+}
+
 // Intensity by scaling the colour itself (0..100 %): the colour command is the one proven on the
 // car's controllers. The scale is perceptual (pct squared, close to the eye's gamma): LED PWM at
 // half duty already looks ~75 % bright, so linear steps would bunch up at the top. A channel that

@@ -14,11 +14,13 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
 SIZES = os.path.join(DATA, "media_sizes.txt")
 # The S3's media: its sounds, montage, intro videos (kiss, Max) and their sound, second greeting, wolf howl,
-# Sonic and McQueen (its media partition). A zero-filled McQueen stand-in
-# fails carbin's checks, so the S3 reads it as no McQueen.
+# Sonic, McQueen, the boot sound rosters and the camera alerts' voice (its media partition); a zero-filled
+# roster reads as none. A zero-filled McQueen stand-in fails carbin's checks, so the S3 reads it as no
+# McQueen; a zero-filled camvoice.bin has no "CAMV" header, so the S3 reads it as no voice (beeps only).
 FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin",
          "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "idle.bin",
-         "mcqueen.bin", "backdrop.bin", "max.bin", "max.pcm", "shadow.bin"]
+         "mcqueen.bin", "backdrop.bin", "max.bin", "max.pcm", "shadow.bin",
+         "drive.snd", "opener.snd", "finale.snd", "camvoice.bin", "connect.snd"]
 MONTAGE_EMPTY = b"MTG1" + (0).to_bytes(2, "little") + (10).to_bytes(2, "little")
 # Stand-ins start with an empty header, so the firmware reads "no clip" and boots.
 HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "max.bin": MONTAGE_EMPTY,

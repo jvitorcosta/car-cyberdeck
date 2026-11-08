@@ -1,8 +1,11 @@
 #include "bootscene.h"
 #include <Arduino.h>
 #include "tjpgd.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
+#include <esp_heap_caps.h>
 #include "car_sprite.h"
 #include "carlook.h"
 #include "bootterm.h"
@@ -12,6 +15,7 @@
 #include "../core/mem.h"
 #include "../../util/black/bootanim.h"
 #include "../core/media.h"
+#include "../../common/ui/backlight.h"
 
 MEDIA_DECL(data_montage_bin);
 
@@ -37,6 +41,31 @@ constexpr uint16_t WHITE = 0xFFFF;
 // The montage sound (data/finale.pcm) starts with the first montage frame, so something plays over
 // the photos; false = end it with the fade to black (bootanim::finaleStartFrame).
 constexpr bool MONTAGE_SOUND_AT_START = false;
+// The brake's backlight fade: a little shorter than the brake, so it's dark before the first photo
+// is drawn (the backlight comes back on at once, with the photo).
+constexpr uint32_t BRAKE_FADE_MS = bootanim::BRAKE_MS - 80;
+
+// The greeting has been heard to its end: it comes out up to ~0.45 s after the scene starts
+// (bootanim::COLD_SOUND_LEAD_MS), so the scene's own clock isn't enough.
+bool greetingDone(uint32_t t) { return t >= greeting::durationMs() && !greeting::playing(); }
+
+// The WiFi-connected chime (greeting::playConnect) bridges the cruise and the montage: cued the
+// first time this is asked (once the deck is online and the greeting is over), done when it has
+// played, or after CHIME_WAIT_MS if another clip (a video's sound) keeps the output busy.
+constexpr uint32_t CHIME_WAIT_MS = 3000;
+uint32_t s_chimeAt = 0;      // scene time + 1 the chime was cued; 0 = not yet
+bool chimeDone(uint32_t t) {
+    if (!s_chimeAt) {
+        s_chimeAt = t + 1;
+        greeting::playConnect();
+    }
+    return !greeting::playing() || t + 1 - s_chimeAt >= CHIME_WAIT_MS;
+}
+
+// The montage frame (of the parsed montage) that starts a finale of `ms`; -1 for no finale.
+int finaleFrame(uint32_t ms, uint32_t leadMs = bootanim::SOUND_LEAD_MS) {
+    return !ms ? -1 : MONTAGE_SOUND_AT_START ? 0 : bootanim::finaleStartFrame(montage::count(), montage::fps(), ms, leadMs);
+}
 
 TFT_eSPI* s_tft = nullptr;
 carlook::Look s_car = carlook::honda();   // the car that drives (ui/carlook)
@@ -51,6 +80,15 @@ uint8_t s_haloLut[64];       // 140 x (1 - d)^1.5 for the underglow halo, d in 6
 uint8_t* s_wheelAng = nullptr;   // per wheel pixel (29 x 29): angle in 256 steps (heap, scene only)
 uint8_t* s_wheelRing = nullptr;  // per wheel pixel: 0 out, 1 tyre, 2 lip, 3 hub centre, 4 hub, 5 face, 6 face with spokes
 constexpr int WHEEL_D = 29;
+// Made once per scene (freed with the strip buffer), so a drive frame copies or looks them up
+// instead of drawing them: the static layers in PSRAM (copied: ~3 ms a frame, drawn: ~11), the
+// small alpha tables in internal RAM (PSRAM reads are too slow for a per-pixel lookup).
+uint16_t* s_static = nullptr;    // rows SKY_H-239 of the layers that never move (strip byte order)
+uint8_t* s_halo = nullptr;       // underglow halo alpha at full glow, HALO_ROWS x HALO_W by |dx|
+uint8_t* s_core = nullptr;       // underglow core alpha, same layout (s_halo's second half)
+uint8_t* s_pool = nullptr;       // a street lamp's light pool on the asphalt, POOL_ROWS x POOL_W
+constexpr int HALO_Y = 199, HALO_ROWS = 29, HALO_W = 127;
+constexpr int POOL_Y = 150, POOL_ROWS = 20, POOL_W = 86;
 
 // ---- strip drawing (everything clipped to the current strip) ----
 inline void put(int x, int y, uint16_t c) { s_buf[(y - s_y0) * W + x] = rgb565::be(c); }
@@ -140,15 +178,27 @@ void initTrees() {
 }
 
 // ---- the car park ----
-void drawBackground(uint32_t t) {
+// The layers that never move: sky band, tree line, verge, fence rail, asphalt grain.
+void drawStatic() {
     for (int y = SKY_H; y < 130; ++y) rect(0, y, W, 1, skyAt(y));         // sky continued
-    const uint16_t tree = hex(0x0A120E);                                // tree line (static)
+    const uint16_t tree = hex(0x0A120E);                                // tree line
     for (int y = s_y0 < 86 ? 86 : s_y0; y < s_y0 + STRIP_H && y < 126; ++y)
         for (int x = 0; x < W; ++x)
             if (y >= s_treeTop[x]) put(x, y, tree);
     rect(0, 126, W, 10, hex(0x09100C));
+    rect(0, 123, W, 1, hex(0x32643F));                                  // the fence's rail
+    for (int y = s_y0 < 140 ? 140 : s_y0; y < s_y0 + STRIP_H; ++y) {      // near-black asphalt
+        const uint16_t base = lerp565(hex(0x0E0F13), hex(0x12131A), y - 140, 99);
+        const uint16_t grain[4] = {bootanim::scale565(base, 225), base,
+                                   bootanim::blend565(WHITE, base, 5), bootanim::blend565(WHITE, base, 10)};
+        for (int x = 0; x < W; ++x) put(x, y, grain[((uint32_t)(x * 73856093u) ^ (uint32_t)(y * 19349663u)) >> 13 & 3]);
+    }
+}
+
+void drawBackground(uint32_t t) {
+    if (s_static && s_y0 >= SKY_H) memcpy(s_buf, s_static + (s_y0 - SKY_H) * W, W * STRIP_H * sizeof(uint16_t));
+    else drawStatic();
     const int fo = bootanim::scroll(t, FENCE_SPEED, 1000);                // chain-link fence
-    rect(0, 123, W, 1, hex(0x32643F));
     for (int y = s_y0 < 124 ? 124 : s_y0; y < s_y0 + STRIP_H && y < 140; ++y)
         for (int x = 0; x < W; ++x)
             if ((x + fo + y) % 5 == 0 || (x + fo - y + 1000) % 5 == 0) put(x, y, bootanim::blend565(hex(0x285A37), get(x, y), 90));
@@ -159,12 +209,6 @@ void drawBackground(uint32_t t) {
         rect(px + 6, 127, 20, 6, hex(0x1A1D24));
         rect(px + 1, 135, 1, 1, hex(0xC81E1E));
         rect(px + 32, 135, 1, 1, hex(0xC81E1E));
-    }
-    for (int y = s_y0 < 140 ? 140 : s_y0; y < s_y0 + STRIP_H; ++y) {      // near-black asphalt
-        const uint16_t base = lerp565(hex(0x0E0F13), hex(0x12131A), y - 140, 99);
-        const uint16_t grain[4] = {bootanim::scale565(base, 225), base,
-                                   bootanim::blend565(WHITE, base, 5), bootanim::blend565(WHITE, base, 10)};
-        for (int x = 0; x < W; ++x) put(x, y, grain[((uint32_t)(x * 73856093u) ^ (uint32_t)(y * 19349663u)) >> 13 & 3]);
     }
     const int bo = bootanim::scroll(t, ROAD_SPEED, BAY_PERIOD);           // parking-bay lines
     for (int bx = -BAY_PERIOD; bx < W + BAY_PERIOD; bx += BAY_PERIOD)
@@ -180,8 +224,13 @@ void drawBackground(uint32_t t) {
             const int hw = (y - 76) * 45 / 100;
             blendRect(lx + 13 - hw, y, 2 * hw + 1, 1, hex(0xE1EBFF), 13);
         }
-        for (int y = 150; y < 170; ++y) {
+        for (int y = POOL_Y; y < POOL_Y + POOL_ROWS; ++y) {
             if (y < s_y0 || y >= s_y0 + STRIP_H) continue;         // only this strip's rows
+            if (s_pool) {
+                const uint8_t* a = s_pool + (y - POOL_Y) * POOL_W;
+                for (int k = 0; k < POOL_W; ++k) blendPx(lx - 30 + k, y, hex(0xC8D2E6), a[k]);
+                continue;
+            }
             const float dy = (float)(y - 160) / 9.0f, dy2 = dy * dy;
             for (int x = lx - 30; x < lx + 56; ++x) {
                 const float dx = (float)(x - lx - 13) / 45.0f, dd = dx * dx + dy2;
@@ -281,8 +330,23 @@ void drawCar(const Car& c) {
     const float glow = bootanim::glowAlpha(c.e) / 217.0f;            // 0.53 at rest .. 1.0 loud
     rect(c.x + 24, GROUND_Y, 154, 2, hex(0x08090C));              // shadow
     const int cx = c.x + 100;                                         // underglow halo + core on the asphalt
-    for (int y = 199; y < 228; ++y) {
+    const int g = (int)(glow * 256.0f);
+    for (int y = HALO_Y; y < HALO_Y + HALO_ROWS; ++y) {
         if (y < s_y0 || y >= s_y0 + STRIP_H) continue;
+        if (s_halo) {
+            const uint8_t* h = s_halo + (y - HALO_Y) * HALO_W;
+            const uint8_t* k = s_core + (y - HALO_Y) * HALO_W;
+            const int xa = std::max({c.x - 26, cx - HALO_W + 1, 0}), xb = std::min({c.x + 226, cx + HALO_W, W});
+            for (int x = xa; x < xb; ++x) {                      // clipped once: no per-pixel checks
+                const int ax = abs(x - cx);
+                if (!h[ax] && !k[ax]) continue;
+                uint16_t px = get(x, y);
+                if (h[ax]) px = bootanim::blend565(UNDERGLOW, px, (uint8_t)(h[ax] * g >> 8));
+                if (k[ax]) px = bootanim::blend565(GLOW_CORE, px, (uint8_t)(k[ax] * g >> 8));
+                put(x, y, px);
+            }
+            continue;
+        }
         const float hy = (float)(y - 213) / 14.0f, hy2 = hy * hy, ky = (float)(y - 211) / 5.0f, ky2 = ky * ky;
         for (int x = c.x - 26; x < c.x + 226; ++x) {
             const float dx = (float)(x - cx);
@@ -371,9 +435,55 @@ void runWithoutScene(uint32_t t0) {
             s_tft->drawString(bootterm::caption(), 10, 10, 2);
         }
         const uint32_t t = millis() - t0;
-        if (bootanim::mayExit(t, t >= greeting::durationMs(), s_online())) return;
+        if (bootanim::mayExit(t, greetingDone(t), s_online()) && chimeDone(t)) return;
         vTaskDelay(pdMS_TO_TICKS(100));
     }
+}
+
+void* psram(size_t n) { return heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT); }
+
+// The per-scene caches above, drawn through the strip buffer (s_buf); one that doesn't fit is
+// drawn live each frame instead.
+void initCaches() {
+    s_static = (uint16_t*)psram((size_t)W * (H - SKY_H) * sizeof(uint16_t));
+    if (s_static)
+        for (int s = 0; s < STRIPS; ++s) {
+            s_y0 = SKY_H + s * STRIP_H;
+            drawStatic();
+            memcpy(s_static + (s_y0 - SKY_H) * W, s_buf, W * STRIP_H * sizeof(uint16_t));
+        }
+    s_halo = (uint8_t*)malloc(2 * HALO_ROWS * HALO_W);         // 7.4 KB
+    if (s_halo) {
+        s_core = s_halo + HALO_ROWS * HALO_W;
+        for (int r = 0; r < HALO_ROWS; ++r) {
+            const int y = HALO_Y + r;
+            const float hy = (float)(y - 213) / 14.0f, hy2 = hy * hy, ky = (float)(y - 211) / 5.0f, ky2 = ky * ky;
+            for (int ax = 0; ax < HALO_W; ++ax) {
+                const float dx = (float)ax;
+                const float d = dx * dx * (1.0f / (126.0f * 126.0f)) + hy2;
+                s_halo[r * HALO_W + ax] = d < 1.0f ? s_haloLut[(int)(d * 64.0f)] : 0;
+                const float k = dx * dx * (1.0f / (90.0f * 90.0f)) + ky2;
+                s_core[r * HALO_W + ax] = ky2 < 1.0f && k < 1.0f ? (uint8_t)(115.0f * (1.0f - k)) : 0;
+            }
+        }
+    }
+    s_pool = (uint8_t*)malloc(POOL_ROWS * POOL_W);             // 1.7 KB
+    if (s_pool)
+        for (int r = 0; r < POOL_ROWS; ++r) {
+            const float dy = (float)(POOL_Y + r - 160) / 9.0f, dy2 = dy * dy;
+            for (int k = 0; k < POOL_W; ++k) {
+                const float dx = (float)(k - 43) / 45.0f, dd = dx * dx + dy2;
+                s_pool[r * POOL_W + k] = dd < 1.0f ? (uint8_t)(26.0f * (1.0f - dd)) : 0;
+            }
+        }
+}
+
+void freeCaches() {
+    free(s_static);
+    free(s_halo);                // s_core is its second half
+    free(s_pool);
+    s_static = nullptr;
+    s_halo = s_core = s_pool = nullptr;
 }
 
 void task(void*) {
@@ -395,44 +505,68 @@ void task(void*) {
         Serial.println("[bootscene] no memory for the strip buffer: scene skipped");
         runWithoutScene(t0);
     } else {
-        if (s_opts.drive) drawSky();                             // no drive: black until the montage
+        if (s_opts.drive) {
+            initCaches();
+            drawSky();                                           // no drive: black until the montage
+        }
         uint32_t tHero = bootanim::NO_EXIT;
         bool skipBrake = false;
         int xc = 0, shown = -1;
         uint8_t* jpgWork = nullptr;                              // tjpgd workspace, montage only
         int finaleAt = -1;                                       // montage frame that starts the finale sound
-        bool finaleStarted = false;
+        bool openerCued = false, finaleStarted = false;
+        enum { LIT, FADING, FADED_OUT } light = LIT;            // the backlight through the brake
+        uint32_t pushMs[3] = {0, 0, 0};                          // of busyMs: sending strips to the panel
         uint32_t frames[3] = {0, 0, 0}, busyMs[3] = {0, 0, 0};   // drive, brake, montage
         TickType_t wake = xTaskGetTickCount();
         for (;;) {
             const uint32_t t = millis() - t0;
             if (!s_opts.drive && tHero == bootanim::NO_EXIT) {
-                if (!s_online()) { vTaskDelayUntil(&wake, pdMS_TO_TICKS(FRAME_MS)); continue; }
+                if (!s_online() || !chimeDone(t)) { vTaskDelayUntil(&wake, pdMS_TO_TICKS(FRAME_MS)); continue; }
                 tHero = t;
                 skipBrake = true;                        // straight to the montage
             }
-            if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, t >= greeting::durationMs(), s_online())) {
+            if (tHero == bootanim::NO_EXIT && bootanim::mayExit(t, greetingDone(t), s_online()) && chimeDone(t)) {
                 tHero = t;
                 xc = bootanim::cruiseX(t);
             }
             const uint32_t u = tHero == bootanim::NO_EXIT ? 0
                              : t - tHero + (skipBrake ? bootanim::BRAKE_MS : 0);
+            // A clip is out ~10 ms after its cue while the audio path is still on from the last
+            // one (the greeting or chime), ~0.45 s from cold: each is cued that early.
+            const bool warm = greeting::warm();
+            const uint32_t lead = warm ? bootanim::SOUND_LEAD_MS : bootanim::COLD_SOUND_LEAD_MS;
+            if (tHero != bootanim::NO_EXIT && !openerCued && bootanim::openerDue(u, lead)) {
+                openerCued = true;                               // in the brake's fade: heard with the first photo
+                finaleAt = finaleFrame(greeting::finaleMs());    // after the opener the path is on
+                if (bootanim::openerFits(finaleAt, montage::fps(), greeting::openerMs()))
+                    greeting::playOpener();                      // the montage's first sound
+                else if (!warm)
+                    finaleAt = finaleFrame(greeting::finaleMs(), bootanim::COLD_SOUND_LEAD_MS);
+            }
             const uint32_t f0 = millis();
-            const uint8_t e = greeting::level(t);
+            const uint8_t e = greeting::level();                // the lights follow the voice
             int mode;
             if (s_opts.drive) bootterm::events(t, tHero != bootanim::NO_EXIT);
-            if (tHero == bootanim::NO_EXIT) {                    // enter + cruise
-                mode = 0;
+            if (tHero != bootanim::NO_EXIT && !skipBrake && light == LIT && u < bootanim::BRAKE_MS)
+                light = backlight::fadeOut(BRAKE_FADE_MS) ? FADING : FADED_OUT;   // FADED_OUT: dim pixels
+            if (tHero == bootanim::NO_EXIT || (light == FADING && u < bootanim::BRAKE_MS)) {
+                // enter + cruise; the brake too while the backlight fades it (same cheap frame)
+                mode = tHero == bootanim::NO_EXIT ? 0 : 1;
+                const uint32_t world = mode ? bootanim::brakeTime(tHero, u) : t;
                 bootterm::drawDirect(*s_tft, t, skyAt);
-                twinkle(t);
-                const Car car = makeCar(t, bootanim::carX(t, bootanim::NO_EXIT), bootanim::bob(t), e);
+                twinkle(world);
+                const Car car = mode ? makeCar(world, bootanim::brakeX(xc, u), 0, e)
+                                     : makeCar(t, bootanim::carX(t, bootanim::NO_EXIT), bootanim::bob(t), e);
                 for (int s = 0; s < STRIPS; ++s) {
                     s_y0 = SKY_H + s * STRIP_H;
-                    drawBackground(t);
+                    drawBackground(world);
                     drawCar(car);
+                    const uint32_t p0 = millis();
                     spr.pushSprite(0, s_y0);
+                    pushMs[mode] += millis() - p0;
                 }
-            } else if (u < bootanim::BRAKE_MS) {                 // brake + fade the whole screen
+            } else if (u < bootanim::BRAKE_MS) {                 // brake + fade the whole screen's pixels
                 mode = 1;
                 const uint32_t world = bootanim::brakeTime(tHero, u);
                 const Car car = makeCar(world, bootanim::brakeX(xc, u), 0, e);
@@ -446,7 +580,9 @@ void task(void*) {
                     drawBackground(world);
                     drawCar(car);
                     dimStrip(lvl);
+                    const uint32_t p0 = millis();
                     spr.pushSprite(0, s_y0);
+                    pushMs[1] += millis() - p0;
                 }
             } else {                                             // the owner's photo montage
                 mode = 2;
@@ -456,13 +592,9 @@ void task(void*) {
                     if (shown < 0) {
                         spr.deleteSprite();                      // the strip isn't needed any more
                         s_buf = nullptr;
+                        freeCaches();
                         jpgWork = (uint8_t*)malloc(TJPGD_WORKSPACE_SIZE);
                         if (!jpgWork) break;                     // no memory: skip the montage
-                        finaleAt = !greeting::finaleMs() ? -1
-                                   : MONTAGE_SOUND_AT_START ? 0
-                                   : bootanim::finaleStartFrame(montage::count(), montage::fps(), greeting::finaleMs());
-                        if (bootanim::openerFits(finaleAt, montage::fps(), greeting::openerMs()))
-                            greeting::playOpener();              // the montage's first sound
                     }
                     if (!finaleStarted && finaleAt >= 0 && i >= finaleAt) {   // the montage sound
                         greeting::playFinale();
@@ -471,6 +603,10 @@ void task(void*) {
                     const uint8_t* jpg;
                     size_t len;
                     if (montage::frame(i, &jpg, &len)) drawJpg(jpgWork, jpg, len);
+                    if (light == FADING) {                       // the first photo is drawn: light it
+                        backlight::restore();
+                        light = LIT;
+                    }
                     shown = i;
                 }
             }
@@ -480,17 +616,19 @@ void task(void*) {
         }
         // Let the finale finish (it ends with the last frame, ~0.1 s of DMA tail) so its I2S buffers
         // are gone before Spotify's TLS allocates; overlapping them fragmented the heap.
+        if (light == FADING) backlight::restore();              // no montage (or no memory for it)
         for (int k = 0; k < 60 && greeting::playing(); ++k) vTaskDelay(pdMS_TO_TICKS(50));
         free(jpgWork);
         if (s_buf) spr.deleteSprite();
         s_buf = nullptr;
-        Serial.printf("[bootscene] %u ms; render avg drive %u ms (%u frames), brake %u ms (%u), montage %u ms (%u of %d); stack free %u\n",
+        Serial.printf("[bootscene] %u ms; render avg drive %u ms (push %u, %u frames), brake %u ms (push %u, %u), montage %u ms (%u of %d); stack free %u\n",
                       (unsigned)(millis() - t0),
-                      (unsigned)(frames[0] ? busyMs[0] / frames[0] : 0), (unsigned)frames[0],
-                      (unsigned)(frames[1] ? busyMs[1] / frames[1] : 0), (unsigned)frames[1],
+                      (unsigned)(frames[0] ? busyMs[0] / frames[0] : 0), (unsigned)(frames[0] ? pushMs[0] / frames[0] : 0), (unsigned)frames[0],
+                      (unsigned)(frames[1] ? busyMs[1] / frames[1] : 0), (unsigned)(frames[1] ? pushMs[1] / frames[1] : 0), (unsigned)frames[1],
                       (unsigned)(frames[2] ? busyMs[2] / frames[2] : 0), (unsigned)frames[2], montage::count(),
                       (unsigned)uxTaskGetStackHighWaterMark(nullptr));
     }
+    freeCaches();
     free(s_wheelAng);
     free(s_wheelRing);
     s_wheelAng = s_wheelRing = nullptr;
@@ -503,11 +641,18 @@ void task(void*) {
 
 void start(TFT_eSPI& tft, bool (*online)()) { start(tft, online, Opts{carlook::honda(), true}); }
 
+bool openerFits(uint32_t openerMs, uint32_t finaleMs) {
+    const media::Blob photos = MEDIA(data_montage_bin, "montage.bin");
+    montage::parse(photos.data, photos.size);   // the task parses it again: same blob, same result
+    return bootanim::openerFits(finaleFrame(finaleMs), montage::fps(), openerMs);
+}
+
 void start(TFT_eSPI& tft, bool (*online)(), const Opts& o) {
     s_opts = o;
     s_car = o.car;
     s_tft = &tft;
     s_online = online;
+    s_chimeAt = 0;
     s_active = true;
     // 6 KB: 4 KB left 1.8 KB free at "bootscene end" (2026-10-21 serial session).
     if (xTaskCreatePinnedToCore(task, "bootscene", 6144, nullptr, 1, nullptr, 1) != pdPASS) {

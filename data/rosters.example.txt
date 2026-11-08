@@ -1,0 +1,22 @@
+# Boot sound rosters for the black deck (tools/gen_rosters.py). Copy to data/rosters.txt
+# (git-ignored), list your own WAVs, then: python tools/gen_rosters.py
+# One WAV per line, relative to greeting-sounds/ (or --sounds DIR); each under 4 s.
+# Every boot picks one clip per section at random, never the one it played last boot.
+# An empty section keeps that boot sound as today's single clip.
+
+[drive]
+# the silver Honda's night drive greeting (else data/greeting.pcm)
+# welcome.wav
+# hello_16k.wav
+
+[opener]
+# the photo montage's first sound (else data/opener.pcm)
+# here_we_go.wav
+
+[finale]
+# with the Honda logo, ending with the montage's fade (else data/finale.pcm)
+# drive_safe.wav
+
+[connect]
+# a short chime when the deck is online, just before the montage (else none)
+# chime.wav

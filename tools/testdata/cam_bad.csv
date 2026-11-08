@@ -1,0 +1,3 @@
+id,kind,lat,lon,heading,limit,label,source,checked
+mao-0001,speed,-3.100000,-60.000000,270,60,Bench speed,car,2026-11-03
+mao-0002,bump,-3.110000,-60.000000,,30,Bench bump,car,2026-11-03

@@ -22,10 +22,25 @@ void test_no_clip_is_done_at_once() {
     TEST_ASSERT_EQUAL_INT(50, introclock::frameAt(0, 0, 50));         // bad fps: done at once
 }
 
+// The video's clock starts with its sound's first sample (lips match the voice): frame 0 holds
+// until then, at most SOUND_WAIT_MS (a sound that never starts doesn't stall the video).
+void test_clock_follows_the_sound() {
+    using introclock::elapsed;
+    TEST_ASSERT_EQUAL_UINT32(800, introclock::SOUND_WAIT_MS);   // a cold start's sound is out in ~0.45 s
+    TEST_ASSERT_EQUAL_UINT32(0, elapsed(1050, 1000, 0, true));        // sound not out yet: hold
+    TEST_ASSERT_EQUAL_UINT32(0, elapsed(1100, 1000, 1100, true));     // its first sample
+    TEST_ASSERT_EQUAL_UINT32(400, elapsed(1500, 1000, 1100, true));
+    TEST_ASSERT_EQUAL_UINT32(0, elapsed(1000 + introclock::SOUND_WAIT_MS, 1000, 0, true));
+    TEST_ASSERT_EQUAL_UINT32(50, elapsed(1050 + introclock::SOUND_WAIT_MS, 1000, 0, true));   // gave up
+    TEST_ASSERT_EQUAL_UINT32(0, elapsed(1050, 1000, 900, true));      // an older clip's start: not ours
+    TEST_ASSERT_EQUAL_UINT32(50, elapsed(1050, 1000, 0, false));      // a silent video: its own clock
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_frames_follow_the_clock);
     RUN_TEST(test_done_after_the_last_frame);
     RUN_TEST(test_no_clip_is_done_at_once);
+    RUN_TEST(test_clock_follows_the_sound);
     return UNITY_END();
 }

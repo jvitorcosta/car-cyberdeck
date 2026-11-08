@@ -17,6 +17,7 @@ bool displayOnly(Screen s, int x, int y) {
     }
     if (s == Screen::Karaoke) return inside(KARAOKE_BODY, x, y);
     if (s == Screen::Presets) return inside(STATUS, x, y);
+    if (s == Screen::Check || s == Screen::Parked) return false;
     return inside(STATUS, x, y) || inside(LEVEL, x, y);
 }
 
@@ -30,6 +31,7 @@ int count(Screen s) {
     if (s == Screen::Menu) return M_N;
     if (s == Screen::Karaoke) return K_N;
     if (s == Screen::Presets) return P_N;
+    if (s == Screen::Check || s == Screen::Parked) return H_N;
     return L_N;
 }
 
@@ -37,6 +39,7 @@ Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
     if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 106, 192, 100, 44);  // LIGHTS, KARAOKE, MUSIC
     if (s == Screen::Karaoke) return mk(4, 2, 70, 36);                        // K_BACK, where Lights has its Back
+    if (s == Screen::Check || s == Screen::Parked) return mk(0, 0, 320, 240);  // H_TAP: anywhere
     // Lights and Presets: < BACK, then the four tabs in x 80..316 (56 px: five 70 px buttons don't fit)
     if (id == L_BACK) return mk(4, 2, 70, 36);
     if (id < L_TAB0 + N_TABS) return mk(80 + (id - L_TAB0) * 60, 2, 56, 36);

@@ -19,6 +19,7 @@
 #include "../../util/black/genre.h"
 #include "../../util/black/genrebadge.h"
 #include "../genre/apple.h"
+#include "../car/markpush.h"
 #include "../../util/lights/ledlook.h"
 #include "../../util/black/songmood.h"
 #include "../../util/wire/songpalette.h"
@@ -308,6 +309,8 @@ static void run(void*) {
                     deferred = true;
                     mem::log("defer step");
                 }
+            } else {
+                markpush::tick(now);               // nothing else to do: a camera mark goes online
             }
         }
         vTaskDelay(pdMS_TO_TICKS(LOOP_DELAY_MS));

@@ -2,8 +2,9 @@
 
 CarDeck is three programs that meet on the phone's hotspot: the **black deck** (ESP32-S3, env
 `s3`, `src/black/`), the **yellow deck** (ESP32 CYD, env `ledpanel`, `src/yellow/`) and the
-**Honda City** watch app (`garmin/carlights/`). Code both decks build lives in `src/common/` and
-`src/util/`. See [HISTORY.md](HISTORY.md) for why it is built this way.
+**Honda City** watch app (`garmin/carlights/`). A fourth, the **OBD deck** (a plain ESP32, env
+`obddeck`, `src/obd/`), reads the car for the health check (being built on `feat/car-health`).
+Code the decks share lives in `src/common/` and `src/util/`. See [HISTORY.md](HISTORY.md) for why it is built this way.
 
 ```
 Spotify, LRCLIB, iTunes, PokéAPI (HTTPS)        ip-api.com, Open-Meteo (HTTP)
@@ -74,14 +75,38 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   Pokémon-style status messages (`ui/lyricmsg`) when there is no line to show.
 - **Genre badge** (`genre/apple`, `util/genre`, `util/genrebadge`) — Apple artist genre, cached
   per artist, mapped to Gen-3 style badges.
-- **Night mode** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
+- **Night mode, black deck** (`util/daynight`, `net/clock`, `ui/backlight`) — 18:00–06:00 local time
   (SNTP; `TIMEZONE` in `src/config.h`, daylight saving included): "Moonlit battle" palette (`ui/theme` `NIGHT`) and a dimmer backlight.
+  The yellow deck uses the same schedule for its backlight only.
 - **Greeting** (`audio/greeting`) — boot sound: the embedded `data/greeting.pcm` (16-bit mono
-  16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task that frees the
-  driver when done; `tools/greeting_clip.py` falls back to the default chime at build time.
+  16 kHz) played through the ES8311 (`board/s3/sink_es8311`) in a one-shot task. From cold the
+  speaker gets 400 ms to wake before the first sample (with 60 ms the deck's own mic heard a clip's
+  first ~0.3 s missing; `-D AUDIO_PROBE` logs that test); after a 16 kHz clip the output stays on,
+  sending silence, for 20 s, so the next clip starts at once; `tools/greeting_clip.py` falls back to the default chime at build time.
   The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
+- **Boot sound rosters** (`util/sndroster`, `util/soundpick`, `audio/greeting`) — the Honda's
+  drive greeting, the montage start and the Honda logo sound each come from a roster:
+  `data/drive.snd`, `opener.snd` and `finale.snd` (git-ignored), built by `tools/gen_rosters.py`
+  from the WAVs listed in `data/rosters.txt` (git-ignored; format in `data/rosters.example.txt`):
+  up to 32 clips of up to 4 s each, 16-bit mono 16 kHz, trimmed at -45 dB, faded out over 20 ms
+  and levelled to 0.12 RMS (peaks capped at 95 %). `setup()` (`pickSounds`) picks one per
+  slot at random, never last boot's (NVS `boot`/`drive`, `opener`, `finale`): the logo's first,
+  then a montage start among the clips that end before it starts (`bootscene::openerFits`, the
+  rule the scene applies); the drive's only for the Honda's opening. A slot without a roster plays
+  its single file (`greeting.pcm`, `opener.pcm`, `finale.pcm`). A fourth roster, `connect.snd`
+  (NVS `connect`), is the WiFi-connected chime: the boot scene cues it (`greeting::playConnect`)
+  once it's online and the greeting is over, and leaves the cruise (or, after a video, starts the
+  montage) when it has played, at most 3 s later; it has no single file, so no roster means no
+  chime. Serial: `[boot] sounds: drive=… opener=… finale=… connect=…`.
+- **Sound timing** (`bootanim::SOUND_LEAD_MS`, `introclock::elapsed`, `greeting::level`) — a clip
+  is heard ~0.45 s after it's cued from cold (task, codec bring-up, the speaker's wake), ~10 ms
+  while the output is still on from the last clip (`greeting::warm`), so the pictures follow
+  the sound, not the cue: an intro video's frames run from its sound's first sample (frame 0 holds
+  up to 0.8 s for it), the drive's car lights follow the greeting as heard, the montage start is
+  cued that much (warm or cold) before the first photo (in the brake's fade) and the logo sound that much before
+  its frame. Serial: `[greeting] <clip>: out N ms after its cue`.
 - **Boot opening** (`util/intropick`) — `setup()` picks one of four openings each boot:
   your intro video ("kiss"), the Honda's night drive, McQueen's, or the second video ("max").
   Random, never last boot's (NVS `boot`/`last`), and only from what the build has (the clips,
@@ -106,8 +131,12 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   light anchors, kinds and RGB565, from `tools/gen_mcqueen_sprite.py`), each with its own rims.
   `bootterm` is the on-board terminal (the BIOS log) shared with the intro. Without a drive (the
   kiss) the scene waits for WiFi and starts at the montage. Cruising: sky drawn once, y 72–239 re-rendered through one
-  320×24 strip (15 KB, freed before the montage); brake: whole-screen fade; montage: JPEG frames
-  from the embedded `data/montage.bin` decoded straight to the display (~10 fps); drive ~15 fps (67 ms/frame). `setup()`
+  320×24 strip (15 KB, freed before the montage) over a copy of the layers that never move (sky
+  band, trees, asphalt; 105 KB in PSRAM), the underglow and lamp light from alpha tables (9 KB);
+  brake: the same frame while the LEDC hardware fades the backlight (`backlight::fadeOut`; whole-screen
+  pixel fade without it), the first photo relights it; montage: JPEG frames from the embedded
+  `data/montage.bin` decoded straight to the display (~10 fps); drive ~19 fps (~52 ms/frame, 24 of
+  them the push at 40 MHz; 80 MHz corrupted the picture). `setup()`
   waits for it; `loop()` and the late-WiFi path wait while active.
 - **Status screens** (`util/linkstatus`, `ui/statusscene`, `ui/status_sprite`) — when
   Spotify can't be polled: whose fault it is (no WiFi, no internet, Spotify error, rejected
@@ -189,11 +218,12 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 | Task | Core | What it does |
 |---|---|---|
-| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the Xbox controller's input, the three screens (`util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, night mode and the theme (`util/termpal`), saves to NVS |
+| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the Xbox controller's input, the screens (Menu, Lights, Karaoke, the car-health Check and Parked: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`, `util/termpal`'s night palette), saves to NVS |
 | `leds-link` | 0 | connects the two LED controllers (NimBLE 2; service FFF0, characteristic FFF3; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing; scans for the Xbox controller every 15 s while none is connected |
-| `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply |
+| `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply; a fill-up phrase (`fuelbook::parsePhrase`) goes instead to the OBD deck's `/fill` (`carlink::fill`, ~2-3 s at most) and its answer is the reply |
 | `lyrics` | 1, idle | polls the black deck's `/state` (every second on the Lyrics page, every 5 s on the main screen, slower after ten misses: `util/pollpace`), parses it (`util/stateparse`), and keeps music mode alive (`GET /music?on=1` every 10 s) |
 | `music` | 1, idle | while music mode is on: a UDP socket on port 4210 that takes the black deck's signed palettes (`util/wire/musicwire`) |
+| `car` | 1, idle | polls the OBD deck's `/car` (signed; `yellow/carlink`, `util/car/carwire`): every second while it answers, backing off 2, 5, then 10 s while it doesn't; at `172.20.10.12` on the hotspot, by mDNS (`cardeck-obd`) elsewhere (`util/deckaddr`) |
 | `weather` | 1, idle | one per try, every 15 min: the place by IP (`util/geoip`, ip-api.com), then Open-Meteo (`util/weather`), plain HTTP into a 2 KB buffer |
 | `ota` | 0 | the update listener (`net/ota`); the screen shows `util/otapage` |
 
@@ -206,15 +236,60 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 - **Lyrics** (`util/karaoke`, `yellow/ui/lyricrun`): the line at the black deck's progress,
   Latin-1 in VT323 and Japanese from `data/jp16.bin`.
 - **Music mode** (`util/lights/musiclights`): the palette's main colour snapped to one of the
-  grid's eight, each light at its level under the palette's cap (40 % floor), a ~3 s fade per new
+  grid's eight, the inside light at its level under the palette's cap (40 % floor), the outside at 100 %, a ~3 s fade per new
   song. The pages' looks are never saved over while it runs. On and off from the button, voice
   ("music") or the watch; `/status` says `music=on|off`.
+- **Car health** (`util/car/healthview`): the pre-flight check (A / B) once per power-on when the
+  first fresh snapshot has `checkReady` and the Menu shows (5 s, or held until a tap on a problem),
+  and trip complete (D: `healthview::ParkGate`, only from the Menu; a snapshot with no new `seq` for
+  3 s is an unknown speed). A tap, or the Xbox controller's A or B, goes back to the Menu
+  (`deckmenu::Screen::Check` / `Parked`). The Menu's trip band shows `healthview::band` from a
+  fresh snapshot (`--` without one), and `healthview::Warnings` puts a problem on the prompt line in
+  ALERT (critical while moving, any when stopped, each once per 2 min). Without an OBD deck neither
+  screen shows, the band reads `--` and nothing else changes.
 - **Network** (`net/wifi`, `util/{roam,netup,hotspotip,deckaddr}`): the black deck at
   `BLACK_DECK_ADDR` on the hotspot, by mDNS (`cardeck`) elsewhere, kept through blips.
 - **Memory**: no PSRAM, so everything that downloads uses fixed buffers (2 KB for the weather,
   `statejson::MAX_JSON` for `/state`) and plain HTTP (no TLS next to NimBLE and WiFi).
 - **Flash**: `min_spiffs.csv`, two 1.9 MB app slots for updates over WiFi; NVS keeps the touch
   calibration (`touch`), the looks and the trip (`leds`) and the Xbox controller's bond.
+
+## OBD deck
+
+A generic ESP32 with no screen (`src/obd/`, env `obddeck`) that owns everything that reads the car:
+the yellow deck can't hold a 4th BLE connection on this framework, so the adapter got its own board.
+It answers the yellow deck over the hotspot and never writes to the car.
+
+| Task | Core | What it does |
+|---|---|---|
+| `loop()` | 1 | once a second: a trip sample from the fresh readings (`util/car/tripsum`), the health `Watch` (`carhealth`), the fuel burnt (`fuelbook`), a closed minute to the trip log (`triplog` on LittleFS, `obd/carfs`), then the `/car` snapshot (`carwire`); every 30 s the log flush and the NVS records; the `[car]` line every 10 s |
+| `obd-link` | 0 | finds and connects the ELM327 over BLE (NimBLE 2, `util/car/obdble`): the remembered address first, then a 4 s scan; 5 s apart, doubling to 60 s while none answers |
+| `obd-ask` | 0 | while connected: the adapter's setup, the supported-PID scan, the PIDs in `obdplan`'s order, `ATRV` at least every 4 s, 03 / 07 every 5 min (`obdplan`); fuel from the air (`fueleco`), stepped only with fresh values |
+| `net` | 1, idle | joins WiFi (`net/wifi`), mDNS `cardeck-obd`, SNTP, the update listener, then the web server: `/car`, `/fill` |
+| `ota` | 0 | the update listener (`net/ota`) |
+
+- **`REMOTE_TOKEN` empty**: nothing could sign a request, so the deck starts no `net` task: no
+  WiFi, no `/car` and `/fill`, no updates over WiFi (`[net] off (REMOTE_TOKEN empty)`). It still
+  reads the car and logs the trips; updates go over USB only.
+- **Bench build** (`obddeck_bench`): `obd/benchlink.cpp` stands in for `obdlink` with a simulated
+  drive (`util/car/benchdrive`). `/car` carries `"sim":1` and the yellow deck marks it SIM; NVS is
+  `carsim` and there's no trip log, so a real deck's records stay.
+- **Read-only**: every write to the adapter goes through `obd::allowed()` (mode 01, 03, 07 and the
+  adapter's setup; never mode 04 or `ATH1`).
+- **Which device** (`util/car/obdpick`): the whole scan is weighed. An adapter-like name wins
+  (strongest signal), a nameless serial-service device only when no name matched; a scanned
+  device that failed is skipped for 10 min (the last 4 kept): one with an adapter-like name only
+  after a failed setup (a missed connect is retried next round), a nameless one after either. The lights
+  (their MACs from `config.h`, `ELK` / `MELK` names; their controllers serve FFF0 too) never.
+- **NVS**: `obd` holds the adapter (`bleaddr`, `bletype`, `blename`); `car` holds the boot sequence
+  (`tseq`, which names the trip file `/t<seq>.jsonl`), the last trip with the health memo (`last`,
+  so a trip cut by the ignition is judged at the next boot), the fuel book (`fuel`) and the last
+  trouble-code counts (`codes`, so a code is "new" against the last read).
+- **Flash**: `min_spiffs.csv`; the 128 KB data partition (32 blocks of 4 KB) holds the trip log
+  (LittleFS: at most 96 KB of trips, 20 files and 70 % of the blocks, oldest dropped first, at boot
+  and when a write fails; a row cut by a power cut is trimmed at boot, an empty file removed).
+- **Snapshot**: `checkReady` once a 03 / 07 read and a battery reading are in, or 20 s after the
+  link went live; `seq` +1 per snapshot (once a second).
 
 ## Between the devices
 
@@ -226,6 +301,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 | watch → yellow | `GET /say`, `/state`, `/presets`, `/status` (signed) | replies from `util/lightstatus`, `util/ledpresets` (wire lines), `util/ledvoice` |
 | watch → black | `GET /playlists?offset=N` (a page: `playlists <total> <next>`, then `<id> <name>` lines), `GET /playlists/play?id=` (signed); `502` + Spotify's refusal in words | `util/black/playlists`; read by the watch's `Tunes.mc` |
 | Siri → yellow | `GET /say?k=<REMOTE_TOKEN>&text=...` | bearer key, plain HTTP |
+| yellow → OBD | `GET /car` (signed only, no `k=`): the car snapshot; `GET /fill?p=6.49` (or no `p`; signed only): a full tank, noted whatever the price; answers `ok 6.49` (price taken), `ok none` (none said, the old one stays) or `refused <p as sent>` (outside 3.00-15.00 R$/L, the old one stays) | `util/car/carwire`; `fuelbook::fillUp`; `remotegate::Accept::SignedOnly` |
 | phone → black | the page `/?k=`, then `/state` and `POST /play` with `k=` | bearer key, plain HTTP |
 
 - **Signing** (`util/wire/sigreq`, `util/wire/hmac256`, `common/net/reqauth`; on the watch
@@ -234,8 +310,9 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   once (a ring of the last 32 nonces). Devices never send the key. **The bearer `k=` is still
   accepted** on the same routes, because Siri Shortcuts and the Home Screen page can't compute an
   HMAC. Details and limits: [SECURITY.md](../SECURITY.md).
-- **Addresses**: on the iPhone hotspot the black deck pins `172.20.10.10` and the yellow deck
-  `172.20.10.11` (`util/hotspotip`); elsewhere `cardeck.local` and `cardeck-leds.local`.
+- **Addresses**: on the iPhone hotspot the black deck pins `172.20.10.10`, the yellow deck
+  `172.20.10.11` and the OBD deck `172.20.10.12` (`util/hotspotip`); elsewhere `cardeck.local`,
+  `cardeck-leds.local` and `cardeck-obd.local`.
 - **Versions**: both decks report their build (`util/version`, from `tools/version.py`): the
   black deck in `/state`'s `"fw"`, the yellow deck in `/status`'s `fw=`. A protocol change means
   updating every device together, and a major version.
@@ -257,8 +334,8 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   yellow deck: a check while online) and goes back after 3 in a row (`[ota] rolled back`).
 - **Watchdogs** (`common/core/watchdog`) — the task watchdog with a 90 s timeout, above the
   longest legitimate wait (an S3 request's DNS, connect, TLS and body; a BLE connect plus a GATT
-  discovery). The black deck's network task and the yellow deck's link, voice, lyrics, music and
-  weather tasks are watched; both `loop()`s use the core's loop watchdog. A hang reboots the deck
+  discovery). The black deck's network task and the yellow deck's link, voice, lyrics, car, music
+  and weather tasks are watched; both `loop()`s use the core's loop watchdog. A hang reboots the deck
   within 90 s.
 - **Back-offs** — the black deck waits out Spotify's 429 (`netplan::PollBackoff`) and retries a
   refused login 4 s, 8 s, ... up to every 5 min (`netplan::LoginBackoff`); the yellow deck retries
@@ -267,7 +344,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 ## Layout
 
-- `src/black/`, `src/yellow/` — each deck's own code. Each env compiles only its deck's folder,
+- `src/black/`, `src/yellow/`, `src/obd/` — each deck's own code. Each env compiles only its deck's folder,
   `src/common/` (`net/`, `ui/backlight`, `board/board.h`, `core/embed.h`, `core/watchdog.h`) and its
   util groups (allow-list `build_src_filter` in `platformio.ini`), so a call into the other deck's
   code fails to link. `src/diag/` holds the standalone checks, one env each (`hwcheck`,
@@ -280,11 +357,13 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
   - `wire/` (the contracts between the decks): hmac256, lyricstatus, musicwire, sigreq,
     songpalette, statejson, stateparse
   - `lights/` (the LED domain, both decks): hue, ledlook, musiclights, tripclock
+  - `car/` (the car health check: the OBD deck; carwire and healthview also the yellow deck):
+    carhealth, carwire, fuelbook, fueleco, healthview, obd, obdble, obdpick, obdplan, triplog, tripsum
   - `common/` (both decks): bootguard, daynight, hotspotip, jsonflat, jsonpath, netdiag, netup,
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
     genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,
-    intropick, linkstatus, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
+    intropick, linkstatus, sndroster, soundpick, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
     quietboot, ridersprite, songmood (+ songpicks.inc), termblend, walkanim, walkrect
   - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, geoip, httphead, karaoke,
     ledpresets, ledvoice, lightstatus, otapage, pollpace, tapguard, termpal, touchcal, touchguard,
@@ -307,6 +386,8 @@ Build flags that are never set in `platformio.ini`; add one for a desk check, th
 | Flag | Deck (env) | What it does |
 |---|---|---|
 | `-D INTRO_FORCE=\"kiss\"` (or `honda`, `mcqueen`, `max`) | black (`s3`) | Forces that boot opening (`main.cpp`, `util/intropick`). |
+| `-D SOUND_FORCE=\"drive:3,opener:0,finale:11\"` (any subset) | black (`s3`) | Forces those boot sound roster indices (`main.cpp` `pickSounds`, `util/soundpick`). |
 | `-D OTA_DEMO` | black (`s3`) | The update screen on a loop with no upload: 0-99 %, Done, then Failed (`main.cpp`). |
-| `-D NIGHT_TEST` | yellow (`ledpanel`) | Night mode whatever the time (`ledpanel.cpp`). |
+| `-D NIGHT_TEST` | yellow (`ledpanel`) | Night whatever the time, synced clock or not: the night backlight and palette, with a serial tuner to try night colours and the backlight live (`docs/yellow-deck.md` "Night"; `ledpanel.cpp` `tuneLine`). |
 | `-D THEME_TEST=<0..7>` | yellow (`ledpanel`) | Forces that swatch's terminal theme whatever the inside light does (`ledpanel.cpp`). |
+| `-D HEALTH_TEST=<a\|b\|c\|d>` | yellow (`ledpanel`) | Draws the car-health screens from a canned snapshot instead of the OBD deck's: `a` the pre-flight check, all OK (back to the Menu after 5 s), `b` the check with a battery problem (held until a tap), `c` driving on the Menu, km/L stepping every second (the trip band redraws only that figure: `[car] band: kml`), `d` trip complete (5 s after the Menu shows). The log says `[car] drew screen A/B/D` (`ledpanel.cpp`). |

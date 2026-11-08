@@ -22,7 +22,7 @@ void test_device_types_map_to_icons() {
         TEST_ASSERT_EQUAL_INT_MESSAGE((int)c.icon, (int)icons::forDevice(c.type), c.type ? c.type : "(null)");
 }
 void test_every_icon_is_12x12() {
-    for (int i = 0; i <= (int)Icon::Note; ++i) {
+    for (int i = 0; i <= (int)Icon::GpsOff; ++i) {
         for (int y = 0; y < icons::SIZE; ++y) {
             const char* r = icons::row((Icon)i, y);
             TEST_ASSERT_NOT_NULL(r);
@@ -38,10 +38,16 @@ void test_pixel_reads_art_and_bounds() {
     TEST_ASSERT_FALSE(icons::pixel(Icon::Phone, 12, 0));
     TEST_ASSERT_FALSE(icons::pixel(Icon::Phone, 0, 12));
 }
+void test_gps_off_is_the_pin_struck_through() {
+    for (int y = 0; y < icons::SIZE; ++y)
+        for (int x = 0; x < icons::SIZE; ++x)
+            TEST_ASSERT_EQUAL(icons::pixel(Icon::Gps, x, y) || x == y, icons::pixel(Icon::GpsOff, x, y));
+}
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_device_types_map_to_icons);
     RUN_TEST(test_every_icon_is_12x12);
     RUN_TEST(test_pixel_reads_art_and_bounds);
+    RUN_TEST(test_gps_off_is_the_pin_struck_through);
     return UNITY_END();
 }

@@ -10,11 +10,20 @@ Gen-3 Pokémon battle, and the car's LED lights by touch, voice, gamepad or watc
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Boards: ESP32 / ESP32-S3](https://img.shields.io/badge/boards-ESP32%20%7C%20ESP32--S3-informational)
 
-<!-- Photo: the decks on the dashboard. Add docs/images/hero.jpg, then uncomment:
-<img src="docs/images/hero.jpg" alt="CarDeck on a car dashboard" width="640">
--->
+<img src="docs/images/dashboard.jpg" alt="Both decks running in the car at night: the yellow deck on the dash, the black deck in its Game Boy Advance shell by the windshield" width="780">
+
+<img src="docs/images/black-deck.jpg" alt="Black deck in a Game Boy Advance shell, playing a song as a Pokémon battle" width="430">
+<img src="docs/images/yellow-deck.jpg" alt="Yellow deck at night, showing the terminal-style dashboard" width="340">
 
 </div>
+
+**Status:** finished. It runs in my car; new features still land now and then.
+
+Photos and the story of the build are on the [case study page](https://jvitorcosta.github.io/projects/car-cyberdeck.html).
+
+## Why I built it
+
+I wanted the car to have a Spotify screen that looks like a Pokémon battle, and its LED lights under my control by touch, voice, gamepad or watch. Everything runs on the phone's hotspot, so it needs no server.
 
 CarDeck is firmware for two cheap 2.8" ESP32 touchscreens and a Connect IQ app for a Garmin
 watch. All three meet on the phone's WiFi hotspot; nothing needs a server.
@@ -38,7 +47,8 @@ The Pokéface watch face that used to live here moved to
 - **Synced lyrics** in the battle dialogue box, from LRCLIB, including accented Latin and
   Japanese/Chinese text.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
-- **Night palette** with a dimmer backlight from 18:00 to 06:00 in your time zone.
+- **Night mode** from 18:00 to 06:00 in your time zone: the black deck takes a night palette and a
+  dimmer backlight; the yellow deck dims and gives each theme a vivid, fully saturated night colour.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, then a
   montage of your own photos. Each boot picks one opening at random, never last boot's: your
   intro video with the log typed over it, the car's night drive, a pixel McQueen's drive, or a
@@ -89,6 +99,11 @@ git-ignored: copy `include/config.example.h` there first. Both decks build from 
 2. **Configure** `src/config.h`: your WiFi networks (the phone hotspot **first**, see
    [On the hotspot](#on-the-hotspot)), the app's client ID and secret, and your time zone.
    For the phone remote and the yellow deck, set `REMOTE_TOKEN` to a long random string.
+   For speed-camera alerts, the deck reads the iPhone's GPS 2 IP app at `GPS_HOST` / `GPS_PORT`
+   (default `172.20.10.1` / `11123`, the phone on its own hotspot; optional). The camera list is
+   not in this repo: it is built and released in https://github.com/jvitorcosta/open-radars-manaus; `python tools/cameras.py push`
+   sends its latest release to the deck (`--release VERSION` pins one), and `python tools/cameras.py import-car`
+   saves the points you marked in the car for that repo's review map.
 3. **Authorize:** `python tools/spotify_auth.py`. It opens the browser and writes a refresh
    token into `src/config.h`. A token made before 2026-11-02 lacks the playlist scopes the watch's
    picker needs for private and collaborative playlists: run it again, flash, and the boot log stops

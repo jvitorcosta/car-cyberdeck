@@ -1,12 +1,15 @@
 // The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
-// red only for problems, amber at night, faint scanlines, all caps) that drives the car's two
-// ELK-family LED controllers. Three screens, laid out by util/deckmenu:
+// red only for problems, vivid at night, faint scanlines, all caps) that drives the car's two
+// ELK-family LED controllers. Three screens (and the two car-health ones, see "Car health"), laid
+// out by util/deckmenu:
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands, for what the
 //           car's panel and CarPlay don't show: the trip and the lights. The header line
 //           (CYBERDECK // HONDA CITY TOURING 2022); the clock big with the date under it ("FRI 23
 //           OCT"), and right of it the outside temperature big and the sky in words (see "Weather"
-//           below), "HI 32 LO 26  MANAUS" right-aligned under them; the trip: TRIP, its time big and
-//           the distance right ("12.4 KM", "-- KM" in DIM while no speed source feeds it); both lights
+//           below), "HI 32 LO 26  MANAUS" right-aligned under them; the trip, from the OBD deck's
+//           snapshot (see "Car health"): "12.4 KM", "11.8 KM/L" and "296 KM LEFT", and under them
+//           "0:16  R$ 6,30  14.1V  90C" (the time is the deck's own; "--" for all the rest while no
+//           fresh snapshot comes); both lights
 //           on one row, "IN [chip] ROSE 40%" | "OUT [chip] YELLOW 100%" (OFF, or -- NO LINK when the
 //           deck has no link to it); the prompt line: a message, music mode's line, or just ">",
 //           with a block cursor (blinking while a message shows); and at the bottom the three
@@ -29,6 +32,11 @@
 //           >NOTHING PLAYING / >LYRICS: NO SIGNAL / >WRONG KEY big in place of the lyrics). Read
 //           from the black deck's GET /state every second while this screen shows, every 5 s while
 //           the Menu shows (see "Lyrics" below)
+// Speed cameras (the black deck has the GPS and beeps; this deck shows): an alert or alarm from the
+// black deck's GET /cam is a band over the bottom third of any screen (a tap on it mutes the black
+// deck's beeps), "CAM --" / "MUTED" a tag on the Menu's header (no GPS fix shows on the black deck's
+// own top strip); voice "mark camera",
+// "cameras mute" (see "Speed cameras" below).
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button; it shows as the bar with a ring cut in it (ui/presslook). After a screen or page
 // change touch waits for the finger to lift and 250 ms (util/tapguard). The iPhone's Bluetooth
@@ -43,25 +51,27 @@
 // Lights and Karaoke; none is drawn while no controller is connected), A presses, B goes back to the
 // Menu; on Lights X is the next page, and on the look pages Y on/off, LB / RB - / + (see "Xbox
 // controller input" below).
-// Night mode (like the black deck): 18:00-06:00 local time, once WiFi has synced the clock, the
-// palette goes to termpal's amber and the backlight to its night level. Without REMOTE_TOKEN
-// there is no WiFi, no clock, and the deck stays in day mode.
-// Theme: while the INSIDE light is on and linked, the terminal (Menu, Lights, Karaoke; not the boot
-// typing or the calibration) takes that light's colour, termpal's three levels of it, day and night
-// (white turns to the amber at night; problems show in white on the red, orange and pink themes).
-// The light off or unreachable: the green / amber again. The colour tiles and chips stay real.
+// Theme: while the INSIDE look is on, the terminal (Menu, Lights, Karaoke; not the boot typing or the
+// calibration) takes its colour, termpal's three levels of it (problems show in white on the red,
+// orange and pink themes), linked or not: a colour tapped with the lights out of reach still shows.
+// The look off: the green again. The colour tiles and chips stay real.
+// Night: 18:00-06:00 local time, once WiFi has synced the clock, the backlight drops to
+// NIGHT_BACKLIGHT and the terminal takes termpal's night palette, each theme's own hue at full
+// saturation (it stays vivid; the day's pale tints went grey on the dimmed panel). The chips stay
+// real. Without REMOTE_TOKEN there is no WiFi, no clock, and it stays day.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
-// (util/musiclights), steady, fading to the next song's over ~3 s, each at the owner's level under the
-// palette's time-of-day cap (never under 40 %). An outside light left off stays off; an inside one
+// (util/musiclights), steady, fading to the next song's over ~3 s, the inside at the owner's level under
+// the palette's time-of-day cap (never under 40 %), the outside at 100 %. An outside light left off stays off; an inside one
 // off is switched on. The theme follows the swatch. The prompt line shows ">MUSIC", a chip and the
 // swatch's name (">MUSIC: WAITING" before the first palette), or ">MUSIC: NO SIGNAL" when no palette
 // came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). Any manual
 // change (touch, the Xbox controller, voice, the watch) ends the mode, then applies; turning it off
 // brings back the looks from before. Not kept over a reboot (see
 // "Music mode" below).
-// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") forces night
-// mode whatever the time, to check the dimming without waiting for 18:00; -D THEME_TEST=<swatch 0..7>
+// Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") is night
+// whatever the time, to check it without waiting for 18:00, with a serial tuner to try night colours
+// and the backlight live (see tuneLine); -D THEME_TEST=<swatch 0..7>
 // (ledlook's order: red, orange, pink, purple, blue, green, white, yellow) forces that theme whatever
 // the inside light does, to see it without the car's lights. Neither is set in platformio.ini (every
 // test hook: docs/ARCHITECTURE.md "Test hooks").
@@ -71,6 +81,9 @@
 // in a row before new firmware has proven itself boot the previous one (util/bootguard).
 // Over USB (the first time, or to recover):
 //   pio run -e ledpanel -t upload
+// The car's health (from the OBD deck, src/obd, over WiFi: yellow/carlink): ">PRE-FLIGHT CHECK" once
+// per power-on, ">TRIP COMPLETE" when the car stands after a trip (see "Car health" below); -D
+// HEALTH_TEST=a|b|c|d draws them from a canned snapshot. Without an OBD deck neither ever shows.
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
@@ -97,6 +110,7 @@
 #include "ui/termfont.h"
 #include "ui/termlayout.h"
 #include "touch.h"
+#include "carlink.h"
 #include "../common/net/clock.h"
 #include "../common/net/httpget.h"
 #include "../common/net/ipaddr.h"
@@ -104,7 +118,11 @@
 #include "../common/net/remote_config.h"
 #include "../common/net/reqauth.h"
 #include "../common/net/wifi.h"
+#include "../util/car/fuelbook.h"
+#include "../util/car/healthview.h"
+#include "../util/car/camwire.h"
 #include "../util/yellow/bothlook.h"
+#include "../util/yellow/camvoice.h"
 #include "../util/yellow/dashtext.h"
 #include "../util/common/daynight.h"
 #include "../util/yellow/deckaddr.h"
@@ -112,6 +130,7 @@
 #include "../util/yellow/elkcmd.h"
 #include "../util/yellow/geoip.h"
 #include "../util/common/hotspotip.h"
+#include "../util/lights/ledintro.h"
 #include "../util/lights/ledlook.h"
 #include "../util/yellow/ledpresets.h"
 #include "../util/yellow/ledvoice.h"
@@ -178,15 +197,24 @@ using deckmenu::P_PRE0;
 static Screen screen = Screen::Menu;  // the screen shown; boot lands on the Menu
 // Lights on any of its tabs (Presets is its PRESETS tab).
 static bool onLights() { return screen == Screen::Lights || screen == Screen::Presets; }
-// The palette: every colour goes through termpal with this flag, so night mode only flips it and
-// redraws.
-static bool night = false;
-// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green / amber. Loop-owned, as
-// `night`; updateTheme() keeps it, from the looks and `insideSeen`: the INSIDE light's link as loop()
-// last took it (its edge loop sets it before anything draws the change).
+// The car-health screens (see "Car health" below): no buttons, a tap anywhere goes back to the Menu.
+static bool onHealth() { return screen == Screen::Check || screen == Screen::Parked; }
+static void drawHealth();
+static void drawHealthClock();
+static void leaveHealth();
+// The theme (see "Theme" above): a ledlook swatch index, or -1 for the green. Loop-owned;
+// updateTheme() keeps it, from the looks.
 static int theme = -1;
-static bool insideSeen = false;
 static bool updateTheme();
+// Night (see "Night" above): the backlight at nightBacklight and termpal's night palette. Loop-owned;
+// updateClock() keeps it.
+static bool night = false;
+static constexpr int NIGHT_BACKLIGHT = 85;  // of 255 (a third), picked on the panel with the night palette
+static int nightBacklight = NIGHT_BACKLIGHT;  // the tuner may change it
+#ifdef NIGHT_TEST
+static bool tuneNight = true;  // the tuner's "D" turns it off to compare with the day
+static int tuneTheme = -2;     // the tuner's forced theme; -2 none
+#endif
 
 // The outside weather (see "Weather" below): the weather task publishes each try under weatherMux
 // and raises weatherFresh; loop() copies it into `wx`, which is all the drawing reads.
@@ -296,8 +324,95 @@ static bool musicDriving = false;
 static Look musicLook[N_CTRL];
 static Look shownLook(int i) { return musicDriving ? musicLook[i] : looks[i + 1]; }
 
-// Controller i's look (power + dimmed colour), both header variants.
+// A running fade (see "A new music look" below; presets use it too), or the welcome's intro (see
+// startIntro): its keys in place of from..to, each at its time after `start`. Loop-owned.
+struct LightFade {
+    songpalette::Rgb from{}, to{};
+    int steps = 0, done = 0;  // done == steps: no fade
+    uint32_t every = 0, at = 0;  // at: millis() of the last step written
+    ledintro::Track intro;  // intro.n > 0: the welcome (steps == intro.n)
+    uint32_t start = 0;
+};
+static LightFade lightFade[N_CTRL];
+
+// The colour frame push() sends for `l` (black when off).
+static songpalette::Rgb frameOf(const Look& l) {
+    if (!l.lit) return {0, 0, 0};
+    const Rgb s = ledRgb(l.swatch);
+    return {elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)};
+}
+
+// The colour frame light i shows now: a fade's current step, else its look's.
+static songpalette::Rgb frameNow(int i) {
+    const LightFade& f = lightFade[i];
+    if (f.done < f.steps && f.intro.n) return f.intro.k[f.done ? f.done - 1 : 0].c;
+    if (f.done < f.steps) return musiclights::blend(f.from, f.to, f.done, f.steps);
+    return frameOf(shownLook(i));
+}
+
+static void writeFrame(int i, const songpalette::Rgb& c) {
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::color(v, c.r, c.g, c.b));
+}
+
+// Light i from `from` to `to` in `steps` steps `every` ms apart. powerOn: the power-on goes now with
+// the first step, so the light never shows its old colour; else the first step waits for its gap.
+static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rgb& to, bool powerOn, int steps, uint32_t every) {
+    LightFade& f = lightFade[i];
+    f.intro.n = 0;  // a fade ends the welcome
+    f.from = from;
+    f.to = to;
+    f.steps = steps;
+    f.done = 0;
+    f.every = every;
+    if (!powerOn || !linkUp(controllers[i])) return;
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+    f.done = 1;
+    f.at = millis();
+    writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+}
+
+// Key n of light i's welcome: its colour frame, or the start of the inside light's curtain fill
+// (its speed, then the effect; the MELK frames only, the ELK one ignores them). Each key is logged
+// with its time since the welcome began, sent or not (no link: the desk's INTRO replay), so
+// tools/intro_check.py can hold the firmware's timeline to ledintro's.
+static void writeKey(int i, int n) {
+    const LightFade& f = lightFade[i];
+    const ledintro::Key& k = f.intro.k[n];
+    const bool up = linkUp(controllers[i]);
+    if (k.fill) {
+        Serial.printf("[intro] %s +%u ms key %d/%d: fill speed %u effect %u, %s\n", controllers[i].label,
+                      static_cast<unsigned>(millis() - f.start), n + 1, f.intro.n,
+                      static_cast<unsigned>(ledintro::FILL_SPEED), static_cast<unsigned>(ledintro::FILL_MODE), up ? "sent" : "no link");
+        if (!up) return;
+        write(controllers[i], elkcmd::speed(ledintro::FILL_SPEED));
+        write(controllers[i], elkcmd::effect(ledintro::FILL_MODE));
+        return;
+    }
+    Serial.printf("[intro] %s +%u ms key %d/%d: colour %u,%u,%u, %s\n", controllers[i].label,
+                  static_cast<unsigned>(millis() - f.start), n + 1, f.intro.n, k.c.r, k.c.g, k.c.b, up ? "sent" : "no link");
+    if (up) writeFrame(i, k.c);
+}
+
+// The welcome, the first time since boot light i links lit (ledintro: the inside light's strip
+// fills from both ends inwards, then the outside light rises, ~6 s): its power-on and first key
+// (dark) now, the rest from fadeTick. A change, a preset or a song's look takes over from the key
+// it reached (its colour frame ends the fill); a reconnect gets its look (push).
+static void startIntro(int i) {
+    const Look l = shownLook(i);
+    const Rgb s = ledRgb(l.swatch);
+    LightFade& f = lightFade[i];
+    f = LightFade();
+    f.intro = ledintro::plan(i == 0, {s.r, s.g, s.b}, l.pct);
+    f.steps = f.intro.n;
+    f.start = f.at = millis();
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+    writeKey(i, 0);
+    f.done = 1;
+}
+
+// Controller i's look (power + dimmed colour), both header variants. Ends a running fade.
 static void push(int i) {
+    lightFade[i].done = lightFade[i].steps;
     Controller& c = controllers[i];
     const Look l = shownLook(i);
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(c, elkcmd::power(v, l.lit));
@@ -434,6 +549,7 @@ static int homeFocus() {
     if (screen == Screen::Menu) return M_ITEM0;
     if (screen == Screen::Karaoke) return K_BACK;
     if (screen == Screen::Presets) return P_PRE0;
+    if (onHealth()) return -1;  // A or B dismiss it (handlePad); nothing to point at
     return L_TILE0 + ledlook::gridSwatch(cur().swatch);
 }
 
@@ -534,18 +650,32 @@ static int textMarked(const char* s, int x, int y, Face f, uint8_t datum) {
 }
 
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
-static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, night, theme)); }
-// A terminal message's colour: ALERT for a problem (a lost link, the wrong key), else TEXT.
+#ifdef NIGHT_TEST
+// The night tuner's palette (see tuneLine): each theme's night colours (index theme + 1), live.
+static uint32_t tuned[9][5];
+static bool tunedReady = false;
+static uint32_t tunedRgb(termpal::Role r) {
+    if (!tunedReady) {
+        for (int t = -1; t < 8; t++) {
+            for (int k = termpal::BG; k <= termpal::ALERT; k++) tuned[t + 1][k] = termpal::rgb(static_cast<termpal::Role>(k), t, true);
+        }
+        tunedReady = true;
+    }
+    return tuned[theme < -1 || theme > 7 ? 0 : theme + 1][r];
+}
+static uint16_t pal(termpal::Role r) { return c565(night ? tunedRgb(r) : termpal::rgb(r, theme)); }
+#else
+static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme, night)); }
+#endif
+// A terminal message's colour: ALERT for a problem (a lost link, the wrong key, a car warning: alert),
+// else TEXT.
 static bool isAlertMsg(const char* m) { return lightstatus::isAlert(m) || karaoke::isAlert(m); }
-static uint16_t msgInk(const char* m) { return pal(isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
-
-// A real colour (a chip), dimmed with the palette at night.
-static uint16_t tint(uint32_t rgb) { return c565(termpal::tile(rgb, night)); }
+static uint16_t msgInk(const char* m, bool alert) { return pal(alert || isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
 
 static void clearBg(int x, int y, int w, int h) {
     if (w <= 0 || h <= 0) return;
     tft.fillRect(x, y, w, h, pal(termpal::BG));
-    const uint16_t line = c565(termpal::scan(night));
+    const uint16_t line = c565(termpal::scan());
     for (int row = y + (3 - y % 3) % 3; row < y + h; row += 3) tft.drawFastHLine(x, row, w, line);
 }
 static void clearBg(const Rect& r) { clearBg(r.x, r.y, r.w, r.h); }
@@ -621,10 +751,10 @@ static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, b
     text(tag, x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
 }
 
-// A colour chip of `l` (dimmed at night like any real colour): filled when lit, a DIM outline when
+// A colour chip of `l`: filled when lit, a DIM outline when
 // off. On a bar, a 1 px BG edge keeps it apart from the fill (pink on yellow, white on green).
 static void drawChip(int x, int y, int w, int h, const Look& l, bool onBar) {
-    if (l.lit) tft.fillRect(x, y, w, h, tint(screenOf(l.swatch)));
+    if (l.lit) tft.fillRect(x, y, w, h, c565(screenOf(l.swatch)));
     else tft.drawRect(x, y, w, h, pal(termpal::DIM));
     if (onBar) tft.drawRect(x - 1, y - 1, w + 2, h + 2, pal(termpal::BG));
 }
@@ -689,7 +819,7 @@ static void drawTab(const Rect& r, const char* s, bool pressed, bool current) {
 
 static void drawButtonBody(int id, bool pressed) {
     const Rect r = deckmenu::rect(screen, id);
-    if (r.w <= 0) return;
+    if (r.w <= 0 || onHealth()) return;  // the health screens' tap is the whole screen, not drawn
     if (screen == Screen::Menu) {
         static_assert(N_MENU_ITEMS == deckmenu::N_ITEMS, "a label per Menu item");
         bool dim = false;
@@ -758,12 +888,14 @@ static char message[32] = "";  // "" when none
 static_assert(sizeof(message) <= MARKED_RUN, "a message holding GOJIRA's mark is drawn whole (textMarked)");
 static uint32_t messageAt = 0;
 static uint32_t messageMs = MESSAGE_MS;
+static bool messageAlert = false;  // drawn in ALERT whatever it says (the car's warnings)
 
 // Sets the message; the caller redraws what shows it (drawMessage, or drawStatus on Lights).
-static void setMessage(const char* m, uint32_t ms = MESSAGE_MS) {
+static void setMessage(const char* m, uint32_t ms = MESSAGE_MS, bool alert = false) {
     snprintf(message, sizeof(message), "%s", m);
     messageAt = millis();
     messageMs = ms;
+    messageAlert = alert;
 }
 
 // Lights: the line under the tabs, just the link state ("LINK 2/2" in TEXT; "OUTSIDE: NO LINK",
@@ -778,9 +910,19 @@ static void drawStatus() {
     char line[24];
     const bool down = lightstatus::link(linkUp(controllers[0]), linkUp(controllers[1]), line, sizeof(line));
     clearBg(r);
-    tft.setTextColor(message[0] ? msgInk(message) : pal(down ? termpal::ALERT : termpal::TEXT));
+    tft.setTextColor(message[0] ? msgInk(message, messageAlert) : pal(down ? termpal::ALERT : termpal::TEXT));
     text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
 }
+
+// ---- Speed cameras: what the band and the tag need before the screens draw (see "Speed cameras") ----
+// While the band is up (bandUp) the screens draw through a TFT viewport over the rows above BAND_Y,
+// so nothing of theirs lands on it; drawAll() ends with the band. camTag is the Menu header's tag:
+// one of termlayout's CAM_TAG_* or "". All loop()'s.
+static constexpr int BAND_Y = 160, BAND_H = 80;  // the bottom third of the 240 rows
+static bool bandUp = false;
+static const char* camTag = "";
+static void drawBand(bool whole);
+static void camBandTap();
 
 // ---- The Menu: a dashboard of stacked bands ----
 // Top to bottom (termlayout places them, test_termfont checks they fit): the header line; the clock
@@ -794,11 +936,17 @@ static void drawStatus() {
 
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
-// The header: one MID line and its rule (the boot's welcome lines typed out before it).
+// The header: one MID line and its rule (the boot's welcome lines typed out before it); the camera
+// tag right-aligned on it in ALERT ("CAM --": this deck can't show the alerts; "MUTED": the black deck
+// won't beep). The title ends at x 259; each tag keeps 4 px clear of it (test_termfont).
 static void drawHeader() {
     clearBg(deckmenu::HEADER);
     tft.setTextColor(pal(termpal::MID));
     text(DASH_TITLE, DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    if (camTag[0]) {
+        tft.setTextColor(pal(termpal::ALERT));
+        text(camTag, DASH_RIGHT, DASH_TITLE_Y, Face::SMALL, TR_DATUM);
+    }
     drawRule(HEADER_RULE_Y);
 }
 
@@ -808,7 +956,7 @@ static void drawHeader() {
 static int hiLoRowTop() { return HILO_BASE - termfont::accentAscent(Face::SMALL); }
 
 // The clock's minute of the day on screen (-1: not synced, "--:--") and its date, read together
-// (netclock::localNow) so they never straddle midnight; updateDayNight keeps them.
+// (netclock::localNow) so they never straddle midnight; updateClock keeps them.
 static int clockMin = -1;
 static int clockY = 0, clockMonth = 0, clockDay = 0;
 
@@ -879,25 +1027,87 @@ static void drawWeather() {
 }
 
 // The trip meter: time since the first loop() pass (the car started the deck), kilometres once a
-// speed feeds it. The trip band shows it; tripTick() redraws the band when its text would change
-// (every minute, or every 0.1 km).
+// speed feeds it (the OBD deck's, see carTick). The trip band shows its time; its NVS record is the
+// boot's ">LAST TRIP".
 static tripmeter::Meter tripMeter;
 
-// The trip band, cleared between its rules and drawn again: TRIP (SMALL, MID), the time (BIG, TEXT)
-// after it and the distance right-aligned (BODY, MID: "12.4 KM"; "-- KM" in DIM while no speed source
-// has fed the meter), on one baseline. Digits and capitals: no accent rises past BIG's ascent.
+// The OBD deck's last snapshot, as loop() took it (carTick; seqAt 0: none yet). Fresh while its seq
+// changed within carlink::STALE_MS: an older one is no data.
+static carlink::Reading car;
+static bool carFresh(uint32_t now) { return car.seqAt != 0 && now - car.seqAt < carlink::STALE_MS; }
+
+// The trip band's texts now (healthview::band): the snapshot's trip km, km/L now, range, R$ so far,
+// volts and coolant while it is fresh, "--" for each without; the time is the trip meter's.
+static healthview::Band tripBandNow() {
+    const uint32_t seconds = tripMeter.trip().seconds;
+    if (!carFresh(millis())) return healthview::band(NAN, NAN, NAN, seconds, NAN, NAN, NAN);
+    const carwire::Snapshot& c = car.snap;
+    healthview::Band b = healthview::band(c.trip.km, c.kmlNow, c.rangeKm, seconds, c.tripCostRs, c.volts, c.coolantC);
+    if (c.sim) {  // a bench drive never passes for the car
+        memmove(b.small + 4, b.small, sizeof(b.small) - 5);
+        memcpy(b.small, "SIM ", 4);
+        b.small[sizeof(b.small) - 1] = 0;
+    }
+    return b;
+}
+static healthview::Band tripBandShown;  // what the band shows (drawTripBand / updateTripBand keep it)
+
+// The band's four parts (termlayout): the trip km left, km/L now from BAND_KML_X, the range right-
+// aligned (TITLE, TEXT; DIM while "--"), and under them the time, R$, volts and coolant (SMALL, MID).
+// Each has its own box, from its ink's top row (ASCII ascent) to its last (descent): the figures'
+// rows split at BAND_KML_X and BAND_RANGE_X, the small line's rows across; no box touches another or
+// a rule. Digits, capitals and "$ , . / :": nothing leaves its box (test_termfont).
+enum BandPart { BP_TRIP, BP_KML, BP_RANGE, BP_SMALL, BP_N };
+static const char* const BAND_PART_NAMES[BP_N] = {"trip", "kml", "range", "small"};
+
+static const char* bandText(const healthview::Band& b, int part) {
+    switch (part) {
+    case BP_TRIP: return b.trip;
+    case BP_KML: return b.kmlNow;
+    case BP_RANGE: return b.range;
+    default: return b.small;
+    }
+}
+
+// One part, its box cleared and its text drawn again.
+static void drawBandPart(const healthview::Band& b, int part) {
+    const char* t = bandText(b, part);
+    if (part == BP_SMALL) {
+        const int top = BAND_SMALL_BASE - termfont::ascent(Face::SMALL);
+        clearBg(RULE_X0, top, RULE_X1 - RULE_X0, BAND_SMALL_BASE + termfont::descent(Face::SMALL) - top);
+        tft.setTextColor(pal(termpal::MID));
+        text(t, DASH_X, BAND_SMALL_BASE, Face::SMALL, BL_DATUM);
+        return;
+    }
+    static constexpr int X0[] = {RULE_X0, BAND_KML_X, BAND_RANGE_X}, X1[] = {BAND_KML_X, BAND_RANGE_X, RULE_X1};
+    const int top = BAND_FIG_BASE - termfont::ascent(Face::TITLE);
+    clearBg(X0[part], top, X1[part] - X0[part], BAND_FIG_BASE + termfont::descent(Face::TITLE) - top);
+    tft.setTextColor(pal(strncmp(t, "--", 2) == 0 ? termpal::DIM : termpal::TEXT));
+    if (part == BP_RANGE) text(t, DASH_RIGHT, BAND_FIG_BASE, Face::TITLE, BR_DATUM);
+    else text(t, part == BP_TRIP ? DASH_X : BAND_KML_X, BAND_FIG_BASE, Face::TITLE, BL_DATUM);
+}
+
+// The whole trip band, cleared between its rules and drawn again (a repaint of the Menu).
 static void drawTripBand() {
-    const tripmeter::Trip t = tripMeter.trip();
-    char hm[16], dist[16];
-    tripmeter::elapsed(t, hm, sizeof(hm));
-    tripmeter::distance(t, dist, sizeof(dist));
+    tripBandShown = tripBandNow();
     clearBg(RULE_X0, CLOCK_RULE_Y + 1, RULE_X1 - RULE_X0, TRIP_RULE_Y - CLOCK_RULE_Y - 1);
-    tft.setTextColor(pal(termpal::MID));
-    text(TRIP_LABEL, DASH_X, TRIP_BASE, Face::SMALL, BL_DATUM);
-    if (!t.hasDistance) tft.setTextColor(pal(termpal::DIM));
-    text(dist, DASH_RIGHT, TRIP_BASE, Face::BODY, BR_DATUM);
-    tft.setTextColor(pal(termpal::TEXT));
-    text(hm, tripTimeX(), TRIP_BASE, Face::BIG, BL_DATUM);
+    for (int i = 0; i < BP_N; i++) drawBandPart(tripBandShown, i);
+}
+
+// On the Menu, only the parts whose text changed (a new snapshot, a stale one, a new minute): while
+// driving km/L moves almost every second, and a whole-band redraw would flash. "[car] band: kml".
+static void updateTripBand() {
+    if (screen != Screen::Menu) return;
+    const healthview::Band b = tripBandNow();
+    char parts[32] = "";
+    for (int i = 0; i < BP_N; i++) {
+        if (!strcmp(bandText(b, i), bandText(tripBandShown, i))) continue;
+        drawBandPart(b, i);
+        const size_t at = strlen(parts);
+        snprintf(parts + at, sizeof(parts) - at, "%s%s", at ? " " : "", BAND_PART_NAMES[i]);
+    }
+    tripBandShown = b;
+    if (parts[0]) Serial.printf("[car] band: %s\n", parts);
 }
 
 // The lights row, cleared between its rules and drawn again: INSIDE left of a vertical MID rule,
@@ -974,7 +1184,7 @@ static void drawPrompt() {
     const int top = LIGHTS_RULE_Y + 1;
     clearBg(RULE_X0, top, RULE_X1 - RULE_X0, deckmenu::PROMPT_BAND.y + deckmenu::PROMPT_BAND.h - top);
     if (message[0]) {
-        tft.setTextColor(msgInk(message));
+        tft.setTextColor(msgInk(message, messageAlert));
         placeCursor(DASH_X + text(message, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
         return;
     }
@@ -989,7 +1199,7 @@ static void drawPrompt() {
         return;
     }
     text(MUSIC_PROMPT, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM);
-    tft.fillRect(songChipX(), PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, tint(SWATCHES[musicSwatch].screen));
+    tft.fillRect(songChipX(), PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, c565(SWATCHES[musicSwatch].screen));
     char name[12];
     upper(SWATCHES[musicSwatch].name, name, sizeof(name));
     placeCursor(songNameX() + text(name, songNameX(), PROMPT_BASE, Face::SMALL, BL_DATUM));
@@ -1078,7 +1288,7 @@ static bool drawLooks() {
 // the 2 px gap around the button, apart from the lit colour's bar inside it. Off: the gap's
 // scanlined bg again (the caller redraws the button, and with it any rule the ring crossed).
 static void drawFocus(int id, bool on) {
-    if (id < 0 || screen == Screen::Menu) return;
+    if (id < 0 || screen == Screen::Menu || onHealth()) return;
     const Rect r = deckmenu::rect(screen, id);
     if (on) {
         tft.drawRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4, pal(termpal::TEXT));
@@ -1318,6 +1528,10 @@ static void drawKaraokeBody(bool all) {
 // Redraws the current screen in the current palette.
 static void drawAll() {
     clearBg(0, 0, tft.width(), tft.height());
+    if (onHealth()) {
+        drawHealth();
+        return;
+    }
     if (screen != Screen::Menu) drawTabRule(0, tft.width());
     for (int id = 0; id < deckmenu::count(screen); id++) {
         if (built(id)) drawButton(id);
@@ -1330,6 +1544,7 @@ static void drawAll() {
         if (screen == Screen::Lights) drawLevel();
         drawStatus();
     }
+    if (bandUp) drawBand(true);  // the clear above stopped at the viewport: the band is whole again
 }
 
 // ---- Touch calibration: tap five crosses with the pen, fit, keep it in NVS ("touch"/"hom") ----
@@ -1505,10 +1720,9 @@ static constexpr uint32_t TRIP_FRESH_MS = 3000;     // a reading older than this
 static uint8_t tripSaved[tripmeter::RECORD_BYTES];
 static bool tripSavedValid = false;
 
-// The OBD link will call this with each speed reading (km/h). It may run on another core, so it
-// only stores the latest reading; tripTick() on the loop task integrates it once a second (the
-// Meter isn't thread-safe). Nothing calls it yet and no speed is faked, so the trip band shows "-- KM".
-static void tripSpeed(uint16_t kmh) __attribute__((unused));
+// carTick() calls this with each fresh snapshot's speed (km/h), so the meter's record (the boot's
+// ">LAST TRIP") has the distance too. It only stores the latest reading; tripTick() integrates it once
+// a second (the Meter isn't thread-safe). No speed is faked: without an OBD deck it has no distance.
 static void tripSpeed(uint16_t kmh) {
     // The speed first, then the time that makes it count: 32-bit and 16-bit writes are atomic on the
     // ESP32, so loop() sees the old pair or the new speed with either time. A new speed with the old
@@ -1550,14 +1764,7 @@ static void tripTick() {
     tripIntegratedAt = checkedAt;
     tripMeter.setSeconds(tripClock.seconds(now));
     const tripmeter::Trip t = tripMeter.trip();
-    // the line shows minutes and tenths of a km: redraw only when one of them moved
-    static bool shown = false;
-    static tripmeter::Trip on;
-    if (!shown || t.seconds / 60 != on.seconds / 60 || t.meters / 100 != on.meters / 100 || t.hasDistance != on.hasDistance) {
-        shown = true;
-        on = t;
-        if (screen == Screen::Menu) drawTripBand();
-    }
+    updateTripBand();  // its minute, or a snapshot gone stale
     static uint32_t savedAt = 0;
     if (!savedAt) savedAt = now ? now : 1;
     if (now - savedAt >= 60000) {
@@ -1575,14 +1782,19 @@ static void tripTick() {
 // Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
 // shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
-// the watch.
+// the watch. The lights fade to it from what they show (even a song's): the inside over ~1 s, the
+// outside, whose controller takes ~1 write a second, half now and the rest 1 s later.
+static constexpr int PRESET_FADE_IN = 4, PRESET_FADE_OUT = 2;
+static constexpr uint32_t PRESET_STEP_IN_MS = 300, PRESET_STEP_OUT_MS = 1000;
 static void applyPreset(int slot0) {
+    const songpalette::Rgb from[N_CTRL] = {frameNow(0), frameNow(1)};
     musicYield();  // both lights get the preset anyway
     const ledpresets::Preset& p = ledpresets::PRESETS[slot0];
     looks[INSIDE] = p.in;
     looks[OUTSIDE] = p.out;
     looks[BOTH] = bothlook::seed(p.in, p.out);
-    for (int i = 0; i < N_CTRL; i++) push(i);
+    startFade(0, from[0], frameOf(p.in), true, PRESET_FADE_IN, PRESET_STEP_IN_MS);
+    startFade(1, from[1], frameOf(p.out), true, PRESET_FADE_OUT, PRESET_STEP_OUT_MS);
     save();
     char m[sizeof(message)];
     lightstatus::applied(ledpresets::shown(p), m, sizeof(m));  // ">ゴジラ APPLIED" on screen
@@ -1704,6 +1916,10 @@ static void setMusic(bool on, bool restore = true);
 
 // One settled tap on a button of the current screen.
 static void press(int id) {
+    if (onHealth()) {
+        leaveHealth();
+        return;
+    }
     if (onLights()) {
         pressLights(id);
         return;
@@ -1731,6 +1947,12 @@ static void press(int id) {
 static void act() {
     tap.acted = true;
     const int x = static_cast<int>(tap.sx / tap.n), y = static_cast<int>(tap.sy / tap.n);
+    if (bandUp && y >= BAND_Y) {  // the band covers the buttons there: a tap on it is mute / unmute
+        tap.id = -1;
+        camBandTap();
+        tapGuard.arm();  // a double tap or a bounce must not toggle it straight back
+        return;
+    }
     tap.id = deckmenu::hit(screen, x, y);
     Serial.printf("[tap] %d,%d -> button %d\n", x, y, tap.id);
     if (tap.id < 0) return;
@@ -1745,6 +1967,14 @@ static void act() {
 //   B: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
 //   Lights only: X next page (BOTH, INSIDE, OUTSIDE, PRESETS, round)
 //   the look pages only: Y this page's lights on/off    LB / RB: - / +  (on PRESETS: nothing)
+//   RT (any screen, nothing drawn): mark a camera here. A firm pull (MARK_PULL of the travel) asks the
+//          black deck's /cam/mark through the cam task; the trigger must come back under MARK_LET_GO
+//          and MARK_GAP_MS pass before the next, so a shaky pull marks once. The black deck answers
+//          by sound (a chirp: saved; a low beep: no GPS fix), so the driver never looks.
+static constexpr uint16_t MARK_PULL = XboxControllerNotificationParser::maxTrig * 4 / 5;
+static constexpr uint16_t MARK_LET_GO = XboxControllerNotificationParser::maxTrig / 4;
+static constexpr uint32_t MARK_GAP_MS = 3000;
+static volatile bool camMarkAsk = false;   // RT pulled: the cam task sends /cam/mark
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
 // redrawn. On Lights, erasing the old ring can notch its button's edge, so that button is redrawn.
@@ -1824,6 +2054,22 @@ static void handlePad() {
     };
     const bool a = edge(n.btnA, pA), b = edge(n.btnB, pB), x = edge(n.btnX, pX), y = edge(n.btnY, pY);
     const bool lb = edge(n.btnLB, pLB), rb = edge(n.btnRB, pRB);
+    static bool rtHeld = false;
+    static uint32_t markedAt = 0;
+    if (!rtHeld && n.trigRT >= MARK_PULL) {
+        rtHeld = true;
+        if (!markedAt || millis() - markedAt >= MARK_GAP_MS) {
+            markedAt = millis();
+            camMarkAsk = true;
+            Serial.println("[pad] RT: mark");
+        }
+    } else if (rtHeld && n.trigRT < MARK_LET_GO) {
+        rtHeld = false;
+    }
+    if (onHealth()) {  // A or B: back to the Menu, as a tap
+        if (a || b) leaveHealth();
+        return;
+    }
     const Screen was = screen;
     if (a) padPress(focus);
     if (screen != was) return;  // A changed the screen: the other buttons wait for their next press
@@ -1989,9 +2235,20 @@ static volatile bool lyricsFresh = false;  // a poll was published; loop() clear
 enum LyricsWant : uint8_t { WANT_NONE, WANT_MENU, WANT_KARAOKE };
 static volatile uint8_t lyricsWant = WANT_NONE;  // what the screen shown needs; loop() keeps it
 static pollpace::Pace lyricsPace;                 // only the lyrics task touches it (and lyricsHost)
-static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches these three
-static deckaddr::Keep lyricsAddr;
-static bool lyricsMdns = false;
+static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches it
+static deckaddr::Keep lyricsAddr;             // under deckLock (see deckGet)
+
+// The deck's mDNS (its name, and the lookups of the other decks), started by the first task that
+// looks a deck up: a black-deck asker (under deckLock) or the car task (yellow/carlink), so under its
+// own lock. True once up.
+static SemaphoreHandle_t mdnsLock = nullptr;  // made in beginVoice, before any task that looks up
+static bool mdnsUp() {
+    static bool up = false;
+    xSemaphoreTake(mdnsLock, portMAX_DELAY);
+    if (!up) up = MDNS.begin(LEDS_MDNS_NAME);
+    xSemaphoreGive(mdnsLock);
+    return up;
+}
 
 // Where the black deck is: its fixed address on the hotspot (until it stops answering as the deck),
 // else its mDNS name on whatever network both are on. False when it can't be found.
@@ -2002,7 +2259,7 @@ static bool lyricsHost(char* out, size_t n) {
         snprintf(out, n, "%s", BLACK_DECK_ADDR);
         return true;
     }
-    if (!lyricsMdns) lyricsMdns = MDNS.begin(LEDS_MDNS_NAME);
+    mdnsUp();
     if (lyricsAddr.addr() == 0) {
         // each failed lookup holds the task for up to 1.5 s: while the deck stays away, not every poll
         const uint32_t now = millis();
@@ -2024,12 +2281,21 @@ static bool lyricsHost(char* out, size_t n) {
 // nothing can be signed (the bearer key is never sent). Not a miss: the deck wasn't asked.
 static constexpr int NOT_SIGNED = -1000;
 
+// Three tasks ask the black deck: the lyrics task (/state, /music), the camera task (/cam, its mute)
+// and the voice task (/say's camera words). One asks at a time, under deckLock: the address keeping
+// (lyricsHost, lyricsAddr) stays one task's at a time. lyricsPace stays the lyrics
+// task's: lyricsHost only paces its lookups by it (word-sized fields), so another asker at worst
+// makes or skips one lookup. The longest hold is an mDNS query and a GET (1.5 s, then 1.5 s and the
+// body's 3 s): DECK_LOCK_MS waits that out, then counts as no answer.
+static SemaphoreHandle_t deckLock = nullptr;  // beginVoice makes it, before any asker starts
+static constexpr uint32_t DECK_LOCK_MS = 7000;
+
 // A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
 // body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
 // peer: the address asked; nonce: the request's n (16 hex). Short timeouts: the deck is one hop
-// away, and a missing deck must not hold the polls up.
-static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
-                   uint32_t* peer = nullptr, char* nonce = nullptr) {
+// away, and a missing deck must not hold the polls up. Under deckLock (deckGet).
+static int deckAsk(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
+                   uint32_t* peer, char* nonce) {
     if (!net::isOnline()) return -1;
     char auth[sigreq::AUTH_LEN];
     if (!reqauth::signGet(path, params, count, auth, sizeof(auth))) {
@@ -2056,6 +2322,22 @@ static int deckGet(const char* path, const sigreq::Param* params, int count, cha
     IPAddress a;
     if (peer && a.fromString(host)) *peer = static_cast<uint32_t>(a);
     return net::httpGet(url, 1500, body, bodyLen, body ? 3000 : 0);
+}
+
+static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
+                   uint32_t* peer = nullptr, char* nonce = nullptr) {
+    if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return -1;
+    const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce);
+    xSemaphoreGive(deckLock);
+    return rc;
+}
+
+// An asker's verdict on the address it asked (lyricsAddr: 3 misses in a row, look it up again),
+// under deckLock like the rest of the address keeping.
+static void deckAnswered(bool valid) {
+    if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return;
+    lyricsAddr.onPoll(valid);
+    xSemaphoreGive(deckLock);
 }
 
 // GET /state into lyricsBody (cut at MAX_JSON, always terminated).
@@ -2098,7 +2380,7 @@ static int musicAsk(bool on) {
 static int musicGet(bool on) {
     const int rc = musicAsk(on);
     // the deck's own answers (200, "stopping" 409, low memory 503); 3 misses in a row: look it up again
-    if (rc != NOT_SIGNED) lyricsAddr.onPoll(rc == 200 || rc == 409 || rc == 503);
+    if (rc != NOT_SIGNED) deckAnswered(rc == 200 || rc == 409 || rc == 503);
     return rc;
 }
 
@@ -2162,7 +2444,7 @@ static void lyricsTask(void*) {
             if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
             pace.onResult(ok);
             // the deck's own answers (a /state that parses, low memory 503); 3 misses in a row: look it up again
-            lyricsAddr.onPoll(ok || rc == 503);
+            deckAnswered(ok || rc == 503);
             const uint32_t at = millis();
             portENTER_CRITICAL(&lyricsMux);
             lyricsPub.wrongKey = rc == 403;
@@ -2182,6 +2464,319 @@ static void lyricsTask(void*) {
 static void beginLyrics() {
     if (lyricsHandle) return;
     xTaskCreatePinnedToCore(lyricsTask, "lyrics", 6144, nullptr, 0, &lyricsHandle, 1);
+}
+
+// ---- Speed cameras: the black deck's GET /cam, as a band over the bottom third ----
+// The black deck (the S3) has the GPS and the camera list, and beeps. This deck only shows: its own
+// task (core 1, idle priority, 4 KB) asks GET /cam (signed, util/car/camwire's small JSON) every
+// second whatever the screen, through deckGet like the lyrics (plain HTTP, no new client), and
+// publishes each poll under camMux; loop() takes it in camTick(). After 10 misses in a row it asks
+// every 5 s (util/pollpace, as the lyrics do), so an absent deck isn't hunted for every second.
+//   Alert / alarm: a band over the bottom third of whatever screen shows (Menu, Lights, PRESETS,
+//     Karaoke): the kind's icon, RADAR 60 / LOMBADA 40 / SINAL, the distance big ("320 M") and the
+//     speed. An alert is termpal's green theme (whatever the deck's theme, night too), a red
+//     light's its orange; an alarm is the band in red with the speed big, blinking at 2 Hz, the
+//     deck's only blinking thing. MUTE on it while the black deck's beeps are off; a tap on it
+//     toggles that (GET /cam/mute?on= the opposite of the last /cam's mute); the band going up or
+//     down, or a tap on it, arms tapGuard, so a tap meant for a button doesn't mute. It stays
+//     CAM_HOLD_MS after st leaves alert / alarm (frozen, not blinking), and through one or two
+//     missed polls.
+//   No fix: no band and no tag here: the black deck's top strip shows it (its GPS icon struck
+//     through), next to the speaker that says it. CAM_LOST_MISSES polls in a row without an
+//     answer, or CAM_UNSIGNED_MS without a clock to sign them: "CAM --" on the Menu's header line,
+//     and no band (the black deck still beeps). Muted with no band up: "MUTED" there.
+// This deck never beeps. Voice ("mark camera", "cameras mute") is /say's (util/yellow/camvoice).
+static constexpr uint32_t CAM_HOLD_MS = 2000;
+static constexpr int CAM_LOST_MISSES = 3;
+static constexpr uint32_t CAM_UNSIGNED_MS = 10000;  // no clock to sign /cam this long: CAM --
+static constexpr uint32_t CAM_BLINK_MS = 250;  // on 250, off 250: 2 Hz
+
+struct CamReading {
+    camwire::View view{};  // the last /cam that parsed (a miss keeps it)
+    bool heard = false;    // one has come since boot
+    int misses = 0;        // polls in a row without one
+};
+static TaskHandle_t camHandle = nullptr;
+static portMUX_TYPE camMux = portMUX_INITIALIZER_UNLOCKED;
+static CamReading camPub;                 // guarded by camMux
+static volatile bool camFresh = false;    // a poll was published; loop() clears it
+static volatile int8_t camMuteAsk = -1;   // a band tap: send /cam/mute?on= this (1, 0); -1 none
+static volatile bool camPollNow = false;  // the mute changed: poll at once, so the band shows it
+
+static void camTask(void*) {
+    static char body[camwire::MAX_JSON];  // static: off the 4 KB stack
+    pollpace::Pace pace;
+    camwire::View v{};
+    bool heard = false, first = true, unsignedTold = false;
+    uint32_t lastPoll = 0, unsignedAt = 0;  // unsignedAt: since when /cam can't be signed; 0: it can
+    watchdog::watch();  // each pass: at most a mute GET and a /cam GET, each a lock wait and ~6 s
+    for (;;) {
+        watchdog::feed();
+        if (ota::active()) {  // an update has the WiFi
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        if (camMarkAsk) {
+            camMarkAsk = false;
+            Serial.printf("[cam] mark: rc=%d\n", deckGet("/cam/mark", nullptr, 0, nullptr, 0));
+        }
+        const int8_t ask = camMuteAsk;
+        if (ask >= 0) {
+            camMuteAsk = -1;
+            const sigreq::Param p[] = {{"on", ask ? "1" : "0"}};
+            Serial.printf("[cam] mute on=%d: rc=%d\n", ask, deckGet("/cam/mute", p, 1, nullptr, 0));
+            camPollNow = true;
+        }
+        const uint32_t now = millis();
+        if (!first && !camPollNow && now - lastPoll < pace.intervalMs()) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+        first = camPollNow = false;
+        lastPoll = now;
+        body[0] = 0;
+        const int rc = deckGet("/cam", nullptr, 0, body, sizeof(body));
+        if (rc == NOT_SIGNED) {
+            // No clock yet: nothing was asked, so no miss either; but past CAM_UNSIGNED_MS the road
+            // isn't being watched from here, so CAM -- says so (the black deck still beeps).
+            if (unsignedAt == 0) unsignedAt = now | 1;
+            if (now - unsignedAt < CAM_UNSIGNED_MS) continue;
+            if (!unsignedTold) Serial.println("[cam] can't sign /cam (no clock): CAM --");
+            unsignedTold = true;
+            portENTER_CRITICAL(&camMux);
+            camPub.misses = CAM_LOST_MISSES;
+            portEXIT_CRITICAL(&camMux);
+            camFresh = true;
+            continue;
+        }
+        unsignedAt = 0;
+        unsignedTold = false;
+        const bool ok = rc == 200 && camwire::parse(body, &v);
+        // Any HTTP answer is the deck at that address (an older black firmware's 404, a 500): only no
+        // answer, or a 403 (someone else's key), counts toward looking the address up again, so this
+        // poll doesn't restart the lyrics' lookups.
+        deckAnswered(rc > 0 && rc != 403);
+        if (!ok && pace.misses() + 1 == CAM_LOST_MISSES) Serial.printf("[cam] deck lost (rc=%d)\n", rc);
+        if (ok && pace.misses() >= CAM_LOST_MISSES) Serial.println("[cam] deck back");
+        pace.onResult(ok);
+        heard = heard || ok;
+        portENTER_CRITICAL(&camMux);
+        if (ok) camPub.view = v;
+        camPub.heard = heard;
+        camPub.misses = pace.misses();
+        portEXIT_CRITICAL(&camMux);
+        camFresh = true;
+    }
+}
+
+// From the voice task, as WiFi starts: deckGet asks only once it is up, and the misses before that
+// count, so a deck that never gets online says CAM --.
+static void beginCam() {
+    if (camHandle) return;
+    if (xTaskCreatePinnedToCore(camTask, "cam", 4096, nullptr, 0, &camHandle, 1) != pdPASS) {
+        Serial.println("[cam] no memory for the task: no camera band");
+    }
+}
+
+// /say's camera words, asked of the black deck from the server's task (the handler waits for an
+// answer anyway). The reply is what Siri says.
+static const char* camSay(camvoice::Cmd c) {
+    const bool mark = c == camvoice::Cmd::Mark, mute = c == camvoice::Cmd::Mute;
+    const sigreq::Param p[] = {{"on", mute ? "1" : "0"}};
+    const int rc = mark ? deckGet("/cam/mark", nullptr, 0, nullptr, 0) : deckGet("/cam/mute", p, 1, nullptr, 0);
+    Serial.printf("[voice] /cam/%s: rc=%d\n", mark ? "mark" : mute ? "mute?on=1" : "mute?on=0", rc);
+    if (rc == 204 && !mark) camPollNow = true;
+    if (rc == 204) return mark ? "Marked" : mute ? "Camera sounds off" : "Camera sounds on";
+    if (rc == 409 && mark) return "No GPS fix";
+    if (rc == 507 && mark) return "The black deck couldn't save it";
+    if (rc == NOT_SIGNED) return "The clock isn't set yet, try again";
+    if (rc == 403) return "The black deck turned it down: wrong key or clock";
+    return "The black deck didn't answer";
+}
+
+// loop()'s side: the last poll (camNow), the band's view (the live alert, frozen through the hold)
+// and when the stage left alert / alarm with the band up (0: it hasn't).
+static CamReading camNow;
+static camwire::View bandView{};
+static uint32_t camQuietAt = 0;
+
+static bool alerting(const camwire::View& v) {
+    return v.stage == cameras::Stage::Alert || v.stage == cameras::Stage::Alarm;
+}
+
+// The band's colours: an alert a role of termpal's green theme (a red light's of its orange) on the
+// scanlined black; an alarm black on ALERT red. Day and night both, whatever the deck's theme.
+static uint16_t bandRed() { return c565(termpal::rgb(termpal::ALERT, night)); }
+static uint16_t bandInk(termpal::Role r) {
+    if (bandView.stage == cameras::Stage::Alarm) return c565(termpal::rgb(termpal::BG, night));
+    const int hue = bandView.kind == camlist::Kind::RedLight ? ledlook::ORANGE : ledlook::GREEN;
+    return c565(termpal::rgb(r, night, hue));
+}
+static void bandBg(int x, int y, int w, int h) {
+    if (bandView.stage == cameras::Stage::Alarm) tft.fillRect(x, y, w, h, bandRed());
+    else clearBg(x, y, w, h);
+}
+
+// The parts' places: the icon centred on (BAND_ICON_X, BAND_MID), the title (TITLE) and under it the
+// small number (BODY) from BAND_TEXT_X, the big number (BIG) right-aligned at DASH_RIGHT on BAND_MID,
+// MUTE (a SMALL inverted tag, like the Menu's LIVE) over it in the top right corner. The numbers'
+// clears, BAND_BIG and BAND_SMALL, hold their texts' ink (even "65535 KM/H": BIG from x 173, BODY
+// to x 139); BAND_BIG starts right of the longest title's ink ("LOMBADA 100" ends at x 168), so a
+// numbers-only redraw never cuts into it.
+static constexpr int BAND_MID = BAND_Y + 40, BAND_ICON_X = 32, BAND_TEXT_X = 60;
+static constexpr int BAND_TITLE_Y = BAND_Y + 14, CAM_SMALL_BASE = BAND_Y + 64;
+static constexpr Rect BAND_BIG{170, BAND_Y + 24, 145, 36}, BAND_SMALL{BAND_TEXT_X, BAND_Y + 48, 96, 22};
+
+static void bandIcon(camlist::Kind k, uint8_t limit, uint16_t ink) {
+    const int cx = BAND_ICON_X, cy = BAND_MID;
+    switch (k) {
+    case camlist::Kind::Speed:  // the round limit sign, the limit in it
+        for (int r = 16; r <= 18; r++) tft.drawCircle(cx, cy, r, ink);
+        if (limit) {
+            char n[4];
+            snprintf(n, sizeof(n), "%u", static_cast<unsigned>(limit));
+            tft.setTextColor(ink);
+            text(n, cx, cy, Face::BODY, MC_DATUM);
+        }
+        break;
+    case camlist::Kind::Bump:  // a hump on the road
+        tft.fillCircle(cx, cy + 8, 13, ink);
+        bandBg(cx - 14, cy + 9, 29, 14);
+        tft.fillRect(cx - 18, cy + 8, 37, 3, ink);
+        break;
+    case camlist::Kind::RedLight:  // a traffic light, the top lamp lit
+        tft.drawRoundRect(cx - 10, cy - 20, 20, 40, 4, ink);
+        tft.drawRoundRect(cx - 9, cy - 19, 18, 38, 3, ink);
+        tft.fillCircle(cx, cy - 11, 5, ink);
+        tft.drawCircle(cx, cy, 5, ink);
+        tft.drawCircle(cx, cy + 11, 5, ink);
+        break;
+    }
+}
+
+// What the band shows, to redraw only what changed: all of it on a new stage, point, mute or hold,
+// else the numbers when the distance or the speed moved or the blink turned.
+static struct BandShown {
+    bool drawn = false;
+    cameras::Stage stage = cameras::Stage::Off;
+    camlist::Kind kind = camlist::Kind::Speed;
+    uint8_t limit = 0;
+    bool mute = false, hold = false, lit = false;
+    uint16_t dist = 0, kmh = 0;
+} bandShown;
+
+static void drawBand(bool whole) {
+    const camwire::View& v = bandView;
+    const bool alarm = v.stage == cameras::Stage::Alarm, hold = camQuietAt != 0;
+    const bool lit = !alarm || hold || (millis() / CAM_BLINK_MS) % 2 == 0;  // the big speed's blink
+    whole = whole || !bandShown.drawn || v.stage != bandShown.stage || v.kind != bandShown.kind ||
+            v.limit != bandShown.limit || v.mute != bandShown.mute || hold != bandShown.hold;
+    if (!whole && v.distM == bandShown.dist && v.kmh == bandShown.kmh && lit == bandShown.lit) return;
+    tft.resetViewport();
+    const uint16_t ink = bandInk(termpal::TEXT), sub = bandInk(termpal::MID);
+    if (whole) {
+        bandBg(0, BAND_Y, tft.width(), BAND_H);
+        if (!alarm) {  // an alert's frame (the alarm's red is its own)
+            tft.drawRect(2, BAND_Y + 1, tft.width() - 4, BAND_H - 2, ink);
+            tft.drawRect(3, BAND_Y + 2, tft.width() - 6, BAND_H - 4, ink);
+        }
+        bandIcon(v.kind, v.limit, ink);
+        const char* name = v.kind == camlist::Kind::Bump ? "LOMBADA" : v.kind == camlist::Kind::RedLight ? "SINAL" : "RADAR";
+        char title[16];
+        if (v.limit && v.kind != camlist::Kind::RedLight) snprintf(title, sizeof(title), "%s %u", name, static_cast<unsigned>(v.limit));
+        else snprintf(title, sizeof(title), "%s", name);
+        tft.setTextColor(ink);
+        text(title, BAND_TEXT_X, BAND_TITLE_Y, Face::TITLE, TL_DATUM);
+        if (v.mute) {
+            const int w = termfont::width(Face::SMALL, "MUTE") + 2 * TAG_PAD, h = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
+            const int x = DASH_RIGHT - w, y = BAND_Y + 6;
+            tft.fillRect(x, y, w, h, ink);
+            tft.setTextColor(alarm ? bandRed() : pal(termpal::BG));
+            text("MUTE", x + w / 2, y + h / 2, Face::SMALL, MC_DATUM);
+        }
+    } else {
+        bandBg(BAND_BIG.x, BAND_BIG.y, BAND_BIG.w, BAND_BIG.h);
+        bandBg(BAND_SMALL.x, BAND_SMALL.y, BAND_SMALL.w, BAND_SMALL.h);
+    }
+    char dist[16], kmh[16];
+    snprintf(dist, sizeof(dist), "%u M", static_cast<unsigned>(v.distM));
+    snprintf(kmh, sizeof(kmh), "%u KM/H", static_cast<unsigned>(v.kmh));
+    if (lit) {
+        tft.setTextColor(ink);
+        text(alarm ? kmh : dist, DASH_RIGHT, BAND_MID, Face::BIG, MR_DATUM);
+    }
+    tft.setTextColor(alarm ? ink : sub);
+    text(alarm ? dist : kmh, BAND_TEXT_X, CAM_SMALL_BASE, Face::BODY, BL_DATUM);
+    tft.setViewport(0, 0, tft.width(), BAND_Y, false);
+    bandShown = {true, v.stage, v.kind, v.limit, v.mute, hold, lit, v.distM, v.kmh};
+}
+
+// The band leaves without a redraw: the OTA page or the touch calibration takes the whole screen
+// (and redraws the deck after). camTick puts it back while it's still wanted.
+static void bandDrop() {
+    if (!bandUp) return;
+    bandUp = false;
+    bandShown.drawn = false;
+    camQuietAt = 0;
+    tft.resetViewport();
+}
+
+// A tap on the band: the black deck's beeps off, or on again (the cam task asks, then polls, and
+// the band shows the answer).
+static void camBandTap() {
+    camMuteAsk = camNow.view.mute ? 0 : 1;
+    Serial.printf("[cam] tap: mute %s\n", camNow.view.mute ? "off" : "on");
+}
+
+// In loop(): takes a published poll, keeps the Menu's tag and the band. The band comes with an
+// alert or alarm, stays through one or two missed polls (the last poll still holds) and CAM_HOLD_MS
+// after the stage leaves (frozen), and goes at once when the deck is lost (CAM --). Going, the
+// screen under it is redrawn whole.
+static void camTick() {
+    if (camFresh) {
+        camFresh = false;  // before the copy: a poll published meanwhile raises it again
+        portENTER_CRITICAL(&camMux);
+        camNow = camPub;
+        portEXIT_CRITICAL(&camMux);
+    }
+    const bool lost = camNow.misses >= CAM_LOST_MISSES;
+    bool want = false;
+    if (!lost && camNow.heard && alerting(camNow.view)) {
+        bandView = camNow.view;
+        camQuietAt = 0;
+        want = true;
+    } else if (bandUp && !lost) {
+        if (camQuietAt == 0) camQuietAt = millis() | 1;
+        want = millis() - camQuietAt < CAM_HOLD_MS;
+    }
+    bandView.mute = camNow.view.mute;  // live through the hold too
+    if (want == bandUp) {
+        if (bandUp) drawBand(false);
+    } else {
+        bandUp = want;
+        Serial.printf("[cam] band %s\n", want ? "up" : "down");
+        // The band takes or gives back the bottom third under a finger that may be on its way to a
+        // button: that tap must not land on the band (a mute nobody meant) or the button under it.
+        tapGuard.arm();
+        tap.acted = true;  // and the press under way, if any, doesn't act on release
+        if (want) {
+            drawBand(true);
+        } else {
+            bandShown.drawn = false;
+            camQuietAt = 0;
+            tft.resetViewport();
+            drawAll();
+        }
+    }
+    // The header's tag, after the band: MUTED only while no band is up to say MUTE.
+    const char* tag = lost ? CAM_TAG_LOST
+                    : !camNow.heard ? ""
+                    : camNow.view.mute && !bandUp ? CAM_TAG_MUTE : "";
+    if (strcmp(tag, camTag) != 0) {
+        Serial.printf("[cam] tag \"%s\"\n", tag);
+        camTag = tag;
+        if (screen == Screen::Menu) drawHeader();
+    }
 }
 
 // In loop(): tells the task how to poll, takes a published poll, and redraws what changed: on the
@@ -2210,6 +2805,325 @@ static void lyricsTick() {
     drawKaraokeBody(false);
 }
 
+// ---- Car health: the OBD deck's snapshot, the pre-flight check (A / B) and trip complete (D) ----
+// yellow/carlink polls the OBD deck's GET /car; carTick() (loop) takes each snapshot and decides:
+//   Check (A / B, ">PRE-FLIGHT CHECK"): once per power-on, the first time a fresh snapshot has
+//           checkReady while the Menu shows (it never covers Lights, Presets or Karaoke: it waits
+//           for the Menu), and only with the car still (healthview::checkMayShow: a yellow reboot
+//           mid-drive skips it for this power-on). Back to the Menu after CHECK_MS, unless an item
+//           is a problem (B): then it holds until a tap.
+//   Parked (D, ">TRIP COMPLETE"): healthview::ParkGate, fed from the snapshot's speed and trip km
+//           while the Menu or D shows (D comes only from the Menu); a stale snapshot (no new seq for
+//           carlink::STALE_MS) is an unknown speed, so it never counts as stopped. It hides when the
+//           car moves.
+// A tap anywhere, or the Xbox controller's A or B, goes back to the Menu (on D: ParkGate::dismiss()).
+// On the Menu and Lights a fresh snapshot can also bring a warning (healthview::Warnings: critical
+// while moving, any problem when stopped, each at most once per 2 minutes) as the message, in ALERT;
+// never over A, B or D. Each fresh snapshot's speed feeds the trip meter, and its figures the band.
+// The texts are healthview's (all caps, <= 39 chars: a BODY line is 311 px, a SMALL one 272), laid
+// out as the brainstorm's mockups; colours by role. Without an OBD deck nothing here ever shows.
+// Test hook: -D HEALTH_TEST=a|b|c|d draws from a canned snapshot instead of the OBD deck's (a: all OK,
+// b: a battery problem, c: driving with km/L stepping, d: parked after a trip); see docs/ARCHITECTURE.md "Test hooks".
+static constexpr uint32_t CHECK_MS = 5000;
+static bool checkDone = false;  // A / B has shown this power-on
+static uint32_t checkAt = 0;    // millis() it showed
+static healthview::ParkGate parkGate;
+static healthview::Check checkShown;    // what the screen shows (drawHealth keeps them)
+static healthview::Parked parkedShown;
+
+// Layout (caps tops): the dashboard's header row and rule, then the rows below.
+static constexpr int HC_BATT_Y = 30, HC_BATT_WHY_Y = 50, HC_ENG_Y = 74, HC_ENG_WHY_Y = 94, HC_RULE1_Y = 114;
+static constexpr int HC_LAST_Y = 124, HC_RANGE_Y = 144, HC_RULE2_Y = 166, HC_STATUS_Y = 180, HC_WHY_X = DASH_X + 8;
+static constexpr int HC_ADVICE_Y = 120, HC_ADVICE_STEP = 15;  // B's three lines, over the last trip and range rows
+static constexpr int HP_ROW1_Y = 32, HP_ROW2_Y = 72, HP_SMALL_Y = 108, HP_RULE1_Y = 126, HP_ITEMS_Y = 136;
+static constexpr int HP_RULE2_Y = 158, HP_FOOTER_Y = 172, HP_COL2_X = 168;
+
+static healthview::Check carCheck() {
+    const carwire::Snapshot& s = car.snap;
+    return healthview::check(s.battery, s.volts, s.engine, s.hasLast ? &s.last : nullptr, s.lastCostRs, s.rangeKm,
+                             s.trimPct);
+}
+static healthview::Parked carParked() {
+    const carwire::Snapshot& s = car.snap;
+    return healthview::parked(s.trip, s.tripCostRs, s.rangeKm, s.battery, s.engine);
+}
+
+static uint16_t roleInk(healthview::Role r) {
+    switch (r) {
+    case healthview::Role::Mid: return pal(termpal::MID);
+    case healthview::Role::Dim: return pal(termpal::DIM);
+    case healthview::Role::Alert: return pal(termpal::ALERT);
+    default: return pal(termpal::TEXT);
+    }
+}
+
+// A line in its role's colour; returns the pen's travel.
+static int healthLine(const healthview::Line& l, int x, int y, Face f) {
+    tft.setTextColor(roleInk(l.role));
+    return text(l.text, x, y, f, TL_DATUM);
+}
+
+// A big figure: the number BIG, its unit after it in BODY (MID), on one baseline ("18.4 KM").
+static void healthFigure(const healthview::Line& l, int x, int y) {
+    const char* unit = strchr(l.text, ' ');
+    if (!unit) {
+        healthLine(l, x, y, Face::BIG);
+        return;
+    }
+    char num[sizeof(l.text)];
+    snprintf(num, sizeof(num), "%.*s", static_cast<int>(unit - l.text), l.text);
+    const int base = y + termfont::capHeight(Face::BIG);
+    tft.setTextColor(roleInk(l.role));
+    const int w = text(num, x, base, Face::BIG, BL_DATUM);
+    tft.setTextColor(pal(termpal::MID));
+    text(unit, x + w, base, Face::BODY, BL_DATUM);
+}
+
+// The status line's block cursor, after its text (steady: the screen is read, not typed into).
+static void healthCursor(int x, int y, Face f) {
+    tft.fillRect(x + termfont::cell(f) / 2, y, termfont::cell(f), termfont::capHeight(f), pal(termpal::TEXT));
+}
+
+// The header's clock, right (DIM; nothing before the clock synced), cleared first.
+static void drawHealthClock() {
+    clearBg(DASH_SPLIT, 0, RULE_X1 - DASH_SPLIT, HEADER_RULE_Y);
+    if (clockMin < 0) return;
+    char s[16];
+    snprintf(s, sizeof(s), "%02d:%02d", clockMin / 60, clockMin % 60);
+    tft.setTextColor(pal(termpal::DIM));
+    text(s, DASH_RIGHT, DASH_TITLE_Y, Face::SMALL, TR_DATUM);
+}
+
+// Where each of a screen's lines goes, in the order healthLines() lists them: its pen (caps top), the
+// right end of its band, its face and how it is drawn. A line's band is the rows its ink can reach
+// (termfont's ascent / descent: healthview's texts are ASCII, no accented capitals) between x and
+// right; no two bands share a row, and none reaches a rule, so a changed line is cleared and drawn
+// again alone.
+enum class HowDrawn : uint8_t { Line, Figure, Cursor };  // Cursor: a line, then the block cursor
+struct HealthSlot {
+    const char* name;  // for the log
+    int x, y, right;
+    Face face;
+    HowDrawn how;
+};
+static constexpr int N_CHECK_LINES = 10, N_PARKED_LINES = 8;
+static const HealthSlot CHECK_SLOTS[N_CHECK_LINES] = {
+    {"battery", DASH_X, HC_BATT_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"batteryWhy", HC_WHY_X, HC_BATT_WHY_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"engine", DASH_X, HC_ENG_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"engineWhy", HC_WHY_X, HC_ENG_WHY_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"lastTrip", DASH_X, HC_LAST_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"range", DASH_X, HC_RANGE_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"status", DASH_X, HC_STATUS_Y, RULE_X1, Face::BODY, HowDrawn::Cursor},
+    // Share rows with lastTrip and range, which are empty while these aren't: a change between A and B
+    // redraws the whole screen (carTick).
+    {"advice1", DASH_X, HC_ADVICE_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"advice2", DASH_X, HC_ADVICE_Y + HC_ADVICE_STEP, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"advice3", DASH_X, HC_ADVICE_Y + 2 * HC_ADVICE_STEP, RULE_X1, Face::SMALL, HowDrawn::Line},
+};
+static const HealthSlot PARKED_SLOTS[N_PARKED_LINES] = {
+    {"km", DASH_X, HP_ROW1_Y, HP_COL2_X, Face::BIG, HowDrawn::Figure},
+    {"minutes", HP_COL2_X, HP_ROW1_Y, RULE_X1, Face::BIG, HowDrawn::Figure},
+    {"kml", DASH_X, HP_ROW2_Y, HP_COL2_X, Face::BIG, HowDrawn::Figure},
+    {"cost", HP_COL2_X, HP_ROW2_Y, RULE_X1, Face::BIG, HowDrawn::Line},  // "R$ 9,40": one figure
+    {"small", DASH_X, HP_SMALL_Y, RULE_X1, Face::SMALL, HowDrawn::Line},
+    {"battery", DASH_X, HP_ITEMS_Y, HP_COL2_X, Face::BODY, HowDrawn::Line},
+    {"engine", HP_COL2_X, HP_ITEMS_Y, RULE_X1, Face::BODY, HowDrawn::Line},
+    {"footer", DASH_X, HP_FOOTER_Y, RULE_X1, Face::BODY, HowDrawn::Cursor},
+};
+static void healthLines(const healthview::Check& c, const healthview::Line* out[N_CHECK_LINES]) {
+    const healthview::Line* l[N_CHECK_LINES] = {&c.battery, &c.batteryWhy, &c.engine, &c.engineWhy,
+                                                &c.lastTrip, &c.range, &c.status,
+                                                &c.advice[0], &c.advice[1], &c.advice[2]};
+    for (int i = 0; i < N_CHECK_LINES; i++) out[i] = l[i];
+}
+static void healthLines(const healthview::Parked& p, const healthview::Line* out[N_PARKED_LINES]) {
+    const healthview::Line* l[N_PARKED_LINES] = {&p.km, &p.minutes, &p.kml, &p.cost, &p.small, &p.battery, &p.engine, &p.footer};
+    for (int i = 0; i < N_PARKED_LINES; i++) out[i] = l[i];
+}
+
+// One line in its slot; `clear`: its band first (a redraw; after drawAll's clear it is clean).
+static void drawHealthSlot(const HealthSlot& sl, const healthview::Line& l, bool clear) {
+    if (clear) {
+        const int base = sl.y + termfont::capHeight(sl.face), x0 = sl.x < RULE_X0 ? RULE_X0 : sl.x;
+        const int top = base - termfont::ascent(sl.face);
+        clearBg(x0, top, sl.right - x0, base + termfont::descent(sl.face) - top);
+    }
+    if (sl.how == HowDrawn::Figure) healthFigure(l, sl.x, sl.y);
+    else if (sl.how == HowDrawn::Cursor) healthCursor(sl.x + healthLine(l, sl.x, sl.y, sl.face), sl.y, sl.face);
+    else healthLine(l, sl.x, sl.y, sl.face);
+}
+
+static bool sameLine(const healthview::Line& a, const healthview::Line& b) {
+    return a.role == b.role && strcmp(a.text, b.text) == 0;
+}
+
+// The lines of `now` that differ from `shown`, cleared and drawn again (all of them when `all`), and
+// `shown` taken up; one log line names those redrawn. Returns how many were drawn.
+template <typename Screenful, int N>
+static int drawHealthLines(const Screenful& now, Screenful& shown, const HealthSlot (&slots)[N], bool all) {
+    const healthview::Line *a[N], *b[N];
+    healthLines(now, a);
+    healthLines(shown, b);
+    char names[96] = "";
+    int n = 0;
+    for (int i = 0; i < N; i++) {
+        if (!all && sameLine(*a[i], *b[i])) continue;
+        drawHealthSlot(slots[i], *a[i], !all);
+        n++;
+        if (!all) {
+            const size_t at = strlen(names);
+            snprintf(names + at, sizeof(names) - at, " %s", slots[i].name);
+        }
+    }
+    shown = now;
+    if (!all && n) Serial.printf("[car] redraw:%s\n", names);
+    return n;
+}
+
+static uint32_t healthFullDraws = 0;  // whole-screen draws of Check / Parked since boot (the log)
+
+// The whole Check or Parked screen, from the snapshot (drawAll has cleared it): on entry, a theme
+// change, a recalibration.
+static void drawHealth() {
+    tft.setTextColor(pal(termpal::MID));
+    const bool sim = car.snap.sim;
+    const char* title = screen == Screen::Check ? (sim ? ">PRE-FLIGHT CHECK  SIM" : ">PRE-FLIGHT CHECK")
+                                                : (sim ? ">TRIP COMPLETE  SIM" : ">TRIP COMPLETE");
+    text(title, DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    drawHealthClock();
+    drawRule(HEADER_RULE_Y);
+    healthFullDraws++;
+    if (screen == Screen::Check) {
+        drawRule(HC_RULE1_Y);
+        drawRule(HC_RULE2_Y);
+        drawHealthLines(carCheck(), checkShown, CHECK_SLOTS, true);
+        Serial.printf("[car] drew screen %s: %s (full draw %lu)\n", checkShown.problem ? "B" : "A", checkShown.status.text,
+                      static_cast<unsigned long>(healthFullDraws));
+        return;
+    }
+    drawRule(HP_RULE1_Y);
+    drawRule(HP_RULE2_Y);
+    drawHealthLines(carParked(), parkedShown, PARKED_SLOTS, true);
+    Serial.printf("[car] drew screen D: %s, %s (full draw %lu)\n", parkedShown.km.text, parkedShown.minutes.text,
+                  static_cast<unsigned long>(healthFullDraws));
+}
+
+// A tap, A or B on Check or Parked: back to the Menu; D stays away until the car has moved.
+static void leaveHealth() {
+    Serial.printf("[car] %s dismissed\n", screen == Screen::Parked ? "trip complete" : "check");
+    if (screen == Screen::Parked) parkGate.dismiss();
+    show(Screen::Menu);
+}
+
+#ifdef HEALTH_TEST
+#define HEALTH_STR2(x) #x
+#define HEALTH_STR(x) HEALTH_STR2(x)
+// The canned snapshot for HEALTH_TEST (a, b, c or d), the mockups' figures; a new seq every second, so
+// it is always fresh (b and d: volts that change every second). a / b: stood still before any trip
+// (0 km: no D), checkReady; d: stood still after an 18.4 km trip, no
+// check (so D shows 5 s after the Menu); c: driving on the Menu (no check, no D), km/L stepping every
+// second and the trip km every ~10 s, so the band's partial redraws show in the log ("[car] band: kml").
+static bool healthTestTake(carlink::Reading* r) {
+    static uint32_t seq = 0, at = 0;
+    const uint32_t now = millis();
+    if (seq && now - at < 1000) return false;
+    at = now;
+    const char which = HEALTH_STR(HEALTH_TEST)[0];
+    carwire::Snapshot s;
+    s.link = carwire::Link::Live;
+    s.checkReady = which != 'd' && which != 'c';
+    s.kmh = which == 'c' ? 40.0f : 0.0f;     // A / B show only below 3 km/h
+    // b / d: the volts step every second (11.8 / 11.9), so the line redraws show in the log
+    s.volts = which == 'a' ? 14.1f : (seq % 2 ? 11.8f : 11.9f);
+    s.coolantC = 90.0f;
+    s.battery.known = s.engine.known = true;
+    if (which == 'b') {
+        s.battery.level = carhealth::Level::Problem;
+        snprintf(s.battery.why, sizeof(s.battery.why), "BATTERY LOW WHILE RUNNING");
+    }
+    s.trip = which == 'd' ? tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60} : tripsum::Summary{};
+    if (which == 'c') {
+        s.volts = 14.1f;
+        s.kmlNow = 10.0f + static_cast<float>(seq % 5) * 0.7f;
+        s.trip.km = 3.0f + static_cast<float>(seq) * 0.011f;
+    }
+    // d: the cost line changes too; c: a cost on the band
+    s.tripCostRs = which == 'd' ? (seq % 2 ? 9.40f : 9.41f) : which == 'c' ? 2.5f : 0.0f;
+    s.hasLast = true;
+    s.last = tripsum::Summary{18.4f, 1.52f, 12.1f, 34.0f, 32 * 60, 6 * 60};
+    s.lastCostRs = 9.40f;
+    s.rangeKm = which == 'd' ? 290.0f : 310.0f;
+    s.trimPct = 2.0f;
+    s.seq = ++seq;
+    r->snap = s;
+    r->seqAt = now ? now : 1;
+    return true;
+}
+#endif
+
+// In loop(): takes a new snapshot, then shows, keeps or leaves Check and Parked (see above). Only the
+// lines a new snapshot changed are redrawn, each in its own band (no whole-screen flash).
+static healthview::Warnings carWarnings;
+
+// A due warning as the message (Menu's prompt line, Lights' STATUS line), in ALERT. Not on Karaoke,
+// which has no message line: it waits (next() only counts a warning it hands out).
+static void carWarn(uint32_t now) {
+    if (screen != Screen::Menu && !onLights()) return;
+    char m[sizeof(message)];
+    const carwire::Snapshot& c = car.snap;
+    if (!carWarnings.next(c.battery, c.engine, c.critical, c.kmh, now, m, sizeof(m))) return;
+    Serial.printf("[car] warning: %s\n", m);
+    setMessage(m, MESSAGE_MS, true);
+    drawMessage();
+}
+
+static void carTick() {
+#ifdef HEALTH_TEST
+    const bool got = healthTestTake(&car);
+#else
+    const bool got = carlink::take(&car);
+#endif
+    const uint32_t now = millis();
+    const bool fresh = carFresh(now);
+    if (got && fresh) {
+        const float kmh = car.snap.kmh;
+        if (kmh >= 0.0f) tripSpeed(static_cast<uint16_t>(kmh < 300.0f ? kmh + 0.5f : 300.0f));  // NAN: no reading
+        updateTripBand();
+    }
+    if (!checkDone && fresh && car.snap.checkReady && screen == Screen::Menu) {
+        checkDone = true;
+        if (healthview::checkMayShow(car.snap.kmh)) {
+            checkAt = now;
+            show(Screen::Check);
+            return;
+        }
+        Serial.println("[car] check: moving, skipped this power-on");
+    }
+    if (screen == Screen::Check) {
+        if (!checkShown.problem && now - checkAt >= CHECK_MS) {
+            Serial.println("[car] check: back to the Menu");
+            show(Screen::Menu);
+        } else if (got) {
+            const healthview::Check c = carCheck();
+            if (c.problem != checkShown.problem) show(Screen::Check);  // A <-> B share rows: start clean
+            else drawHealthLines(c, checkShown, CHECK_SLOTS, false);   // only the lines that changed
+        }
+        return;
+    }
+    if (car.seqAt != 0 && (screen == Screen::Menu || screen == Screen::Parked)) {
+        const bool parked = parkGate.update(fresh ? car.snap.kmh : NAN, car.snap.trip.km, now);
+        if (parked && screen == Screen::Menu) show(Screen::Parked);
+        else if (!parked && screen == Screen::Parked) {
+            Serial.println("[car] moving: trip complete hidden");
+            show(Screen::Menu);
+        } else if (got && screen == Screen::Parked) {
+            drawHealthLines(carParked(), parkedShown, PARKED_SLOTS, false);
+        }
+    }
+    if (got && fresh) carWarn(now);  // after D's turn: a stop that shows D shows no warning over it
+}
+
 // ---- Music mode: the song's colour on both lights ----
 // Its own task (core 1, idle priority, 4 KB), started the first time music mode goes on. While
 // musicWant and online it holds a UDP socket on musicwire::PORT (raw lwip, 200 ms receive timeout),
@@ -2217,8 +3131,8 @@ static void lyricsTick() {
 // black deck's address (musicPeer), signed with REMOTE_TOKEN and with a counter above the last one
 // (util/wire/musicwire), and publishes the latest PalPkt and its time under musicMux.
 // musicTick() (loop) reads them at most MUSIC_TICK_MS apart: the palette's main colour snapped to a
-// swatch (musiclights::nearestSwatch) and each light's level (musiclights::level: the owner's under
-// the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (musicFadeTick).
+// swatch (musiclights::nearestSwatch) and the inside light's level (musiclights::level: the owner's under
+// the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (fadeTick).
 // The prompt line is redrawn when its state or swatch changed.
 struct MusicHeard {
     bool palOk = false;  // a PalPkt came since the socket opened
@@ -2305,40 +3219,24 @@ static void musicTask(void*) {
 // (its takes ~1). The first step goes as soon as that gap since the light's last step allows (a new
 // song right after a change still keeps the rate). A light switched on for it fades up from black,
 // its power-on sent with the first step; an outside light left off gets nothing. Loop-owned.
-struct MusicFade {
-    songpalette::Rgb from{}, to{};
-    int steps = 0, done = 0;  // done == steps: no fade
-    uint32_t every = 0, at = 0;  // at: millis() of the last step written
-};
 static constexpr int MUSIC_FADE_IN = 6, MUSIC_FADE_OUT = 3;
 static constexpr uint32_t MUSIC_FADE_MS = 3000;
-static MusicFade musicFade[N_CTRL];
-
-// The colour frame push() sends for `l` (black when off).
-static songpalette::Rgb frameOf(const Look& l) {
-    if (!l.lit) return {0, 0, 0};
-    const Rgb s = ledRgb(l.swatch);
-    return {elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)};
-}
-
-// The colour frame light i shows now: a fade's current step, else its look's.
-static songpalette::Rgb frameNow(int i) {
-    const MusicFade& f = musicFade[i];
-    if (f.done < f.steps) return musiclights::blend(f.from, f.to, f.done, f.steps);
-    return frameOf(shownLook(i));
-}
-
-static void writeFrame(int i, const songpalette::Rgb& c) {
-    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::color(v, c.r, c.g, c.b));
-}
 
 // Each loop pass: the fades' due steps. A light out of reach skips its writes (it gets its look
 // when it comes back: loop()'s fresh push).
-static void musicFadeTick() {
+static void fadeTick() {
     const uint32_t now = millis();
     for (int i = 0; i < N_CTRL; i++) {
-        MusicFade& f = musicFade[i];
-        if (f.done >= f.steps || now - f.at < f.every) continue;
+        LightFade& f = lightFade[i];
+        if (f.done >= f.steps) continue;
+        if (f.intro.n) {  // the welcome: its next key at its time
+            if (now - f.start < f.intro.k[f.done].at) continue;
+            f.at = now;
+            writeKey(i, f.done);
+            f.done++;
+            continue;
+        }
+        if (now - f.at < f.every) continue;
         f.done++;
         f.at = now;
         if (linkUp(controllers[i])) writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
@@ -2354,27 +3252,19 @@ static bool musicTarget(int swatch, int cap) {
         Look t;
         t.swatch = swatch;
         t.lit = i == 0 || own.lit;
-        t.pct = static_cast<uint8_t>(musiclights::level(own.pct, cap));
+        t.pct = static_cast<uint8_t>(i == 0 ? musiclights::level(own.pct, cap) : musiclights::OUTSIDE_PCT);
         if (musicDriving && t == musicLook[i]) continue;
         any = true;
         const Look was = shownLook(i);
         const songpalette::Rgb from = frameNow(i);
         musicLook[i] = t;
-        MusicFade& f = musicFade[i];
-        const uint32_t lastStep = f.at;
-        f = MusicFade();
-        f.at = lastStep;
-        if (!t.lit) continue;  // the outside light left off: stays off, nothing sent
-        f.from = was.lit ? from : songpalette::Rgb{0, 0, 0};
-        f.to = frameOf(t);
-        f.steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
-        f.every = MUSIC_FADE_MS / static_cast<uint32_t>(f.steps);
-        if (!was.lit && linkUp(controllers[i])) {  // switched on with its first step, never its old colour
-            for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
-            f.done = 1;
-            f.at = millis();
-            writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+        LightFade& f = lightFade[i];
+        if (!t.lit) {  // the outside light left off: stays off, nothing sent
+            f.done = f.steps;
+            continue;
         }
+        const int steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
+        startFade(i, was.lit ? from : songpalette::Rgb{0, 0, 0}, frameOf(t), !was.lit, steps, MUSIC_FADE_MS / static_cast<uint32_t>(steps));
     }
     musicDriving = true;
     return any;
@@ -2399,7 +3289,7 @@ static void setMusic(bool on, bool restore) {
         const bool drove = musicDriving;
         musicDriving = false;
         musicSwatch = -1;
-        for (MusicFade& f : musicFade) f = MusicFade();
+        for (LightFade& f : lightFade) f = LightFade();
         if (drove && restore) {
             for (int i = 0; i < N_CTRL; i++) push(i);
             drawLooks();  // the lights band and the theme
@@ -2483,7 +3373,9 @@ static void drawUpdateBar(int pct) {
     text(line, tft.width() / 2, UPDATE_PCT_Y, Face::TITLE, TC_DATUM);
 }
 
+static void bandDrop();
 static void drawUpdatePage(otaview::Phase p, int pct) {
+    bandDrop();  // the page holds the whole screen; the band comes back after it
     clearBg(0, 0, tft.width(), tft.height());
     drawHeader();
     tft.setTextColor(pal(otapage::alert(p) ? termpal::ALERT : termpal::TEXT));
@@ -2644,11 +3536,41 @@ static void applyVoice(const VoiceJob& job) {
     answerVoice(line, job.seq);
 }
 
+// A fill-up phrase ("filled up at 6.49", "tanque cheio", util/car/fuelbook::parsePhrase): the fuel
+// book lives on the OBD deck, so it goes there as a signed GET /fill (p only with a price inside
+// 3.00-15.00 R$/L; a full tank all the same with none or another), and its answer becomes the reply
+// (fuelbook::fillReply: "Full tank noted, 6.49 per litre.", "... I heard 649, that's not a price.",
+// "I can't reach the car module."). At most ~2 s on this task; the watchdog is fed around it.
+static void sayFill(float price, bool priceOk) {
+    char p[12], answer[32], line[64];
+    const bool withP = fuelbook::priceParam(price, priceOk, p, sizeof(p));
+    watchdog::feed();
+    const bool ok = carlink::fill(withP ? p : nullptr, answer, sizeof(answer));
+    watchdog::feed();
+    fuelbook::fillReply(ok ? answer : nullptr, price, priceOk, line, sizeof(line));
+    Serial.printf("[voice] fill-up (p=%s): %s -> %s\n", withP ? p : "none", ok ? answer : "no answer", line);
+    server->send(200, "text/plain", line);
+}
+
 static void handleSay() {
     if (!reqauth::pass(*server, gate, "/say", "Wrong key")) return;
     const String text = server->arg("text");
     Serial.printf("[voice] \"%s\"\n", text.c_str());
     if (text.length() == 0) { server->send(200, "text/plain", "I didn't hear anything"); return; }  // no text from the Shortcut
+    // camera words first: they need a camera word, which no lights phrase has (util/yellow/camvoice)
+    const camvoice::Cmd cc = camvoice::parse(text.c_str());
+    if (cc != camvoice::Cmd::None) {
+        const char* reply = camSay(cc);
+        Serial.printf("[voice] -> %s\n", reply);
+        server->send(200, "text/plain", reply);
+        return;
+    }
+    float price = NAN;
+    bool priceOk = true;
+    if (fuelbook::parsePhrase(text.c_str(), &price, &priceOk)) {  // before the lights: "fill" is no colour
+        sayFill(price, priceOk);
+        return;
+    }
     VoiceJob job;
     if (!ledvoice::parse(text.c_str(), &job.c)) { server->send(200, "text/plain", "Sorry, I didn't get a colour or a command"); return; }
     static uint32_t nextSeq = 0;
@@ -2720,15 +3642,19 @@ static void voiceTask(void*) {
     // Watched: WebServer's waits are 5 s per request, a WiFi join feeds before each try.
     watchdog::watch();
     net::connectAny();
+    beginCam();
     while (!net::isOnline()) {
         watchdog::feed();
         net::loop();
         vTaskDelay(pdMS_TO_TICKS(500));
     }
     server->begin();
-    netclock::begin();  // SNTP, for night mode and the Menu's clock
+    netclock::begin();  // SNTP, for the Menu's clock and night dimming
     weatherTick();  // the first try
     beginLyrics();
+#ifndef HEALTH_TEST  // the test draws from a canned snapshot (carTick)
+    carlink::begin(mdnsUp);
+#endif
     ota::begin(LEDS_MDNS_NAME);  // updates over WiFi (off without OTA_PASSWORD; WiFi itself needs REMOTE_TOKEN)
     Serial.printf("[voice] on: http://%s/say?text=purple&k=<REMOTE_TOKEN>  (heap %u)\n",
                   net::deviceIp().c_str(), static_cast<unsigned>(ESP.getFreeHeap()));
@@ -2752,6 +3678,8 @@ static void beginVoice() {
         return;
     }
     reqauth::begin();  // HMAC's self-test: the watch's requests and ours to the black deck are signed
+    mdnsLock = xSemaphoreCreateMutex();
+    deckLock = xSemaphoreCreateMutex();  // before the voice task, which starts every asker
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);
@@ -2777,10 +3705,11 @@ static void vividGamma() {
     for (uint8_t v : NEG) tft.writedata(v);
 }
 
-// Night mode and the Menu's clock. Polled each second (a time() call) so the clock turns over on the
-// minute; the mode follows the clock. On a change the backlight drops before the repaint, so no
-// frame shows at day brightness.
-static void updateDayNight() {
+static void repaint();
+
+// The Menu's clock and night. Polled each second (a time() call) so the clock turns over on the
+// minute; night follows it: the backlight and a repaint in the night palette.
+static void updateClock() {
     static uint32_t checkedAt = 0;
     static bool first = true;
     if (!first && millis() - checkedAt < 1000) return;
@@ -2789,36 +3718,40 @@ static void updateDayNight() {
     int m = 0, y = 0, month = 0, day = 0;
     const bool synced = netclock::localNow(&m, &y, &month, &day);
     const int minute = synced ? m : -1;
-    bool want = synced && daynight::isNight(m);
-#ifdef NIGHT_TEST
-    want = true;
-#endif
     if (minute != clockMin || day != clockDay) {
         if (minute >= 0 && clockMin < 0) Serial.printf("[clock] synced, local %02d:%02d\n", m / 60, m % 60);
         clockMin = minute;
         clockY = y;
         clockMonth = month;
         clockDay = day;
-        if (want == night && screen == Screen::Menu) drawClock();
+        if (screen == Screen::Menu) drawClock();
+        if (onHealth()) drawHealthClock();
     }
+    bool want = synced && daynight::isNight(m);
+#ifdef NIGHT_TEST
+    want = tuneNight;
+#endif
     if (want == night) return;
     night = want;
-    backlight::set(night);  // before the repaint
-    Serial.printf("[ui] night mode %s\n", night ? "on" : "off");
-    drawAll();
+    backlight::setLevel(night ? nightBacklight : 255);
+    Serial.printf("[ui] night %s\n", night ? "on" : "off");
+    repaint();
 }
 
-// The theme the INSIDE light asks for: its colour while it's on and linked (insideSeen), else -1.
+// The theme the INSIDE look asks for: its colour while it's on, linked or not, else -1.
 static int wantTheme() {
+#ifdef NIGHT_TEST
+    if (tuneTheme > -2) return tuneTheme;
+#endif
 #ifdef THEME_TEST
     return THEME_TEST;
 #else
     const Look l = shownLook(0);  // in music mode the song's swatch
-    return lightstatus::of(insideSeen, l.lit) == lightstatus::State::On ? ledlook::gridSwatch(l.swatch) : -1;  // cyan: blue's
+    return l.lit ? ledlook::gridSwatch(l.swatch) : -1;  // cyan: blue's
 #endif
 }
 
-// Called before anything draws a changed look or link (drawLooks, a preset, voice, the link edge),
+// Called before anything draws a changed look (drawLooks, a preset, voice),
 // and once more at the end of each loop as a backstop: a new theme repaints the current screen (the
 // backlight stays), with a button still under a finger or a controller press drawn pressed again.
 // The early return keeps the repaint (which may come back here) from recursing. True when it
@@ -2828,10 +3761,16 @@ static bool updateTheme() {
     if (want == theme) return false;
     theme = want;
     Serial.printf("[ui] theme %d\n", theme);
+    repaint();
+    return true;
+}
+
+// The current screen drawn again, with a button still under a finger or a controller press drawn
+// pressed again.
+static void repaint() {
     drawAll();
     if (tap.down && tap.id >= 0) drawButton(tap.id, true);
     if (padFlash >= 0) drawButton(padFlash, true);
-    return true;
 }
 
 void setup() {
@@ -2839,10 +3778,10 @@ void setup() {
     Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
     ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
     // The task watchdog at 90 s (common/core/watchdog), before any task subscribes: the link,
-    // voice, lyrics, music and weather tasks, and this loop from the end of setup().
+    // voice, lyrics, car, music and weather tasks, and this loop from the end of setup().
     watchdog::begin();
     tft.init();
-    backlight::begin();  // PWM, at the day level
+    backlight::begin();  // PWM, full until updateClock says night
     tft.invertDisplay(true);  // CYD panel: colours are inverted without this
     tft.setRotation(1);
     // The texts are Latin-1 bytes (txt::latin1Fold) and the fonts cover 0x20-0xFF: each byte is its
@@ -2859,7 +3798,7 @@ void setup() {
     typeBoot();  // before the tasks start: nothing else draws while it types
     showLastTrip();  // after the typing, so its few seconds start when the Menu shows
     weatherOff = !gate.enabled();  // no REMOTE_TOKEN, no WiFi: the first draw already says >OFFLINE
-    theme = wantTheme();  // after the typing (always green); no link yet, so -1 but for THEME_TEST
+    theme = wantTheme();  // after the typing (always green): the saved inside look's colour, no link needed
     drawAll();
     // NimBLE 2 (the Xbox library needs it): init, bonding on for the controller, +9 dBm. Its bonds
     // live in NVS "nimble_bond"; an older NimBLE 1.4 build boot-loops on them (blescan/bletest).
@@ -2877,7 +3816,147 @@ void setup() {
     enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
 }
 
+#ifdef NIGHT_TEST
+// The night tuner, a line on the serial port (tools/deck_shot.py's port, 115200), live, no rebuild:
+//   N <theme -1..7> <TEXT> <MID> <DIM> [ALERT]  that theme's night colours (hex RRGGBB); shows it
+//   T <theme -1..7>   show that theme (T alone: the next one; T X back to the inside light's)
+//   B <0..255>        the night backlight
+//   D                 day / night, to compare
+//   P                 print every theme's night colours and the backlight
+static void tuneLine(const char* s) {
+    char cmd = 0;
+    int t = 0;
+    unsigned v[4] = {0, 0, 0, 0};
+    const int n = sscanf(s, " %c %d %x %x %x %x", &cmd, &t, &v[0], &v[1], &v[2], &v[3]);
+    if (n < 1) return;
+    if (cmd == 'N' && n >= 5 && t >= -1 && t < 8) {
+        tunedRgb(termpal::BG);  // filled from termpal first
+        for (int k = 0; k < n - 2; k++) tuned[t + 1][termpal::TEXT + k] = v[k] & 0xFFFFFF;
+        tuneTheme = t;
+        Serial.printf("[tune] theme %d: %06X %06X %06X %06X\n", t, tuned[t + 1][termpal::TEXT], tuned[t + 1][termpal::MID],
+                      tuned[t + 1][termpal::DIM], tuned[t + 1][termpal::ALERT]);
+        theme = -3;  // forces updateTheme's repaint, also when the theme is already shown
+    } else if (cmd == 'T') {
+        if (strchr(s, 'X')) tuneTheme = -2;
+        else if (n >= 2 && t >= -1 && t < 8) tuneTheme = t;
+        else tuneTheme = theme >= 7 ? -1 : theme + 1;
+        Serial.printf("[tune] theme %d\n", tuneTheme);
+    } else if (cmd == 'B' && n >= 2) {
+        nightBacklight = t < 0 ? 0 : t > 255 ? 255 : t;
+        if (night) backlight::setLevel(nightBacklight);
+        Serial.printf("[tune] backlight %d\n", nightBacklight);
+    } else if (cmd == 'D') {
+        tuneNight = !tuneNight;
+    } else if (cmd == 'P') {
+        tunedRgb(termpal::BG);
+        for (int k = -1; k < 8; k++) {
+            Serial.printf("[tune] N %d %06X %06X %06X %06X\n", k, tuned[k + 1][termpal::TEXT], tuned[k + 1][termpal::MID],
+                          tuned[k + 1][termpal::DIM], tuned[k + 1][termpal::ALERT]);
+        }
+        Serial.printf("[tune] B %d\n", nightBacklight);
+    }
+}
+#endif
+
+// One panel row to the PC: "R<yyy> <hex RGB565>".
+static void shotRow(int y) {
+    static const char HEX_DIGITS[] = "0123456789abcdef";
+    static uint8_t rgb[320 * 3 + 1];  // this panel's read comes one byte late: rgb[0] is the dummy's
+    static char row[6 + 320 * 4 + 2];
+    tft.readRectRGB(0, y, 320, 1, rgb);
+    int n = snprintf(row, sizeof row, "R%03d ", y);
+    for (int x = 0; x < 320; x++) {
+        const uint8_t* p = rgb + x * 3 + 1;
+        const unsigned v = ((p[0] & 0xF8U) << 8) | ((p[1] & 0xFCU) << 3) | (p[2] >> 3);
+        for (int s = 12; s >= 0; s -= 4) row[n++] = HEX_DIGITS[(v >> s) & 15U];
+    }
+    row[n++] = '\n';
+    Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
+}
+
+// "INTRO\n" on the serial port plays the welcome again on each lit light (music mode skips it, as at
+// the first link), with no reboot and no car: unlinked lights log their keys as "no link"
+// (tools/intro_check.py checks them). ">WELCOME" shows on the prompt line.
+static void replayIntro() {
+    Serial.println("[intro] replay");
+    bool any = false;
+    for (int i = 0; i < N_CTRL; i++) {
+        if (shownLook(i).lit && !musicDriving) {
+            startIntro(i);
+            any = true;
+        } else {
+            Serial.printf("[intro] %s: skipped (%s)\n", controllers[i].label, musicDriving ? "music mode" : "off");
+        }
+    }
+    if (!any) return;
+    setMessage(">WELCOME");
+    drawMessage();
+}
+
+// "SHOT\n" on the serial port sends the panel to the PC (tools/deck_shot.py): "SHOT 320 240", a row
+// line each, "SHOT END". NimBLE's own error prints skip the serial lock and can land inside a row, so
+// the PC then asks again for the rows it lost ("R031\n", 2 s of silence or "Q" ends it). About 30 s at
+// 115200, in the loop: the screen holds still, touch and drawing wait (the 90 s watchdog doesn't
+// mind), the lights' link and the servers keep running. "INTRO\n" is read here too (replayIntro).
+static void shotTick() {
+    static const char WORD[] = "SHOT\n", INTRO[] = "INTRO\n";
+    static uint8_t matched = 0, introMatched = 0;
+    bool go = false, intro = false;
+#ifdef NIGHT_TEST
+    static char line[64];
+    static uint8_t len = 0;
+#endif
+    while (Serial.available()) {
+        const char c = static_cast<char>(Serial.read());
+        if (c == '\r') continue;
+#ifdef NIGHT_TEST
+        if (c == '\n') {
+            line[len] = 0;
+            len = 0;
+            tuneLine(line);
+        } else if (len < sizeof line - 1) {
+            line[len++] = c;
+        }
+#endif
+        matched = c == WORD[matched] ? matched + 1 : (c == WORD[0] ? 1 : 0);
+        if (WORD[matched] == 0) {
+            matched = 0;
+            go = true;
+        }
+        introMatched = c == INTRO[introMatched] ? introMatched + 1 : (c == INTRO[0] ? 1 : 0);
+        if (INTRO[introMatched] == 0) {
+            introMatched = 0;
+            intro = true;
+        }
+    }
+    if (intro) replayIntro();
+    if (!go) return;
+    Serial.println("SHOT 320 240");
+    for (int y = 0; y < 240; y++) shotRow(y);
+    Serial.println("SHOT END");
+    char ask[5];
+    uint8_t n = 0;
+    for (uint32_t until = millis() + 2000; static_cast<int32_t>(until - millis()) > 0;) {
+        if (!Serial.available()) {
+            delay(5);
+            continue;
+        }
+        const char c = static_cast<char>(Serial.read());
+        if (c == 'Q') break;
+        if (c == '\r') continue;
+        if (c != '\n') {
+            if (n < sizeof ask - 1) ask[n++] = c;
+            continue;
+        }
+        ask[n] = 0;
+        n = 0;
+        if (ask[0] == 'R' && atoi(ask + 1) < 240) shotRow(atoi(ask + 1));
+        until = millis() + 2000;
+    }
+}
+
 void loop() {
+    shotTick();
     // Up bootguard::HEALTHY_MS, online at that moment and the update listener started (when updates
     // are on; off, online is enough; ota::onGoodPoll checks the time and the listener): this
     // firmware has proven itself (net/ota), and can take the next update. Checked once a second.
@@ -2928,13 +4007,15 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, ota %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, car %u, cam %u, ota %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       static_cast<unsigned>(weatherStackLeft),  // the last try's (each ends with it)
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
                       musicHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(musicHandle)) : 0u,
+                      carlink::stackLeft(),
+                      camHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(camHandle)) : 0u,
                       ota::stackLeft(),
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
@@ -2942,9 +4023,11 @@ void loop() {
     handlePad();
     takeWeather();
     lyricsTick();
+    carTick();
+    camTick();
     musicTick();
-    musicFadeTick();
-    updateDayNight();
+    fadeTick();
+    updateClock();
     tripTick();
     blinkCursor();
 
@@ -2953,6 +4036,7 @@ void loop() {
     if (digitalRead(PIN_BOOT) == LOW) {
         if (bootSince == 0) bootSince = millis();
         else if (millis() - bootSince > 2000) {
+            bandDrop();  // the crosses take the whole screen
             calibrate();
             tapGuard.arm();  // the last cross's tap must not land on the screen drawn next
             drawAll();
@@ -2963,6 +4047,10 @@ void loop() {
     }
 
     // A controller that just came up gets its zone's look, so it matches what the deck remembers.
+    // The first time since boot a lit light plays the welcome to it instead (startIntro), and
+    // ">WELCOME" shows after the link message (it says more).
+    static bool welcomed[N_CTRL] = {};
+    bool welcomedNow = false;
     static bool shown[N_CTRL] = {};
     static uint32_t edgeAt[N_CTRL] = {};  // when each light last changed link state, and which way
     static bool edgeUp[N_CTRL] = {};
@@ -2971,15 +4059,16 @@ void loop() {
         const bool up = linkUp(c);
         if (up && c.fresh) {
             c.fresh = false;
-            push(i);
-            musicFade[i].done = musicFade[i].steps;  // it has the target: no step back to a mid-fade colour
+            if (!welcomed[i] && shownLook(i).lit && !musicDriving) {
+                startIntro(i);
+                welcomedNow = true;
+            } else {
+                push(i);
+            }
+            welcomed[i] = true;
         }
         if (up != shown[i]) {
             shown[i] = up;
-            if (i == 0) {
-                insideSeen = up;
-                updateTheme();  // before drawLightState: the screen is in the right theme first
-            }
             char m[sizeof(message)];
             // both lights going the same way together (the phone hotspot, the car's power): one
             // message, or the second would replace the first
@@ -2993,6 +4082,10 @@ void loop() {
             drawLightState();  // STATUS on Lights (the message too), the lights band on the Menu: NO LINK while it's gone
             if (screen == Screen::Menu) drawMessage();
         }
+    }
+    if (welcomedNow && !(message[0] && messageMs > MESSAGE_MS && millis() - messageAt < messageMs)) {
+        setMessage(">WELCOME");
+        drawMessage();
     }
     updateTheme();  // a backstop: every path above has already called it
     publish();  // for /state and /status
