@@ -58,8 +58,8 @@
 // The light off or unreachable: the green again. The colour tiles and chips stay real.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
-// (util/musiclights), steady, fading to the next song's over ~3 s, each at the owner's level under the
-// palette's time-of-day cap (never under 40 %). An outside light left off stays off; an inside one
+// (util/musiclights), steady, fading to the next song's over ~3 s, the inside at the owner's level under
+// the palette's time-of-day cap (never under 40 %), the outside at 100 %. An outside light left off stays off; an inside one
 // off is switched on. The theme follows the swatch. The prompt line shows ">MUSIC", a chip and the
 // swatch's name (">MUSIC: WAITING" before the first palette), or ">MUSIC: NO SIGNAL" when no palette
 // came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). Any manual
@@ -120,6 +120,7 @@
 #include "../util/yellow/elkcmd.h"
 #include "../util/yellow/geoip.h"
 #include "../util/common/hotspotip.h"
+#include "../util/lights/ledintro.h"
 #include "../util/lights/ledlook.h"
 #include "../util/yellow/ledpresets.h"
 #include "../util/yellow/ledvoice.h"
@@ -305,8 +306,95 @@ static bool musicDriving = false;
 static Look musicLook[N_CTRL];
 static Look shownLook(int i) { return musicDriving ? musicLook[i] : looks[i + 1]; }
 
-// Controller i's look (power + dimmed colour), both header variants.
+// A running fade (see "A new music look" below; presets use it too), or the welcome's intro (see
+// startIntro): its keys in place of from..to, each at its time after `start`. Loop-owned.
+struct LightFade {
+    songpalette::Rgb from{}, to{};
+    int steps = 0, done = 0;  // done == steps: no fade
+    uint32_t every = 0, at = 0;  // at: millis() of the last step written
+    ledintro::Track intro;  // intro.n > 0: the welcome (steps == intro.n)
+    uint32_t start = 0;
+};
+static LightFade lightFade[N_CTRL];
+
+// The colour frame push() sends for `l` (black when off).
+static songpalette::Rgb frameOf(const Look& l) {
+    if (!l.lit) return {0, 0, 0};
+    const Rgb s = ledRgb(l.swatch);
+    return {elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)};
+}
+
+// The colour frame light i shows now: a fade's current step, else its look's.
+static songpalette::Rgb frameNow(int i) {
+    const LightFade& f = lightFade[i];
+    if (f.done < f.steps && f.intro.n) return f.intro.k[f.done ? f.done - 1 : 0].c;
+    if (f.done < f.steps) return musiclights::blend(f.from, f.to, f.done, f.steps);
+    return frameOf(shownLook(i));
+}
+
+static void writeFrame(int i, const songpalette::Rgb& c) {
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::color(v, c.r, c.g, c.b));
+}
+
+// Light i from `from` to `to` in `steps` steps `every` ms apart. powerOn: the power-on goes now with
+// the first step, so the light never shows its old colour; else the first step waits for its gap.
+static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rgb& to, bool powerOn, int steps, uint32_t every) {
+    LightFade& f = lightFade[i];
+    f.intro.n = 0;  // a fade ends the welcome
+    f.from = from;
+    f.to = to;
+    f.steps = steps;
+    f.done = 0;
+    f.every = every;
+    if (!powerOn || !linkUp(controllers[i])) return;
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+    f.done = 1;
+    f.at = millis();
+    writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+}
+
+// Key n of light i's welcome: its colour frame, or the start of the inside light's curtain fill
+// (its speed, then the effect; the MELK frames only, the ELK one ignores them). Each key is logged
+// with its time since the welcome began, sent or not (no link: the desk's INTRO replay), so
+// tools/intro_check.py can hold the firmware's timeline to ledintro's.
+static void writeKey(int i, int n) {
+    const LightFade& f = lightFade[i];
+    const ledintro::Key& k = f.intro.k[n];
+    const bool up = linkUp(controllers[i]);
+    if (k.fill) {
+        Serial.printf("[intro] %s +%u ms key %d/%d: fill speed %u effect %u, %s\n", controllers[i].label,
+                      static_cast<unsigned>(millis() - f.start), n + 1, f.intro.n,
+                      static_cast<unsigned>(ledintro::FILL_SPEED), static_cast<unsigned>(ledintro::FILL_MODE), up ? "sent" : "no link");
+        if (!up) return;
+        write(controllers[i], elkcmd::speed(ledintro::FILL_SPEED));
+        write(controllers[i], elkcmd::effect(ledintro::FILL_MODE));
+        return;
+    }
+    Serial.printf("[intro] %s +%u ms key %d/%d: colour %u,%u,%u, %s\n", controllers[i].label,
+                  static_cast<unsigned>(millis() - f.start), n + 1, f.intro.n, k.c.r, k.c.g, k.c.b, up ? "sent" : "no link");
+    if (up) writeFrame(i, k.c);
+}
+
+// The welcome, the first time since boot light i links lit (ledintro: the inside light's strip
+// fills from both ends inwards, then the outside light rises, ~6 s): its power-on and first key
+// (dark) now, the rest from fadeTick. A change, a preset or a song's look takes over from the key
+// it reached (its colour frame ends the fill); a reconnect gets its look (push).
+static void startIntro(int i) {
+    const Look l = shownLook(i);
+    const Rgb s = ledRgb(l.swatch);
+    LightFade& f = lightFade[i];
+    f = LightFade();
+    f.intro = ledintro::plan(i == 0, {s.r, s.g, s.b}, l.pct);
+    f.steps = f.intro.n;
+    f.start = f.at = millis();
+    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
+    writeKey(i, 0);
+    f.done = 1;
+}
+
+// Controller i's look (power + dimmed colour), both header variants. Ends a running fade.
 static void push(int i) {
+    lightFade[i].done = lightFade[i].steps;
     Controller& c = controllers[i];
     const Look l = shownLook(i);
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(c, elkcmd::power(v, l.lit));
@@ -1601,14 +1689,19 @@ static void tripTick() {
 // Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
 // shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
-// the watch.
+// the watch. The lights fade to it from what they show (even a song's): the inside over ~1 s, the
+// outside, whose controller takes ~1 write a second, half now and the rest 1 s later.
+static constexpr int PRESET_FADE_IN = 4, PRESET_FADE_OUT = 2;
+static constexpr uint32_t PRESET_STEP_IN_MS = 300, PRESET_STEP_OUT_MS = 1000;
 static void applyPreset(int slot0) {
+    const songpalette::Rgb from[N_CTRL] = {frameNow(0), frameNow(1)};
     musicYield();  // both lights get the preset anyway
     const ledpresets::Preset& p = ledpresets::PRESETS[slot0];
     looks[INSIDE] = p.in;
     looks[OUTSIDE] = p.out;
     looks[BOTH] = bothlook::seed(p.in, p.out);
-    for (int i = 0; i < N_CTRL; i++) push(i);
+    startFade(0, from[0], frameOf(p.in), true, PRESET_FADE_IN, PRESET_STEP_IN_MS);
+    startFade(1, from[1], frameOf(p.out), true, PRESET_FADE_OUT, PRESET_STEP_OUT_MS);
     save();
     char m[sizeof(message)];
     lightstatus::applied(ledpresets::shown(p), m, sizeof(m));  // ">ゴジラ APPLIED" on screen
@@ -2607,8 +2700,8 @@ static void lyricsTick() {
 // black deck's address (musicPeer), signed with REMOTE_TOKEN and with a counter above the last one
 // (util/wire/musicwire), and publishes the latest PalPkt and its time under musicMux.
 // musicTick() (loop) reads them at most MUSIC_TICK_MS apart: the palette's main colour snapped to a
-// swatch (musiclights::nearestSwatch) and each light's level (musiclights::level: the owner's under
-// the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (musicFadeTick).
+// swatch (musiclights::nearestSwatch) and the inside light's level (musiclights::level: the owner's under
+// the palette's cap, a 40 % floor) are the lights' music looks; a new one fades in (fadeTick).
 // The prompt line is redrawn when its state or swatch changed.
 struct MusicHeard {
     bool palOk = false;  // a PalPkt came since the socket opened
@@ -2695,40 +2788,24 @@ static void musicTask(void*) {
 // (its takes ~1). The first step goes as soon as that gap since the light's last step allows (a new
 // song right after a change still keeps the rate). A light switched on for it fades up from black,
 // its power-on sent with the first step; an outside light left off gets nothing. Loop-owned.
-struct MusicFade {
-    songpalette::Rgb from{}, to{};
-    int steps = 0, done = 0;  // done == steps: no fade
-    uint32_t every = 0, at = 0;  // at: millis() of the last step written
-};
 static constexpr int MUSIC_FADE_IN = 6, MUSIC_FADE_OUT = 3;
 static constexpr uint32_t MUSIC_FADE_MS = 3000;
-static MusicFade musicFade[N_CTRL];
-
-// The colour frame push() sends for `l` (black when off).
-static songpalette::Rgb frameOf(const Look& l) {
-    if (!l.lit) return {0, 0, 0};
-    const Rgb s = ledRgb(l.swatch);
-    return {elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)};
-}
-
-// The colour frame light i shows now: a fade's current step, else its look's.
-static songpalette::Rgb frameNow(int i) {
-    const MusicFade& f = musicFade[i];
-    if (f.done < f.steps) return musiclights::blend(f.from, f.to, f.done, f.steps);
-    return frameOf(shownLook(i));
-}
-
-static void writeFrame(int i, const songpalette::Rgb& c) {
-    for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::color(v, c.r, c.g, c.b));
-}
 
 // Each loop pass: the fades' due steps. A light out of reach skips its writes (it gets its look
 // when it comes back: loop()'s fresh push).
-static void musicFadeTick() {
+static void fadeTick() {
     const uint32_t now = millis();
     for (int i = 0; i < N_CTRL; i++) {
-        MusicFade& f = musicFade[i];
-        if (f.done >= f.steps || now - f.at < f.every) continue;
+        LightFade& f = lightFade[i];
+        if (f.done >= f.steps) continue;
+        if (f.intro.n) {  // the welcome: its next key at its time
+            if (now - f.start < f.intro.k[f.done].at) continue;
+            f.at = now;
+            writeKey(i, f.done);
+            f.done++;
+            continue;
+        }
+        if (now - f.at < f.every) continue;
         f.done++;
         f.at = now;
         if (linkUp(controllers[i])) writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
@@ -2744,27 +2821,19 @@ static bool musicTarget(int swatch, int cap) {
         Look t;
         t.swatch = swatch;
         t.lit = i == 0 || own.lit;
-        t.pct = static_cast<uint8_t>(musiclights::level(own.pct, cap));
+        t.pct = static_cast<uint8_t>(i == 0 ? musiclights::level(own.pct, cap) : musiclights::OUTSIDE_PCT);
         if (musicDriving && t == musicLook[i]) continue;
         any = true;
         const Look was = shownLook(i);
         const songpalette::Rgb from = frameNow(i);
         musicLook[i] = t;
-        MusicFade& f = musicFade[i];
-        const uint32_t lastStep = f.at;
-        f = MusicFade();
-        f.at = lastStep;
-        if (!t.lit) continue;  // the outside light left off: stays off, nothing sent
-        f.from = was.lit ? from : songpalette::Rgb{0, 0, 0};
-        f.to = frameOf(t);
-        f.steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
-        f.every = MUSIC_FADE_MS / static_cast<uint32_t>(f.steps);
-        if (!was.lit && linkUp(controllers[i])) {  // switched on with its first step, never its old colour
-            for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(controllers[i], elkcmd::power(v, true));
-            f.done = 1;
-            f.at = millis();
-            writeFrame(i, musiclights::blend(f.from, f.to, f.done, f.steps));
+        LightFade& f = lightFade[i];
+        if (!t.lit) {  // the outside light left off: stays off, nothing sent
+            f.done = f.steps;
+            continue;
         }
+        const int steps = i == 0 ? MUSIC_FADE_IN : MUSIC_FADE_OUT;
+        startFade(i, was.lit ? from : songpalette::Rgb{0, 0, 0}, frameOf(t), !was.lit, steps, MUSIC_FADE_MS / static_cast<uint32_t>(steps));
     }
     musicDriving = true;
     return any;
@@ -2789,7 +2858,7 @@ static void setMusic(bool on, bool restore) {
         const bool drove = musicDriving;
         musicDriving = false;
         musicSwatch = -1;
-        for (MusicFade& f : musicFade) f = MusicFade();
+        for (LightFade& f : lightFade) f = LightFade();
         if (drove && restore) {
             for (int i = 0; i < N_CTRL; i++) push(i);
             drawLooks();  // the lights band and the theme
@@ -3279,6 +3348,42 @@ void setup() {
     enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
 }
 
+// "INTRO\n" on the serial port plays the welcome again on each lit light (music mode skips it, as at
+// the first link), with no reboot and no car: unlinked lights log their keys as "no link"
+// (tools/intro_check.py checks them). ">WELCOME" shows on the prompt line.
+static void replayIntro() {
+    Serial.println("[intro] replay");
+    bool any = false;
+    for (int i = 0; i < N_CTRL; i++) {
+        if (shownLook(i).lit && !musicDriving) {
+            startIntro(i);
+            any = true;
+        } else {
+            Serial.printf("[intro] %s: skipped (%s)\n", controllers[i].label, musicDriving ? "music mode" : "off");
+        }
+    }
+    if (!any) return;
+    setMessage(">WELCOME");
+    drawMessage();
+}
+
+// Each loop pass: the serial port's bytes, for "INTRO\n" (replayIntro); anything else is dropped.
+static void introTick() {
+    static const char WORD[] = "INTRO\n";
+    static uint8_t matched = 0;
+    bool go = false;
+    while (Serial.available()) {
+        const char c = static_cast<char>(Serial.read());
+        if (c == '\r') continue;
+        matched = c == WORD[matched] ? matched + 1 : (c == WORD[0] ? 1 : 0);
+        if (WORD[matched] == 0) {
+            matched = 0;
+            go = true;
+        }
+    }
+    if (go) replayIntro();
+}
+
 void loop() {
     // Up bootguard::HEALTHY_MS, online at that moment and the update listener started (when updates
     // are on; off, online is enough; ota::onGoodPoll checks the time and the listener): this
@@ -3343,11 +3448,12 @@ void loop() {
     }
 
     handlePad();
+    introTick();
     takeWeather();
     lyricsTick();
     camTick();
     musicTick();
-    musicFadeTick();
+    fadeTick();
     updateDayNight();
     tripTick();
     blinkCursor();
@@ -3368,6 +3474,10 @@ void loop() {
     }
 
     // A controller that just came up gets its zone's look, so it matches what the deck remembers.
+    // The first time since boot a lit light plays the welcome to it instead (startIntro), and
+    // ">WELCOME" shows after the link message (it says more).
+    static bool welcomed[N_CTRL] = {};
+    bool welcomedNow = false;
     static bool shown[N_CTRL] = {};
     static uint32_t edgeAt[N_CTRL] = {};  // when each light last changed link state, and which way
     static bool edgeUp[N_CTRL] = {};
@@ -3376,8 +3486,13 @@ void loop() {
         const bool up = linkUp(c);
         if (up && c.fresh) {
             c.fresh = false;
-            push(i);
-            musicFade[i].done = musicFade[i].steps;  // it has the target: no step back to a mid-fade colour
+            if (!welcomed[i] && shownLook(i).lit && !musicDriving) {
+                startIntro(i);
+                welcomedNow = true;
+            } else {
+                push(i);
+            }
+            welcomed[i] = true;
         }
         if (up != shown[i]) {
             shown[i] = up;
@@ -3398,6 +3513,10 @@ void loop() {
             drawLightState();  // STATUS on Lights (the message too), the lights band on the Menu: NO LINK while it's gone
             if (screen == Screen::Menu) drawMessage();
         }
+    }
+    if (welcomedNow && !(message[0] && messageMs > MESSAGE_MS && millis() - messageAt < messageMs)) {
+        setMessage(">WELCOME");
+        drawMessage();
     }
     updateTheme();  // a backstop: every path above has already called it
     publish();  // for /state and /status

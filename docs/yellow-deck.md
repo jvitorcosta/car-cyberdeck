@@ -122,13 +122,37 @@ It is not on the Lights page's grid, and song colours never snap to it. Voice se
 "light blue", "azul claro"); the deck, Siri's replies, `/state`, `/presets` and the watch all call
 it Cyan. With cyan on the inside light the terminal takes the blue theme.
 
-- **Apply**: tap a preset on the PRESETS tab, or Xbox A on it.
+- **Apply**: tap a preset on the PRESETS tab, or Xbox A on it. The lights fade to it: the inside
+  over about a second, the outside in two steps a second apart (its controller is slow).
 - **Voice**: "rose", "fire", "gojira" (or "godzilla"), "purpura", "civic", "ocean", or "preset
   one" … "preset six" (also `favourite` / `favorite`, and digits: "preset 2"). It applies to both
   lights and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
   `Rose: inside Pink 40 percent, outside Pink 100 percent`. Siri may hear "purpura" as "purple",
   the colour; say "preset four" for that one.
 - **Watch**: the PRESETS page (see [garmin/README.md](../garmin/README.md)).
+
+**Welcome:** the first time each light links after the deck starts, a lit light plays a short
+intro in your last look. The inside light goes dark, then its strip fills with colour from both ends
+inwards over 4 s and takes your look. The outside light stays dark meanwhile, then rises through a
+peak (30 points brighter, at most 100 %) as the fill ends and settles on its look, about 6 s in all.
+The deck can't light single LEDs: the fill is the inside controller's own built-in curtain effect
+(`ledintro::FILL_MODE` and `FILL_SPEED`), started with its effect command, and the outside
+controller has no such effect. The curtain's colours are the controller's own, so for a look it
+has no colour for (orange, pink) the strip fills with the nearest and shifts to the look at the
+end. Each light ends on its look twice, so a lost write still lands on it. A light you left off
+stays off, music mode skips the intro, and a change, a preset or a song's colour takes over at
+once. A later reconnect sets the look straight away.
+
+Tuning the fill in the car: the effect numbers come from published notes on a sibling controller
+(MELK-OA10), which list 57 to 76 as the curtains without naming each one. If the inside strip
+doesn't fill from both ends inwards, try the other numbers in that range in `FILL_MODE`; if the
+fill doesn't finish in time, raise `FILL_SPEED` (0 to 100) or `FILL_MS`.
+
+Checking it on the desk: `python tools/intro_check.py <port>` sends `INTRO` over USB, which plays the
+welcome again on each lit light without a reboot, and holds the deck's `[intro]` log (each key,
+its time, `sent` or `no link`) to the timeline above: PASS or FAIL, and the timeline. In the car,
+the same command (or a reboot) plays it on the lights, and `>WELCOME` on the prompt line says it
+ran. It only checks the deck: how the controller draws the fill is seen in the car.
 
 ## Music mode: song colours
 
@@ -141,10 +165,10 @@ reboot. There is no microphone: the black deck picks the current song's colour (
 - **Colour**: both lights take the song's colour with that colour's tuned LED mix, steady through
   the song. On a new song they fade to the next colour over about 3 s. The black deck waits for
   the new song's cover (up to 8 s) before it sends, so a song changes the lights once.
-- **Brightness**: each light at the level you left it, times the time-of-day cap (day 06:00-18:00
-  100 %, evening 18:00-22:00 and 05:00-06:00 70 %, late night 22:00-05:00 45 %), but never under
-  40 %; a light you had at 40 % or less keeps its level. At each step a playing song's lights fade
-  to the new level once.
+- **Brightness**: the outside light runs at 100 % at any hour. The inside light stays at the level
+  you left it, times the time-of-day cap (day 06:00-18:00 100 %, evening 18:00-22:00 and 05:00-06:00
+  70 %, late night 22:00-05:00 45 %), but never under 40 %; at 40 % or less it keeps its level. At
+  each step a playing song's inside light fades to the new level once.
 - **Off lights**: an outside light you left off stays off; the inside light is switched on.
 - **Screen**: the terminal theme follows the song's colour. The lights row shows what the lights
   show; the prompt line shows `>MUSIC [chip] PINK`, `>MUSIC: WAITING` until the first palette
