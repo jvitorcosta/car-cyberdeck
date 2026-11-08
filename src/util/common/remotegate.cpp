@@ -11,7 +11,7 @@ static bool sameKey(const char* a, const char* b) {
     return diff == 0;
 }
 
-bool Gate::keyOk(const char* key) const { return enabled() && key && sameKey(key, key_); }
+bool Gate::keyOk(const char* key) const { return !signedOnly_ && enabled() && key && sameKey(key, key_); }
 
 Result Gate::request(const char* key, bool clipPlaying, uint32_t nowMs) {
     if (!keyOk(key)) return Result::BadKey;
