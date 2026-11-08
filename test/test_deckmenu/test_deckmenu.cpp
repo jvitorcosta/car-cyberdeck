@@ -35,7 +35,7 @@ void test_rects_inside_screen_and_apart() {
     const Rect menu[] = {HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND};
     const Rect lights[] = {STATUS, LEVEL};
     const Rect karaoke[] = {KARAOKE_BODY};
-    check_screen(Screen::Menu, menu, 5);
+    check_screen(Screen::Menu, menu, 4);
     check_screen(Screen::Lights, lights, 2);
     check_screen(Screen::Karaoke, karaoke, 1);
     check_screen(Screen::Presets, lights, 1);  // STATUS only: no level row on the PRESETS tab
