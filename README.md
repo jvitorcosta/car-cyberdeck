@@ -167,9 +167,10 @@ there); on any other network they use DHCP and mDNS names.
 | Black deck | `s3` | `172.20.10.10` | `cardeck.local` | phone page `/?k=<REMOTE_TOKEN>`, `/state`, `/music` |
 | Yellow deck | `ledpanel` | `172.20.10.11` | `cardeck-leds.local` | `/say`, `/state`, `/presets`, `/status` ([yellow-deck.md](docs/yellow-deck.md#voice-and-http)) |
 
-- **The hotspot goes first in `WIFI_NETWORKS`.** It gets two tries after a drop, and the fixed
-  addresses are pinned only on an iPhone hotspot. A deck stays on the network it joined; off the
-  hotspot the yellow deck finds the black deck by its mDNS name.
+- **The hotspot goes first in `WIFI_NETWORKS`.** It gets three tries at boot (~24 s, time to
+  unlock the phone) and two after a drop, and the fixed addresses are pinned only on an iPhone
+  hotspot. A deck that joined another network looks for the hotspot once a minute and moves to it
+  when it's in range; off the hotspot the yellow deck finds the black deck by its mDNS name.
 - **Both decks need the same `REMOTE_TOKEN`**, and so does the watch's `Secrets.mc`. Devices sign
   their requests with it and never send it (see [SECURITY.md](SECURITY.md)), so update all of
   them together.

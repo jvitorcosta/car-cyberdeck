@@ -5,6 +5,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Both decks
+- **Changed:** the decks wait longer for the iPhone hotspot at boot (three 8 s tries, time to
+  unlock the phone) before falling back to another network, and a deck on the fallback moves to
+  the hotspot once a minute's scan finds it. Before, a hotspot that wasn't advertising yet lost to
+  the home WiFi and the deck stayed there.
+
 ### Yellow deck
 - **Changed:** night mode keeps each theme's own colour, vivid, instead of turning the screen
   amber. From 18:00 to 06:00 the backlight drops to about a third and every theme takes a fully
