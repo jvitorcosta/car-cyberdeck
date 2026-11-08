@@ -231,7 +231,7 @@ struct WeatherReading {
 static WeatherReading wx;
 static bool weatherOff = false;  // no REMOTE_TOKEN: no WiFi, so no weather (">OFFLINE")
 
-// What the black deck (the S3) is playing (see "Lyrics" below): the lyrics task publishes each poll
+// What the black deck (the S3) is playing (see "Lyrics" below): the poll task publishes each poll
 // under lyricsMux and raises lyricsFresh; loop() copies it into `song`, which is all the drawing reads.
 struct LyricsReading {
     bool wrongKey = false;    // the last poll was turned down (403: the decks' REMOTE_TOKEN differ)
@@ -263,7 +263,7 @@ static bool karaokeReady() { return karaoke::available(lyricsHeard(), song.deck.
 static bool karaokeShownReady = false;  // as the Menu item was last drawn (lit or dimmed)
 
 // Music mode (see "Music mode" below): on and off from the Menu's MUSIC item, never saved (boots
-// off). musicOn is loop()'s; musicWant is the same for the lyrics task (the keep-alive) and the music
+// off). musicOn is loop()'s; musicWant is the same for the poll task (the keep-alive) and the music
 // task (the UDP socket). musicState and musicSwatch are what the prompt line draws (musicSwatch -1
 // before a palette); musicTick() keeps them.
 static bool musicOn = false;
@@ -2322,8 +2322,8 @@ static void takeWeather() {
 }
 
 // ---- Lyrics: what the black deck (the S3) is playing, from its GET /state ----
-// Its own task (core 1, idle priority like the weather; core 0 is the lights' and the controller's
-// link), started with the weather once WiFi is up. It polls only while a screen that shows it is up
+// A step of the poll task (core 1, idle priority like the weather; core 0 is the lights' and the
+// controller's link; see beginCam), from the weather's start once WiFi is up. It polls only while a screen that shows it is up
 // (loop() keeps lyricsWant): the KARAOKE screen every second, every 5 s after ten misses in a row
 // (util/pollpace); the Menu every MENU_POLL_MS, every 30 s after those ten misses (enough to light or
 // dim its KARAOKE item); at once when either opens. Otherwise it sleeps. On KARAOKE loop() also
@@ -2336,18 +2336,17 @@ static void takeWeather() {
 // found, lost and back, not every poll.
 // The same task keeps music mode alive on the black deck (musicKeepAlive, below), whatever screen
 // shows: it owns lyricsHost.
-static TaskHandle_t lyricsHandle = nullptr;
 static portMUX_TYPE lyricsMux = portMUX_INITIALIZER_UNLOCKED;
 static LyricsReading lyricsPub;             // guarded by lyricsMux
 static volatile bool lyricsFresh = false;  // a poll was published; loop() clears it
 enum LyricsWant : uint8_t { WANT_NONE, WANT_MENU, WANT_KARAOKE };
 static volatile uint8_t lyricsWant = WANT_NONE;  // what the screen shown needs; loop() keeps it
-static pollpace::Pace lyricsPace;                 // only the lyrics task touches it (and lyricsHost)
-static char lyricsBody[statejson::MAX_JSON];  // only the lyrics task touches it
+static pollpace::Pace lyricsPace;                 // only the poll task touches it (and lyricsHost)
+static char lyricsBody[statejson::MAX_JSON];  // only the poll task touches it
 static deckaddr::Keep lyricsAddr;             // under deckLock (see deckGet)
 
 // The deck's mDNS (its name, and the lookups of the other decks), started by the first task that
-// looks a deck up: a black-deck asker (under deckLock) or the car task (yellow/carlink), so under its
+// looks a deck up: a black-deck asker (under deckLock) or the OBD deck's /car (yellow/carlink), both on the poll task now, so under its
 // own lock. True once up.
 static SemaphoreHandle_t mdnsLock = nullptr;  // made in beginVoice, before any task that looks up
 static bool mdnsUp() {
@@ -2389,9 +2388,9 @@ static bool lyricsHost(char* out, size_t n) {
 // nothing can be signed (the bearer key is never sent). Not a miss: the deck wasn't asked.
 static constexpr int NOT_SIGNED = -1000;
 
-// Three tasks ask the black deck: the lyrics task (/state, /music), the camera task (/cam, its mute)
-// and the voice task (/say's camera words). One asks at a time, under deckLock: the address keeping
-// (lyricsHost, lyricsAddr) stays one task's at a time. lyricsPace stays the lyrics
+// Two tasks ask the black deck: the poll task (the lyrics' /state and /music, the camera band's /cam
+// and its mute) and the voice task (/say's camera words). One asks at a time, under deckLock: the
+// address keeping (lyricsHost, lyricsAddr) stays one task's at a time. lyricsPace stays the poll
 // task's: lyricsHost only paces its lookups by it (word-sized fields), so another asker at worst
 // makes or skips one lookup. The longest hold is an mDNS query and a GET (1.5 s, then 1.5 s and the
 // body's 3 s): DECK_LOCK_MS waits that out, then counts as no answer.
@@ -2455,7 +2454,7 @@ static int lyricsGet() {
 }
 
 // ---- Music mode: the black deck sends the song's palette ----
-// From the lyrics task: while musicWant, GET /music?on=1 at once and every MUSIC_KEEP_MS (the black
+// From the poll task: while musicWant, GET /music?on=1 at once and every MUSIC_KEEP_MS (the black
 // deck stops after 30 s without one), MUSIC_RETRY_MS after a miss (no answer, "stopping, ask again"),
 // but MUSIC_KEEP_MS after a 503 (its low memory: Spotify's TLS needs that heap, so no hurry); on=0 once
 // when it goes. Each ask also records the black deck's address (musicPeer), the one sender the music
@@ -2513,70 +2512,61 @@ static void musicKeepAlive() {
     nextAt = millis() + (rc == 200 || rc == 503 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
 }
 
-static void lyricsTask(void*) {
+static volatile bool lyricsOn = false;  // beginLyrics() ran: WiFi is up
+// One pass of the lyrics: a /state poll when it is due (a few GETs of 1.5 s and an mDNS query of
+// 1.5 s at most), else nothing. From the poll task.
+static void lyricsStep() {
     static stateparse::Deck deck;  // static: ~650 B, off the task stack
     pollpace::Pace& pace = lyricsPace;
-    uint32_t lastPoll = 0;
-    uint8_t was = WANT_NONE;  // what was wanted at the last poll
-    watchdog::watch();  // each pass: a few GETs of 1.5 s and an mDNS query of 1.5 s at most
-    for (;;) {
-        watchdog::feed();
-        musicKeepAlive();
-        const uint8_t want = lyricsWant;
-        if (want == WANT_NONE || ota::active()) {  // nothing shows it, or an update has the WiFi
-            was = WANT_NONE;
-            vTaskDelay(pdMS_TO_TICKS(100));
-            continue;
+    static uint32_t lastPoll = 0;
+    static uint8_t was = WANT_NONE;  // what was wanted at the last poll
+    if (!lyricsOn) return;
+    musicKeepAlive();
+    const uint8_t want = lyricsWant;
+    if (want == WANT_NONE || ota::active()) {  // nothing shows it, or an update has the WiFi
+        was = WANT_NONE;
+        return;
+    }
+    const uint32_t now = millis();
+    const uint32_t every = want == WANT_MENU ? pace.menuIntervalMs() : pace.intervalMs();
+    // a nudge only helps while the deck answers (a missing one is polled at its own pace)
+    const bool nudged = lyricsNudge && want == WANT_KARAOKE && pace.misses() == 0 && now - lastPoll >= LYRICS_NUDGE_MS;
+    if (want != was || now - lastPoll >= every || nudged) {
+        // KARAOKE just opened: poll at once, at the fast pace, and look the name up again at once.
+        // (The Menu keeps the misses so far, or its 30 s back-off would restart on every visit.)
+        if (want == WANT_KARAOKE && was != WANT_KARAOKE) pace = pollpace::Pace();
+        was = want;
+        lastPoll = now;
+        lyricsNudge = false;
+        const int rc = lyricsGet();
+        if (rc == NOT_SIGNED) return;  // no clock yet: nothing was asked, so nothing is lost either
+        const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
+        if (pace.misses() == 0 && !ok) {
+            // 403: another REMOTE_TOKEN, or clocks 2 min apart (the black deck's [auth] line says which)
+            Serial.printf("[lyrics] deck lost (rc=%d%s)\n", rc, rc == 403 ? ": wrong key or clock off" : "");
         }
-        const uint32_t now = millis();
-        const uint32_t every = want == WANT_MENU ? pace.menuIntervalMs() : pace.intervalMs();
-        // a nudge only helps while the deck answers (a missing one is polled at its own pace)
-        const bool nudged = lyricsNudge && want == WANT_KARAOKE && pace.misses() == 0 && now - lastPoll >= LYRICS_NUDGE_MS;
-        if (want != was || now - lastPoll >= every || nudged) {
-            // KARAOKE just opened: poll at once, at the fast pace, and look the name up again at once.
-            // (The Menu keeps the misses so far, or its 30 s back-off would restart on every visit.)
-            if (want == WANT_KARAOKE && was != WANT_KARAOKE) pace = pollpace::Pace();
-            was = want;
-            lastPoll = now;
-            lyricsNudge = false;
-            const int rc = lyricsGet();
-            if (rc == NOT_SIGNED) {  // no clock yet: nothing was asked, so nothing is lost either
-                vTaskDelay(pdMS_TO_TICKS(50));
-                continue;
-            }
-            const bool ok = rc == 200 && stateparse::parse(lyricsBody, deck);
-            if (pace.misses() == 0 && !ok) {
-                // 403: another REMOTE_TOKEN, or clocks 2 min apart (the black deck's [auth] line says which)
-                Serial.printf("[lyrics] deck lost (rc=%d%s)\n", rc, rc == 403 ? ": wrong key or clock off" : "");
-            }
-            if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
-            pace.onResult(ok);
-            // the deck's own answers (a /state that parses, low memory 503); 3 misses in a row: look it up again
-            deckAnswered(ok || rc == 503);
-            const uint32_t at = millis();
-            portENTER_CRITICAL(&lyricsMux);
-            lyricsPub.wrongKey = rc == 403;
-            if (ok) {
-                lyricsPub.deck = deck;
-                lyricsPub.at = at ? at : 1;
-            }
-            portEXIT_CRITICAL(&lyricsMux);
-            lyricsFresh = true;
+        if (pace.misses() > 0 && ok) Serial.println("[lyrics] deck back");
+        pace.onResult(ok);
+        // the deck's own answers (a /state that parses, low memory 503); 3 misses in a row: look it up again
+        deckAnswered(ok || rc == 503);
+        const uint32_t at = millis();
+        portENTER_CRITICAL(&lyricsMux);
+        lyricsPub.wrongKey = rc == 403;
+        if (ok) {
+            lyricsPub.deck = deck;
+            lyricsPub.at = at ? at : 1;
         }
-        vTaskDelay(pdMS_TO_TICKS(50));
+        portEXIT_CRITICAL(&lyricsMux);
+        lyricsFresh = true;
     }
 }
 
-// From the voice task, once WiFi is up. 6 KB: the GETs and the mDNS query; the [mem]
-// line shows what's left.
-static void beginLyrics() {
-    if (lyricsHandle) return;
-    xTaskCreatePinnedToCore(lyricsTask, "lyrics", 6144, nullptr, 0, &lyricsHandle, 1);
-}
+// From the voice task, once WiFi is up.
+static void beginLyrics() { lyricsOn = true; }
 
 // ---- Speed cameras: the black deck's GET /cam, as a band over the bottom third ----
-// The black deck (the S3) has the GPS and the camera list, and beeps. This deck only shows: its own
-// task (core 1, idle priority, 4 KB) asks GET /cam (signed, util/car/camwire's small JSON) every
+// The black deck (the S3) has the GPS and the camera list, and beeps. This deck only shows: a step of
+// the poll task (beginCam) asks GET /cam (signed, util/car/camwire's small JSON) every
 // second whatever the screen, through deckGet like the lyrics (plain HTTP, no new client), and
 // publishes each poll under camMux; loop() takes it in camTick(). After 10 misses in a row it asks
 // every 5 s (util/pollpace, as the lyrics do), so an absent deck isn't hunted for every second.
@@ -2604,81 +2594,92 @@ struct CamReading {
     bool heard = false;    // one has come since boot
     int misses = 0;        // polls in a row without one
 };
-static TaskHandle_t camHandle = nullptr;
 static portMUX_TYPE camMux = portMUX_INITIALIZER_UNLOCKED;
 static CamReading camPub;                 // guarded by camMux
 static volatile bool camFresh = false;    // a poll was published; loop() clears it
 static volatile int8_t camMuteAsk = -1;   // a band tap: send /cam/mute?on= this (1, 0); -1 none
 static volatile bool camPollNow = false;  // the mute changed: poll at once, so the band shows it
 
-static void camTask(void*) {
-    static char body[camwire::MAX_JSON];  // static: off the 4 KB stack
-    pollpace::Pace pace;
-    camwire::View v{};
-    bool heard = false, first = true, unsignedTold = false;
-    uint32_t lastPoll = 0, unsignedAt = 0;  // unsignedAt: since when /cam can't be signed; 0: it can
-    watchdog::watch();  // each pass: at most a mute GET and a /cam GET, each a lock wait and ~6 s
-    for (;;) {
-        watchdog::feed();
-        if (ota::active()) {  // an update has the WiFi
-            vTaskDelay(pdMS_TO_TICKS(100));
-            continue;
-        }
-        const int8_t ask = camMuteAsk;
-        if (ask >= 0) {
-            camMuteAsk = -1;
-            const sigreq::Param p[] = {{"on", ask ? "1" : "0"}};
-            Serial.printf("[cam] mute on=%d: rc=%d\n", ask, deckGet("/cam/mute", p, 1, nullptr, 0));
-            camPollNow = true;
-        }
-        const uint32_t now = millis();
-        if (!first && !camPollNow && now - lastPoll < pace.intervalMs()) {
-            vTaskDelay(pdMS_TO_TICKS(50));
-            continue;
-        }
-        first = camPollNow = false;
-        lastPoll = now;
-        body[0] = 0;
-        const int rc = deckGet("/cam", nullptr, 0, body, sizeof(body));
-        if (rc == NOT_SIGNED) {
-            // No clock yet: nothing was asked, so no miss either; but past CAM_UNSIGNED_MS the road
-            // isn't being watched from here, so CAM -- says so (the black deck still beeps).
-            if (unsignedAt == 0) unsignedAt = now | 1;
-            if (now - unsignedAt < CAM_UNSIGNED_MS) continue;
-            if (!unsignedTold) Serial.println("[cam] can't sign /cam (no clock): CAM --");
-            unsignedTold = true;
-            portENTER_CRITICAL(&camMux);
-            camPub.misses = CAM_LOST_MISSES;
-            portEXIT_CRITICAL(&camMux);
-            camFresh = true;
-            continue;
-        }
-        unsignedAt = 0;
-        unsignedTold = false;
-        const bool ok = rc == 200 && camwire::parse(body, &v);
-        // Any HTTP answer is the deck at that address (an older black firmware's 404, a 500): only no
-        // answer, or a 403 (someone else's key), counts toward looking the address up again, so this
-        // poll doesn't restart the lyrics' lookups.
-        deckAnswered(rc > 0 && rc != 403);
-        if (!ok && pace.misses() + 1 == CAM_LOST_MISSES) Serial.printf("[cam] deck lost (rc=%d)\n", rc);
-        if (ok && pace.misses() >= CAM_LOST_MISSES) Serial.println("[cam] deck back");
-        pace.onResult(ok);
-        heard = heard || ok;
+static volatile bool camOn = false;  // beginCam() ran
+// One pass of the camera band: a mute asked for, then a /cam poll when it is due (each a lock wait
+// and ~6 s at most), else nothing. From the poll task.
+static void camStep() {
+    static char body[camwire::MAX_JSON];  // static: off the task stack
+    static pollpace::Pace pace;
+    static camwire::View v{};
+    static bool heard = false, first = true, unsignedTold = false;
+    static uint32_t lastPoll = 0, unsignedAt = 0;  // unsignedAt: since when /cam can't be signed; 0: it can
+    if (!camOn) return;
+    if (ota::active()) return;  // an update has the WiFi
+    const int8_t ask = camMuteAsk;
+    if (ask >= 0) {
+        camMuteAsk = -1;
+        const sigreq::Param p[] = {{"on", ask ? "1" : "0"}};
+        Serial.printf("[cam] mute on=%d: rc=%d\n", ask, deckGet("/cam/mute", p, 1, nullptr, 0));
+        camPollNow = true;
+    }
+    const uint32_t now = millis();
+    if (!first && !camPollNow && now - lastPoll < pace.intervalMs()) return;
+    first = camPollNow = false;
+    lastPoll = now;
+    body[0] = 0;
+    const int rc = deckGet("/cam", nullptr, 0, body, sizeof(body));
+    if (rc == NOT_SIGNED) {
+        // No clock yet: nothing was asked, so no miss either; but past CAM_UNSIGNED_MS the road
+        // isn't being watched from here, so CAM -- says so (the black deck still beeps).
+        if (unsignedAt == 0) unsignedAt = now | 1;
+        if (now - unsignedAt < CAM_UNSIGNED_MS) return;
+        if (!unsignedTold) Serial.println("[cam] can't sign /cam (no clock): CAM --");
+        unsignedTold = true;
         portENTER_CRITICAL(&camMux);
-        if (ok) camPub.view = v;
-        camPub.heard = heard;
-        camPub.misses = pace.misses();
+        camPub.misses = CAM_LOST_MISSES;
         portEXIT_CRITICAL(&camMux);
         camFresh = true;
+        return;
+    }
+    unsignedAt = 0;
+    unsignedTold = false;
+    const bool ok = rc == 200 && camwire::parse(body, &v);
+    // Any HTTP answer is the deck at that address (an older black firmware's 404, a 500): only no
+    // answer, or a 403 (someone else's key), counts toward looking the address up again, so this
+    // poll doesn't restart the lyrics' lookups.
+    deckAnswered(rc > 0 && rc != 403);
+    if (!ok && pace.misses() + 1 == CAM_LOST_MISSES) Serial.printf("[cam] deck lost (rc=%d)\n", rc);
+    if (ok && pace.misses() >= CAM_LOST_MISSES) Serial.println("[cam] deck back");
+    pace.onResult(ok);
+    heard = heard || ok;
+    portENTER_CRITICAL(&camMux);
+    if (ok) camPub.view = v;
+    camPub.heard = heard;
+    camPub.misses = pace.misses();
+    portEXIT_CRITICAL(&camMux);
+    camFresh = true;
+}
+
+// The poll task (core 1, idle priority, 6 KB): the lyrics, the camera band and the OBD deck's /car,
+// one request at a time. Bluedroid's dual mode leaves ~25 KB of heap, and three tasks each with its
+// own stack and socket ran it out when WiFi came up (lwIP aborts when it can't get a thread's
+// semaphore). The worst pass (every step's GETs timing out at once, with their mDNS lookups) is
+// ~20 s, well under the watchdog's 90 s; while the decks answer, each step is a LAN hop of ~50 ms.
+static TaskHandle_t pollHandle = nullptr;
+static void pollTask(void*) {
+    watchdog::watch();
+    for (;;) {
+        watchdog::feed();
+        lyricsStep();
+        camStep();
+        carlink::step();
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }
 
 // From the voice task, as WiFi starts: deckGet asks only once it is up, and the misses before that
-// count, so a deck that never gets online says CAM --.
+// count, so a deck that never gets online says CAM --. It starts the poll task too.
 static void beginCam() {
-    if (camHandle) return;
-    if (xTaskCreatePinnedToCore(camTask, "cam", 4096, nullptr, 0, &camHandle, 1) != pdPASS) {
-        Serial.println("[cam] no memory for the task: no camera band");
+    camOn = true;
+    if (pollHandle) return;
+    if (xTaskCreatePinnedToCore(pollTask, "poll", 6144, nullptr, 0, &pollHandle, 1) != pdPASS) {
+        Serial.println("[poll] no memory for the task: no lyrics, camera band or car health");
     }
 }
 
@@ -2825,7 +2826,7 @@ static void bandDrop() {
     tft.resetViewport();
 }
 
-// A tap on the band: the black deck's beeps off, or on again (the cam task asks, then polls, and
+// A tap on the band: the black deck's beeps off, or on again (the poll task asks, then polls, and
 // the band shows the answer).
 static void camBandTap() {
     camMuteAsk = camNow.view.mute ? 0 : 1;
@@ -4114,15 +4115,13 @@ void loop() {
     static uint32_t memAt = 0;
     if (millis() - memAt > 60000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, lyrics %u, music %u, car %u, cam %u, ota %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, weather %u, poll %u, music %u, ota %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       static_cast<unsigned>(weatherStackLeft),  // the last try's (each ends with it)
-                      lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
+                      pollHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(pollHandle)) : 0u,
                       musicHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(musicHandle)) : 0u,
-                      carlink::stackLeft(),
-                      camHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(camHandle)) : 0u,
                       ota::stackLeft(),
                       static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }

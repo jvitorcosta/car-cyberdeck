@@ -4,7 +4,6 @@
 #include <WiFi.h>
 #include <cstdio>
 #include <cstring>
-#include "../common/core/watchdog.h"
 #include "../common/net/httpget.h"
 #include "../common/net/ipaddr.h"
 #include "../common/net/ota.h"
@@ -23,7 +22,7 @@ constexpr int N_BACKOFF = sizeof(BACKOFF_MS) / sizeof(BACKOFF_MS[0]);
 // While it can't be found by name, a lookup (up to 1.5 s) at most this often.
 constexpr uint32_t LOOKUP_MS = 30000;
 
-TaskHandle_t handle = nullptr;
+volatile bool started = false;  // begin() ran (the voice task); step() reads it
 portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 Reading pub;                 // guarded by mux
 volatile bool fresh = false;  // a snapshot was published since the last take
@@ -76,60 +75,52 @@ int get(char* body, size_t n, char (&h)[40]) {
     return net::httpGet(url, 1500, body, n, 3000);
 }
 
-void task(void*) {
-    static carwire::Snapshot s;  // static: off the task stack
-    static char body[carwire::MAX_JSON];
-    int misses = 0;
-    bool seen = false;  // a snapshot came this power-on
-    uint32_t lastSeq = 0, seqAt = 0, nextAt = 0;
-    watchdog::watch();  // each pass: one GET of 1.5 s (3 s deadline) and an mDNS query of 1.5 s at most
-    for (;;) {
-        watchdog::feed();
-        const uint32_t now = millis();
-        if (!net::isOnline() || ota::active() || static_cast<int32_t>(now - nextAt) < 0) {
-            vTaskDelay(pdMS_TO_TICKS(50));
-            continue;
-        }
-        char h[40];
-        const int rc = get(body, sizeof(body), h);
-        if (rc == NOT_SIGNED) {  // no clock yet: nothing was asked, so nothing is missed either
-            nextAt = now + BACKOFF_MS[0];
-            continue;
-        }
-        const bool ok = rc == 200 && carwire::decode(body, &s);
-        addr.onPoll(ok);  // 3 misses in a row: look the name up again
-        if (ok) {
-            if (misses > 0 || !seen) Serial.printf("[car] OBD deck %s (seq %lu)\n", seen ? "back" : "answering",
-                                                   static_cast<unsigned long>(s.seq));
-            looked = false;  // a later loss looks the name up at once
-            if (!seen || s.seq != lastSeq) seqAt = millis() | 1;
-            lastSeq = s.seq;
-            seen = true;
-            portENTER_CRITICAL(&mux);
-            pub.snap = s;
-            pub.seqAt = seqAt;
-            memcpy(goodHost, h, sizeof(goodHost));
-            portEXIT_CRITICAL(&mux);
-            fresh = true;
-            misses = 0;
-        } else {
-            if (misses == 0) Serial.printf("[car] no OBD deck (rc=%d%s)\n", rc, rc == 403 ? ": wrong key or clock off" : "");
-            ++misses;
-            if (misses < N_BACKOFF) Serial.printf("[car] next poll in %lu s\n", static_cast<unsigned long>(BACKOFF_MS[misses] / 1000));
-        }
-        // answering: a poll a second, start to start; missing: the back-off after this one ends (a
-        // lookup or a timeout may have taken 1.5 s of it)
-        nextAt = misses == 0 ? now + BACKOFF_MS[0] : millis() + BACKOFF_MS[misses < N_BACKOFF ? misses : N_BACKOFF - 1];
-    }
-}
+int misses = 0;
+bool seen = false;  // a snapshot came this power-on
+uint32_t lastSeq = 0, seqAt = 0, nextAt = 0;
 
 }  // namespace
 
+void step() {
+    static carwire::Snapshot s;  // static: off the caller's stack
+    static char body[carwire::MAX_JSON];
+    const uint32_t now = millis();
+    if (!started || !net::isOnline() || ota::active() || static_cast<int32_t>(now - nextAt) < 0) return;
+    char h[40];
+    const int rc = get(body, sizeof(body), h);
+    if (rc == NOT_SIGNED) {  // no clock yet: nothing was asked, so nothing is missed either
+        nextAt = now + BACKOFF_MS[0];
+        return;
+    }
+    const bool ok = rc == 200 && carwire::decode(body, &s);
+    addr.onPoll(ok);  // 3 misses in a row: look the name up again
+    if (ok) {
+        if (misses > 0 || !seen) Serial.printf("[car] OBD deck %s (seq %lu)\n", seen ? "back" : "answering",
+                                               static_cast<unsigned long>(s.seq));
+        looked = false;  // a later loss looks the name up at once
+        if (!seen || s.seq != lastSeq) seqAt = millis() | 1;
+        lastSeq = s.seq;
+        seen = true;
+        portENTER_CRITICAL(&mux);
+        pub.snap = s;
+        pub.seqAt = seqAt;
+        memcpy(goodHost, h, sizeof(goodHost));
+        portEXIT_CRITICAL(&mux);
+        fresh = true;
+        misses = 0;
+    } else {
+        if (misses == 0) Serial.printf("[car] no OBD deck (rc=%d%s)\n", rc, rc == 403 ? ": wrong key or clock off" : "");
+        ++misses;
+        if (misses < N_BACKOFF) Serial.printf("[car] next poll in %lu s\n", static_cast<unsigned long>(BACKOFF_MS[misses] / 1000));
+    }
+    // answering: a poll a second, start to start; missing: the back-off after this one ends (a
+    // lookup or a timeout may have taken 1.5 s of it)
+    nextAt = misses == 0 ? now + BACKOFF_MS[0] : millis() + BACKOFF_MS[misses < N_BACKOFF ? misses : N_BACKOFF - 1];
+}
+
 void begin(bool (*up)()) {
-    if (handle) return;
     mdnsUp = up;
-    // 4.5 KB: the GET and the mDNS query took ~2.3 KB on the deck (the [mem] line shows what's left)
-    xTaskCreatePinnedToCore(task, "car", 4608, nullptr, 0, &handle, 1);
+    started = true;
 }
 
 bool take(Reading* out) {
@@ -158,7 +149,5 @@ bool fill(const char* price, char* reply, size_t n) {
     // the OBD deck is one hop away: 0.6 s to connect and per wait for its head, 0.8 s for the body
     return net::httpGet(url, 600, reply, n, 800) == 200 && reply[0];
 }
-
-unsigned stackLeft() { return handle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(handle)) : 0u; }
 
 }  // namespace carlink
