@@ -62,15 +62,24 @@ constexpr const char* PAD_LABEL = "PAD";
 constexpr int PAD_GAP = 4, PAD_ICON_W = 19, PAD_NUB_W = 2, PAD_NUB_H = 4, PAD_CELL_W = 3, PAD_CELL_GAP = 1;
 // The header's PAD part, label to nub, from its left edge to DASH_RIGHT.
 inline int padWidth() { return termfont::width(termfont::Face::SMALL, PAD_LABEL) + PAD_GAP + PAD_ICON_W + PAD_NUB_W; }
+// the camera tag right-aligned on the header line (ledpanel's camTick): the black deck's /cam not
+// answering, or (with no band up to say MUTE) the camera beeps muted. No GPS fix is the black deck's
+// to show (its top strip's GPS icon). "CAM MUTE" would run
+// into the title: 7 SMALL cells at most fit after it.
+constexpr const char* CAM_TAG_LOST = "CAM --";
+constexpr const char* CAM_TAG_MUTE = "MUTED";
 // the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the temperature (BIG) with the
 // sky in words (SMALL) under it right of it, right-aligned; then the band's last row, on HILO_BASE:
 // the HI / LO line (SMALL) right-aligned. The caps sit 8 rows apart: rule, clock, date, row, rule.
 constexpr int DASH_SPLIT = 160;
 constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, HILO_BASE = 86, CLOCK_RULE_Y = 94;
-// the trip: TRIP_LABEL (SMALL), the time (BIG) TRIP_TIME_GAP after it, the distance (BODY) right-
-// aligned, all on TRIP_BASE, the BIG caps centred between the rules
-constexpr const char* TRIP_LABEL = "TRIP";
-constexpr int TRIP_BASE = 126, TRIP_TIME_GAP = 6, TRIP_RULE_Y = 135;
+// the trip (util/car/healthview::band): three figures (TITLE, on BAND_FIG_BASE), the trip km from
+// DASH_X, km/L now from BAND_KML_X, the range right-aligned; under them the small line (SMALL, on
+// BAND_SMALL_BASE: the time, R$, volts, coolant) from DASH_X. The figures' caps sit as far under the
+// clock band's rule as the small line's above the band's own (+-1). Each part is redrawn alone in its
+// own box (only what changed, so nothing flashes while driving): the figures' rows split at BAND_KML_X
+// and BAND_RANGE_X (trip | km/L | range), the small line's rows across.
+constexpr int BAND_FIG_BASE = 113, BAND_KML_X = 92, BAND_RANGE_X = 187, BAND_SMALL_BASE = 130, TRIP_RULE_Y = 135;
 // the lights on one row (BODY, on LIGHT_ROW_BASE, the caps centred between the rules): INSIDE left of
 // a vertical MID rule at LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: its label, a chip
 // of its colour as tall as the caps (LIGHT_CHIP_W wide) LIGHT_GAP after it, and LIGHT_GAP after that
@@ -96,9 +105,6 @@ constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 5;
 // Whether the HI / LO line `s`, right-aligned at DASH_RIGHT, fits the row from DASH_X. When not,
 // ledpanel shows it without its city.
 inline bool hiLoFits(const char* s) { return DASH_X <= DASH_RIGHT - termfont::width(termfont::Face::SMALL, s); }
-
-// Where the trip's time starts: after TRIP_LABEL.
-inline int tripTimeX() { return DASH_X + termfont::advance(termfont::Face::SMALL, TRIP_LABEL) + TRIP_TIME_GAP; }
 
 // Music mode's swatch chip and its name on the prompt line.
 inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, MUSIC_PROMPT) + MUSIC_CHIP_GAP; }

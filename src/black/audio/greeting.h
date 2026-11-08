@@ -31,11 +31,35 @@ uint32_t introStartedAt();          // millis() of the intro sound's first sampl
 // the synthesised one while music mode's mic holds the port (the recording is 48 kHz).
 void playHowl();
 bool playing();                     // a clip is still playing (its task and I2S driver are alive)
+// Camera alert sound (beeps and voice lines, car/camsound) cutting in. pauseFor silences the clip playing now for ms (it
+// stops between two 128-sample writes, keeps its output open, and carries on from the same sample
+// afterwards); it returns once that clip has stopped writing (or none plays). A clip that starts
+// meanwhile waits for it too. Its length on screen (durationMs, level) does not stretch.
+void pauseFor(uint32_t ms);
+// Then the output for the beeps: the rate to write them at with audiosink::write (the paused clip's,
+// whose output they borrow, or 16 kHz on an output opened for them when no clip plays), or 0 when it
+// can't be had right now (a clip opening or closing it: ask again shortly). endTones() follows on
+// the same task, whatever beginTones() said: it ends the pause and gives the output back, unless
+// keepOpen asks to hold an output opened for the beeps (an alarm's next beep in 1.5 s: no driver,
+// codec and amp cycle per beep) and no clip is waiting for it. Then the next beginTones() reuses
+// it, and releaseTones() (same task) closes it: on leaving the alarm, or when
+// clipWaiting() says a clip started meanwhile.
+int beginTones();
+void endTones(bool keepOpen = false);
+void releaseTones();
+bool clipWaiting();
+// The audio output is still on from the last 16 kHz clip (audio/sink.h warm()): a clip cued now is
+// heard at once (bootanim::SOUND_LEAD_MS), not after the speaker's wake (COLD_SOUND_LEAD_MS).
+bool warm();
 
-// Boot sound rosters (data/drive.snd, opener.snd, finale.snd from tools/gen_rosters.py, git-ignored):
-// many clips per slot, one picked each boot by main.cpp (util/soundpick). A slot without a roster
-// plays its single file above (greeting.pcm, opener.pcm, finale.pcm).
-enum Slot : uint8_t { DRIVE = 0, OPENER = 1, FINALE = 2 };
+// WiFi-connected chime: this boot's CONNECT clip, played by the boot scene once the deck is online
+// and the greeting is over, just before the montage. Silent without a connect roster (no single file).
+void playConnect();
+
+// Boot sound rosters (data/drive.snd, opener.snd, finale.snd, connect.snd from tools/gen_rosters.py,
+// git-ignored): many clips per slot, one picked each boot by main.cpp (util/soundpick). A slot without
+// a roster plays its single file above (greeting.pcm, opener.pcm, finale.pcm; CONNECT has none).
+enum Slot : uint8_t { DRIVE = 0, OPENER = 1, FINALE = 2, CONNECT = 3 };
 int rosterCount(Slot s);                 // clips in the slot's roster; 0 = none
 uint32_t rosterMs(Slot s, int i);        // clip i's length; 0 when out of range
 const char* rosterName(Slot s, int i);   // clip i's name (logs); "?" when out of range

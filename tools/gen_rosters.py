@@ -4,11 +4,12 @@ clips, so each boot picks one at random (util/soundpick).
   python tools/gen_rosters.py [rosters.txt] [--sounds DIR]
 
 rosters.txt (default data/rosters.txt, git-ignored; see data/rosters.example.txt) has [drive]
-(the silver Honda's greeting), [opener] (the montage start) and [finale] (the Honda logo), one WAV
+(the silver Honda's greeting), [opener] (the montage start), [finale] (the Honda logo) and [connect]
+(the WiFi-connected chime; a missing section is an empty roster), one WAV
 per line, relative to DIR (default greeting-sounds/). Each clip is made mono 16 kHz (gen_greeting.py),
 trimmed only of real silence (-45 dB), faded out over 20 ms and levelled to today's clips' loudness
 (RMS, peaks capped at 95 %), and must stay under 4 s. Writes data/drive.snd,
-data/opener.snd and data/finale.snd (git-ignored). Standard library only.
+data/opener.snd, data/finale.snd and data/connect.snd (git-ignored). Standard library only.
 """
 import argparse
 import os
@@ -20,7 +21,7 @@ import gen_greeting as gg  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 DATA = os.path.join(ROOT, "data")
-SLOTS = ["drive", "opener", "finale"]
+SLOTS = ["drive", "opener", "finale", "connect"]
 RATE = gg.RATE
 MAX_SECONDS = 4.0
 MIN_SECONDS = 0.2            # shorter is a click (an empty or mis-cut WAV), not a greeting

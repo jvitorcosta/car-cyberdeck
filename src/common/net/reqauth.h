@@ -12,7 +12,8 @@ namespace reqauth {
 void begin();
 // HMAC's self-test passed (begin): music mode's signed packets (util/wire/musicwire) are off without it.
 bool hmacOk();
-// True when the request carries the bearer key (gate) or a valid signature for `path`. Else it has
+// True when the request carries the bearer key (gate; never a remotegate::Accept::SignedOnly gate,
+// the decks' own routes) or a valid signature for `path`. Else it has
 // answered: 403 "clock off" for a signature outside the 2-minute window (or from before this boot),
 // 503 "clock not set" for a signed request before SNTP (a signature can't be checked yet), else 403
 // with wrongKeyText. Logs a refused signature's reason, never the key or the tag.

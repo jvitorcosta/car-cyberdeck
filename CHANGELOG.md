@@ -5,7 +5,31 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Yellow deck
+- **Changed:** night mode keeps each theme's own colour, vivid, instead of turning the screen
+  amber. From 18:00 to 06:00 the backlight drops to about a third and every theme takes a fully
+  saturated night version of its hue (pure red, a deep marine blue, a phosphor-terminal green, one
+  yellow), picked on the panel; problems stay white on the red, orange and pink themes and red on
+  the rest. The scanlines lose their amber tint.
+
 ### Black deck (S3)
+- **Added:** camera alerts for fixed speed cameras, electronic speed bumps and red-light cameras.
+  Speed comes from the iPhone's GPS (GPS 2 IP over the hotspot). A speed camera or bump is
+  announced at 200 m or 12 s ahead, whichever is further; a red-light camera at 200 m. In the
+  last 100 m, going over the limit sounds the alarm until you slow down (red-light cameras never
+  alarm). Alerts are a chime and a voice line, with beeps when there is no voice pack
+  (`tools/gen_camvoice.py`), and they pause the intro or music. The road sign shows on screen.
+  `/cam/mute` silences them. The list comes from the open-radars-manaus releases:
+  `python tools/cameras.py push`.
+- **Added:** marking a camera from the car. Press the PS3 controller's right stick in, R3 (or say "mark
+  camera"): the deck saves the spot and answers with a chirp, or a low beep when there's no GPS fix.
+  With `MARKS_REPO` and `MARKS_TOKEN` in `config.h`, each mark goes straight online as an issue in
+  that private GitHub repo (one sent later when there's no signal), ready for open-radars-manaus'
+  review map. The top strip shows a GPS pin, struck through while there's no fix.
+- **Added:** a WiFi-connected chime at boot. Once the deck is online and the greeting is over, a
+  short chime plays and then the montage starts, so the order is greeting, chime, montage start,
+  Honda logo. It comes from a fourth roster, `[connect]` in `data/rosters.txt`; with no
+  `[connect]` clips the boot stays silent there.
 - **Added:** varied boot sounds. The Honda's drive greeting, the montage start and the Honda logo
   each pick one clip at random from their own roster at every boot, never last boot's: the drive
   says "Bem-vindo, moreno", the ETC voice or one of seven Japanese greetings, and the montage and
@@ -13,13 +37,16 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   sound starts. Rosters are built locally with `tools/gen_rosters.py` (git-ignored, like the other
   clips); without them each moment plays its single clip as before. They are levelled to the
   loudness of today's clips, so a dense one (the Bem-vindo over its music bed) no longer rasps.
-- **Fixed:** clips and the intro videos' sound no longer lose their first syllable: the speaker
-  amp gets 60 ms to wake before the first sample.
+- **Fixed:** clips and the intro videos' sound no longer lose their first syllable. The deck's own
+  mic showed the speaker staying near silent for ~0.3 s after each clip powered it up: it now gets
+  400 ms to wake, and stays on for 20 s after a clip, so the chime, montage start and logo sound
+  that follow start at once and whole.
 - **Changed:** a smoother boot. The night drive runs at ~19 fps (was ~16): the layers that never
   move are drawn once, and the underglow and lamp light come from tables. The brake's dip to black is a backlight fade (10+ frames, was 6 dimmed ones).
   The kiss video plays at 16 fps with every frame (it dropped 28 at 20), and both intro videos'
   sound is levelled to the greetings' loudness (the kiss was twice as loud, Max quieter).
-- **Fixed:** boot sounds land on their picture. A sound is heard ~0.1 s after it's cued, so the
+- **Fixed:** boot sounds land on their picture. A sound is heard ~0.45 s after it's cued from cold
+  (~10 ms with the speaker already on), so the
   intro videos now run on their sound's clock (lips match the voice), the car's lights follow the
   greeting as it's heard, the montage-start voice is cued in the brake's fade so it comes with the
   first photo, and the logo sound is cued early enough to end with the fade to black.
@@ -44,6 +71,24 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   show which lights are connected (1 inside, 2 outside; 4 its battery low).
 - **Added:** the controller's battery on the main screen's header ("PAD" and four cells).
 - **Removed:** Xbox controller support, `lib/xboxpad` and the `xboxtest` diagnostic.
+- **Added:** the camera band. It follows the black deck's alerts within about a second, says the
+  alerts out loud, and has a mute button.
+- **Added:** pressing the PS3 controller's right stick in (R3) marks a camera (once per 3 s; nothing
+  on screen, the black deck answers by sound).
+- **Changed:** the white theme is a softer grey-white.
+- **Changed:** music mode runs the outside light at 100 % at any hour.
+- **Changed:** presets fade in instead of jumping.
+- **Added:** when the deck starts, the lights play a welcome in the last look's colour: the inside
+  strip fills from both ends inwards over 4 s (the controller's own curtain effect), then the
+  outside light rises, about 6 s in all. ">WELCOME" shows when it plays, and "INTRO" on the serial
+  port replays it on the desk (`tools/intro_check.py` checks it).
+- **Changed:** night mode keeps the colours vivid. From 18:00 to 06:00, once the clock is synced,
+  the backlight drops to about a third and every theme takes a night version of its own hue at full
+  saturation (pure red, a deep marine blue, a phosphor-terminal green, one yellow), picked on the
+  panel; the dimmed day colours looked washed out. Problems stay white on the red, orange and pink
+  themes and red on the rest. No amber palette: each theme keeps its colour.
+- **Changed:** the theme follows the inside look even when that light isn't connected, so a colour
+  tapped away from the car still shows on the screen.
 
 ## [2.0.0] - 2026-10-28
 
