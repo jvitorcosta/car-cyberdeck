@@ -28,6 +28,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - **Changed:** the main screen shows the trip's time (`0:16`, over `TRIP`) right of the clock, and
   the lyrics button and page are called KARAOKE (`[KARAOKE]`, `>KARAOKE: NO SIGNAL`, the log's
   `[karaoke]`). The link and voice tasks' stacks are smaller (8 → 5 KB, 6 → 4 KB).
+- **Added:** the main screen shows what the black deck plays in its middle band: the track over
+  the artist, the time and a progress line (`>NOTHING PLAYING` / `>NO SIGNAL` without a song).
+- **Changed:** the header is just `HONDA CITY TOURING` and the controller's battery, with room
+  between them.
+- **Changed:** the PS3 controller's LED 1 means connected and is always lit while it is; the inside
+  and outside lights' links moved to LEDs 2 and 3 (4 is still its battery low). Before, with no
+  light linked, a connected controller showed no LED at all.
 - **Changed:** night mode keeps each theme's own colour, vivid, instead of turning the screen
   amber. From 18:00 to 06:00 the backlight drops to about a third and every theme takes a fully
   saturated night version of its hue (pure red, a deep marine blue, a phosphor-terminal green, one
