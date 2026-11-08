@@ -1,7 +1,8 @@
 # Honda City watch app
 
 `carlights/` is a Connect IQ watch app for the Garmin Forerunner 255 (also 255M, 255S, 255S
-Music) that controls the [yellow deck](../docs/yellow-deck.md)'s car lights from the wrist. It
+Music) that controls the [yellow deck](../docs/yellow-deck.md)'s car lights from the wrist, and
+picks a Spotify playlist through the black deck (the watch's own music controls can't). It
 shows as **Honda City**, with a silver City with magenta underglow as its icon.
 
 The watch faces (Pokéface) live in their own repository,
@@ -16,6 +17,11 @@ which is on the same hotspot as the deck. The app calls the yellow deck at `http
 Garmin Connect on iOS. The deck has to be on the hotspot, not home WiFi: "No answer" means it
 isn't.
 
+The PLAYLISTS page asks the **black deck** instead, at `http://172.20.10.10` (its fixed hotspot
+address), with `GET /playlists?offset=N` and `GET /playlists/play?id=<playlist id>`
+([the picker](../docs/ARCHITECTURE.md#between-the-devices)): the black deck holds the Spotify
+login and calls Spotify for the watch.
+
 Every request is **signed** with `REMOTE_TOKEN` (`source/Sign.mc`: HMAC-SHA256 with
 `Toybox.Cryptography`, the watch's clock and a random nonce, the same scheme as the decks'
 `src/util/wire/sigreq.h`); the key itself never leaves the watch. Requests go one at a time from
@@ -23,7 +29,7 @@ a short queue, and every reply is read back into the screen, so it shows what th
 
 ## Using it
 
-- **Pages** (UP / DOWN, looping; it opens on BOTH, so each zone is one press away): BOTH shows the
+- **Pages** (UP / DOWN, looping through five; it opens on BOTH, so each zone is one press away): BOTH shows the
   inside (left) and outside (right) lights as two columns, each filled with its colour up to its
   brightness; INSIDE and OUTSIDE fill the whole round face that way. On opening, the app reads both
   lights from `/state`, the presets from `/presets` and the links and music mode from `/status`.
@@ -39,6 +45,16 @@ a short queue, and every reply is read back into the screen, so it shows what th
   didn't answer); START on one applies it, buzzes, says APPLIED for a second and returns to the
   pages; BACK leaves without applying. GOJIRA's bar shows its name as **ゴジラ**, a small bitmap of
   the deck's Unifont glyphs (the watch's fonts have no kana).
+- **PLAYLISTS** (the fifth page): the first time it shows, the app asks the black deck for your
+  Spotify playlists; the middle says how many ("8+ playlists" while there are more) and, once one
+  is started from here, "Playing" and its name. START opens them as a list (or asks again if the
+  black deck didn't answer); **More** at the end adds the next page in place (up to 60). START on
+  a playlist plays it on the phone's Spotify, buzzes, says "Starting..." for a second and returns
+  to the page, whose bottom line then shows any error: "Open Spotify on phone" (Spotify has no
+  active device: open it on the phone and play anything once), "Needs Spotify Premium",
+  "Re-authorise Spotify" (the black deck's token lacks a scope: run `tools/spotify_auth.py`
+  again), "Spotify busy: wait" (rate limited), "Spotify slow: retry". The list shows only public
+  playlists until the token has `playlist-read-private` (see the [CHANGELOG](../CHANGELOG.md)).
 - **Colours** are the deck's screen colours, except purple (`AA00FF`, the deck's `#8C00FF` as the
   watch's 64 colours show it) and GOJIRA's cyan (`00AAFF`, apart from OCEAN's blue and from green).
   Cyan comes only from the preset: a zone list opened on a cyan light starts on Blue.
@@ -52,7 +68,8 @@ a short queue, and every reply is read back into the screen, so it shows what th
   (no Bluetooth link to Garmin Connect), "Wrong key" (`Secrets.mc` doesn't match the deck's
   `REMOTE_TOKEN`), "Clock off: sync watch" (the watch's clock is more than 2 minutes off the
   deck's), "Deck has no clock" (the deck has had no SNTP answer yet), "Deck busy" (the deck is busy,
-  for example updating), or the deck's own "Sorry ..." line.
+  for example updating, or low on memory), or the deck's own "Sorry ..." line. The PLAYLISTS page
+  shows the same ones about the black deck.
 
 ## Build and install
 
@@ -74,19 +91,21 @@ a short queue, and every reply is read back into the screen, so it shows what th
 4. Install: plug the watch in over USB, copy `bin/CarLights.prg` to its `GARMIN/APPS` folder (if
    Windows asks about the file already there, keep the new one), then unplug.
 
-The signing has known-answer tests (`source/SignTest.mc`, the same vectors as `test/test_sigreq`):
-build with `--unit-test` and run them in the simulator with `monkeydo bin/CarLights.prg fr255 /t`.
+The signing has known-answer tests (`source/SignTest.mc`, the same vectors as `test/test_sigreq`),
+and the playlists page reading has its own (`source/TunesTest.mc`): build with `--unit-test` and
+run them in the simulator with `monkeydo bin/CarLights.prg fr255 /t`.
 
 ## Source map
 
 | File | What it does |
 |---|---|
 | `CarLightsApp.mc` | the app: the pages and the glance |
-| `ZonesView.mc`, `ZonesDelegate.mc` | the four pages, their lists (colours, Brightness, Off, Music mode; the presets) |
+| `ZonesView.mc`, `ZonesDelegate.mc` | the five pages, their lists (colours, Brightness, Off, Music mode; the presets; the playlists) |
 | `LevelView.mc` | a zone's brightness screen |
 | `PresetBar.mc` | a preset drawn as a bar; the Presets list's rows |
 | `Fill.mc`, `ColorDot.mc` | the filled-column look and the list's colour dots |
 | `Deck.mc` | the lights, presets, links and music mode as the deck reports them, and the request queue |
+| `Tunes.mc`, `TunesTest.mc` | the Spotify playlists from the black deck, playing one; its tests |
 | `Sign.mc`, `SignTest.mc` | request signing and its tests |
 | `HondaGlance.mc` | the glance card |
 | `Secrets.mc.example` | the template for the git-ignored `Secrets.mc` |

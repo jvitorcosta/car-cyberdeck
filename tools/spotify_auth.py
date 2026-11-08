@@ -27,7 +27,10 @@ REPO = Path(__file__).resolve().parent.parent
 CONFIG = REPO / "src" / "config.h"
 REDIRECT = "http://127.0.0.1:8888/callback"
 PORT = 8888
-SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing"
+# playlist-read-*: the watch's playlist picker (GET /playlists on the black deck) lists private and
+# collaborative playlists too. A token made before 2026-11-02 lacks them: run this again.
+SCOPES = ("user-read-playback-state user-modify-playback-state user-read-currently-playing "
+          "playlist-read-private playlist-read-collaborative")
 
 
 def read_define(text, name):
