@@ -70,6 +70,16 @@ void test_hop_goes_up_and_lands() {
     TEST_ASSERT_TRUE(h.done);
 }
 
+// The position jitters back a little at each Spotify poll: the sweep holds where it was. A real seek
+// back (REWIND_MS of the line or more) goes back.
+void test_steady_px_holds_small_jitter() {
+    // a 3 s line 300 px wide: 1 px = 10 ms
+    TEST_ASSERT_EQUAL_INT(120, karaokepick::steadyPx(120, 115, 300, 1000, 4000));   // 50 ms back: held
+    TEST_ASSERT_EQUAL_INT(130, karaokepick::steadyPx(120, 130, 300, 1000, 4000));   // forward: follows
+    TEST_ASSERT_EQUAL_INT(60, karaokepick::steadyPx(120, 60, 300, 1000, 4000));     // 600 ms back: a seek
+    TEST_ASSERT_EQUAL_INT(70, karaokepick::steadyPx(120, 70, 300, 1000, 1000));     // no length: follows
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_picks_prev_cur_next);
@@ -82,5 +92,6 @@ int main(int, char**) {
     RUN_TEST(test_sweep_clamps_after_end);
     RUN_TEST(test_zero_length_line_is_full);
     RUN_TEST(test_hop_goes_up_and_lands);
+    RUN_TEST(test_steady_px_holds_small_jitter);
     return UNITY_END();
 }

@@ -26,7 +26,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - **Removed:** the KARAOKE screen (the lyrics page), the poll of the black deck's `/state` (the
   heaviest WiFi and heap load the deck had), the main screen's now-playing band and the Japanese
   font (`data/jp16.bin`, `tools/gen_jp_font.py`). The clock band is back to its earlier height with
-  the clock and date centred in it. The `karaoke` task is the `deck` task (5 KB of stack): it only
+  the clock and date centred in it. The `karaoke` task is the `deck` task (6 KB of stack): it only
   sends the music and karaoke keep-alives, and the `[mem]` line says `deck`. At the desk the free
   heap went from ~31-33 KB (low-water 25.7 KB, largest block 11.7 KB) to ~44-52 KB (low-water
   41 KB, largest block 27.6 KB).

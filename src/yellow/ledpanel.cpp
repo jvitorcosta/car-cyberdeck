@@ -1976,11 +1976,11 @@ static void deckTask(void*) {
     }
 }
 
-// From the voice task, once WiFi is up. 5 KB: the GETs and the mDNS query; the [mem] line shows
+// From the voice task, once WiFi is up. 6 KB: the GETs and the mDNS query; the [mem] line shows
 // what's left.
 static void beginDeck() {
     if (deckHandle) return;
-    xTaskCreatePinnedToCore(deckTask, "deck", 5120, nullptr, 0, &deckHandle, 1);
+    xTaskCreatePinnedToCore(deckTask, "deck", 6144, nullptr, 0, &deckHandle, 1);
 }
 
 // ---- Music mode: the song's colour on both lights ----

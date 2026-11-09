@@ -122,7 +122,7 @@ static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k,
     using lyricstatus::Status;
     static uint32_t lastDraw = 0, lastWalk = 0, hopAt0 = 0, shownStart = 0;
     static char shownCur[sizeof k.cur], shownNext[sizeof k.next], shownMsg[lyricmsg::TEXT_CAP];
-    static int lastOffset = 0, hopFrom = 0;
+    static int lastOffset = 0, hopFrom = 0, shownPx = 0;
     static bool hopping = false, walked = false;
     static lyricmsg::Out msg;
     const uint32_t now = millis();
@@ -139,10 +139,11 @@ static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k,
     if (whole || k.startMs != shownStart || strcmp(k.cur, shownCur) != 0 || strcmp(k.next, shownNext) != 0 ||
         strcmp(msgNow, shownMsg) != 0) {
         // A new line after one the Pokémon walked: it hops back from where it stood.
-        hopping = !whole && !message && walked && strcmp(k.cur, shownCur) != 0;
+        hopping = !whole && !message && walked && k.startMs != shownStart;
         hopFrom = lastOffset;
         hopAt0 = now;
         if (whole || message) walked = false;
+        shownPx = 0;
         ui::drawKaraoke(s_tft, view, k, message, whole);
         shownStart = k.startMs;
         strlcpy(shownCur, k.cur, sizeof shownCur);
@@ -156,7 +157,10 @@ static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k,
     }
     if (now - lastWalk < WALK_FRAME_MS) return;
     lastWalk = now;
-    const int px = k.cur[0] ? karaokepick::sweepPx(view.progressMs, k.startMs, k.endMs, ui::karaokeLineW()) : 0;
+    const int lineW = ui::karaokeLineW();
+    const int raw = k.cur[0] ? karaokepick::sweepPx(view.progressMs, k.startMs, k.endMs, lineW) : 0;
+    const int px = karaokepick::steadyPx(shownPx, raw, lineW, k.startMs, k.endMs);
+    shownPx = px;
     ui::drawKaraokeSweep(s_tft, px);
     if (!walker || message) return;
     if (view.isPlaying) step++;
@@ -516,6 +520,9 @@ void loop() {
     if (camRows) {
         const camband::Rect v = camband::screens(cam, s_tft.width(), s_tft.height());
         s_tft.setViewport(v.x, v.y, v.w, v.h, false);
+        ui::setKaraokeClip(v.x, v.y, v.w, v.h);
+    } else {
+        ui::setKaraokeClip(0, 0, s_tft.width(), s_tft.height());
     }
     bool topDrawn = false;   // a screen drew its top strip this loop (over the GPS -- tag)
 

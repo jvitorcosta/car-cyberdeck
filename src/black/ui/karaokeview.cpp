@@ -26,6 +26,14 @@ static size_t s_aEnd = 0, s_bStart = 0, s_bN = 0;
 static int s_w1 = 0, s_w2 = 0;              // its rows' widths at 2x; both 0 for a message
 static int s_lit = 0;                       // px swept so far
 static walkrect::Rect s_walk{0, 0, 0, 0};
+static int s_clipX = 0, s_clipY = 0, s_clipW = 320, s_clipH = 240;   // setKaraokeClip
+
+void setKaraokeClip(int x, int y, int w, int h) {
+    s_clipX = x;
+    s_clipY = y;
+    s_clipW = w;
+    s_clipH = h;
+}
 
 // a and b mixed 1:1 per channel (RGB565): the dim tones between the text and the box.
 static uint16_t mix(uint16_t a, uint16_t b) {
@@ -39,20 +47,17 @@ static void drawRow(TFT_eSPI& t, int row, uint16_t fg, uint16_t shadow) {
     else drawRunScaled(t, s_items + s_bStart, s_bN, TEXT_X, ROW1_Y + ROW_H, fg, shadow, TL_DATUM, SCALE);
 }
 
-// The lit tone over a row, clipped to x0..x1 (from TEXT_X) inside whatever viewport the loop set
-// (the camera band's).
+// The lit tone over a row, clipped to x0..x1 (from TEXT_X) inside the screens' clip (with vpDatum
+// false TFT_eSPI's viewport getters say the whole screen, so main hands the clip over).
 static void litBand(TFT_eSPI& t, int row, int x0, int x1) {
-    const int vx = t.getViewportX(), vy = t.getViewportY(), vw = t.getViewportWidth(),
-              vh = t.getViewportHeight();
-    const bool vd = t.getViewportDatum();
     const int y = ROW1_Y + row * ROW_H;
-    const int cx0 = max(TEXT_X + x0, vx), cy0 = max(y, vy);
-    const int cx1 = min(TEXT_X + x1 + SCALE, vx + vw), cy1 = min(y + ROW_H + SCALE, vy + vh);   // + shadow
-    if (cx1 > cx0 && cy1 > cy0) {
-        t.setViewport(cx0, cy0, cx1 - cx0, cy1 - cy0, false);
-        drawRow(t, row, theme::pal().text, theme::pal().dlgShadow);
-    }
-    t.setViewport(vx, vy, vw, vh, vd);
+    const int cx0 = max(TEXT_X + x0, s_clipX), cy0 = max(y, s_clipY);
+    const int cx1 = min(TEXT_X + x1 + SCALE, s_clipX + s_clipW);   // + shadow
+    const int cy1 = min(y + ROW_H + SCALE, s_clipY + s_clipH);
+    if (cx1 <= cx0 || cy1 <= cy0) return;
+    t.setViewport(cx0, cy0, cx1 - cx0, cy1 - cy0, false);
+    drawRow(t, row, theme::pal().text, theme::pal().dlgShadow);
+    t.setViewport(s_clipX, s_clipY, s_clipW, s_clipH, false);
 }
 
 static void drawLines(TFT_eSPI& t, const shared::KaraokeLines& k, const char* message) {

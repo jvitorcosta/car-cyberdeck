@@ -395,7 +395,7 @@ other slot (`[ota] rolled back`); `[ota] this firmware is good` marks it proven.
 Taking the karaoke lyrics, the `/state` poll of the black deck, the Menu's now-playing band and the
 Japanese font off the deck moved its free heap from ~31-33 KB (low-water 25.7 KB, largest block
 11.7 KB) to ~44-52 KB (low-water 41 KB, largest block 27.6 KB). The one task left that talks to the
-black deck, `deck` (5 KB of stack), only sends the music and karaoke keep-alives.
+black deck, `deck` (6 KB of stack), only sends the music and karaoke keep-alives.
 
 Every 10 s the serial log prints the free heap, its low-water mark, its largest free block, the
 allocations that failed and each task's unused stack (`[mem] heap 44500 (min 41000, block 27600,
