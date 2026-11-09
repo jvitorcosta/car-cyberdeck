@@ -12,15 +12,16 @@ namespace ui {
 
 using lyricface::Face;
 
-// ---- layout (320x240): the mockup's "night drive" (spec 2026-11-09 karaoke look) ----
+// ---- layout (320x240): the yellow deck's terminal look, black and VT323 ----
+// Rows' tops; each row is lyricface::lineHeight tall, its accents inside it.
 static constexpr int TEXT_X = 12, TEXT_W = 296;           // every line starts at TEXT_X
-static constexpr int SONG_Y = 6, ARTIST_Y = 24;           // rows' tops: LINE, SMALL
-static constexpr int BAR_X = TEXT_X, BAR_Y = 42, BAR_W = TEXT_W, BAR_H = 4;
-static constexpr int PREV_Y = 52;                         // the line just sung, LINE
-static constexpr int ROW1_Y = 100;                        // the sung line's first row; the walker's feet
+static constexpr int SONG_Y = 2, ARTIST_Y = 23;           // LINE (21 px), SMALL (20 px)
+static constexpr int BAR_X = TEXT_X, BAR_Y = 46, BAR_W = TEXT_W, BAR_H = 3;
+static constexpr int PREV_Y = 52;                         // the line just sung, LINE: 52..73
+static constexpr int ROW1_Y = 112;                        // the sung line's first row: 2 SUNG or 3 SUNG_SMALL rows, 78 px
 static constexpr int NEXT_GAP = 8;                        // the next line, under the sung line's last row
-// The walker's band: half size (32x16 at most) and the hop (karaokepick::HOP_PX, 14) above ROW1_Y,
-// rows 70..100, clear of the line just sung (52..70 at LINE's line height).
+// The walker, full size (64x32 at most), stands on row 1's capitals (walkerFeet), 120 or 124: with the
+// hop (karaokepick::HOP_PX, 14) its band starts at 73 at the highest, clear of the line just sung.
 
 struct Colours { uint16_t bg, song, artist, barOn, barOff, lit, unsung, prev, next; };
 static Colours s_c;                          // setKaraokeLook
@@ -47,6 +48,8 @@ void setKaraokeLook(int light, bool night) {
 }
 
 static int rowY(int row) { return ROW1_Y + row * lyricface::lineHeight(s_face); }
+// Where the walker's feet go: on row 1's capitals, under its accents' room.
+static int walkerFeet() { return ROW1_Y + lyricface::ascent(s_face) - lyricface::capAscent(s_face); }
 
 static void drawRow(TFT_eSPI& t, int row, uint16_t fg) {
     drawRunFace(t, s_items + s_rows.start[row], s_rows.end[row] - s_rows.start[row], TEXT_X, rowY(row), fg,
@@ -76,14 +79,14 @@ static void drawLine(TFT_eSPI& t, const char* utf8, Face f, int y, uint16_t fg, 
     drawRunFace(t, items, n, TEXT_X, y, fg, f);
 }
 
-// The sung line (or a message) in s_items, wrapped in the largest face that fits it in three rows;
-// "..." on the last row only when even SUNG_SMALL doesn't.
+// The sung line (or a message) in s_items, wrapped in the largest face that fits it in its rows (2 in
+// SUNG, 3 in SUNG_SMALL); "..." on the last row only when even SUNG_SMALL doesn't.
 static void layOut(const char* sung, size_t cap) {
     size_t n = 0;
     for (Face f : {Face::SUNG, Face::SUNG_SMALL}) {
         s_face = f;
         n = glyphrun::decode(sung, s_items, cap, faceWidth, wideWidth, faceCtx(f), false, emojiWidth, emojiSeq);
-        s_rows = glyphrun::wrapRows(s_items, n, TEXT_W, 3 * faceWidth('.', faceCtx(f)), glyphrun::MAX_ROWS);
+        s_rows = glyphrun::wrapRows(s_items, n, TEXT_W, 3 * faceWidth('.', faceCtx(f)), lyricface::rows(f));
         if (!s_rows.ellipsis) return;
     }
     // past the last row's end nothing is drawn, so "..." can overwrite it (s_items has room for 3)
@@ -174,12 +177,44 @@ int karaokeWalkerOffset(int px) {
     return (int)((int64_t)px * s_w[0] / total);
 }
 
+// Row 1 drawn again inside x0..x1, y0..y1 (and the screens' clip): unsung, then lit up to s_lit.
+static void redrawRow1(TFT_eSPI& t, int x0, int y0, int x1, int y1) {
+    x0 = max(x0, s_clipX);
+    y0 = max(y0, s_clipY);
+    x1 = min(x1, s_clipX + s_clipW);
+    y1 = min(y1, s_clipY + s_clipH);
+    if (x1 <= x0 || y1 <= y0) return;
+    t.setViewport(x0, y0, x1 - x0, y1 - y0, false);
+    drawRow(t, 0, s_c.unsung);
+    t.setViewport(s_clipX, s_clipY, s_clipW, s_clipH, false);
+    const int lit = min(s_lit, s_w[0]);
+    if (lit > 0 && min(x1, TEXT_X + lit) > x0) {
+        t.setViewport(x0, y0, min(x1, TEXT_X + lit) - x0, y1 - y0, false);
+        drawRow(t, 0, s_c.lit);
+        t.setViewport(s_clipX, s_clipY, s_clipW, s_clipH, false);
+    }
+}
+
 void drawKaraokeWalker(TFT_eSPI& t, uint32_t animMs, int step, int offset, int lift) {
-    const int w = walkerWidth() / 2;
+    const int w = walkerWidth();
     if (!w) return;
     int cx = TEXT_X + offset;
     if (cx < TEXT_X + w / 2) cx = TEXT_X + w / 2;   // the whole sprite on screen
     if (cx > TEXT_X + TEXT_W - w / 2) cx = TEXT_X + TEXT_W - w / 2;
-    blitWalker(t, cx, ROW1_Y - lift, animMs, step, s_c.bg, s_walk, true);
+    const walkrect::Rect was = s_walk;
+    blitWalker(t, cx, walkerFeet() - lift, animMs, step, s_c.bg, s_walk);
+    // The blit clears its box and the last one's to black, and the feet stand in row 1's accent room
+    // (ROW1_Y up to the capitals): put back the accents it uncovered, beside the sprite's box.
+    if (!s_rows.n || !was.w) return;
+    const int y0 = ROW1_Y, y1 = walkerFeet();
+    const int ux0 = min(was.x, s_walk.x), ux1 = max(was.x + was.w, s_walk.x + s_walk.w);
+    const int uy0 = max(min(was.y, s_walk.y), y0), uy1 = min(max(was.y + was.h, s_walk.y + s_walk.h), y1);
+    if (uy1 <= uy0) return;
+    if (s_walk.y + s_walk.h <= y0 || s_walk.y >= y1) {   // hopped clear of the room: all of it
+        redrawRow1(t, ux0, uy0, ux1, uy1);
+        return;
+    }
+    redrawRow1(t, ux0, uy0, s_walk.x, uy1);
+    redrawRow1(t, s_walk.x + s_walk.w, uy0, ux1, uy1);
 }
 }  // namespace ui

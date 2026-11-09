@@ -221,16 +221,18 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   view (searching shows the `lyricmsg` searching message in the line's place); plain lyrics,
   instrumental or none give the "no lyrics" message (`lyricmsg`) for 30 s from when it is known,
   then the normal screen until the next song. Pausing keeps the screen; the OTA screen, the
-  offline and waiting status screens and the camera band keep their priority. The view ("night
-  drive") is dark and frameless in the light's colour (`karaokepal`: termpal's three tones of that
-  swatch, pale by day and vivid at night, white for -1, cyan as blue; a change of light or of day and
-  night redraws it whole). It has the song, artist and progress bar at the top, the line just sung
-  (one row), the current line (Atkinson Hyperlegible Bold, GFX tables in `src/black/fonts` from
-  `tools/gfxfont.py`; up to three rows at 22 px, `glyphrun::wrapRows`, else at 18 px, `...` only past
-  that) and the next line (one row). LRCLIB times lines, not words, so the current line lights up
-  near white evenly from its start to the next line's start (the last line sweeps 5 s or to the
-  song's end). The walking Pokémon, at half size (`blitWalker`'s `half`), walks on the current
-  line's top edge at the sweep point (on a longer line it stays on row 1, all rows' progress mapped
+  offline and waiting status screens and the camera band keep their priority. The view has
+  the yellow deck's terminal look: black, in the yellow deck's theme (`karaokepal`: termpal's TEXT,
+  MID and DIM for the light's swatch, pale by day and vivid at night, the default green for -1, cyan
+  as blue; DIM dimmed where it stands too close to TEXT for the sweep to show; a change of light or of
+  day and night redraws it whole). It has the song, artist and progress bar at the top, the line just sung
+  (one row), the current line (VT323 like the yellow deck, GFX tables in `src/black/fonts` from
+  `tools/gfxfont.py`; two rows at 36 px, `glyphrun::wrapRows`, else three at 24 px, `...` only past
+  that; each row tall enough for its accents) and the next line (one row). LRCLIB times lines, not
+  words, so the current line lights up from DIM to TEXT evenly from its start to the next line's
+  start (the last line sweeps 5 s or to the song's end). The walking Pokémon, full size, stands on
+  the current line's capitals at the sweep point (the accents it walks past are drawn again behind
+  it) (on a longer line it stays on row 1, all rows' progress mapped
   onto it) and hops back (a 300 ms, 14 px arc) at each new line. An instrumental break (a
   timed blank line) keeps the last line fully swept; before the first line, it waits unlit. CJK
   and emoji draw at their 16 px among the letters. Karaoke and music mode are independent.
@@ -264,7 +266,7 @@ OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks
   switches, each with an ON / OFF tag).
 - **Karaoke** (the switch only): an on/off state flipped by a tap, the PS3 controller's cross,
   voice or the watch (`util/ledvoice`), not kept over a reboot. The `deck` task sends
-  `GET /karaoke?on=1&light=N` (the INSIDE light's shown swatch, -1 off or unlinked) at once, every
+  `GET /karaoke?on=1&light=N` (the INSIDE light's shown swatch, the one its own theme takes; -1 while it is off) at once, every
   10 s and on a change of light while it is on (`util/yellow/keepalive`); the black deck draws the
   lyrics in that colour.
 - **Music mode** (`util/lights/musiclights`): the palette's main colour snapped to one of the

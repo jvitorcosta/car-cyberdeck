@@ -20,9 +20,28 @@ void test_latin1_covered() {
     TEST_ASSERT_EQUAL_INT(0, lyricface::advance(Face::SUNG, 0x10));   // below the font
 }
 
+// The yellow deck's VT323 sizes: 36, 24, 19 and 17 px.
 void test_line_heights() {
-    TEST_ASSERT_TRUE(lyricface::lineHeight(Face::SUNG) >= 22 && lyricface::lineHeight(Face::SUNG) <= 30);
+    TEST_ASSERT_TRUE(lyricface::lineHeight(Face::SUNG) >= 37);
     TEST_ASSERT_TRUE(lyricface::lineHeight(Face::SUNG_SMALL) < lyricface::lineHeight(Face::SUNG));
+    TEST_ASSERT_TRUE(lyricface::lineHeight(Face::SMALL) < lyricface::lineHeight(Face::LINE));
+}
+
+// Falling back to SUNG_SMALL never needs more room than SUNG took.
+void test_sung_faces_share_their_room() {
+    TEST_ASSERT_EQUAL_INT(2, lyricface::rows(Face::SUNG));
+    TEST_ASSERT_EQUAL_INT(3, lyricface::rows(Face::SUNG_SMALL));
+    TEST_ASSERT_TRUE(lyricface::rows(Face::SUNG_SMALL) * lyricface::lineHeight(Face::SUNG_SMALL) <=
+                     lyricface::rows(Face::SUNG) * lyricface::lineHeight(Face::SUNG));
+}
+
+// The capitals' top: under the accents' (where the walker stands), 'H' as tall as 'A'.
+void test_cap_ascent() {
+    for (Face f : {Face::SUNG, Face::SUNG_SMALL, Face::LINE, Face::SMALL}) {
+        const lyricface::Font& ft = lyricface::font(f);
+        TEST_ASSERT_EQUAL_INT(-ft.glyph['H' - ft.first].yOffset, lyricface::capAscent(f));
+        TEST_ASSERT_TRUE(lyricface::capAscent(f) < lyricface::ascent(f));
+    }
 }
 
 // Every glyph's ink, accents and descenders included, inside its row: from the row's top (ascent
@@ -45,6 +64,8 @@ int main(int, char**) {
     RUN_TEST(test_faces_shrink);
     RUN_TEST(test_latin1_covered);
     RUN_TEST(test_line_heights);
+    RUN_TEST(test_sung_faces_share_their_room);
+    RUN_TEST(test_cap_ascent);
     RUN_TEST(test_every_glyph_inside_its_row);
     return UNITY_END();
 }

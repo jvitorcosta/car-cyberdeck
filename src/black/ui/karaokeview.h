@@ -2,12 +2,12 @@
 #include <TFT_eSPI.h>
 #include "app_state.h"
 #include "../core/shared.h"
-// The karaoke view (core/karaoke switches it on), "night drive": no frame, dark, in the colour of
-// the car's INSIDE light (util/black/karaokepal). The song, artist and progress bar at the top, the
-// line just sung (one row), the line being sung (Atkinson Hyperlegible, util/black/lyricface: up to
-// three rows, a size smaller before anything is cut) and the next line (one row). The sung words
-// light up near white as the sweep crosses them and the walking Pokémon, at half size, steps along
-// row 1's top edge. Specs: docs/superpowers/specs/2026-11-09-black-deck-karaoke-design.md and
+// The karaoke view (core/karaoke switches it on) in the yellow deck's terminal look: black, in the
+// theme the yellow deck shows (the car's INSIDE light's colour, util/black/karaokepal) and its VT323
+// (util/black/lyricface). The song, artist and progress bar at the top, the line just sung (one row),
+// the line being sung (two rows at 36 px, else three at 24 px, before anything is cut) and the next
+// line (one row). The sung words light up from DIM to TEXT as the sweep crosses them and the walking
+// Pokémon, full size, stands on row 1's capitals. Specs: docs/superpowers/specs/2026-11-09-black-deck-karaoke-design.md and
 // 2026-11-09-karaoke-look-and-menu-design.md.
 namespace ui {
 // The colours for the next whole draw: the light's swatch (karaoke::light(), -1 for none) and night.

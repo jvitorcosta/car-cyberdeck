@@ -23,7 +23,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   The lyrics are drawn by the black deck now. While it is on the deck sends the black deck `GET
   /karaoke?on=1` at once and every 10 s. Voice and the watch say "karaoke" / "karaoke off" (also
   "karaokê", "caraoquê"). It is not kept over a reboot. Each ask carries the inside light's colour
-  (`light=N`, -1 when it is off or has no link) for the karaoke view's colour, and a change of
+  (`light=N`, the one its own theme takes, -1 when it is off) for the karaoke view's colour, and a change of
   colour asks at once.
 - **Changed:** the main screen's top is one row now (the clock and date left, the trip's time
   right); the lights each get a block of their colour with INSIDE / OUTSIDE and the colour and
@@ -78,13 +78,14 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ### Black deck (S3)
 - **Added:** a full-screen karaoke view, switched by the yellow deck's KARAOKE item: `GET
   /karaoke?on=1|0` (signed like `/music`; `on=1` is a keep-alive every 10 s, 30 s without one or
-  `on=0` turns it off; `[karaoke] on` / `off` in the log). It is dark, with no frame, in the colour
-  of the car's inside light (`light=N` with each `on=1`; pale tints by day, vivid at night; white
-  with the light off), in Atkinson Hyperlegible Bold, a typeface made for legibility. It shows the song,
-  artist and progress bar, the line just sung, the current line large (up to three rows, a size
-  smaller before anything is cut) lighting up near white as it is sung from its start to the next
-  line's start (LRCLIB times lines, not words), and the next line. The walking Pokémon, at half
-  size, walks on the line's top edge at the sweep point and hops back at each new line.
+  `on=0` turns it off; `[karaoke] on` / `off` in the log). It has the yellow deck's terminal look, so
+  the two decks match: black, in the yellow deck's theme (the colour of the car's inside light,
+  `light=N` with each `on=1`; pale by day, vivid at night; green with the light off) and its VT323
+  lettering. It shows the song, artist and progress bar, the line just sung, the current line large
+  (two rows at 36 px, else three at 24 px, before anything is cut) lighting up as it is sung from its
+  start to the next line's start (LRCLIB times lines, not words), and the next line. The walking
+  Pokémon, full size, stands on the line's capitals at the sweep point and hops back at each new
+  line. The normal screen is unchanged.
   A song without synced lyrics shows the "no lyrics" message for 30 s, then the normal screen until
   the next song; the OTA, offline and waiting screens and the camera band keep their priority.
   Karaoke and music mode are independent.

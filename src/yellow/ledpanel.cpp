@@ -1957,12 +1957,12 @@ static void keepAlive(KeepAlive& k, bool want) {
     k.st.nextAt = millis() + (rc == 200 || rc == 503 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
 }
 
-// The INSIDE light's swatch for the black deck's karaoke colour: what it shows (music mode's look
-// while that drives it), or -1 while it is off or has no link. Read from the deck task without a
-// lock: a look read mid-change is put right on the next pass, 100 ms later.
+// The INSIDE light's swatch for the black deck's karaoke colour, the one this deck's theme takes
+// (wantTheme): what it shows (music mode's look while that drives it), or -1 while it is off. Read
+// from the deck task without a lock: a look read mid-change is put right on the next pass, 100 ms later.
 static int insideLight() {
     const Look l = shownLook(0);
-    return l.lit && linkUp(controllers[0]) ? l.swatch : -1;
+    return l.lit ? l.swatch : -1;
 }
 
 // Karaoke: GET /karaoke?on=1&light=N at music mode's pace (the black deck goes back to its normal

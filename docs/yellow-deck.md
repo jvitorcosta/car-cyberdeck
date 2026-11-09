@@ -110,7 +110,7 @@ the watch, say "karaoke" (on) or "karaoke off" ("karaokê" and "caraoquê" work 
 The yellow deck draws no lyrics. While the switch is on it asks the black deck `GET /karaoke?on=1`
 (signed) at once and then every 10 s; the black deck turns karaoke off 30 s after the last ask, and
 a tap to turn it off sends `on=0`, which stops it at once. Each ask carries the inside light's
-colour (`light=N`, or -1 while it is off or has no link): the black deck's karaoke view takes that
+colour (`light=N`, the one this deck's own theme takes, or -1 while it is off): the black deck's karaoke view takes that
 colour, and a change of colour asks at once. What the black deck shows is in the
 [README](../README.md#black-deck) and [ARCHITECTURE.md](ARCHITECTURE.md#black-deck). Karaoke and
 music mode are independent: both can be on together.

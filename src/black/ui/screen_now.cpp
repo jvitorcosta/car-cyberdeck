@@ -127,7 +127,7 @@ void drawWalker(TFT_eSPI& t, const AppState& st, uint32_t animMs, int step) {
 }
 
 void blitWalker(TFT_eSPI& t, int cx, int feetY, uint32_t animMs, int step, uint16_t fill,
-                walkrect::Rect& prev, bool half) {
+                walkrect::Rect& prev) {
     static constexpr int SLACK = 8;
     // ~7.8 KB in PSRAM: filled by the CPU, sent by pushImage (no DMA on this deck)
     static uint16_t* buf = (uint16_t*)mem::bigAlloc((walk::MAX_W + 2 * SLACK) *
@@ -146,9 +146,7 @@ void blitWalker(TFT_eSPI& t, int cx, int feetY, uint32_t animMs, int step, uint1
     }
     const uint16_t* spr = walk::pixels(fr);
     const uint8_t* msk = walk::mask(fr);
-    const int k = half ? 2 : 1;                           // source pixels per drawn pixel
-    const int sw = wi.w;                                  // the frame's row length
-    int w = wi.w / k, h = wi.h / k;
+    int w = wi.w, h = wi.h;
 
     int bob = (!wi.pmd && (step % 2)) ? 1 : 0;           // fallback fake-walk only
     bool mirror = !wi.pmd && ((step / 4) % 2);
@@ -161,11 +159,10 @@ void blitWalker(TFT_eSPI& t, int cx, int feetY, uint32_t animMs, int step, uint1
     for (int i = 0; i < r.w * r.h; ++i) buf[i] = fillBE;
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x) {
-            int sx = (mirror ? (w - 1 - x) : x) * k;
-            const int si = y * k * sw + sx;
-            if (!msk[si]) continue;
+            int sx = mirror ? (w - 1 - x) : x;
+            if (!msk[y * w + sx]) continue;
             int bx = x0 + x - r.x, by = y0 + y - r.y;
-            if (bx >= 0 && bx < r.w && by >= 0 && by < r.h) buf[by * r.w + bx] = spr[si];
+            if (bx >= 0 && bx < r.w && by >= 0 && by < r.h) buf[by * r.w + bx] = spr[y * w + sx];
         }
     t.pushImage(r.x, r.y, r.w, r.h, buf);
     prev = p.next;

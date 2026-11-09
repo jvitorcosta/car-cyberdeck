@@ -32,9 +32,8 @@ void drawWalker(TFT_eSPI& t, const AppState& st, uint32_t animMs, int step);
 int walkerWidth();
 // The walker centred on cx with its feet on feetY, over `fill`; prev: the caller's last drawn
 // rect (walkrect), w == 0 for none (a repainted screen). drawWalker and ui/karaokeview share it.
-// half: every second pixel of every second row, half the size (the karaoke's Pokémon).
 void blitWalker(TFT_eSPI& t, int cx, int feetY, uint32_t animMs, int step, uint16_t fill,
-                walkrect::Rect& prev, bool half = false);
+                walkrect::Rect& prev);
 // Dialogue-box text (a lyric line or a status message), redrawn only when it changes.
 // notes: draw the note icons (off for plain lyrics, whose timing is approximate).
 void drawLyricArea(TFT_eSPI& t, const char* text, bool notes);

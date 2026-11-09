@@ -14,23 +14,29 @@ uint32_t tint(uint32_t c, int pct, uint32_t base) {
     return out;
 }
 
+// The quiet tone: the theme's DIM, or DIM at QUIET_PCT where it is too close to TEXT for the sweep to
+// show (night yellow is one colour at all three levels).
+static uint32_t quiet(uint32_t text, uint32_t dim) {
+    if (termpal::contrastOnBlack(text) >= 1.5 * termpal::contrastOnBlack(dim)) return dim;
+    return tint(dim, QUIET_PCT, 0x000000);
+}
+
 Pal of(int swatch, bool night) {
     if (swatch == CYAN) swatch = BLUE;
-    if (swatch < 0 || swatch > CYAN) swatch = DEFAULT_SWATCH;
+    if (swatch < 0 || swatch >= CYAN) swatch = -1;   // termpal's default, the yellow deck's green
     const uint32_t t = termpal::rgb(termpal::TEXT, swatch, night);
     const uint32_t m = termpal::rgb(termpal::MID, swatch, night);
-    const uint32_t d = termpal::rgb(termpal::DIM, swatch, night);
-    const uint32_t grey = night ? 0x5A6068 : 0x8A929C;
+    const uint32_t d = quiet(t, termpal::rgb(termpal::DIM, swatch, night));
     Pal p;
-    p.bg = night ? tint(d, 7, 0x030406) : tint(d, 10, 0x0E1218);
-    p.song = t;
-    p.artist = m;
+    p.bg = termpal::rgb(termpal::BG, swatch, night);
+    p.song = m;
+    p.artist = d;
     p.barOn = t;
-    p.barOff = tint(d, 30, p.bg);
-    p.lit = night ? 0xEDE6D6 : 0xFFFFFF;
-    p.unsung = tint(d, 45, grey);
-    p.prev = tint(d, 55, grey);
-    p.next = tint(m, 70, grey);
+    p.barOff = d;
+    p.lit = t;
+    p.unsung = d;
+    p.prev = d;
+    p.next = d;
     return p;
 }
 
