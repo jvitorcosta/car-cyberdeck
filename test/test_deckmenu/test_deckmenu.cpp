@@ -145,9 +145,9 @@ void test_menu_ids_and_hits() {
     // LIGHTS, KARAOKE and MUSIC side by side, finger-sized.
     const Rect lights = rect(Screen::Menu, M_ITEM0 + LIGHTS), karaoke = rect(Screen::Menu, M_ITEM0 + KARAOKE),
                music = rect(Screen::Menu, M_ITEM0 + MUSIC);
-    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 192 && lights.w == 100 && lights.h == 44);
-    TEST_ASSERT_TRUE(karaoke.x == 110 && karaoke.y == 192 && karaoke.w == 100 && karaoke.h == 44);
-    TEST_ASSERT_TRUE(music.x == 216 && music.y == 192 && music.w == 100 && music.h == 44);
+    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 130 && lights.w == 100 && lights.h == 106);
+    TEST_ASSERT_TRUE(karaoke.x == 110 && karaoke.y == 130 && karaoke.w == 100 && karaoke.h == 106);
+    TEST_ASSERT_TRUE(music.x == 216 && music.y == 130 && music.w == 100 && music.h == 106);
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 214));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 214));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 270, 214));
@@ -157,8 +157,9 @@ void test_menu_ids_and_hits() {
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 212, 214));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 213, 214));
     // just above the row (under the prompt line) and below it (the screen's last rows), still the item
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 188));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 189));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 126));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 127));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 54, 230));   // anywhere in the tall button
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 239));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 319, 239));
     // Out-of-range ids have no rect, and any tap is -1 or a valid id.
@@ -170,6 +171,12 @@ void test_menu_ids_and_hits() {
             const int h = hit(Screen::Menu, x, y);
             TEST_ASSERT_TRUE(h >= -1 && h < M_N);
         }
+}
+
+// The lights band is display only: a tap on it is no item, however big its colour blocks are.
+void test_lights_band_is_no_hit() {
+    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, 60, 75));
+    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, 200, 90));
 }
 
 void test_hit_snaps_and_ignores_display_rects() {
@@ -247,6 +254,7 @@ int main(int, char**) {
     RUN_TEST(test_presets_tab);
     RUN_TEST(test_menu_bands_stack);
     RUN_TEST(test_menu_ids_and_hits);
+    RUN_TEST(test_lights_band_is_no_hit);
     RUN_TEST(test_hit_snaps_and_ignores_display_rects);
     RUN_TEST(test_neighbour);
     RUN_TEST(test_preset_slots);

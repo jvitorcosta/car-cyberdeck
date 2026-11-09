@@ -820,10 +820,10 @@ static void drawStatus() {
 }
 
 // ---- The Menu: a dashboard of stacked bands ----
-// Top to bottom (termlayout places them, test_termfont checks they fit): the header line; the clock
-// and the date left, the weather right, today's HI / LO under them; the trip (its time big, the
-// distance right); both lights on one row; the prompt line (a message, music mode's line, or just
-// ">") with its block cursor; the three items at the bottom. A MID rule under each band but the
+// Top to bottom (termlayout places them, test_termfont checks they fit): the header line; one row of
+// the clock and the date left, the trip's time right; both lights, each a block of its colour with
+// its name and level; the prompt line (a message, music mode's line, or just ">") with its block
+// cursor; the three tall items at the bottom. A MID rule under each band but the
 // prompt line. Each part clears and draws its own rows, so it is redrawn alone when what it shows
 // changes: the clock each minute, the weather on a new reading, the trip when its minute or its
 // tenth of a km moves, the lights on a look or link change, the prompt line when a message comes or
@@ -868,7 +868,7 @@ static void drawHeader() {
 static int clockMin = -1;
 static int clockY = 0, clockMonth = 0, clockDay = 0;
 
-// The clock band's left: the clock (BIG, TEXT) and under it the date (SMALL, MID: "FRI 23 OCT",
+// The clock row's left: the clock (TITLE, TEXT) and after it the date (SMALL, MID: "FRI 23 OCT",
 // "--- -- ---" before the clock synced). The date only turns over with a minute, so both go together.
 static void drawClock() {
     char s[16];  // room for any int, so -Wformat-truncation stays quiet
@@ -879,17 +879,17 @@ static void drawClock() {
     const int top = HEADER_RULE_Y + 1;
     clearBg(RULE_X0, top, DASH_SPLIT - RULE_X0, CLOCK_RULE_Y - top);  // down to the band's rule
     tft.setTextColor(pal(termpal::TEXT));
-    text(s, DASH_X, CLOCK_Y, Face::BIG, TL_DATUM);
+    text(s, DASH_X, CLOCK_Y, Face::TITLE, TL_DATUM);
     tft.setTextColor(pal(termpal::MID));
-    text(date, DASH_X, DATE_Y, Face::SMALL, TL_DATUM);
+    text(date, termlayout::dateX(), DATE_Y, Face::SMALL, TL_DATUM);
 }
 
 // The trip meter: time since the first loop() pass (the car started the deck). Its NVS record is
 // the boot's ">LAST TRIP".
 static tripmeter::Meter tripMeter;
 
-// The clock band's right, right-aligned: the trip's time (BIG, TEXT: "0:42", hours and minutes) and
-// TRIP under it (SMALL, MID). tripShown is the minute on screen: tripTick redraws it when it moves.
+// The clock row's right, right-aligned: the trip's time (TITLE, TEXT: "0:42", hours and minutes) and
+// TRIP before it (SMALL, MID). tripShown is the minute on screen: tripTick redraws it when it moves.
 static uint32_t tripShown = UINT32_MAX;
 static void drawTripTime() {
     tripShown = tripMeter.trip().seconds / 60U;
@@ -898,16 +898,16 @@ static void drawTripTime() {
     const int top = HEADER_RULE_Y + 1;
     clearBg(DASH_SPLIT, top, RULE_X1 - DASH_SPLIT, CLOCK_RULE_Y - top);
     tft.setTextColor(pal(termpal::TEXT));
-    text(s, DASH_RIGHT, CLOCK_Y, Face::BIG, TR_DATUM);
+    text(s, DASH_RIGHT, CLOCK_Y, Face::TITLE, TR_DATUM);
     tft.setTextColor(pal(termpal::MID));
-    text(TRIP_LABEL, DASH_RIGHT, WORDS_Y, Face::SMALL, TR_DATUM);
+    text(TRIP_LABEL, DASH_RIGHT - termfont::width(Face::TITLE, s) - CLOCK_GAP, WORDS_Y, Face::SMALL, TR_DATUM);
 }
 
-// The lights row, cleared between its rules and drawn again: INSIDE left of a vertical MID rule,
-// OUTSIDE right of it, each its label (IN / OUT, BODY, MID) and what lightstatus::of says of it: on,
-// a chip of its colour on the caps and "ROSE 40%" (BODY, TEXT); off, a DIM outlined chip and OFF in
-// DIM; no link, "-- NO LINK" in ALERT and no chip (never its last look: the deck can't tell what a
-// light it has lost shows).
+// The lights band, cleared between its rules and drawn again: INSIDE left of a vertical MID rule,
+// OUTSIDE right of it, each a block of its colour, its label (SMALL, MID) and under it what
+// lightstatus::of says of it (LIGHT_VALUE_FACE): on, the block filled and "ROSE 40%" (TEXT); off, a
+// DIM outlined block and OFF in DIM; no link, "-- NO LINK" in ALERT and no block (never its last
+// look: the deck can't tell what a light it has lost shows).
 static_assert(N_CTRL == N_LIGHT_LABELS, "a label per light");
 static void drawLightsBand() {
     const int top = CLOCK_RULE_Y + 1;
@@ -916,24 +916,24 @@ static void drawLightsBand() {
     for (int i = 0; i < N_CTRL; i++) {
         const Look l = shownLook(i);  // music mode's while it drives the lights
         tft.setTextColor(pal(termpal::MID));
-        text(LIGHT_LABELS[i], lightX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+        text(LIGHT_LABELS[i], lightTextX(i), LIGHT_LABEL_Y, Face::SMALL, TL_DATUM);
         const lightstatus::State st = lightstatus::of(linkUp(controllers[i]), l.lit);
         if (st == lightstatus::State::NoLink) {
             tft.setTextColor(pal(termpal::ALERT));
-            text("-- NO LINK", lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+            text("-- NO LINK", lightTextX(i), LIGHT_VALUE_BASE, LIGHT_VALUE_FACE, BL_DATUM);
             continue;
         }
-        drawChip(lightChipX(i), LIGHT_ROW_BASE - LIGHT_CHIP_H, LIGHT_CHIP_W, LIGHT_CHIP_H, l, false);  // on BODY's caps
+        drawChip(lightX(i), LIGHT_BLOCK_Y, LIGHT_BLOCK_W, LIGHT_BLOCK_H, l, false);
         if (st == lightstatus::State::Off) {
             tft.setTextColor(pal(termpal::DIM));
-            text("OFF", lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+            text("OFF", lightTextX(i), LIGHT_VALUE_BASE, LIGHT_VALUE_FACE, BL_DATUM);
             continue;
         }
         char name[12], s[32];
         upper(SWATCHES[l.swatch].name, name, sizeof(name));
         snprintf(s, sizeof(s), "%s %u%%", name, static_cast<unsigned>(l.pct));
         tft.setTextColor(pal(termpal::TEXT));
-        text(s, lightTextX(i), LIGHT_ROW_BASE, Face::BODY, BL_DATUM);
+        text(s, lightTextX(i), LIGHT_VALUE_BASE, LIGHT_VALUE_FACE, BL_DATUM);
     }
 }
 

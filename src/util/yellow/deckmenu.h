@@ -12,7 +12,7 @@ struct Rect { int16_t x, y, w, h; };
 // presets in place of the colours and the level row.
 enum class Screen : uint8_t { Menu, Lights, Presets };
 
-// Menu (the dashboard): three items side by side, finger-sized, at the bottom under the prompt line;
+// Menu (the dashboard): three items side by side, tall (easy to hit while driving), at the bottom under the prompt line;
 // everything else on it is display only (the bands below).
 enum MenuId : int { M_ITEM0 = 0, M_N = 3 };
 enum Item : uint8_t { LIGHTS, KARAOKE, MUSIC };  // later: CAR, HEART
@@ -35,8 +35,8 @@ Rect rect(Screen s, int id);
 // trip's time, the two lights on one row, the prompt line (the messages,
 // music mode's line), then (the items). A tap in a band doesn't snap to an item; the 4
 // rows between the prompt line and the items, and those under them, do.
-constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 113};                               // menu
-constexpr Rect LIGHTS_BAND{0, 135, 320, 31}, PROMPT_BAND{0, 166, 320, 22};                        // menu
+constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 30};                                // menu
+constexpr Rect LIGHTS_BAND{0, 52, 320, 49}, PROMPT_BAND{0, 101, 320, 25};                         // menu
 constexpr Rect STATUS{4, 40, 312, 12}, LEVEL{106, 190, 108, 46};  // lights (STATUS: presets too)
 
 // Number of ids on a screen (M_N / L_N / P_N).

@@ -124,12 +124,14 @@ void test_menu_items_fit() {
     for (int i = 0; i < deckmenu::N_ITEMS; i++) {
         const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + i);
         TEST_ASSERT_EQUAL_INT(100, r.w);
-        TEST_ASSERT_TRUE(r.h == 44 && r.y + r.h <= 240 - MARGIN);  // at the bottom, 4 px off the edge
-        // the label (BODY) top left, its ink inside the margins
+        TEST_ASSERT_TRUE(r.h == 106 && r.y + r.h <= 240 - MARGIN);  // at the bottom, 4 px off the edge
+        // the label (BODY) at the left, its caps centred top to bottom (+-1), its ink inside the margins
         const char* label = MENU_ITEMS[i];
         fitsLeft(Face::BODY, label, ROW_TEXT_X, r.w);
         const Rows ink = fromCapTop(Face::BODY, ROW_TEXT_Y);
         TEST_ASSERT_TRUE_MESSAGE(ink.top >= MARGIN, label);
+        const int capsBelow = r.h - (ROW_TEXT_Y + termfont::capHeight(Face::BODY));
+        TEST_ASSERT_TRUE_MESSAGE(ROW_TEXT_Y - capsBelow <= 1 && capsBelow - ROW_TEXT_Y <= 1, label);
         // a tag (KARAOKE's and MUSIC MODE's ON / OFF: SMALL, an inverted mini-label, its caps TAG_PAD from its
         // edges) bottom right, under the label's ink with a row to spare, inside the margins
         for (const char* tag : {ON_TAG, OFF_TAG}) {
@@ -214,27 +216,27 @@ void test_dash_header_fits() {
 }
 
 void test_dash_clock_and_trip_fit() {
-    // the clock (BIG) and the date (SMALL) left of DASH_SPLIT, whatever the digits / the day
-    for (const char* s : {"--:--", "00:00", "23:59", "18:47", "20:08", "11:11"}) fitsLeft(Face::BIG, s, DASH_X, DASH_SPLIT);
-    for (const char* s : {"--- -- ---", "WED 23 SEP", "THU 30 NOV", "SAT 28 MAY"}) fitsLeft(Face::SMALL, s, DASH_X, DASH_SPLIT);
-    // the trip's time (BIG, hours:minutes) and its label (SMALL) right of it
-    for (const char* s : {"0:00", "9:59", "99:59"}) fitsRight(Face::BIG, s, DASH_RIGHT, DASH_SPLIT);
-    fitsRight(Face::SMALL, TRIP_LABEL, DASH_RIGHT, DASH_SPLIT);
-    // rows: the clock over the date, the time over its label, all between the header rule and the band's
-    const Rows clock = fromCapTop(Face::BIG, CLOCK_Y), date = fromCapTop(Face::SMALL, DATE_Y);
-    const Rows label = fromCapTop(Face::SMALL, WORDS_Y);
+    // the clock (TITLE) and after it the date (SMALL) left of DASH_SPLIT, whatever the digits / the day
+    for (const char* s : {"--:--", "00:00", "23:59", "18:47", "20:08", "11:11"}) fitsLeft(Face::TITLE, s, DASH_X, DASH_SPLIT);
+    TEST_ASSERT_EQUAL_INT(DASH_X + termfont::width(Face::TITLE, "88:88") + CLOCK_GAP, dateX());
+    for (const char* s : {"--- -- ---", "WED 23 SEP", "THU 30 NOV", "SAT 28 MAY"}) fitsLeft(Face::SMALL, s, dateX(), DASH_SPLIT);
+    // the trip's time (TITLE, hours:minutes) right-aligned, its label (SMALL) CLOCK_GAP before it, right of it
+    for (const char* s : {"0:00", "9:59", "99:59"}) {
+        fitsRight(Face::TITLE, s, DASH_RIGHT, DASH_SPLIT);
+        fitsRight(Face::SMALL, TRIP_LABEL, DASH_RIGHT - termfont::width(Face::TITLE, s) - CLOCK_GAP, DASH_SPLIT);
+    }
+    // one row between the header rule and the band's, the caps centred (+-1); the SMALL words sit
+    // on the TITLE caps' bottom row
+    const Rows clock = fromCapTop(Face::TITLE, CLOCK_Y), date = fromCapTop(Face::SMALL, DATE_Y);
     between(HEADER_RULE_Y, clock, CLOCK_RULE_Y, "clock");
-    above(clock, date, "clock over the date");
-    above(clock, label, "trip time over its label");
     between(HEADER_RULE_Y, date, CLOCK_RULE_Y, "date");
-    // the caps as far from the header rule as the date's from the band's rule (+-1)
-    const int gapTop = CLOCK_Y - (HEADER_RULE_Y + 1), gapBottom = CLOCK_RULE_Y - (DATE_Y + termfont::capHeight(Face::SMALL));
+    TEST_ASSERT_EQUAL_INT(CLOCK_Y + termfont::capHeight(Face::TITLE), DATE_Y + termfont::capHeight(Face::SMALL));
+    TEST_ASSERT_EQUAL_INT(DATE_Y, WORDS_Y);
+    const int gapTop = CLOCK_Y - (HEADER_RULE_Y + 1), gapBottom = CLOCK_RULE_Y - (CLOCK_Y + termfont::capHeight(Face::TITLE));
     TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
     // the band's rule is the first row of the lights band under it (each band starts on the rule above)
     TEST_ASSERT_EQUAL_INT(deckmenu::CLOCK_BAND.y + deckmenu::CLOCK_BAND.h, CLOCK_RULE_Y);
     TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, CLOCK_RULE_Y);
-    // the split clears: the left column's clear ends before the right column's ink starts
-    TEST_ASSERT_TRUE(DASH_SPLIT < DASH_RIGHT - termfont::width(Face::BIG, "99:59"));
 }
 
 // The lights row: IN left, OUT right of the vertical rule at LIGHTS_SPLIT, each its label (BODY), a
@@ -242,17 +244,17 @@ void test_dash_clock_and_trip_fit() {
 // LINK (BODY), all on one baseline.
 void test_dash_lights_fit() {
     TEST_ASSERT_EQUAL_INT(2, N_LIGHT_LABELS);
-    TEST_ASSERT_EQUAL_STRING("IN", LIGHT_LABELS[0]);
-    TEST_ASSERT_EQUAL_STRING("OUT", LIGHT_LABELS[1]);
-    TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::BODY), LIGHT_CHIP_H);
+    TEST_ASSERT_EQUAL_STRING("INSIDE", LIGHT_LABELS[0]);
+    TEST_ASSERT_EQUAL_STRING("OUTSIDE", LIGHT_LABELS[1]);
     TEST_ASSERT_TRUE(LIGHT_GAP >= MARGIN);
     // each half starts the dashboard's margin in from its left (the screen's edge, the rule)
     TEST_ASSERT_EQUAL_INT(DASH_X, lightX(0));
     TEST_ASSERT_EQUAL_INT(LIGHTS_SPLIT + DASH_X, lightX(1));
     for (int i = 0; i < N_LIGHT_LABELS; i++) {
-        TEST_ASSERT_TRUE(lightChipX(i) >= lightX(i) + termfont::width(Face::BODY, LIGHT_LABELS[i]) + MARGIN);
-        TEST_ASSERT_EQUAL_INT(lightChipX(i) + LIGHT_CHIP_W + LIGHT_GAP, lightTextX(i));
+        TEST_ASSERT_EQUAL_INT(lightX(i) + LIGHT_BLOCK_W + LIGHT_GAP, lightTextX(i));
         const int right = i == 0 ? LIGHTS_SPLIT : DASH_RIGHT + MARGIN;  // the rule; the rules' end
+        fitsLeft(Face::SMALL, LIGHT_LABELS[i], lightTextX(i), right);
+        // every colour at 100 % ("PURPLE 100%" the widest), OFF and the lost link, in LIGHT_VALUE_FACE
         for (int n = 0; n < ledlook::N_SWATCH; n++) {
             const ledlook::Swatch& sw = ledlook::SWATCHES[n];
             char name[16], s[24];
@@ -260,22 +262,20 @@ void test_dash_lights_fit() {
             for (; sw.name[k]; k++) name[k] = static_cast<char>(toupper(static_cast<unsigned char>(sw.name[k])));
             name[k] = 0;
             snprintf(s, sizeof(s), "%s 100%%", name);
-            fitsLeft(Face::BODY, s, lightTextX(i), right);
+            fitsLeft(LIGHT_VALUE_FACE, s, lightTextX(i), right);
         }
-        for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(Face::BODY, s, lightTextX(i), right);
+        for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(LIGHT_VALUE_FACE, s, lightTextX(i), right);
     }
-    // the longest case, pinned: "OUT [chip] YELLOW 100%" is about 136 px, in its half's 145
-    const int outRow = lightTextX(1) + termfont::width(Face::BODY, "YELLOW 100%") - lightX(1);
-    TEST_ASSERT_TRUE(outRow >= 130 && outRow <= 140);
-    TEST_ASSERT_TRUE(lightX(1) + outRow <= DASH_RIGHT);
-    // the row between the clock band's rule and its own, caps centred; the clear reaches an accented
-    // capital's top; the band's rule starts the prompt line's band
-    const Rows row = fromBase(Face::BODY, LIGHT_ROW_BASE);
-    between(CLOCK_RULE_Y, row, LIGHTS_RULE_Y, "lights");
-    TEST_ASSERT_TRUE(LIGHT_ROW_BASE - termfont::accentAscent(Face::BODY) > CLOCK_RULE_Y);
-    const int gapTop = (LIGHT_ROW_BASE - termfont::capHeight(Face::BODY)) - (CLOCK_RULE_Y + 1);
-    const int gapBottom = LIGHTS_RULE_Y - LIGHT_ROW_BASE;
-    TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
+    TEST_ASSERT_EQUAL_INT((int)Face::TITLE, (int)LIGHT_VALUE_FACE);   // it fits, so the big one
+    // the block, the label over the value, all between the clock band's rule and the lights' rule
+    TEST_ASSERT_TRUE(LIGHT_BLOCK_Y > CLOCK_RULE_Y + 1 && LIGHT_BLOCK_Y + LIGHT_BLOCK_H < LIGHTS_RULE_Y - 1);
+    const Rows label = fromCapTop(Face::SMALL, LIGHT_LABEL_Y), value = fromBase(LIGHT_VALUE_FACE, LIGHT_VALUE_BASE);
+    between(CLOCK_RULE_Y, label, LIGHTS_RULE_Y, "light's label");
+    between(CLOCK_RULE_Y, value, LIGHTS_RULE_Y, "light's value");
+    above(label, value, "label over the value");
+    // the label's caps top and the value's caps bottom on the block's edges (+-1)
+    TEST_ASSERT_TRUE(LIGHT_LABEL_Y - LIGHT_BLOCK_Y <= 1 && LIGHT_LABEL_Y >= LIGHT_BLOCK_Y);
+    TEST_ASSERT_TRUE(LIGHT_BLOCK_Y + LIGHT_BLOCK_H - LIGHT_VALUE_BASE <= 1 && LIGHT_VALUE_BASE - (LIGHT_BLOCK_Y + LIGHT_BLOCK_H) <= 1);
     TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, CLOCK_RULE_Y);
     TEST_ASSERT_EQUAL_INT(deckmenu::PROMPT_BAND.y, LIGHTS_RULE_Y);
 }

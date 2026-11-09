@@ -6,14 +6,14 @@
 
 namespace termlayout {
 
-// The Menu's three items (100 px wide), in deckmenu::Item order: the label (BODY) top left, its caps'
-// top ROW_TEXT_Y and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
+// The Menu's three items (100x106), in deckmenu::Item order: the label (BODY) at the left, its caps'
+// top ROW_TEXT_Y (centred top to bottom) and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
 // it has one (SMALL, an inverted mini-label: TAG_PAD px of fill around the caps, TAG_RIGHT in from
 // the item's right edge, TAG_BOTTOM up from its bottom): KARAOKE's and MUSIC MODE's ON or OFF (always
 // one of them). "[KARAOKE]" and a tag side by side don't fit 100 px, so the tag goes under the label, and the label always sits high (it doesn't jump when a tag comes).
 constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[KARAOKE]", "MUSIC MODE"};
 constexpr int N_MENU_ITEMS = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
-constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 7;
+constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 47;
 constexpr const char* ON_TAG = "ON";
 constexpr const char* OFF_TAG = "OFF";
 constexpr int TAG_PAD = 3, TAG_RIGHT = 6, TAG_BOTTOM = 5;
@@ -59,24 +59,29 @@ constexpr const char* PAD_LABEL = "PAD";
 constexpr int PAD_GAP = 4, PAD_ICON_W = 19, PAD_NUB_W = 2, PAD_NUB_H = 4, PAD_CELL_W = 3, PAD_CELL_GAP = 1;
 // The header's PAD part, label to nub, from its left edge to DASH_RIGHT.
 inline int padWidth() { return termfont::width(termfont::Face::SMALL, PAD_LABEL) + PAD_GAP + PAD_ICON_W + PAD_NUB_W; }
-// the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the trip's time (BIG) with
-// TRIP_LABEL (SMALL) under it right of it, right-aligned; the band ends at CLOCK_RULE_Y.
+// One row: the clock (TITLE) and CLOCK_GAP after it the date (SMALL) left of DASH_SPLIT; right of
+// it, right-aligned, the trip's time (TITLE) and CLOCK_GAP before it TRIP_LABEL (SMALL). The caps
+// are centred between the header's rule and CLOCK_RULE_Y, the SMALL words on the TITLE caps' bottom.
 constexpr int DASH_SPLIT = 160;
-constexpr int CLOCK_Y = 58, DATE_Y = 87, WORDS_Y = 87, CLOCK_RULE_Y = 135;
+constexpr int CLOCK_Y = 29, DATE_Y = 33, WORDS_Y = 33, CLOCK_RULE_Y = 52, CLOCK_GAP = 8;
 constexpr const char* TRIP_LABEL = "TRIP";
-// the lights on one row (BODY, on LIGHT_ROW_BASE, the caps centred between the rules): INSIDE left of
-// a vertical MID rule at LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: its label, a chip
-// of its colour as tall as the caps (LIGHT_CHIP_W wide) LIGHT_GAP after it, and LIGHT_GAP after that
-// what the light shows ("YELLOW 100%", "OFF", "-- NO LINK" with no chip)
-constexpr const char* LIGHT_LABELS[] = {"IN", "OUT"};  // the controllers' order: inside, outside
+inline int dateX() { return DASH_X + termfont::width(termfont::Face::TITLE, "88:88") + CLOCK_GAP; }
+// the lights, big enough to read from the corner of an eye: INSIDE left of a vertical MID rule at
+// LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: a block of its colour LIGHT_BLOCK_W x
+// LIGHT_BLOCK_H from LIGHT_BLOCK_Y, and LIGHT_GAP after it its label (SMALL, caps top LIGHT_LABEL_Y)
+// over what it shows (LIGHT_VALUE_FACE on LIGHT_VALUE_BASE: "YELLOW 100%", "OFF", "-- NO LINK" with
+// no block). TITLE fits "PURPLE 100%" only with a block 28 px wide (test_termfont).
+constexpr const char* LIGHT_LABELS[] = {"INSIDE", "OUTSIDE"};  // the controllers' order
 constexpr int N_LIGHT_LABELS = sizeof(LIGHT_LABELS) / sizeof(LIGHT_LABELS[0]);
-constexpr int LIGHT_ROW_BASE = 157, LIGHTS_RULE_Y = 166, LIGHTS_SPLIT = 159;
-constexpr int LIGHT_CHIP_W = 14, LIGHT_CHIP_H = 11, LIGHT_GAP = 6;
+constexpr int LIGHTS_RULE_Y = 101, LIGHTS_SPLIT = 159;
+constexpr int LIGHT_BLOCK_W = 28, LIGHT_BLOCK_H = 34, LIGHT_BLOCK_Y = 60, LIGHT_GAP = 6;
+constexpr int LIGHT_LABEL_Y = 60, LIGHT_VALUE_BASE = 94;
+constexpr termfont::Face LIGHT_VALUE_FACE = termfont::Face::TITLE;
 // the prompt line (SMALL, on PROMPT_BASE, the caps centred between the lights' rule and the items): a
 // message while one shows, music mode's line, else PROMPT_IDLE; the block cursor (a SMALL cell)
 // after it, by DASH_RIGHT
 constexpr const char* PROMPT_IDLE = ">";
-constexpr int PROMPT_BASE = 185;
+constexpr int PROMPT_BASE = 121;
 // music mode's line: once the song's palette came, MUSIC_PROMPT and its swatch as a MUSIC_CHIP px
 // square (SMALL's caps, on the baseline) MUSIC_CHIP_GAP after it and the swatch's name MUSIC_CHIP_GAP
 // after that (">MUSIC [chip] PINK"); before, MUSIC_WAITING alone; with no palette for a while,
@@ -90,9 +95,8 @@ constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 5;
 inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, MUSIC_PROMPT) + MUSIC_CHIP_GAP; }
 inline int songNameX() { return songChipX() + MUSIC_CHIP + MUSIC_CHIP_GAP; }
 
-// A light's half of the lights row (0 inside, 1 outside): where it starts, its chip, its text.
+// A light's half of the lights band (0 inside, 1 outside): where it starts (its block), its text.
 inline int lightX(int i) { return i == 0 ? DASH_X : LIGHTS_SPLIT + DASH_X; }
-inline int lightChipX(int i) { return lightX(i) + termfont::advance(termfont::Face::BODY, LIGHT_LABELS[i]) + LIGHT_GAP; }
-inline int lightTextX(int i) { return lightChipX(i) + LIGHT_CHIP_W + LIGHT_GAP; }
+inline int lightTextX(int i) { return lightX(i) + LIGHT_BLOCK_W + LIGHT_GAP; }
 
 }  // namespace termlayout

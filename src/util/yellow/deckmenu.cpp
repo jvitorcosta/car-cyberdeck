@@ -33,7 +33,7 @@ int count(Screen s) {
 
 Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
-    if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 106, 192, 100, 44);  // LIGHTS, KARAOKE, MUSIC
+    if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 106, 130, 100, 106);  // LIGHTS, KARAOKE, MUSIC
     // Lights and Presets: < BACK, then the four tabs in x 80..316 (56 px: five 70 px buttons don't fit)
     if (id == L_BACK) return mk(4, 2, 70, 36);
     if (id < L_TAB0 + N_TABS) return mk(80 + (id - L_TAB0) * 60, 2, 56, 36);
