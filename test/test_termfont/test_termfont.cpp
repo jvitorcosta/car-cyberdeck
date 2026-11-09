@@ -293,6 +293,7 @@ void test_dash_prompt_fits() {
     TEST_ASSERT_EQUAL_STRING(">LAST TRIP 999.9 KM 99:59", last);
     for (const char* m : {static_cast<const char*>(last), PROMPT_IDLE, ">INSIDE: NO LINK", ">OUTSIDE: LINKED",
                           ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">KARAOKE ON", ">KARAOKE OFF",
+                          ">KARAOKE: CONNECTING...", ">BLACK DECK NOT ANSWERING",
                           ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
@@ -339,7 +340,8 @@ void test_status_fits() {
     // its ink, '/' included, stays inside, and nothing goes below the baseline (the clear is the rect)
     const termfont::Font& f = termfont::font(Face::SMALL);
     for (const char* s : {"LINK 2/2", "OUTSIDE: NO LINK", "INSIDE: NO LINK", "NO LINK", ">PURPURA APPLIED", ">INSIDE: NO LINK",
-                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">KARAOKE ON", ">KARAOKE OFF"}) {
+                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">KARAOKE ON", ">KARAOKE OFF",
+                          ">KARAOKE: CONNECTING...", ">BLACK DECK NOT ANSWERING"}) {
         for (const char* p = s; *p; p++) {
             const termfont::Glyph& g = f.glyph[static_cast<unsigned char>(*p) - f.first];
             if (g.height == 0) continue;

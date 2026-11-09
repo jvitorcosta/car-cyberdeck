@@ -135,8 +135,10 @@ static void drawLines(TFT_eSPI& t, const shared::KaraokeLines& k, const char* me
 void drawKaraokeBar(TFT_eSPI& t, const AppState& st) {
     const float frac = st.durationMs ? (float)st.progressMs / (float)st.durationMs : 0.0f;
     const int fw = (int)(frac > 1.0f ? BAR_W : frac * BAR_W);
+    // the played part solid; the rest empty, a thin line through its middle (the yellow deck's bar)
     t.fillRect(BAR_X, BAR_Y, fw, BAR_H, s_c.barOn);
-    t.fillRect(BAR_X + fw, BAR_Y, BAR_W - fw, BAR_H, s_c.barOff);
+    t.fillRect(BAR_X + fw, BAR_Y, BAR_W - fw, BAR_H, s_c.bg);
+    if (fw < BAR_W) t.drawFastHLine(BAR_X + fw, BAR_Y + BAR_H / 2, BAR_W - fw, s_c.barOff);
 }
 
 void drawKaraoke(TFT_eSPI& t, const AppState& st, const shared::KaraokeLines& k, const char* message,

@@ -17,6 +17,7 @@ enum class Screen : uint8_t { Normal, Karaoke, NoLyrics };
 class Mode {
 public:
     void keepAlive(uint32_t nowMs) {
+        if (!on(nowMs)) noneSeen_ = false;   // switched on again: a song without lyrics says so again
         on_ = true;
         aliveAt_ = nowMs;
     }

@@ -19,7 +19,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ### Yellow deck
 - **Changed:** KARAOKE on the main screen is an on/off switch like MUSIC MODE (an `ON` / `OFF` tag;
-  a tap or the PS3 controller's cross on the focus toggles it; `>KARAOKE ON` / `>KARAOKE OFF`).
+  a tap or the PS3 controller's cross on the focus toggles it; `>KARAOKE OFF`, and when it goes on
+  `>KARAOKE: CONNECTING...` until the black deck answers, then `>KARAOKE ON`, or `>BLACK DECK NOT
+  ANSWERING` after two misses in a row while it keeps asking).
   The lyrics are drawn by the black deck now. While it is on the deck sends the black deck `GET
   /karaoke?on=1` at once and every 10 s. Voice and the watch say "karaoke" / "karaoke off" (also
   "karaokê", "caraoquê"). It is not kept over a reboot. Each ask carries the inside light's colour
@@ -86,7 +88,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   start to the next line's start (LRCLIB times lines, not words), and the next line. The song and
   the artist share the top row (the song left, the artist right); the walking Pokémon, full size,
   walks on the progress bar under them at the song's progress, as on the normal screen, so it doesn't
-  pull the eye along the lyrics. The normal screen is unchanged.
+  pull the eye along the lyrics. The bar is a thin line that fills solid as the song plays. Switched
+  off and on again during a song without lyrics, it shows the "no lyrics" message again. The normal screen is unchanged.
   A song without synced lyrics shows the "no lyrics" message for 30 s, then the normal screen until
   the next song; the OTA, offline and waiting screens and the camera band keep their priority.
   Karaoke and music mode are independent.

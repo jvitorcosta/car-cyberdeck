@@ -190,9 +190,12 @@ static int tuneTheme = -2;     // the tuner's forced theme; -2 none
 
 // Karaoke (see "Karaoke" below): the Menu's KARAOKE item switches the black deck's karaoke view on
 // and off, never saved (boots off). karaokeOn is loop()'s; karaokeWant is the same for the deck task
-// (the keep-alive).
+// (the keep-alive). karaokeTaps counts the switches on, so the deck task knows to tell the answer
+// (keepalive::Confirm); karaokeShown is what it told (a keepalive::Shown), for loop() to show.
 static bool karaokeOn = false;
 static volatile bool karaokeWant = false;
+static volatile uint32_t karaokeTaps = 0;
+static volatile uint8_t karaokeShown = 0;
 
 // Music mode (see "Music mode" below): on and off from the Menu's MUSIC item, never saved (boots
 // off). musicOn is loop()'s; musicWant is the same for the deck task (the keep-alive) and the music
@@ -788,6 +791,7 @@ static void drawLevel() {
 // change (show() drops it), so none outlives its screen. Only loop() touches it (and setup(), before
 // loop() starts).
 static constexpr uint32_t MESSAGE_MS = 2500;
+static constexpr uint32_t KARAOKE_WAIT_MS = 15000;  // ">KARAOKE: CONNECTING..." until an answer replaces it
 static constexpr uint32_t LAST_TRIP_MS = 6000;  // the boot's ">LAST TRIP ..." is worth longer to read
 static char message[32] = "";  // "" when none
 static_assert(sizeof(message) <= MARKED_RUN, "a message holding GOJIRA's mark is drawn whole (textMarked)");
@@ -1937,16 +1941,17 @@ struct KeepAlive {
     int lastRc = 0;
 };
 
-static void keepAlive(KeepAlive& k, bool want) {
-    if (ota::active()) return;
+// The on=1's answer, 0 when none went out.
+static int keepAlive(KeepAlive& k, bool want) {
+    if (ota::active()) return 0;
     const int light = k.light ? k.light() : -1;
     switch (keepalive::due(k.st, want, millis(), light)) {
-    case keepalive::Ask::None: return;
+    case keepalive::Ask::None: return 0;
     case keepalive::Ask::Off:
         k.st.asked = false;
         k.lastRc = 0;
         Serial.printf("[%s] off (rc=%d)\n", k.tag, k.get(false, -1));
-        return;
+        return 0;
     case keepalive::Ask::On: break;
     }
     const int rc = k.get(true, light);
@@ -1955,6 +1960,7 @@ static void keepAlive(KeepAlive& k, bool want) {
     k.st.asked = true;
     k.st.sentLight = light;
     k.st.nextAt = millis() + (rc == 200 || rc == 503 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
+    return rc;
 }
 
 // The INSIDE light's swatch for the black deck's karaoke colour, the one this deck's theme takes
@@ -1985,7 +1991,18 @@ static void deckTask(void*) {
     for (;;) {
         watchdog::feed();
         keepAlive(music, musicWant);
-        keepAlive(karaoke, karaokeWant);
+        // want before taps: setKaraoke counts the tap first, so a switch on seen here is counted
+        static keepalive::Confirm confirm;
+        static uint32_t seenTaps = 0;
+        const bool want = karaokeWant;
+        const uint32_t taps = karaokeTaps;
+        if (taps != seenTaps) {
+            seenTaps = taps;
+            keepalive::start(confirm);
+        }
+        if (!want) confirm.waiting = false;
+        const keepalive::Shown shown = keepalive::answer(confirm, keepAlive(karaoke, want));
+        if (shown != keepalive::Shown::None) karaokeShown = static_cast<uint8_t>(shown);
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
@@ -2180,13 +2197,29 @@ static void drawMusicItem() {
 }
 
 // Karaoke on or off (the KARAOKE item, voice): the deck task follows karaokeWant (on: GET /karaoke?on=1
-// at once and every KARAOKE_KEEP_MS, off: on=0 once), and ">KARAOKE ON" / ">KARAOKE OFF" shows like
-// any message. The black deck picks its screen per song. The caller redraws the item.
+// at once and every KARAOKE_KEEP_MS, off: on=0 once). Off shows ">KARAOKE OFF"; on shows
+// ">KARAOKE: CONNECTING..." until the black deck answers (karaokeAnswerTick). The black deck picks
+// its screen per song. The caller redraws the item.
 static void setKaraoke(bool on) {
     karaokeOn = on;
+    if (on) karaokeTaps = karaokeTaps + 1;
     karaokeWant = on;
     Serial.printf("[karaoke] %s\n", on ? "on" : "off");
-    setMessage(on ? ">KARAOKE ON" : ">KARAOKE OFF");
+    if (on) setMessage(">KARAOKE: CONNECTING...", KARAOKE_WAIT_MS);
+    else setMessage(">KARAOKE OFF");
+    drawMessage();
+}
+
+// What the deck task heard after a switch on (karaokeShown): ">KARAOKE ON" at the black deck's first
+// answer, ">BLACK DECK NOT ANSWERING" (ALERT) after keepalive::NO_ANSWER_MISSES misses; it keeps
+// asking, and a later answer still says ON. From loop().
+static void karaokeAnswerTick() {
+    const uint8_t s = karaokeShown;
+    if (!s) return;
+    karaokeShown = 0;
+    if (!karaokeOn) return;
+    if (s == static_cast<uint8_t>(keepalive::Shown::Connected)) setMessage(">KARAOKE ON");
+    else setMessage(">BLACK DECK NOT ANSWERING", KARAOKE_WAIT_MS, true);
     drawMessage();
 }
 
@@ -2895,6 +2928,7 @@ void loop() {
         setMessage(">WELCOME");
         drawMessage();
     }
+    karaokeAnswerTick();
     updateTheme();  // a backstop: every path above has already called it
     publish();  // for /state and /status
     delay(10);

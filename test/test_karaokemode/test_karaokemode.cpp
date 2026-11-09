@@ -30,6 +30,28 @@ void test_no_lyrics_for_30s_then_normal() {
     TEST_ASSERT_TRUE(m.screen(Status::None, 1, 31000) == Screen::Normal);
 }
 
+// Switched off and on again during a song known to have no lyrics: the message again, not the
+// normal screen at once (the tap would seem to do nothing).
+void test_switching_on_again_shows_no_lyrics_again() {
+    Mode m;
+    m.keepAlive(0);
+    TEST_ASSERT_TRUE(m.screen(Status::None, 1, 1000) == Screen::NoLyrics);
+    m.keepAlive(20000);
+    TEST_ASSERT_TRUE(m.screen(Status::None, 1, 31000) == Screen::Normal);
+    m.stop();
+    m.keepAlive(40000);
+    TEST_ASSERT_TRUE(m.screen(Status::None, 1, 40000) == Screen::NoLyrics);
+}
+
+// A keep-alive while already on keeps the timer: the message still ends.
+void test_keepalive_while_on_keeps_the_timer() {
+    Mode m;
+    m.keepAlive(0);
+    TEST_ASSERT_TRUE(m.screen(Status::None, 1, 1000) == Screen::NoLyrics);
+    m.keepAlive(25000);
+    TEST_ASSERT_TRUE(m.screen(Status::None, 1, 31000) == Screen::Normal);
+}
+
 void test_plain_counts_as_none() {
     Mode m;
     m.keepAlive(0);
@@ -94,6 +116,8 @@ int main(int, char**) {
     RUN_TEST(test_off_is_normal);
     RUN_TEST(test_synced_shows_karaoke);
     RUN_TEST(test_no_lyrics_for_30s_then_normal);
+    RUN_TEST(test_switching_on_again_shows_no_lyrics_again);
+    RUN_TEST(test_keepalive_while_on_keeps_the_timer);
     RUN_TEST(test_plain_counts_as_none);
     RUN_TEST(test_retrying_does_not_count);
     RUN_TEST(test_a_new_song_restarts_the_timer);

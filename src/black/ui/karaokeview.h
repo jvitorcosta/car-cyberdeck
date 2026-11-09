@@ -20,7 +20,8 @@ void drawKaraoke(TFT_eSPI& t, const AppState& st, const shared::KaraokeLines& k,
 // Where the screens may draw this pass (ui/camband::screens: all of it, or left of the camera sign
 // and above its band), as main set the viewport. The sweep clips inside it and restores it.
 void setKaraokeClip(int x, int y, int w, int h);
-// The progress bar under the artist.
+// The progress bar under the song's row: the played part solid, the rest a thin line (the Pokémon
+// walks at their meeting).
 void drawKaraokeBar(TFT_eSPI& t, const AppState& st);
 // The sung line's width, all its rows (0: a message, nothing to sweep).
 int karaokeLineW();

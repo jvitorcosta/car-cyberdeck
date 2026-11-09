@@ -15,6 +15,32 @@ static State asked(uint32_t nextAt, int sentLight) {
     return s;
 }
 
+// The answer to a tap that switched karaoke on: Connected at the first 200, NoAnswer once after
+// NO_ANSWER_MISSES misses in a row (still waiting: a later 200 is Connected), nothing otherwise.
+void test_confirm_connected_at_first_answer() {
+    keepalive::Confirm c;
+    keepalive::start(c);
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::Connected, (int)keepalive::answer(c, 200));
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::None, (int)keepalive::answer(c, 200));
+}
+
+void test_confirm_no_answer_after_misses() {
+    keepalive::Confirm c;
+    keepalive::start(c);
+    TEST_ASSERT_EQUAL_INT(2, keepalive::NO_ANSWER_MISSES);
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::None, (int)keepalive::answer(c, -11));
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::NoAnswer, (int)keepalive::answer(c, -1));
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::None, (int)keepalive::answer(c, -11));
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::Connected, (int)keepalive::answer(c, 200));
+}
+
+void test_confirm_quiet_without_a_tap() {
+    keepalive::Confirm c;
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::None, (int)keepalive::answer(c, 200));
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::None, (int)keepalive::answer(c, -11));
+    TEST_ASSERT_EQUAL_INT((int)keepalive::Shown::None, (int)keepalive::answer(c, -11));
+}
+
 void test_first_want_asks_on() {
     TEST_ASSERT_EQUAL_INT((int)Ask::On, (int)keepalive::due(State{}, true, 0, 1));
 }
@@ -43,6 +69,9 @@ void test_waits_across_the_wrap() {
 
 int main(int, char**) {
     UNITY_BEGIN();
+    RUN_TEST(test_confirm_connected_at_first_answer);
+    RUN_TEST(test_confirm_no_answer_after_misses);
+    RUN_TEST(test_confirm_quiet_without_a_tap);
     RUN_TEST(test_first_want_asks_on);
     RUN_TEST(test_waits_until_next);
     RUN_TEST(test_light_change_asks_early);
