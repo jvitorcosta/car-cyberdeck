@@ -114,16 +114,15 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
 }
 
 // The karaoke view (ui/karaokeview) for the track on screen: the lines when they change (whole: the
-// screen), the bar, the sweep and the Pokémon on it, hopping back left at each new line
+// screen), the bar with the Pokémon on it at the song's progress, and the sweep
 // (util/black/karaokepick). The message in the sung line's place while searching, or for the
 // "no lyrics" screen (plain lyrics count as none: nothing to sweep).
 static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k, karaokemode::Screen sc,
                             uint32_t gen, bool walker, uint32_t animMs, int& step, bool whole) {
     using lyricstatus::Status;
-    static uint32_t lastDraw = 0, lastWalk = 0, hopAt0 = 0, shownStart = 0;
+    static uint32_t lastDraw = 0, lastWalk = 0, shownStart = 0;
     static char shownCur[sizeof k.cur], shownNext[sizeof k.next], shownMsg[lyricmsg::TEXT_CAP];
-    static int lastOffset = 0, hopFrom = 0, shownPx = 0;
-    static bool hopping = false, walked = false;
+    static int shownPx = 0;
     static lyricmsg::Out msg;
     static int shownLight = -2;   // the look on screen: the inside light's swatch and night
     static bool shownNight = false;
@@ -148,11 +147,6 @@ static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k,
     const char* msgNow = message ? message : "";
     if (whole || k.startMs != shownStart || strcmp(k.cur, shownCur) != 0 || strcmp(k.next, shownNext) != 0 ||
         strcmp(msgNow, shownMsg) != 0) {
-        // A new line after one the Pokémon walked: it hops back from where it stood.
-        hopping = !whole && !message && walked && k.startMs != shownStart;
-        hopFrom = lastOffset;
-        hopAt0 = now;
-        if (whole || message) walked = false;
         shownPx = 0;
         ui::drawKaraoke(s_tft, view, k, message, whole);
         shownStart = k.startMs;
@@ -172,18 +166,9 @@ static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k,
     const int px = karaokepick::steadyPx(shownPx, raw, lineW, k.startMs, k.endMs);
     shownPx = px;
     ui::drawKaraokeSweep(s_tft, px);
-    if (!walker || message) return;
+    if (!walker) return;
     if (view.isPlaying) step++;
-    int offset = ui::karaokeWalkerOffset(px), lift = 0;
-    if (hopping) {
-        const karaokepick::Hop h = karaokepick::hopAt(now - hopAt0, hopFrom, offset);
-        offset = h.x;
-        lift = h.lift;
-        hopping = !h.done;
-    }
-    ui::drawKaraokeWalker(s_tft, animMs, step, offset, lift);
-    lastOffset = offset;
-    walked = true;
+    ui::drawKaraokeWalker(s_tft, view, animMs, step);
 }
 
 // This boot's opening (util/intropick): random, never last boot's (NVS "boot"/"last"), only

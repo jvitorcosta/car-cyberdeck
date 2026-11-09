@@ -33,10 +33,7 @@ int lineHeight(Face f) {
     return need > ft.yAdvance ? need : ft.yAdvance;
 }
 
-int rows(Face f) {
-    if (f == Face::SUNG) return 2;
-    return f == Face::SUNG_SMALL ? 3 : 1;
-}
+int rows(Face f) { return f == Face::SUNG || f == Face::SUNG_SMALL ? 3 : 1; }
 
 int ascent(Face f) {
     const Font& ft = font(f);
@@ -44,11 +41,6 @@ int ascent(Face f) {
     for (int c = ft.first; c <= ft.last; ++c)
         if (ft.glyph[c - ft.first].height && -ft.glyph[c - ft.first].yOffset > top) top = -ft.glyph[c - ft.first].yOffset;
     return top;
-}
-
-int capAscent(Face f) {
-    const Font& ft = font(f);
-    return -ft.glyph['H' - ft.first].yOffset;
 }
 
 }  // namespace lyricface

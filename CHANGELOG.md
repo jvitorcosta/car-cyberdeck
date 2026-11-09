@@ -82,10 +82,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the two decks match: black, in the yellow deck's theme (the colour of the car's inside light,
   `light=N` with each `on=1`; pale by day, vivid at night; green with the light off) and its VT323
   lettering. It shows the song, artist and progress bar, the line just sung, the current line large
-  (two rows at 36 px, else three at 24 px, before anything is cut) lighting up as it is sung from its
-  start to the next line's start (LRCLIB times lines, not words), and the next line. The walking
-  Pokémon, full size, stands on the line's capitals at the sweep point and hops back at each new
-  line. The normal screen is unchanged.
+  (three rows at 36 px, else at 24 px, before anything is cut) lighting up as it is sung from its
+  start to the next line's start (LRCLIB times lines, not words), and the next line. The song and
+  the artist share the top row (the song left, the artist right); the walking Pokémon, full size,
+  walks on the progress bar under them at the song's progress, as on the normal screen, so it doesn't
+  pull the eye along the lyrics. The normal screen is unchanged.
   A song without synced lyrics shows the "no lyrics" message for 30 s, then the normal screen until
   the next song; the OTA, offline and waiting screens and the camera band keep their priority.
   Karaoke and music mode are independent.

@@ -29,12 +29,10 @@ const Font& font(Face f);
 int advance(Face f, uint8_t latin1);
 // A row's height: the font's line height, or more where its accents and descenders need it.
 int lineHeight(Face f);
-// The rows the sung line may take in a face: 2 in SUNG, 3 in SUNG_SMALL (the same room); 1 otherwise.
+// The rows the sung line may take in a face: 3 in SUNG and SUNG_SMALL; 1 otherwise.
 int rows(Face f);
 // Rows from a line's top to its baseline: the highest ink in the font (Á's mark), so a row's clear
 // and the sweep's clip hold its accents.
 int ascent(Face f);
-// Rows from the capitals' top to the baseline ('H'): where the walker stands on a row.
-int capAscent(Face f);
 
 }  // namespace lyricface

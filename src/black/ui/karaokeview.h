@@ -4,10 +4,10 @@
 #include "../core/shared.h"
 // The karaoke view (core/karaoke switches it on) in the yellow deck's terminal look: black, in the
 // theme the yellow deck shows (the car's INSIDE light's colour, util/black/karaokepal) and its VT323
-// (util/black/lyricface). The song, artist and progress bar at the top, the line just sung (one row),
-// the line being sung (two rows at 36 px, else three at 24 px, before anything is cut) and the next
-// line (one row). The sung words light up from DIM to TEXT as the sweep crosses them and the walking
-// Pokémon, full size, stands on row 1's capitals. Specs: docs/superpowers/specs/2026-11-09-black-deck-karaoke-design.md and
+// (util/black/lyricface). At the top one row with the song left and the artist right, and the
+// progress bar with the walking Pokémon on it at the song's progress; then the line just sung (one
+// row), the line being sung (three rows at 36 px, else at 24 px, before anything is cut) and the next
+// line (one row). The sung words light up from DIM to TEXT as the sweep crosses them. Specs: docs/superpowers/specs/2026-11-09-black-deck-karaoke-design.md and
 // 2026-11-09-karaoke-look-and-menu-design.md.
 namespace ui {
 // The colours for the next whole draw: the light's swatch (karaoke::light(), -1 for none) and night.
@@ -26,9 +26,6 @@ void drawKaraokeBar(TFT_eSPI& t, const AppState& st);
 int karaokeLineW();
 // Lights the sung line up to px of karaokeLineW(), row by row. Only the new part is drawn.
 void drawKaraokeSweep(TFT_eSPI& t, int px);
-// Where the Pokémon stands for a sweep at px: all rows' progress mapped onto row 1 (it never drops
-// onto the text), from row 1's left edge.
-int karaokeWalkerOffset(int px);
-// The Pokémon (ui::blitWalker) on row 1's top edge at offset, raised by lift (the hop).
-void drawKaraokeWalker(TFT_eSPI& t, uint32_t animMs, int step, int offset, int lift);
+// The Pokémon (ui::blitWalker) on the progress bar's top at the song's progress, as on the normal screen.
+void drawKaraokeWalker(TFT_eSPI& t, const AppState& st, uint32_t animMs, int step);
 }

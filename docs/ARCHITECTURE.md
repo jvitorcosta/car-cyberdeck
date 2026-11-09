@@ -225,15 +225,13 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   the yellow deck's terminal look: black, in the yellow deck's theme (`karaokepal`: termpal's TEXT,
   MID and DIM for the light's swatch, pale by day and vivid at night, the default green for -1, cyan
   as blue; DIM dimmed where it stands too close to TEXT for the sweep to show; a change of light or of
-  day and night redraws it whole). It has the song, artist and progress bar at the top, the line just sung
+  day and night redraws it whole). It has the song (left) and artist (right) on one row at the top and the
+  progress bar under them with the walking Pokémon on it at the song's progress, then the line just sung
   (one row), the current line (VT323 like the yellow deck, GFX tables in `src/black/fonts` from
-  `tools/gfxfont.py`; two rows at 36 px, `glyphrun::wrapRows`, else three at 24 px, `...` only past
+  `tools/gfxfont.py`; three rows at 36 px, `glyphrun::wrapRows`, else at 24 px, `...` only past
   that; each row tall enough for its accents) and the next line (one row). LRCLIB times lines, not
   words, so the current line lights up from DIM to TEXT evenly from its start to the next line's
-  start (the last line sweeps 5 s or to the song's end). The walking Pokémon, full size, stands on
-  the current line's capitals at the sweep point (the accents it walks past are drawn again behind
-  it) (on a longer line it stays on row 1, all rows' progress mapped
-  onto it) and hops back (a 300 ms, 14 px arc) at each new line. An instrumental break (a
+  start (the last line sweeps 5 s or to the song's end). An instrumental break (a
   timed blank line) keeps the last line fully swept; before the first line, it waits unlit. CJK
   and emoji draw at their 16 px among the letters. Karaoke and music mode are independent.
 

@@ -40,12 +40,4 @@ int steadyPx(int shownPx, int px, int widthPx, uint32_t startMs, uint32_t endMs)
     const uint64_t backMs = static_cast<uint64_t>(shownPx - px) * (endMs - startMs) / static_cast<uint64_t>(widthPx);
     return backMs < REWIND_MS ? shownPx : px;
 }
-
-Hop hopAt(uint32_t sinceMs, int fromX, int toX) {
-    if (sinceMs >= HOP_MS) return {toX, 0, true};
-    const float t = static_cast<float>(sinceMs) / static_cast<float>(HOP_MS);
-    const int x = fromX + static_cast<int>(static_cast<float>(toX - fromX) * t);
-    const int lift = static_cast<int>(4.0f * static_cast<float>(HOP_PX) * t * (1.0f - t) + 0.5f);
-    return {x, lift, false};
-}
 }  // namespace karaokepick
