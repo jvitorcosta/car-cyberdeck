@@ -2,6 +2,7 @@
 # with the src/ modules it (transitively) #includes. Windows PowerShell or PowerShell 7 (CI).
 #   powershell -ExecutionPolicy Bypass -File tools\run_tests.ps1     (Windows)
 #   pwsh tools/run_tests.ps1                                          (Linux/macOS)
+# Suite names after it (test_glyphrun test_text) run only those.
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 $ps = (Get-Process -Id $PID).Path                  # run ntest with this same PowerShell
@@ -21,6 +22,7 @@ function Deps($file, $seen) {
 }
 $fail = 0; $pass = 0; $failed = @()
 foreach ($t in Get-ChildItem test -Directory) {
+    if ($args.Count -and $args -notcontains $t.Name) { continue }
     $tf = Get-ChildItem $t.FullName -Filter *.cpp | Select-Object -First 1
     if (-not $tf) { $fail++; $failed += $t.Name; Write-Host "FAIL $($t.Name): no .cpp in the folder"; continue }
     $seen = New-Object 'System.Collections.Generic.HashSet[string]'

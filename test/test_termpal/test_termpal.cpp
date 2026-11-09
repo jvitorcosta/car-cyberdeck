@@ -1,6 +1,6 @@
 #include <unity.h>
 #include <initializer_list>
-#include "../../src/util/yellow/termpal.h"
+#include "../../src/util/common/termpal.h"
 
 using namespace termpal;
 

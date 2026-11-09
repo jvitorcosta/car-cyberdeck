@@ -122,7 +122,7 @@
 #include "../util/yellow/padtrigger.h"
 #include "../util/common/remotegate.h"
 #include "../util/yellow/tapguard.h"
-#include "../util/yellow/termpal.h"
+#include "../util/common/termpal.h"
 #include "../util/common/version.h"
 #include "../util/yellow/touchcal.h"
 #include "../util/lights/tripclock.h"
