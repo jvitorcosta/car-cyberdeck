@@ -48,8 +48,9 @@ The deck boots by typing the welcome (`WELCOME TO CYBERDECK`, about half a secon
 version (`FW 2.0.0`), then shows the **main screen**. The look is "Seegson" (Alien: Isolation):
 pale green on black, one hue at three brightnesses, and red kept for problems only (`-- NO LINK`,
 `>OFFLINE`, `>WRONG KEY`). Every screen has faint scanlines and all-caps
-labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; at night see
-[Night](#night); `src/util/common/termpal.h` lists each one's figure).
+labels. Day and night the screen is in the vivid colours of [Night](#night) (each theme's hue at
+full saturation; the paler day colours, which clear 4.5:1 on black, looked dull and are not used);
+`src/util/common/termpal.h` lists each one's figure.
 
 - **Main screen**, top to bottom; it puts first what the car's panel and CarPlay don't show:
   - the header `HONDA CITY TOURING`, with the PS3 controller's battery at the right;
@@ -291,10 +292,10 @@ Remove-Item Env:PLATFORMIO_BUILD_FLAGS
 ## Night
 
 From **18:00 to 06:00** local time (`TIMEZONE`), once the deck has the time over WiFi, the
-backlight drops to about a third (85 of 255) and the screen takes the **night palette**: each theme
-in its own hue at full saturation, so the colours stay vivid on the dimmed panel (the day's pale
-tints went grey there). The colour chips and the lights are untouched. Without WiFi there is no
-clock, so it stays day. The serial log says `[ui] night on` / `off`.
+backlight drops to about a third (85 of 255). The screen is in the **night palette** all day too:
+each theme in its own hue at full saturation, vivid on the dimmed panel and livelier than the
+day's pale tints, which are no longer used. The colour chips and the lights are untouched. Without
+WiFi there is no clock, so it stays at full backlight. The serial log says `[ui] night on` / `off`.
 
 Picked on the panel (TEXT / MID / DIM, then problems):
 

@@ -44,10 +44,11 @@
 // calibration) takes its colour, termpal's three levels of it (problems show in white on the red,
 // orange and pink themes), linked or not: a colour tapped with the lights out of reach still shows.
 // The look off: the green again. The colour tiles and chips stay real.
-// Night: 18:00-06:00 local time, once WiFi has synced the clock, the backlight drops to
-// NIGHT_BACKLIGHT and the terminal takes termpal's night palette, each theme's own hue at full
-// saturation (it stays vivid; the day's pale tints went grey on the dimmed panel). The chips stay
-// real. Without REMOTE_TOKEN there is no WiFi, no clock, and it stays day.
+// Colours and night: the terminal is in termpal's night palette day and night, each theme's own hue
+// at full saturation (the day's pale tints looked dull, and went grey on the dimmed panel). Night,
+// 18:00-06:00 local time once WiFi has synced the clock, only drops the backlight to
+// NIGHT_BACKLIGHT. The chips stay real. Without REMOTE_TOKEN there is no WiFi, no clock, and it
+// stays day.
 // Music mode ("song colours"): the MUSIC item has the black deck (the S3) send the song's palette over
 // UDP (util/musicwire); both lights then take its main colour snapped to one of the grid's 8 swatches
 // (util/musiclights), steady, fading to the next song's over ~3 s, the inside at the owner's level under
@@ -590,9 +591,10 @@ static uint32_t tunedRgb(termpal::Role r) {
     }
     return tuned[theme < -1 || theme > 7 ? 0 : theme + 1][r];
 }
-static uint16_t pal(termpal::Role r) { return c565(night ? tunedRgb(r) : termpal::rgb(r, theme)); }
+static uint16_t pal(termpal::Role r) { return c565(tunedRgb(r)); }  // vivid day and night
 #else
-static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme, night)); }
+// termpal's vivid colours day and night (the day's pale tints looked dull); night only dims the backlight.
+static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme, true)); }
 #endif
 // A terminal message's colour: ALERT for a problem (a lost link, the wrong key, a car warning: alert),
 // else TEXT.
@@ -2551,7 +2553,7 @@ static void vividGamma() {
 static void repaint();
 
 // The Menu's clock and night. Polled each second (a time() call) so the clock turns over on the
-// minute; night follows it: the backlight and a repaint in the night palette.
+// minute; night follows it: the backlight, and a repaint.
 static void updateClock() {
     static uint32_t checkedAt = 0;
     static bool first = true;

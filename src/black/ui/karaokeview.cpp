@@ -42,8 +42,8 @@ void setKaraokeClip(int x, int y, int w, int h) {
     s_clipH = h;
 }
 
-void setKaraokeLook(int light, bool night) {
-    const karaokepal::Pal p = karaokepal::of(light, night);
+void setKaraokeLook(int light) {
+    const karaokepal::Pal p = karaokepal::of(light);
     s_c = {rgb565::hex(p.bg),     rgb565::hex(p.song),  rgb565::hex(p.artist),
            rgb565::hex(p.barOn),  rgb565::hex(p.barOff), rgb565::hex(p.lit),
            rgb565::hex(p.unsung), rgb565::hex(p.prev),  rgb565::hex(p.next)};

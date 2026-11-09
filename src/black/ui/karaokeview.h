@@ -10,8 +10,8 @@
 // line (one row). The sung words light up from DIM to TEXT as the sweep crosses them. Specs: docs/superpowers/specs/2026-11-09-black-deck-karaoke-design.md and
 // 2026-11-09-karaoke-look-and-menu-design.md.
 namespace ui {
-// The colours for the next whole draw: the light's swatch (karaoke::light(), -1 for none) and night.
-void setKaraokeLook(int light, bool night);
+// The colours for the next whole draw: the light's swatch (karaoke::light(), -1 for none).
+void setKaraokeLook(int light);
 // whole: the screen (a new song, back from another screen); otherwise only the box's lines (the
 // next line became current). message (searching, no lyrics: ui/lyricmsg), when not null, takes the
 // sung line's place and nothing sweeps. Before the first line, the first line waits there, dim.

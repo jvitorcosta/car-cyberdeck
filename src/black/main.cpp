@@ -124,16 +124,13 @@ static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k,
     static char shownCur[sizeof k.cur], shownNext[sizeof k.next], shownMsg[lyricmsg::TEXT_CAP];
     static int shownPx = 0;
     static lyricmsg::Out msg;
-    static int shownLight = -2;   // the look on screen: the inside light's swatch and night
-    static bool shownNight = false;
+    static int shownLight = -2;   // the look on screen: the inside light's swatch
     const uint32_t now = millis();
     const int light = karaoke::light();
-    const bool night = theme::isNightActive();
-    if (light != shownLight || night != shownNight) whole = true;   // a new colour: all of it
+    if (light != shownLight) whole = true;   // a new colour: all of it
     if (whole) {
         shownLight = light;
-        shownNight = night;
-        ui::setKaraokeLook(light, night);
+        ui::setKaraokeLook(light);
     }
 
     const char* message = nullptr;

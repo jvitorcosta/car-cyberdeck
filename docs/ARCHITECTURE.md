@@ -223,9 +223,9 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   then the normal screen until the next song. Pausing keeps the screen; the OTA screen, the
   offline and waiting status screens and the camera band keep their priority. The view has
   the yellow deck's terminal look: black, in the yellow deck's theme (`karaokepal`: termpal's TEXT,
-  MID and DIM for the light's swatch, pale by day and vivid at night, the default green for -1, cyan
-  as blue; DIM dimmed where it stands too close to TEXT for the sweep to show; a change of light or of
-  day and night redraws it whole). It has the song (left) and artist (right) on one row at the top and the
+  MID and DIM for the light's swatch, its vivid colours day and night, the default green for -1, cyan
+  as blue; DIM dimmed where it stands too close to TEXT for the sweep to show; a change of light
+  redraws it whole). It has the song (left) and artist (right) on one row at the top and the
   progress bar under them with the walking Pokémon on it at the song's progress, then the line just sung
   (one row), the current line (VT323 like the yellow deck, GFX tables in `src/black/fonts` from
   `tools/gfxfont.py`; three rows at 36 px, `glyphrun::wrapRows`, else at 24 px, `...` only past
@@ -243,7 +243,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 | Task | Core | What it does |
 |---|---|---|
-| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the screens (Menu, Lights: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`, `util/termpal`'s night palette), saves to NVS |
+| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the screens (Menu, Lights: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`; the screen is in `util/termpal`'s night palette all day), saves to NVS |
 | `leds-link` | 0 | connects the two LED controllers (`yellow/elklink` on Bluedroid's GATT client, sharing the stack with the PS3 controller's Bluetooth Classic; service FFF0, characteristic FFF3, written by handle; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing. The PS3 controller connects by itself (PS button) |
 | `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply |
 | `deck` | 1, idle | 6 KB of stack; sends the black deck its keep-alives: `GET /music?on=1` while music mode is on and `GET /karaoke?on=1` while the KARAOKE switch is on, each every 10 s (`on=0` once when switched off). It reads nothing from the black deck |

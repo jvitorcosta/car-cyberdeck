@@ -53,7 +53,8 @@ The Pokéface watch face that used to live here moved to
   A song without synced lyrics shows "no lyrics" for 30 s, then the normal screen.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
 - **Night mode** from 18:00 to 06:00 in your time zone: the black deck takes a night palette and a
-  dimmer backlight; the yellow deck dims and gives each theme a vivid, fully saturated night colour.
+  dimmer backlight; the yellow deck dims. Its colours, and the black deck's karaoke view, are each theme's vivid,
+  fully saturated night colour day and night.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, then a
   montage of your own photos. Each boot picks one opening at random, never last boot's: your
   intro video with the log typed over it, the car's night drive, a pixel McQueen's drive, or a

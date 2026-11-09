@@ -27,6 +27,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   "karaokê", "caraoquê"). It is not kept over a reboot. Each ask carries the inside light's colour
   (`light=N`, the one its own theme takes, -1 when it is off) for the karaoke view's colour, and a change of
   colour asks at once.
+- **Changed:** the terminal is in the vivid night colours all day too (the day's pale tints looked
+  dull); night only dims the backlight.
 - **Changed:** the main screen's top is one row now (the clock and date left, the trip's time
   right); the lights each get a block of their colour with INSIDE / OUTSIDE and the colour and
   level in large type; the three items are more than twice as tall (106 px), easier to hit while
@@ -82,7 +84,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   /karaoke?on=1|0` (signed like `/music`; `on=1` is a keep-alive every 10 s, 30 s without one or
   `on=0` turns it off; `[karaoke] on` / `off` in the log). It has the yellow deck's terminal look, so
   the two decks match: black, in the yellow deck's theme (the colour of the car's inside light,
-  `light=N` with each `on=1`; pale by day, vivid at night; green with the light off) and its VT323
+  `light=N` with each `on=1`; vivid day and night; green with the light off) and its VT323
   lettering. It shows the song, artist and progress bar, the line just sung, the current line large
   (three rows at 36 px, else at 24 px, before anything is cut) lighting up as it is sung from its
   start to the next line's start (LRCLIB times lines, not words), and the next line. The song and

@@ -1,9 +1,9 @@
 #pragma once
 #include <cstdint>
 // The karaoke view's colours: the yellow deck's terminal look (termpal), so the two decks match.
-// Black, in the theme the yellow deck shows (the car's INSIDE light's colour, pale by day and vivid at
-// night; its green with the light off): the song in MID, the sung words and the played bar in TEXT,
-// the rest in DIM. 0xRRGGBB. PURE, host-tested.
+// Black, in the theme the yellow deck shows (the car's INSIDE light's colour, termpal's vivid
+// colours day and night; its green with the light off): the song in MID, the sung words and the
+// played bar in TEXT, the rest in DIM. 0xRRGGBB. PURE, host-tested.
 namespace karaokepal {
 
 struct Pal {
@@ -25,6 +25,6 @@ constexpr int QUIET_PCT = 55;
 uint32_t tint(uint32_t c, int pct, uint32_t base);
 // The colours for a ledlook swatch (0..8): -1 or out of range is termpal's default (green); cyan
 // (8), which termpal has no theme for, takes blue's, as on the yellow deck.
-Pal of(int swatch, bool night);
+Pal of(int swatch);
 
 }  // namespace karaokepal
