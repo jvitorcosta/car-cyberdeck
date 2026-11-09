@@ -35,4 +35,10 @@ size_t fit(Item* it, size_t n, size_t cap, int maxW, AsciiWidthFn aw, void* ctx)
 // no spaces), else hard. ellipsisW = width of "...".
 struct Wrap { size_t aEnd, bStart, bEnd; bool bEllipsis; };
 Wrap wrapTwo(const Item* it, size_t n, int maxW, int ellipsisW);
+// Up to maxRows (1..MAX_ROWS) rows of maxW, broken as wrapTwo breaks: row i = [start[i], end[i]),
+// n rows; a row never starts with the space it broke at. When the text runs past the last row, that
+// row is cut so it and "..." (ellipsisW) fit maxW, and ellipsis is set.
+constexpr int MAX_ROWS = 3;
+struct Rows { size_t start[MAX_ROWS], end[MAX_ROWS]; int n; bool ellipsis; };
+Rows wrapRows(const Item* it, size_t n, int maxW, int ellipsisW, int maxRows);
 }
