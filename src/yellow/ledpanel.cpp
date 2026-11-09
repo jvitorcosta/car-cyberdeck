@@ -1,22 +1,18 @@
 // The yellow deck (CYD) as the car's control screen: a Seegson-style terminal (pale green on black,
 // red only for problems, vivid at night, faint scanlines, all caps) that drives the car's two
-// ELK-family LED controllers. Three screens (and the two car-health ones, see "Car health"), laid
-// out by util/deckmenu:
+// ELK-family LED controllers. Two screens, laid out by util/deckmenu:
 //   Menu (boot, after the CYBERDECK welcome types out): a dashboard of stacked bands, for what the
 //           car's panel and CarPlay don't show: the trip and the lights. The header line
-//           (CYBERDECK // HONDA CITY TOURING 2022); the clock big with the date under it ("FRI 23
-//           OCT"), and right of it the outside temperature big and the sky in words (see "Weather"
-//           below), "HI 32 LO 26  MANAUS" right-aligned under them; the trip, from the OBD deck's
-//           snapshot (see "Car health"): "12.4 KM", "11.8 KM/L" and "296 KM LEFT", and under them
-//           "0:16  R$ 6,30  14.1V  90C" (the time is the deck's own; "--" for all the rest while no
-//           fresh snapshot comes); both lights
-//           on one row, "IN [chip] ROSE 40%" | "OUT [chip] YELLOW 100%" (OFF, or -- NO LINK when the
-//           deck has no link to it); the prompt line: a message, music mode's line, or just ">",
-//           with a block cursor (blinking while a message shows); and at the bottom the three
-//           items "[LIGHTS]", "[KARAOKE]" (with a LIVE tag while the black deck plays a song with
-//           synced lyrics, dimmed otherwise: a tap then only says why) and "MUSIC MODE" (a tap turns
-//           music mode on or off, an ON or OFF tag under it; see "Music mode" below). The song
-//           itself is on the Karaoke screen only
+//           (HONDA CITY TOURING, the PS3 controller's battery at the right); the clock big with the
+//           date under it ("FRI 23 OCT"), and right of it the trip's time big ("0:16", the deck's
+//           own) over TRIP; both lights on one row, "IN [chip] ROSE 40%" | "OUT [chip] YELLOW 100%"
+//           (OFF, or -- NO LINK when the deck has no link to it); the prompt line: a message, music
+//           mode's line, or just ">", with a block cursor (blinking while a message shows); and at
+//           the bottom the three items "[LIGHTS]" (opens Lights), "KARAOKE" and "MUSIC MODE", the
+//           last two on/off switches (a tap flips it, an ON or OFF tag under it; see "Music mode"
+//           below). KARAOKE has the black deck (the S3) show the song's lyrics full screen, swept
+//           line by line; the prompt line says ">KARAOKE ON" / ">KARAOKE OFF". The deck draws no
+//           lyrics itself and no longer reads the black deck's /state
 //   Lights: < BACK, the pages BOTH / INSIDE / OUTSIDE / PRESETS as Pip-Boy tabs (BOTH sets both
 //           lights together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK
 //           2/2", or "OUTSIDE: NO LINK" in ALERT), then on the three look pages 2x4 colour buttons
@@ -27,16 +23,6 @@
 //           ゴジラ on screen (">ゴジラ APPLIED"): three Unifont glyphs (ui/gojiraname), as VT323 has
 //           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, cyan,
 //           is a preset's only: not on the grid, never a song colour; the theme takes blue's for it
-//   Karaoke: < BACK and "TITLE - ARTIST" of the song the black deck (the S3) is playing, its synced
-//           lyric line big, the next line under it, and a thin progress line (or >NO SYNCED LYRICS /
-//           >NOTHING PLAYING / >KARAOKE: NO SIGNAL / >WRONG KEY big in place of the lyrics). Read
-//           from the black deck's GET /state every second while this screen shows, every 5 s while
-//           the Menu shows (see "Lyrics" below)
-// Speed cameras (the black deck has the GPS and beeps; this deck shows): an alert or alarm from the
-// black deck's GET /cam is a band over the bottom third of any screen (a tap on it mutes the black
-// deck's beeps), "CAM --" / "MUTED" a tag on the Menu's header (no GPS fix shows on the black deck's
-// own top strip); voice "mark camera",
-// "cameras mute" (see "Speed cameras" below).
 // A press acts once it settles (its first ~40 ms averaged), and a tap in a gap snaps to the nearest
 // button; it shows as the bar with a ring cut in it (ui/presslook). After a screen or page
 // change touch waits for the finger to lift and 250 ms (util/tapguard). The iPhone's Bluetooth
@@ -44,15 +30,17 @@
 // The STATUS line on Lights and the prompt line on the Menu show a terminal message for 2.5 s
 // (">ROSE APPLIED", ">INSIDE: NO LINK"), then their usual line again (on the Menu: ">" or music mode's line).
 // Each page's colour, intensity and power and the page last shown survive a reboot (NVS); the deck
-// still boots to the Menu. Touch calibration (resistive panel) runs on first boot,
+// still boots to the Menu. Karaoke and music mode are not kept: both boot off. Touch calibration (resistive panel) runs on first boot,
 // or with BOOT held (at power-up, or 2 s any time). Voice and the Garmin watch: GET /say, /state,
-// /presets and /status over WiFi (see "Voice" below), on either screen. A PS3 controller (Bluetooth
+// /presets and /status over WiFi (see "Voice" below), on either screen. Voice and the watch also say
+// "karaoke" / "karaoke off" (reply "Karaoke on/off"). A PS3 controller (Bluetooth
 // Classic) drives it too: the D-pad moves the focus (an inverted bar on the Menu's three items, a TEXT
-// ring on Lights and Karaoke; none is drawn while no controller is connected), cross presses, circle
+// ring on Lights; none is drawn while no controller is connected), cross presses (on KARAOKE or
+// MUSIC MODE it flips the switch), circle
 // goes back to the Menu; on Lights square is the next page, and on the look pages triangle on/off,
 // L1 / R1 - / +. On any screen START, L2 / R2, SELECT, L1 / R1 and PS are shortcuts for both lights,
 // answered by a buzz, and the pad's LEDs show it is connected and the links (see "PS3 controller input" below).
-// Theme: while the INSIDE look is on, the terminal (Menu, Lights, Karaoke; not the boot typing or the
+// Theme: while the INSIDE look is on, the terminal (Menu, Lights; not the boot typing or the
 // calibration) takes its colour, termpal's three levels of it (problems show in white on the red,
 // orange and pink themes), linked or not: a colour tapped with the lights out of reach still shows.
 // The look off: the green again. The colour tiles and chips stay real.
@@ -79,8 +67,10 @@
 // Updates over USB only, `pio run -e ledpanel -t upload` (the WiFi updates went to fit the PS3
 // controller's Bluedroid in the heap; docs/BACKLOG.md). Three crash resets in a row before new
 // firmware has proven itself still boot the previous one (net/ota's boot guard, util/bootguard).
-// The deck does lights, karaoke and music mode only: the car's health, the speed cameras and the
-// weather went for the same heap (the OBD deck shows the car; the black deck speaks the cameras).
+// The deck does lights, karaoke (the switch only), music mode, the PS3 controller and the watch's
+// routes: the car's health, the speed cameras and the weather went for the same heap (the OBD deck
+// shows the car; the black deck speaks the cameras). Its "deck" task only sends the music and
+// karaoke keep-alives to the black deck.
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
@@ -489,7 +479,7 @@ static int homeFocus() {
 // ---- Drawing ----
 // The lettering is VT323, a CRT terminal font, 1-bit at four sizes named by role (ui/termfont:
 // SMALL, BODY, TITLE, BIG); where each label goes so it fits is ui/termlayout's, which
-// test_termfont checks. Every label is upper case (the lyrics keep theirs). The touch calibration
+// test_termfont checks. Every label is upper case. The touch calibration
 // screens keep TFT_eSPI's built-in fonts.
 // The background is black with a faint scanline on every 3rd screen row: every clear goes through
 // clearBg(), which repaints a rect's lines on absolute rows, so a partial redraw stays aligned.
@@ -1486,7 +1476,7 @@ static void act() {
 // Moving around (the screen's buttons):
 //   D-pad: move the focus (held: repeats; the sticks are ignored; on the Menu left / right along
 //          its three items, no wrap)    cross: press the focused button
-//   circle: back to the Menu (from Lights or Karaoke; on the Menu: nothing)
+//   circle: back to the Menu (from Lights; on the Menu: nothing)
 //   Lights only: square next page (BOTH, INSIDE, OUTSIDE, PRESETS, round)
 //   the look pages only: triangle this page's lights on/off    L1 / R1: this page's - / +
 // Shortcuts, on any screen (both lights; padfeel buzzes once, twice when a light isn't linked):

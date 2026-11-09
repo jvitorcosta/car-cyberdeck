@@ -2,13 +2,14 @@
 
 The yellow deck is a Cheap Yellow Display (ESP32-2432S028R, build `ledpanel`) that runs the car's
 two LED controllers (inside and outside) over Bluetooth LE. It shows a terminal-style dashboard,
-sets the lights by touch, a PS3 controller or the Garmin watch, shows the black deck's lyrics
-(karaoke), and in music mode gives the lights each song's colour. That is all it does: the car's
+sets the lights by touch, a PS3 controller or the Garmin watch, switches the black deck's karaoke
+view on and off, and in music mode gives the lights each song's colour. That is all it does: the car's
 health belongs to the OBD deck, and the deck takes new firmware over USB only (its heap goes to
 the two Bluetooth stacks, see [Memory](#memory)).
 
 - [Set up](#set-up)
 - [On the deck](#on-the-deck)
+- [Karaoke](#karaoke)
 - [Presets](#presets)
 - [Music mode: song colours](#music-mode-song-colours)
 - [Theme: the inside light's colour](#theme-the-inside-lights-colour)
@@ -55,20 +56,14 @@ labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; 
   - the clock big with the date under it (`FRI 23 OCT`; `--:--` until WiFi has synced the
     clock), and on the right the trip's time big (`0:16`, hours:minutes since the deck started)
     over `TRIP` (dim);
-  - what the black deck plays: the track (in capitals) over the artist (dim), the time on the
-    artist's row (`1:23 / 3:45`, `PAUSED` while paused) and a progress line under them. Without a
-    song it reads `>NOTHING PLAYING`, `>NO SIGNAL` (the black deck doesn't answer) or `>WRONG KEY`
-    (red). It comes from the same poll as karaoke (every 5 s on this screen; the time runs on
-    between polls);
   - both lights on one row: `IN`, a chip of its colour, its name and level (`ROSE 40%`) on the
     left, `OUT` the same on the right; `OFF` (dim) for a light that is off, `-- NO LINK` (red)
     when the deck has no link to it;
   - the prompt line: `>` and a block cursor; a message while one shows, and music mode's line
     while it is on;
-  - three big buttons: `[LIGHTS]` opens the Lights page, `[KARAOKE]` the black deck's lyrics,
-    `MUSIC MODE` turns music mode on or off (an inverted `ON` / `OFF` tag under it). KARAOKE is
-    bright with a `LIVE` tag while the black deck plays a song with synced lyrics, dim otherwise:
-    a tap then says why.
+  - three big buttons: `[LIGHTS]` opens the Lights page; `KARAOKE` and `MUSIC MODE` are on/off
+    switches, each with an inverted `ON` / `OFF` tag under it. KARAOKE shows the black deck's
+    lyrics on its own screen (see [Karaoke](#karaoke)). The deck shows no song or lyrics itself.
 - **Lights**: `< BACK` returns to the main screen. Tabs for BOTH / INSIDE / OUTSIDE / PRESETS,
   then the status line. On BOTH, INSIDE and OUTSIDE: the 2x4 colour boxes (the chosen one is
   inverted) and a 10-cell level bar with `-` / `+` (labelled with the %, `MIX` or `OFF`). Tap a
@@ -83,22 +78,14 @@ labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; 
 - **Status line**: `LINK 2/2` while the deck holds both lights; when one is down, in red,
   `OUTSIDE: NO LINK`, `INSIDE: NO LINK`, or `NO LINK` for both. What the deck shows as on is what
   it last sent while connected: the controllers can't be read back.
-- **Karaoke**: the song the black deck plays (`TITLE - ARTIST`, in capitals), its synced line big,
-  the next line under it, and a thin progress line. Accented Latin letters draw in the terminal's
-  font; **Japanese** (kana and the common JIS level 1 kanji) draws from a GNU Unifont subset in
-  flash (`data/jp16.bin`, `tools/gen_jp_font.py`), and a character outside it (Chinese-only
-  hanzi, rarer kanji, Korean) shows as an empty box. Lines wrap at spaces, and anywhere between
-  Japanese characters. With nothing to sing along it shows, big and dim, `>NOTHING PLAYING`,
-  `>NO SYNCED LYRICS`, `>KARAOKE: NO SIGNAL` (the black deck doesn't answer) or `>WRONG KEY` (in
-  red: the two decks' `REMOTE_TOKEN` differ). The page polls the black deck every second.
 - **Messages**: a terminal line on the prompt line (on Lights: in place of the status line) for
   2.5 s when something happens: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED`,
-  `>MUSIC ON`, why KARAOKE won't open, and at boot the trip before (`>LAST TRIP 12.4 KM 0:47`; 6 s).
+  `>MUSIC ON`, `>KARAOKE ON`, and at boot the trip before (`>LAST TRIP 12.4 KM 0:47`; 6 s).
 - **Taps**: a pressed button is the solid bar with a ring cut into it. After a screen or page
   change the deck waits for the finger to lift and a quarter second to pass, so a double tap on
   `[LIGHTS]` can't press a button on the next screen.
 - **PS3 controller**: the D-pad moves the focus (an inverted bar on the main screen's buttons, a
-  ring on Lights), **cross** presses, **circle** goes back to the main screen. On Lights only:
+  ring on Lights), **cross** presses (on KARAOKE or MUSIC MODE it flips the switch), **circle** goes back to the main screen. On Lights only:
   **square** next page (BOTH, INSIDE, OUTSIDE, PRESETS, round again); on the look pages
   **triangle** this page's lights on/off and **L1 / R1** `-` / `+`. The focus shows only while a
   controller is connected.
@@ -109,6 +96,20 @@ labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; 
   finger does nothing; each press logs it: `[pad] trigger pressure L2 255, R2 0`). Its LEDs: **1** connected to the deck (always lit while it is),
   **2** the inside light connected, **3** the outside one, **4** its own battery low. Its battery shows at the top right of the main screen ("PAD" and four
   cells; red when it's dying, filling round while it charges).
+
+## Karaoke
+
+`KARAOKE` on the main screen is a switch for the black deck's karaoke view, like `MUSIC MODE`: a
+tap, or cross on the PS3 controller while it has the focus, turns it on or off; the tag under the
+button says `ON` or `OFF` and the prompt line shows `>KARAOKE ON` / `>KARAOKE OFF`. By voice or from
+the watch, say "karaoke" (on) or "karaoke off" ("karaokê" and "caraoquê" work too); the reply is
+`Karaoke on` / `Karaoke off`. It is never kept over a reboot: the deck boots with it off.
+
+The yellow deck draws no lyrics. While the switch is on it asks the black deck `GET /karaoke?on=1`
+(signed) at once and then every 10 s; the black deck turns karaoke off 30 s after the last ask, and
+a tap to turn it off sends `on=0`, which stops it at once. What the black deck shows is in the
+[README](../README.md#black-deck) and [ARCHITECTURE.md](ARCHITECTURE.md#black-deck). Karaoke and
+music mode are independent: both can be on together.
 
 ## Presets
 
@@ -268,7 +269,7 @@ line per song with what it knew and which rule decided:
 
 ## Theme: the inside light's colour
 
-While the **INSIDE** light is on, the terminal (main screen, Lights, Karaoke; not the boot typing
+While the **INSIDE** light is on, the terminal (main screen and Lights; not the boot typing
 or the touch calibration) takes that light's colour: the same three brightnesses in
 its hue. Blue and purple are lighter shades so the text reads; white is a soft grey-white, held
 back so it doesn't glare. Problems stay red, except on the red,
@@ -369,6 +370,7 @@ English or Portuguese, any order, other words ignored (`src/util/yellow/ledvoice
 | Brighter / dimmer (10 % steps) | brighter, up, more / mais, aumenta, forte; dimmer, down, less / menos, diminui, fraco |
 | Level | a number (`50`, `50%`, rounded to 10), max/máximo, min/mínimo |
 | Preset | rose, fire, gojira/godzilla, purpura, civic, ocean; or preset/favourite/favorite + 1-6, as a word or digit ("preset two", "preset 2") |
+| Karaoke | karaoke, karaokê, caraoquê: on; with an off word ("karaoke off"): off. Nothing else in the phrase is applied |
 | Music mode | music, música ("music mode" too): on; with an off word ("music off", "desliga o modo música"): off. Nothing else in the phrase is applied |
 
 A colour also turns the lights on. "light" only counts right before "blue" ("light off" is just
@@ -384,15 +386,20 @@ iPhone. It signs every request. How it works, and how to build and install it:
 ## Memory
 
 The deck runs two Bluetooth stacks at once (Bluedroid's dual mode: Classic for the PS3 controller,
-LE for the lights), which leaves the least heap of any build. So it does lights, karaoke, music
+LE for the lights), which leaves the least heap of any build. So it does lights, the karaoke switch, music
 mode and the watch's routes, and nothing else: no weather, speed cameras, car health or updates
 over WiFi (the car's health is the OBD deck's). It still keeps two app slots
 for the boot guard: three crashes in a row before a firmware has run a minute online boot the
 other slot (`[ota] rolled back`); `[ota] this firmware is good` marks it proven.
 
+Taking the karaoke lyrics, the `/state` poll of the black deck, the Menu's now-playing band and the
+Japanese font off the deck moved its free heap from ~31-33 KB (low-water 25.7 KB, largest block
+11.7 KB) to ~44-52 KB (low-water 41 KB, largest block 27.6 KB). The one task left that talks to the
+black deck, `deck` (5 KB of stack), only sends the music and karaoke keep-alives.
+
 Every 10 s the serial log prints the free heap, its low-water mark, its largest free block, the
-allocations that failed and each task's unused stack (`[mem] heap 30948 (min 27376, block 14324,
-fails 0)  stack left: link 3568, voice 2472, karaoke 3876, ...`, from a desk run with WiFi up). If
+allocations that failed and each task's unused stack (`[mem] heap 44500 (min 41000, block 27600,
+fails 0)  stack left: link 3568, voice 2472, deck ..., ...`, from a desk run with WiFi up). If
 a feature comes back, watch the `min` and the `block`: lwIP aborts when a socket can't get its
 semaphore, and a library that takes one big buffer fails first on a heap in pieces.
 

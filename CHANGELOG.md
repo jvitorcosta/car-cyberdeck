@@ -18,6 +18,18 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Changed:** KARAOKE on the main screen is an on/off switch like MUSIC MODE (an `ON` / `OFF` tag;
+  a tap or the PS3 controller's cross on the focus toggles it; `>KARAOKE ON` / `>KARAOKE OFF`).
+  The lyrics are drawn by the black deck now. While it is on the deck sends the black deck `GET
+  /karaoke?on=1` at once and every 10 s. Voice and the watch say "karaoke" / "karaoke off" (also
+  "karaokê", "caraoquê"). It is not kept over a reboot.
+- **Removed:** the KARAOKE screen (the lyrics page), the poll of the black deck's `/state` (the
+  heaviest WiFi and heap load the deck had), the main screen's now-playing band and the Japanese
+  font (`data/jp16.bin`, `tools/gen_jp_font.py`). The clock band is back to its earlier height with
+  the clock and date centred in it. The `karaoke` task is the `deck` task (5 KB of stack): it only
+  sends the music and karaoke keep-alives, and the `[mem]` line says `deck`. At the desk the free
+  heap went from ~31-33 KB (low-water 25.7 KB, largest block 11.7 KB) to ~44-52 KB (low-water
+  41 KB, largest block 27.6 KB).
 - **Fixed:** the deck restarted when the PS3 controller connected while the heap was short (music
   mode just turned on, a lyrics poll in flight): esp32-ps3 took a 4 KB buffer for its few-byte
   "start sending reports" command and wrote through NULL when that failed. The link now swaps that
@@ -59,6 +71,15 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the rest. The scanlines lose their amber tint.
 
 ### Black deck (S3)
+- **Added:** a full-screen karaoke view, switched by the yellow deck's KARAOKE item: `GET
+  /karaoke?on=1|0` (signed like `/music`; `on=1` is a keep-alive every 10 s, 30 s without one or
+  `on=0` turns it off; `[karaoke] on` / `off` in the log). It shows the song, artist and progress
+  bar, the line just sung small, the current line large with a dark tone sweeping across it from
+  its start to the next line's start (LRCLIB times lines, not words), and the next line small. The
+  walking Pokémon walks on the line's top edge at the sweep point and hops back at each new line.
+  A song without synced lyrics shows the "no lyrics" message for 30 s, then the normal screen until
+  the next song; the OTA, offline and waiting screens and the camera band keep their priority.
+  Karaoke and music mode are independent.
 - **Added:** `GET /playlists?offset=N` and `GET /playlists/play?id=<playlist id>` for the watch,
   signed like `/state`: one page of `/v1/me/playlists` as text, and start-playback with the
   playlist as context. Spotify is asked on the network task, on the kept-open connection.
