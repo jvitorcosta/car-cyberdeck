@@ -47,9 +47,10 @@ The Pokéface watch face that used to live here moved to
 - **Synced lyrics** in the battle dialogue box, from LRCLIB, including accented Latin and
   Japanese/Chinese text.
 - **Karaoke view:** with the yellow deck's KARAOKE switch on, the black deck shows the song's
-  lyrics full screen: song, artist and progress bar at the top, the line just sung small, the
-  current line large with a dark tone sweeping across it as it is sung, the next line small under
-  it. The song's Pokémon walks along the line at the sweep point and hops back at each new line.
+  lyrics full screen, dark and in the colour of the car's inside light: song, artist and progress
+  bar at the top, the line just sung, the current line large (up to three rows) lighting up as it is
+  sung, the next line under it. The song's Pokémon walks along the line at the sweep point and hops
+  back at each new line.
   A song without synced lyrics shows "no lyrics" for 30 s, then the normal screen.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
 - **Night mode** from 18:00 to 06:00 in your time zone: the black deck takes a night palette and a

@@ -49,20 +49,22 @@ version (`FW 2.0.0`), then shows the **main screen**. The look is "Seegson" (Ali
 pale green on black, one hue at three brightnesses, and red kept for problems only (`-- NO LINK`,
 `>OFFLINE`, `>WRONG KEY`). Every screen has faint scanlines and all-caps
 labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; at night see
-[Night](#night); `src/util/yellow/termpal.h` lists each one's figure).
+[Night](#night); `src/util/common/termpal.h` lists each one's figure).
 
 - **Main screen**, top to bottom; it puts first what the car's panel and CarPlay don't show:
   - the header `HONDA CITY TOURING`, with the PS3 controller's battery at the right;
-  - the clock big with the date under it (`FRI 23 OCT`; `--:--` until WiFi has synced the
-    clock), and on the right the trip's time big (`0:16`, hours:minutes since the deck started)
-    over `TRIP` (dim);
-  - both lights on one row: `IN`, a chip of its colour, its name and level (`ROSE 40%`) on the
-    left, `OUT` the same on the right; `OFF` (dim) for a light that is off, `-- NO LINK` (red)
-    when the deck has no link to it;
+  - one row: the clock with the date after it (`FRI 23 OCT`; `--:--` until WiFi has synced the
+    clock), and on the right `TRIP` (dim) and the trip's time (`0:16`, hours:minutes since the deck
+    started);
+  - both lights, big enough to read at a glance: on the left a block of the inside light's colour,
+    `INSIDE` and under it its name and level in large type (`ROSE 40%`), the outside light the same
+    on the right; an outlined block and `OFF` (dim) for a light that is off, `-- NO LINK` (red) and
+    no block when the deck has no link to it;
   - the prompt line: `>` and a block cursor; a message while one shows, and music mode's line
     while it is on;
-  - three big buttons: `[LIGHTS]` opens the Lights page; `KARAOKE` and `MUSIC MODE` are on/off
-    switches, each with an inverted `ON` / `OFF` tag under it. KARAOKE shows the black deck's
+  - three tall buttons filling the bottom half, easy to hit while driving: `[LIGHTS]` opens the
+    Lights page; `KARAOKE` and `MUSIC MODE` are on/off switches, each with an inverted `ON` / `OFF`
+    tag at its bottom right. KARAOKE shows the black deck's
     lyrics on its own screen (see [Karaoke](#karaoke)). The deck shows no song or lyrics itself.
 - **Lights**: `< BACK` returns to the main screen. Tabs for BOTH / INSIDE / OUTSIDE / PRESETS,
   then the status line. On BOTH, INSIDE and OUTSIDE: the 2x4 colour boxes (the chosen one is
@@ -107,7 +109,9 @@ the watch, say "karaoke" (on) or "karaoke off" ("karaokê" and "caraoquê" work 
 
 The yellow deck draws no lyrics. While the switch is on it asks the black deck `GET /karaoke?on=1`
 (signed) at once and then every 10 s; the black deck turns karaoke off 30 s after the last ask, and
-a tap to turn it off sends `on=0`, which stops it at once. What the black deck shows is in the
+a tap to turn it off sends `on=0`, which stops it at once. Each ask carries the inside light's
+colour (`light=N`, or -1 while it is off or has no link): the black deck's karaoke view takes that
+colour, and a change of colour asks at once. What the black deck shows is in the
 [README](../README.md#black-deck) and [ARCHITECTURE.md](ARCHITECTURE.md#black-deck). Karaoke and
 music mode are independent: both can be on together.
 

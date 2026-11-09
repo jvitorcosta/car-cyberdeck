@@ -210,7 +210,9 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
   `[music]` serial line tells each palette sent for a new song or a change.
 - **Karaoke view** (`core/karaoke`, `ui/karaokeview`, `util/black/karaokepick`,
-  `util/black/karaokemode`) — `GET /karaoke?on=1|0` (signed like `/music`, `reqauth`; `400
+  `util/black/karaokemode`, `util/black/karaokepal`, `util/black/lyricface`) — `GET
+  /karaoke?on=1|0` (with `light=N` on `on=1`, the yellow deck's INSIDE light: `karaokemode::parseLight`,
+  0..8 or -1; signed like `/music`, `reqauth`; `400
   on=1 or on=0` otherwise; answers `{"on":1}` or `{"on":0}`) is the yellow deck's switch. `on=1` is a
   keep-alive (sent at once and every 10 s while its KARAOKE switch is on); 30 s without one turns
   karaoke off, and `on=0` stops it at once (`karaokemode`). Logged as `[karaoke] on` / `off` on a
@@ -219,15 +221,19 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   view (searching shows the `lyricmsg` searching message in the line's place); plain lyrics,
   instrumental or none give the "no lyrics" message (`lyricmsg`) for 30 s from when it is known,
   then the normal screen until the next song. Pausing keeps the screen; the OTA screen, the
-  offline and waiting status screens and the camera band keep their priority. The view has the song,
-  artist and progress bar at the top and a dialogue box with the line just sung (small), the current
-  line (font 2 at 2x, up to two rows, `...` past that) and the next line (small). LRCLIB times
-  lines, not words, so a dark tone sweeps the current line evenly from its start to the next line's
-  start (the last line sweeps 5 s or to the song's end). The walking Pokémon walks on the current
-  line's top edge at the sweep point (on a two-row line it stays on row 1, both rows' progress
-  mapped onto it) and hops back (a 300 ms, 14 px arc) at each new line. An instrumental break (a
-  timed blank line) keeps the last line fully swept; before the first line, it waits dim. CJK lines
-  draw with the deck's Unifont glyphs. Karaoke and music mode are independent.
+  offline and waiting status screens and the camera band keep their priority. The view ("night
+  drive") is dark and frameless in the light's colour (`karaokepal`: termpal's three tones of that
+  swatch, pale by day and vivid at night, white for -1, cyan as blue; a change of light or of day and
+  night redraws it whole). It has the song, artist and progress bar at the top, the line just sung
+  (one row), the current line (Atkinson Hyperlegible Bold, GFX tables in `src/black/fonts` from
+  `tools/gfxfont.py`; up to three rows at 22 px, `glyphrun::wrapRows`, else at 18 px, `...` only past
+  that) and the next line (one row). LRCLIB times lines, not words, so the current line lights up
+  near white evenly from its start to the next line's start (the last line sweeps 5 s or to the
+  song's end). The walking Pokémon, at half size (`blitWalker`'s `half`), walks on the current
+  line's top edge at the sweep point (on a longer line it stays on row 1, all rows' progress mapped
+  onto it) and hops back (a 300 ms, 14 px arc) at each new line. An instrumental break (a
+  timed blank line) keeps the last line fully swept; before the first line, it waits unlit. CJK
+  and emoji draw at their 16 px among the letters. Karaoke and music mode are independent.
 
 ## Yellow deck
 
@@ -252,12 +258,15 @@ OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks
   swatch, a level and on/off. The swatch table (`ledlook::SWATCHES`) holds each colour's LED mix
   and screen colour: the grid's eight, then the preset-only cyan. Presets: `util/ledpresets`.
   Voice: `util/ledvoice`. Replies and link words: `util/lightstatus`.
-- **Main screen** (`util/dashtext`, `util/tripmeter`, `util/lights/tripclock`): clock and date,
-  the trip's time, both lights, the prompt line and three items (`[LIGHTS]`, and the KARAOKE and
-  MUSIC MODE switches, each with an ON / OFF tag).
+- **Main screen** (`util/dashtext`, `util/tripmeter`, `util/lights/tripclock`): one row of the
+  clock and date and the trip's time, both lights (a block of each one's colour, its name and level
+  in TITLE), the prompt line and three tall items (`[LIGHTS]`, and the KARAOKE and MUSIC MODE
+  switches, each with an ON / OFF tag).
 - **Karaoke** (the switch only): an on/off state flipped by a tap, the PS3 controller's cross,
   voice or the watch (`util/ledvoice`), not kept over a reboot. The `deck` task sends
-  `GET /karaoke?on=1` at once and every 10 s while it is on; the black deck draws the lyrics.
+  `GET /karaoke?on=1&light=N` (the INSIDE light's shown swatch, -1 off or unlinked) at once, every
+  10 s and on a change of light while it is on (`util/yellow/keepalive`); the black deck draws the
+  lyrics in that colour.
 - **Music mode** (`util/lights/musiclights`): the palette's main colour snapped to one of the
   grid's eight, the inside light at its level under the palette's cap (40 % floor), the outside at 100 %, a ~3 s fade per new
   song. The pages' looks are never saved over while it runs. On and off from the button, voice
