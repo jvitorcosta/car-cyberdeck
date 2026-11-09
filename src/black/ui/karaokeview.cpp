@@ -1,29 +1,33 @@
 #include "karaokeview.h"
-#include "battle.h"
 #include "screen_now.h"
 #include "textdraw.h"
-#include "theme.h"
 #include "lyricmsg.h"
 #include "../core/mem.h"
 #include "../../util/black/glyphrun.h"
+#include "../../util/black/karaokepal.h"
+#include "../../util/black/lyricface.h"
+#include "../../util/common/rgb565.h"
 
 namespace ui {
 
-// ---- layout (320x240): the mockup's option B at half size ----
-static constexpr int TOP_H = 44;                          // song, artist, bar over the top colour
-static constexpr int BAR_X = 8, BAR_Y = 38, BAR_W = 304, BAR_H = 4;
-static constexpr int BOX_X = 4, BOX_Y = 44, BOX_W = 312, BOX_H = 194;
-static constexpr int IN_X = BOX_X + 6, IN_W = BOX_W - 12;  // the box's inside, left to right
-static constexpr int TEXT_X = 16, TEXT_W = 288;           // every line starts at TEXT_X
-static constexpr int PREV_Y = 54;                         // the line just sung, font 2
-static constexpr int ROW1_Y = 120, ROW_H = 32;            // the sung line at 2x; feet on ROW1_Y
-static constexpr int NEXT_Y = 192;                        // the next line, font 2
-static constexpr int SCALE = 2;
-// Walker band: ROW1_Y - BAND_H - 1 - HOP_PX = 73, clear of the line just sung (54..72).
+using lyricface::Face;
 
+// ---- layout (320x240): the mockup's "night drive" (spec 2026-11-09 karaoke look) ----
+static constexpr int TEXT_X = 12, TEXT_W = 296;           // every line starts at TEXT_X
+static constexpr int SONG_Y = 6, ARTIST_Y = 24;           // rows' tops: LINE, SMALL
+static constexpr int BAR_X = TEXT_X, BAR_Y = 42, BAR_W = TEXT_W, BAR_H = 4;
+static constexpr int PREV_Y = 52;                         // the line just sung, LINE
+static constexpr int ROW1_Y = 100;                        // the sung line's first row; the walker's feet
+static constexpr int NEXT_GAP = 8;                        // the next line, under the sung line's last row
+// The walker's band: half size (32x16 at most) and the hop (karaokepick::HOP_PX, 14) above ROW1_Y,
+// rows 70..100, clear of the line just sung (52..70 at LINE's line height).
+
+struct Colours { uint16_t bg, song, artist, barOn, barOff, lit, unsung, prev, next; };
+static Colours s_c;                          // setKaraokeLook
 static glyphrun::Item* s_items = nullptr;   // the sung line, decoded (PSRAM)
-static size_t s_aEnd = 0, s_bStart = 0, s_bN = 0;
-static int s_w1 = 0, s_w2 = 0;              // its rows' widths at 2x; both 0 for a message
+static glyphrun::Rows s_rows{};             // its rows; n 0 for nothing to sweep
+static Face s_face = Face::SUNG;            // its face: SUNG, or SUNG_SMALL when SUNG won't fit
+static int s_w[glyphrun::MAX_ROWS] = {};    // its rows' widths; all 0 for a message
 static int s_lit = 0;                       // px swept so far
 static walkrect::Rect s_walk{0, 0, 0, 0};
 static int s_clipX = 0, s_clipY = 0, s_clipW = 320, s_clipH = 240;   // setKaraokeClip
@@ -35,130 +39,147 @@ void setKaraokeClip(int x, int y, int w, int h) {
     s_clipH = h;
 }
 
-// a and b mixed 1:1 per channel (RGB565): the dim tones between the text and the box.
-static uint16_t mix(uint16_t a, uint16_t b) {
-    return (uint16_t)((((a & 0xF81F) + (b & 0xF81F)) >> 1 & 0xF81F) |
-                      (((a & 0x07E0) + (b & 0x07E0)) >> 1 & 0x07E0));
+void setKaraokeLook(int light, bool night) {
+    const karaokepal::Pal p = karaokepal::of(light, night);
+    s_c = {rgb565::hex(p.bg),     rgb565::hex(p.song),  rgb565::hex(p.artist),
+           rgb565::hex(p.barOn),  rgb565::hex(p.barOff), rgb565::hex(p.lit),
+           rgb565::hex(p.unsung), rgb565::hex(p.prev),  rgb565::hex(p.next)};
 }
-static uint16_t dimTone() { return mix(mix(theme::pal().text, theme::pal().dlgFill), theme::pal().dlgFill); }
 
-static void drawRow(TFT_eSPI& t, int row, uint16_t fg, uint16_t shadow) {
-    if (row == 0) drawRunScaled(t, s_items, s_aEnd, TEXT_X, ROW1_Y, fg, shadow, TL_DATUM, SCALE);
-    else drawRunScaled(t, s_items + s_bStart, s_bN, TEXT_X, ROW1_Y + ROW_H, fg, shadow, TL_DATUM, SCALE);
+static int rowY(int row) { return ROW1_Y + row * lyricface::lineHeight(s_face); }
+
+static void drawRow(TFT_eSPI& t, int row, uint16_t fg) {
+    drawRunFace(t, s_items + s_rows.start[row], s_rows.end[row] - s_rows.start[row], TEXT_X, rowY(row), fg,
+                s_face);
 }
 
 // The lit tone over a row, clipped to x0..x1 (from TEXT_X) inside the screens' clip (with vpDatum
 // false TFT_eSPI's viewport getters say the whole screen, so main hands the clip over).
 static void litBand(TFT_eSPI& t, int row, int x0, int x1) {
-    const int y = ROW1_Y + row * ROW_H;
+    const int y = rowY(row);
     const int cx0 = max(TEXT_X + x0, s_clipX), cy0 = max(y, s_clipY);
-    const int cx1 = min(TEXT_X + x1 + SCALE, s_clipX + s_clipW);   // + shadow
-    const int cy1 = min(y + ROW_H + SCALE, s_clipY + s_clipH);
+    const int cx1 = min(TEXT_X + x1, s_clipX + s_clipW);
+    const int cy1 = min(y + lyricface::lineHeight(s_face), s_clipY + s_clipH);
     if (cx1 <= cx0 || cy1 <= cy0) return;
     t.setViewport(cx0, cy0, cx1 - cx0, cy1 - cy0, false);
-    drawRow(t, row, theme::pal().text, theme::pal().dlgShadow);
+    drawRow(t, row, s_c.lit);
     t.setViewport(s_clipX, s_clipY, s_clipW, s_clipH, false);
 }
 
+// One row of text in a face at y, cut with "..." to TEXT_W.
+static void drawLine(TFT_eSPI& t, const char* utf8, Face f, int y, uint16_t fg, bool upper = false) {
+    constexpr size_t MAX_ITEMS = 96;   // more than TEXT_W holds in any face
+    glyphrun::Item items[MAX_ITEMS];
+    size_t n = glyphrun::decode(utf8, items, MAX_ITEMS, faceWidth, wideWidth, faceCtx(f), upper, emojiWidth,
+                                emojiSeq);
+    n = glyphrun::fit(items, n, MAX_ITEMS, TEXT_W, faceWidth, faceCtx(f));
+    drawRunFace(t, items, n, TEXT_X, y, fg, f);
+}
+
+// The sung line (or a message) in s_items, wrapped in the largest face that fits it in three rows;
+// "..." on the last row only when even SUNG_SMALL doesn't.
+static void layOut(const char* sung, size_t cap) {
+    size_t n = 0;
+    for (Face f : {Face::SUNG, Face::SUNG_SMALL}) {
+        s_face = f;
+        n = glyphrun::decode(sung, s_items, cap, faceWidth, wideWidth, faceCtx(f), false, emojiWidth, emojiSeq);
+        s_rows = glyphrun::wrapRows(s_items, n, TEXT_W, 3 * faceWidth('.', faceCtx(f)), glyphrun::MAX_ROWS);
+        if (!s_rows.ellipsis) return;
+    }
+    // past the last row's end nothing is drawn, so "..." can overwrite it (s_items has room for 3)
+    size_t& end = s_rows.end[s_rows.n - 1];
+    for (int i = 0; i < 3; ++i)
+        s_items[end++] = {glyphrun::Kind::Ascii, '.', txt::Mark::None, '.',
+                          (uint8_t)faceWidth('.', faceCtx(s_face))};
+}
+
 static void drawLines(TFT_eSPI& t, const shared::KaraokeLines& k, const char* message) {
-    const uint16_t fill = theme::pal().dlgFill;
-    t.fillRect(IN_X, PREV_Y - 2, IN_W, 20, fill);
-    t.fillRect(IN_X, ROW1_Y, IN_W, 2 * ROW_H + SCALE, fill);
-    t.fillRect(IN_X, NEXT_Y - 2, IN_W, 20, fill);
-    s_aEnd = s_bStart = s_bN = 0;
-    s_w1 = s_w2 = s_lit = 0;
+    const int lineH = lyricface::lineHeight(Face::LINE);
+    t.fillRect(0, PREV_Y, t.width(), lineH, s_c.bg);
+    t.fillRect(0, ROW1_Y, t.width(), t.height() - ROW1_Y, s_c.bg);
+    s_rows = {};
+    s_w[0] = s_w[1] = s_w[2] = 0;
+    s_lit = 0;
 
     // Before the first line the first line waits in the sung line's place, nothing under it.
     const bool intro = !message && !k.cur[0];
     const char* sung = message ? message : (intro ? k.next : k.cur);
-    if (!message && k.prev[0])
-        drawText(t, k.prev, TEXT_X, PREV_Y, dimTone(), fill, TL_DATUM, TEXT_W);
-    if (!message && !intro && k.next[0])
-        drawText(t, k.next, TEXT_X, NEXT_Y, mix(theme::pal().text, fill), fill, TL_DATUM, TEXT_W);
+    if (!message && k.prev[0]) drawLine(t, k.prev, Face::LINE, PREV_Y, s_c.prev);
 
     constexpr size_t MAX_ITEMS = lyricmsg::TEXT_CAP;   // one item per byte at most; +3 for "..."
     if (!s_items) s_items = (glyphrun::Item*)mem::bigAlloc((MAX_ITEMS + 3) * sizeof(glyphrun::Item));
-    if (!s_items || !sung[0]) return;
-    const size_t n = glyphrun::decode(sung, s_items, MAX_ITEMS, asciiWidth2, wideWidth, &t, false,
-                                      emojiWidth, emojiSeq);
-    if (!n) return;
-    const glyphrun::Wrap w = glyphrun::wrapTwo(s_items, n, TEXT_W / SCALE, 3 * asciiWidth2('.', &t));
-    s_aEnd = w.aEnd;
-    if (w.bStart < w.bEnd) {
-        s_bStart = w.bStart;
-        s_bN = w.bEnd - w.bStart;
-        if (w.bEllipsis) {   // items past bEnd are not drawn, so "..." can overwrite them
-            for (int i = 0; i < 3; ++i)
-                s_items[w.bEnd + i] = {glyphrun::Kind::Ascii, '.', txt::Mark::None, '.',
-                                       (uint8_t)asciiWidth2('.', &t)};
-            s_bN += 3;
-        }
+    int bottom = ROW1_Y;
+    if (s_items && sung[0]) {
+        layOut(sung, MAX_ITEMS);
+        // A message reads in the lit tone at once; a lyric line starts unsung and gets swept.
+        for (int r = 0; r < s_rows.n; ++r) drawRow(t, r, message ? s_c.lit : s_c.unsung);
+        bottom = rowY(s_rows.n);
+        if (!message)
+            for (int r = 0; r < s_rows.n; ++r)
+                s_w[r] = glyphrun::width(s_items + s_rows.start[r], s_rows.end[r] - s_rows.start[r]);
+        if (message) s_rows.n = 0;   // nothing to sweep
     }
-    // A message reads in the text tone at once; a lyric line starts dim and gets swept.
-    const uint16_t fg = message ? theme::pal().text : dimTone();
-    const uint16_t sh = message ? theme::pal().dlgShadow : fill;
-    drawRow(t, 0, fg, sh);
-    if (s_bN) drawRow(t, 1, fg, sh);
-    if (!message) {
-        s_w1 = glyphrun::width(s_items, s_aEnd) * SCALE;
-        s_w2 = s_bN ? glyphrun::width(s_items + s_bStart, s_bN) * SCALE : 0;
+    if (!message && !intro && k.next[0]) {
+        const int y = min(bottom + NEXT_GAP, t.height() - lineH);
+        drawLine(t, k.next, Face::LINE, y, s_c.next);
     }
 }
 
 void drawKaraokeBar(TFT_eSPI& t, const AppState& st) {
     const float frac = st.durationMs ? (float)st.progressMs / (float)st.durationMs : 0.0f;
     const int fw = (int)(frac > 1.0f ? BAR_W : frac * BAR_W);
-    t.fillRect(BAR_X, BAR_Y, fw, BAR_H, theme::EXP_BLUE);
-    t.fillRect(BAR_X + fw, BAR_Y, BAR_W - fw, BAR_H, theme::HP_EMPTY);
+    t.fillRect(BAR_X, BAR_Y, fw, BAR_H, s_c.barOn);
+    t.fillRect(BAR_X + fw, BAR_Y, BAR_W - fw, BAR_H, s_c.barOff);
 }
 
 void drawKaraoke(TFT_eSPI& t, const AppState& st, const shared::KaraokeLines& k, const char* message,
                  bool whole) {
     if (whole) {
-        t.fillRect(0, 0, t.width(), TOP_H, theme::pal().top);
-        drawText(t, st.trackName, 8, 4, theme::pal().topText, theme::pal().boxBorder, TL_DATUM, 304, true);
-        drawText(t, st.artist, 8, 20, theme::CD_SILVER, theme::pal().boxBorder, TL_DATUM, 304);
+        t.fillScreen(s_c.bg);
+        drawLine(t, st.trackName, Face::LINE, SONG_Y, s_c.song, true);
+        drawLine(t, st.artist, Face::SMALL, ARTIST_Y, s_c.artist);
         drawKaraokeBar(t, st);
-        t.fillRect(0, BOX_Y, t.width(), t.height() - BOX_Y, theme::pal().top);
-        dialogueBox(t, BOX_X, BOX_Y, BOX_W, BOX_H);
         s_walk = {0, 0, 0, 0};
     } else if (message && s_walk.w) {   // a message has no Pokémon on it
-        t.fillRect(s_walk.x, s_walk.y, s_walk.w, s_walk.h, theme::pal().dlgFill);
+        t.fillRect(s_walk.x, s_walk.y, s_walk.w, s_walk.h, s_c.bg);
         s_walk = {0, 0, 0, 0};
     }
     drawLines(t, k, message);
 }
 
-int karaokeLineW() { return s_w1 + s_w2; }
+int karaokeLineW() { return s_w[0] + s_w[1] + s_w[2]; }
 
 void drawKaraokeSweep(TFT_eSPI& t, int px) {
-    const int total = s_w1 + s_w2;
+    const int total = karaokeLineW();
     if (!total) return;
     if (px > total) px = total;
-    if (px < s_lit) {   // the song went back inside the line: dim again, sweep from the start
-        drawRow(t, 0, dimTone(), theme::pal().dlgFill);
-        if (s_bN) drawRow(t, 1, dimTone(), theme::pal().dlgFill);
+    if (px < s_lit) {   // the song went back inside the line: unsung again, sweep from the start
+        for (int r = 0; r < s_rows.n; ++r) drawRow(t, r, s_c.unsung);
         s_lit = 0;
     }
     if (px <= s_lit) return;
-    if (s_lit < s_w1) litBand(t, 0, s_lit, min(px, s_w1));
-    if (px > s_w1) litBand(t, 1, max(s_lit, s_w1) - s_w1, px - s_w1);
+    int rowStart = 0;   // the row's first px in the whole line's sweep
+    for (int r = 0; r < s_rows.n; ++r) {
+        const int a = max(s_lit, rowStart), b = min(px, rowStart + s_w[r]);
+        if (b > a) litBand(t, r, a - rowStart, b - rowStart);
+        rowStart += s_w[r];
+    }
     s_lit = px;
 }
 
 int karaokeWalkerOffset(int px) {
-    const int total = s_w1 + s_w2;
+    const int total = karaokeLineW();
     if (!total) return 0;
     if (px > total) px = total;
-    return (int)((int64_t)px * s_w1 / total);
+    return (int)((int64_t)px * s_w[0] / total);
 }
 
 void drawKaraokeWalker(TFT_eSPI& t, uint32_t animMs, int step, int offset, int lift) {
-    const int w = walkerWidth();
+    const int w = walkerWidth() / 2;
     if (!w) return;
     int cx = TEXT_X + offset;
-    if (cx < IN_X + w / 2) cx = IN_X + w / 2;   // the whole sprite inside the box
-    if (cx > IN_X + IN_W - w / 2) cx = IN_X + IN_W - w / 2;
-    blitWalker(t, cx, ROW1_Y - lift, animMs, step, theme::pal().dlgFill, s_walk);
+    if (cx < TEXT_X + w / 2) cx = TEXT_X + w / 2;   // the whole sprite on screen
+    if (cx > TEXT_X + TEXT_W - w / 2) cx = TEXT_X + TEXT_W - w / 2;
+    blitWalker(t, cx, ROW1_Y - lift, animMs, step, s_c.bg, s_walk, true);
 }
 }  // namespace ui
