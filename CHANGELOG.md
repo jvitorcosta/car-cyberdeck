@@ -18,6 +18,23 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Fixed:** the deck restarted when the PS3 controller connected while the heap was short (music
+  mode just turned on, a lyrics poll in flight): esp32-ps3 took a 4 KB buffer for its few-byte
+  "start sending reports" command and wrote through NULL when that failed. The link now swaps that
+  send for one that allocates what the command needs and retries it (`yellow/padhid`).
+- **Fixed:** the PS3 controller's taps went missing, X and O the most: on the radio's default
+  balance only ~20 of its reports a second came through next to WiFi and the lights, so a quick tap
+  fell between two. Bluetooth now has the radio first (~45 a second at the desk, and fewer WiFi
+  drops to the black deck, not more), and a tap shorter than the loop's pass is still caught.
+- **Fixed:** a finger resting on L2 or R2 changed the preset and buzzed: the triggers count past
+  half travel now, by their pressure (`util/padtrigger`), and the junk report a new connection can
+  start with (every face button down at once) is dropped.
+- **Changed:** a burst of presses sends each light its latest look at most every 300 ms instead of
+  every one (the inside controller takes ~7 writes a second, a look is four).
+- **Added:** why the deck last restarted: `[boot] reset reason` and `[crash] last run: panic after
+  264s: heap 22108 (min 21224, block 5876), 1 failed allocs (last 4112 B), at music ask`, with the
+  last six runs kept in NVS for a USB read after a drive (`common/core/crashlog`). A failed
+  allocation logs its size as it happens, and `[mem]` comes every 10 s with the largest free block.
 - **Removed:** the weather, the speed-camera band, the car-health screens (pre-flight check, trip
   complete, the trip band and the car's warnings), fill-ups by voice and updates over WiFi. With
   the PS3 controller on Bluedroid's dual mode the deck had ~16 KB of heap left and crashed (lwIP
