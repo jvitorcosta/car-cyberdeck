@@ -13,6 +13,9 @@ enum class Mark : uint8_t { None, Acute, Grave, Circumflex, Tilde, Diaeresis, Ce
 // may be nullptr. Letters that fold to two characters (Æ, ß) carry no mark. Returns the
 // folded length.
 size_t foldMarks(const char* src, char* dst, Mark* marks, size_t n);
+// foldMarks undone for one letter: the Latin-1 code of base with mark ('c' + Cedilla -> 0xE7), for a
+// font that has the accented letters; 0 when Latin-1 has no such letter (or mark is None).
+uint8_t latin1(char base, Mark mark);
 // UTF-8 -> Latin-1 bytes, the yellow deck's lettering (its fonts cover 0x20-0xFF): ASCII and
 // U+00A1..00FF (accented letters, the degree sign) become one byte each, the no-break space and the
 // other Unicode spaces a plain ' ' (lines wrap at it); above that, curly quotes and ʼ fold to ' and ",

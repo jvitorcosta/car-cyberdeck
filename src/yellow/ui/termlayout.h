@@ -1,22 +1,19 @@
 #pragma once
 // Where the yellow deck's car-LED panel (ledpanel.cpp) puts its text, as far as fitting goes: the
-// x of each fixed label in its rect, the boot's typed lines, the dashboard's bands and the lyric
-// pitches. Shared with test_termfont, which checks every fixed label fits at its termfont Face with
+// x of each fixed label in its rect, the boot's typed lines and the dashboard's bands. Shared with test_termfont, which checks every fixed label fits at its termfont Face with
 // room to spare. PURE, host-tested.
 #include "termfont.h"
 
 namespace termlayout {
 
-// The Menu's three items (100 px wide), in deckmenu::Item order: the label (BODY) top left, its caps'
-// top ROW_TEXT_Y and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
+// The Menu's three items (100x106), in deckmenu::Item order: the label (BODY) at the left, its caps'
+// top ROW_TEXT_Y (centred top to bottom) and its x ROW_TEXT_X from the rect's; under it, right-aligned, the item's tag while
 // it has one (SMALL, an inverted mini-label: TAG_PAD px of fill around the caps, TAG_RIGHT in from
-// the item's right edge, TAG_BOTTOM up from its bottom): KARAOKE's LIVE while it opens, MUSIC MODE's ON
-// or OFF (always one of them). "[KARAOKE]" and LIVE side by side don't fit 100 px, so the tag goes under
-// the label, and the label always sits high (it doesn't jump when a tag comes).
+// the item's right edge, TAG_BOTTOM up from its bottom): KARAOKE's and MUSIC MODE's ON or OFF (always
+// one of them). "[KARAOKE]" and a tag side by side don't fit 100 px, so the tag goes under the label, and the label always sits high (it doesn't jump when a tag comes).
 constexpr const char* MENU_ITEMS[] = {"[LIGHTS]", "[KARAOKE]", "MUSIC MODE"};
 constexpr int N_MENU_ITEMS = sizeof(MENU_ITEMS) / sizeof(MENU_ITEMS[0]);
-constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 7;
-constexpr const char* LIVE_TAG = "LIVE";
+constexpr int ROW_TEXT_X = 8, ROW_TEXT_Y = 47;
 constexpr const char* ON_TAG = "ON";
 constexpr const char* OFF_TAG = "OFF";
 constexpr int TAG_PAD = 3, TAG_RIGHT = 6, TAG_BOTTOM = 5;
@@ -46,8 +43,8 @@ constexpr const char* BOOT_LINES[] = {"WELCOME TO CYBERDECK", ">SET TERMINAL/INQ
 constexpr int N_BOOT = sizeof(BOOT_LINES) / sizeof(BOOT_LINES[0]);
 constexpr int BOOT_X = 8, BOOT_Y0 = 2, BOOT_DY = 13;
 
-// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, NOW_BAND, LIGHTS_BAND,
-// PROMPT_BAND, then the items at the bottom), each band but the prompt line under a MID rule from x 4
+// ---- The Menu: a dashboard of stacked bands (deckmenu's HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND,
+// then the items at the bottom), each band but the prompt line under a MID rule from x 4
 // to 315 (from the clock band down, the next band's first row). Text starts at DASH_X; right-aligned
 // text ends at DASH_RIGHT. A _Y is the caps' top row, a _BASE the baseline (the row under the caps),
 // as ledpanel's text() places them.
@@ -62,42 +59,33 @@ constexpr const char* PAD_LABEL = "PAD";
 constexpr int PAD_GAP = 4, PAD_ICON_W = 19, PAD_NUB_W = 2, PAD_NUB_H = 4, PAD_CELL_W = 3, PAD_CELL_GAP = 1;
 // The header's PAD part, label to nub, from its left edge to DASH_RIGHT.
 inline int padWidth() { return termfont::width(termfont::Face::SMALL, PAD_LABEL) + PAD_GAP + PAD_ICON_W + PAD_NUB_W; }
-// the clock (BIG) with the date (SMALL) under it left of DASH_SPLIT; the trip's time (BIG) with
-// TRIP_LABEL (SMALL) under it right of it, right-aligned; the band ends at CLOCK_RULE_Y.
+// One row: the clock (TITLE) and CLOCK_GAP after it the date (SMALL) left of DASH_SPLIT; right of
+// it, right-aligned, the trip's time (TITLE) and CLOCK_GAP before it TRIP_LABEL (SMALL). The caps
+// are centred between the header's rule and CLOCK_RULE_Y, the SMALL words on the TITLE caps' bottom.
 constexpr int DASH_SPLIT = 160;
-constexpr int CLOCK_Y = 29, DATE_Y = 58, WORDS_Y = 58, CLOCK_RULE_Y = 76;
+constexpr int CLOCK_Y = 29, DATE_Y = 33, WORDS_Y = 33, CLOCK_RULE_Y = 52, CLOCK_GAP = 8;
 constexpr const char* TRIP_LABEL = "TRIP";
-// What the black deck plays, down to NOW_RULE_Y: the track (TITLE, TEXT) over the artist (SMALL, MID)
-// with the time right-aligned on the artist's row (SMALL, DIM: "1:23 / 3:45", NOW_PAUSED while
-// paused; the artist stops NOW_TIME_GAP short of NOW_TIME_W, the widest time), then the progress
-// line NOW_BAR_H tall (the played part solid, the rest a DIM hairline). Without a song, one word on
-// the track's row (TITLE, DIM; ALERT for the wrong key) and the hairline.
-constexpr int NOW_TRACK_Y = 85, NOW_ARTIST_Y = 107, NOW_BAR_Y = 124, NOW_BAR_H = 3, NOW_RULE_Y = 135;
-constexpr int NOW_TIME_GAP = 8;
-constexpr const char* NOW_TIME_WIDEST = "88:88 / 88:88";
-constexpr const char* NOW_PAUSED = "PAUSED";
-constexpr const char* NOW_NOTHING = ">NOTHING PLAYING";
-constexpr const char* NOW_NO_SIGNAL = ">NO SIGNAL";
-constexpr const char* NOW_WRONG_KEY = ">WRONG KEY";
-inline int nowTimeW() { return termfont::width(termfont::Face::SMALL, NOW_TIME_WIDEST); }
-inline int nowArtistW() { return DASH_RIGHT - DASH_X - nowTimeW() - NOW_TIME_GAP; }
-// the lights on one row (BODY, on LIGHT_ROW_BASE, the caps centred between the rules): INSIDE left of
-// a vertical MID rule at LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: its label, a chip
-// of its colour as tall as the caps (LIGHT_CHIP_W wide) LIGHT_GAP after it, and LIGHT_GAP after that
-// what the light shows ("YELLOW 100%", "OFF", "-- NO LINK" with no chip)
-constexpr const char* LIGHT_LABELS[] = {"IN", "OUT"};  // the controllers' order: inside, outside
+inline int dateX() { return DASH_X + termfont::width(termfont::Face::TITLE, "88:88") + CLOCK_GAP; }
+// the lights, big enough to read from the corner of an eye: INSIDE left of a vertical MID rule at
+// LIGHTS_SPLIT, OUTSIDE right of it, each half from lightX: a block of its colour LIGHT_BLOCK_W x
+// LIGHT_BLOCK_H from LIGHT_BLOCK_Y, and LIGHT_GAP after it its label (SMALL, caps top LIGHT_LABEL_Y)
+// over what it shows (LIGHT_VALUE_FACE on LIGHT_VALUE_BASE: "YELLOW 100%", "OFF", "-- NO LINK" with
+// no block). TITLE fits "PURPLE 100%" only with a block 28 px wide (test_termfont).
+constexpr const char* LIGHT_LABELS[] = {"INSIDE", "OUTSIDE"};  // the controllers' order
 constexpr int N_LIGHT_LABELS = sizeof(LIGHT_LABELS) / sizeof(LIGHT_LABELS[0]);
-constexpr int LIGHT_ROW_BASE = 157, LIGHTS_RULE_Y = 166, LIGHTS_SPLIT = 159;
-constexpr int LIGHT_CHIP_W = 14, LIGHT_CHIP_H = 11, LIGHT_GAP = 6;
+constexpr int LIGHTS_RULE_Y = 101, LIGHTS_SPLIT = 159;
+constexpr int LIGHT_BLOCK_W = 28, LIGHT_BLOCK_H = 34, LIGHT_BLOCK_Y = 60, LIGHT_GAP = 6;
+constexpr int LIGHT_LABEL_Y = 60, LIGHT_VALUE_BASE = 94;
+constexpr termfont::Face LIGHT_VALUE_FACE = termfont::Face::TITLE;
 // the prompt line (SMALL, on PROMPT_BASE, the caps centred between the lights' rule and the items): a
 // message while one shows, music mode's line, else PROMPT_IDLE; the block cursor (a SMALL cell)
 // after it, by DASH_RIGHT
 constexpr const char* PROMPT_IDLE = ">";
-constexpr int PROMPT_BASE = 185;
+constexpr int PROMPT_BASE = 121;
 // music mode's line: once the song's palette came, MUSIC_PROMPT and its swatch as a MUSIC_CHIP px
 // square (SMALL's caps, on the baseline) MUSIC_CHIP_GAP after it and the swatch's name MUSIC_CHIP_GAP
 // after that (">MUSIC [chip] PINK"); before, MUSIC_WAITING alone; with no palette for a while,
-// MUSIC_NO_SIGNAL alone (not KARAOKE's ">KARAOKE: NO SIGNAL")
+// MUSIC_NO_SIGNAL alone
 constexpr const char* MUSIC_PROMPT = ">MUSIC";
 constexpr const char* MUSIC_WAITING = ">MUSIC: WAITING";
 constexpr const char* MUSIC_NO_SIGNAL = ">MUSIC: NO SIGNAL";
@@ -107,23 +95,8 @@ constexpr int MUSIC_CHIP = 10, MUSIC_CHIP_GAP = 5;
 inline int songChipX() { return DASH_X + termfont::advance(termfont::Face::SMALL, MUSIC_PROMPT) + MUSIC_CHIP_GAP; }
 inline int songNameX() { return songChipX() + MUSIC_CHIP + MUSIC_CHIP_GAP; }
 
-// A light's half of the lights row (0 inside, 1 outside): where it starts, its chip, its text.
+// A light's half of the lights band (0 inside, 1 outside): where it starts (its block), its text.
 inline int lightX(int i) { return i == 0 ? DASH_X : LIGHTS_SPLIT + DASH_X; }
-inline int lightChipX(int i) { return lightX(i) + termfont::advance(termfont::Face::BODY, LIGHT_LABELS[i]) + LIGHT_GAP; }
-inline int lightTextX(int i) { return lightChipX(i) + LIGHT_CHIP_W + LIGHT_GAP; }
-
-// The KARAOKE body: the line due now in BIG over up to 3 lines KARAOKE_BIG_DY apart (or, when that
-// would cut it, TITLE over up to 4 lines KARAOKE_FIT_DY apart) in KARAOKE_BIG_H rows from KARAOKE_BIG_Y;
-// the next line in BODY over up to 2 lines KARAOKE_NEXT_DY apart in KARAOKE_NEXT_H rows from
-// KARAOKE_NEXT_Y; KARAOKE_W px wide. A BIG block holding Japanese (ui/lyricrun: 2x Unifont glyphs, 32
-// rows centred on the caps) goes KARAOKE_WIDE_DY apart, 3 lines of it a little taller than the area;
-// the big area's clear, rows KARAOKE_BIG_CLEAR_Y up to KARAOKE_BIG_CLEAR_END, covers every block with
-// its accents.
-constexpr int KARAOKE_W = 312;
-constexpr int KARAOKE_BIG_Y = 56, KARAOKE_BIG_H = 90, KARAOKE_BIG_DY = 30, KARAOKE_FIT_DY = 22, KARAOKE_WIDE_DY = 32;
-constexpr int KARAOKE_BIG_CLEAR_Y = 44, KARAOKE_BIG_CLEAR_END = 147;
-constexpr int KARAOKE_NEXT_Y = 156, KARAOKE_NEXT_H = 40, KARAOKE_NEXT_DY = 20;
-// The row of a big-area block's first line's tallest ASCII glyph: n lines dy apart, centred.
-constexpr int karaokeBlockY(int n, int dy) { return KARAOKE_BIG_Y + (KARAOKE_BIG_H - n * dy) / 2; }
+inline int lightTextX(int i) { return lightX(i) + LIGHT_BLOCK_W + LIGHT_GAP; }
 
 }  // namespace termlayout

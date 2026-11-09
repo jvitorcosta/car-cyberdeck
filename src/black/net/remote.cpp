@@ -7,6 +7,7 @@
 #include "../../common/net/wifi.h"
 #include "../audio/greeting.h"
 #include "../audio/musicsvc.h"
+#include "../core/karaoke.h"
 #include "../../util/common/remotegate.h"
 #include "../../util/black/qrfit.h"
 #include "../../util/black/netplan.h"
@@ -179,6 +180,17 @@ static void handleMusic() {
     }
 }
 
+// The karaoke view (core/karaoke): the yellow deck sends on=1 every 10 s while its KARAOKE switch is
+// on (with light=N, its INSIDE light's swatch, for the view's colour), on=0 to stop at once. Signed by the yellow deck; the key also does (a test by hand).
+static void handleKaraoke() {
+    if (!reqauth::pass(*s_server, s_gate, "/karaoke", "wrong key")) return;
+    const String on = s_server->arg("on");
+    if (on == "1") karaoke::keepAlive(karaokemode::parseLight(s_server->arg("light").c_str()));
+    else if (on == "0") karaoke::stop();
+    else { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
+    s_server->send(200, "application/json", on == "1" ? "{\"on\":1}" : "{\"on\":0}");
+}
+
 // The watch's playlist picker (util/black/playlists): signed, or the key. Spotify is asked on the
 // network task (spotify/client), so these wait for it: a page of the owner's playlists, or one played.
 static void handlePlaylists() {
@@ -311,6 +323,7 @@ void begin(bool (*hold)()) {
     s_server->on("/state", HTTP_GET, handleState);
     s_server->on("/music", HTTP_GET, handleMusic);
     s_server->on("/music/debug", HTTP_GET, handleMusicDebug);
+    s_server->on("/karaoke", HTTP_GET, handleKaraoke);
     s_server->on("/playlists", HTTP_GET, handlePlaylists);
     s_server->on("/playlists/play", HTTP_GET, handlePlaylistPlay);
     s_server->on("/trip/reset", HTTP_POST, [] {

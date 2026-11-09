@@ -1,6 +1,7 @@
 #include "shared.h"
 #include "../../util/common/text.h"
 #include "../../util/black/genre.h"
+#include "../../util/black/karaokepick.h"
 #include <string.h>
 #include "../lyrics/lrclib.h"
 #include <freertos/FreeRTOS.h>
@@ -88,6 +89,21 @@ void lyricPair(uint32_t gen, uint32_t posMs, LyricPair& out) {
         txt::copy(out.next, lyricbuf::lineText(l, p.next), sizeof(out.next));
         out.nextStartMs = l.lines[p.next].tMs;
     }
+}
+
+void karaokeLines(uint32_t gen, uint32_t posMs, uint32_t durationMs, KaraokeLines& out) {
+    Guard g;
+    out.status = (gen != 0 && s_statusGen == gen) ? s_status : lyricstatus::Status::Searching;
+    out.prev[0] = out.cur[0] = out.next[0] = '\0';
+    out.startMs = out.endMs = 0;
+    if (gen == 0 || s_lyricsGen != gen || !lyricsvc::arena()) return;
+    const lyricbuf::Lyrics& l = *lyricsvc::arena();
+    const karaokepick::Pick p = karaokepick::pick(l, posMs, durationMs);
+    txt::copy(out.prev, lyricbuf::lineText(l, p.prev), sizeof(out.prev));
+    txt::copy(out.cur, lyricbuf::lineText(l, p.cur), sizeof(out.cur));
+    txt::copy(out.next, lyricbuf::lineText(l, p.next), sizeof(out.next));
+    out.startMs = p.startMs;
+    out.endMs = p.endMs;
 }
 
 bool takeWalker(uint32_t gen) {

@@ -18,6 +18,27 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Changed:** KARAOKE on the main screen is an on/off switch like MUSIC MODE (an `ON` / `OFF` tag;
+  a tap or the PS3 controller's cross on the focus toggles it; `>KARAOKE OFF`, and when it goes on
+  `>KARAOKE: CONNECTING...` until the black deck answers, then `>KARAOKE ON`, or `>BLACK DECK NOT
+  ANSWERING` after two misses in a row while it keeps asking).
+  The lyrics are drawn by the black deck now. While it is on the deck sends the black deck `GET
+  /karaoke?on=1` at once and every 10 s. Voice and the watch say "karaoke" / "karaoke off" (also
+  "karaokê", "caraoquê"). It is not kept over a reboot. Each ask carries the inside light's colour
+  (`light=N`, the one its own theme takes, -1 when it is off) for the karaoke view's colour, and a change of
+  colour asks at once.
+- **Changed:** the terminal is in the vivid night colours all day too (the day's pale tints looked
+  dull); night only dims the backlight.
+- **Changed:** the main screen's top is one row now (the clock and date left, the trip's time
+  right); the lights each get a block of their colour with INSIDE / OUTSIDE and the colour and
+  level in large type; the three items are more than twice as tall (106 px), easier to hit while
+  driving.
+- **Removed:** the KARAOKE screen (the lyrics page), the poll of the black deck's `/state` (the
+  heaviest WiFi and heap load the deck had), the main screen's now-playing band and the Japanese
+  font (`data/jp16.bin`, `tools/gen_jp_font.py`). The `karaoke` task is the `deck` task (6 KB of stack): it only
+  sends the music and karaoke keep-alives, and the `[mem]` line says `deck`. At the desk the free
+  heap went from ~31-33 KB (low-water 25.7 KB, largest block 11.7 KB) to ~44-52 KB (low-water
+  41 KB, largest block 27.6 KB).
 - **Fixed:** the deck restarted when the PS3 controller connected while the heap was short (music
   mode just turned on, a lyrics poll in flight): esp32-ps3 took a 4 KB buffer for its few-byte
   "start sending reports" command and wrote through NULL when that failed. The link now swaps that
@@ -59,6 +80,21 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the rest. The scanlines lose their amber tint.
 
 ### Black deck (S3)
+- **Added:** a full-screen karaoke view, switched by the yellow deck's KARAOKE item: `GET
+  /karaoke?on=1|0` (signed like `/music`; `on=1` is a keep-alive every 10 s, 30 s without one or
+  `on=0` turns it off; `[karaoke] on` / `off` in the log). It has the yellow deck's terminal look, so
+  the two decks match: black, in the yellow deck's theme (the colour of the car's inside light,
+  `light=N` with each `on=1`; vivid day and night; green with the light off) and its VT323
+  lettering. It shows the song, artist and progress bar, the line just sung, the current line large
+  (three rows at 36 px, else at 24 px, before anything is cut) lighting up as it is sung from its
+  start to the next line's start (LRCLIB times lines, not words), and the next line. The song and
+  the artist share the top row (the song left, the artist right); the walking Pokémon, full size,
+  walks on the progress bar under them at the song's progress, as on the normal screen, so it doesn't
+  pull the eye along the lyrics. The bar is a thin line that fills solid as the song plays. Switched
+  off and on again during a song without lyrics, it shows the "no lyrics" message again. The normal screen is unchanged.
+  A song without synced lyrics shows the "no lyrics" message for 30 s, then the normal screen until
+  the next song; the OTA, offline and waiting screens and the camera band keep their priority.
+  Karaoke and music mode are independent.
 - **Added:** `GET /playlists?offset=N` and `GET /playlists/play?id=<playlist id>` for the watch,
   signed like `/state`: one page of `/v1/me/playlists` as text, and start-playback with the
   playlist as context. Spotify is asked on the network task, on the kept-open connection.

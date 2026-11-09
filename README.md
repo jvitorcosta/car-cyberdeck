@@ -31,7 +31,7 @@ watch. All three meet on the phone's WiFi hotspot; nothing needs a server.
 | Device | Board | Build | What it does | Manual |
 |---|---|---|---|---|
 | **Black deck** | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | Spotify now playing as a FireRed/Emerald battle: album art, a walking Pokémon, synced lyrics, genre badge; picks each song's colour for the lights | this page, [Architecture](docs/ARCHITECTURE.md) |
-| **Yellow deck** | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `ledpanel` | Drives the car's two LED controllers over Bluetooth: a terminal-style dashboard (clock, trip time), colours and presets, karaoke (the black deck's lyrics), music mode; PS3 controller and watch control | [docs/yellow-deck.md](docs/yellow-deck.md) |
+| **Yellow deck** | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `ledpanel` | Drives the car's two LED controllers over Bluetooth: a terminal-style dashboard (clock, trip time), colours and presets, switches for the black deck's karaoke view and for music mode; PS3 controller and watch control | [docs/yellow-deck.md](docs/yellow-deck.md) |
 | **Honda City** watch app | Garmin Forerunner 255 | `garmin/carlights` | The lights from the wrist: each zone's colour and level, the presets, music mode, a glance card; and a Spotify playlist picker (through the black deck) | [garmin/README.md](garmin/README.md) |
 
 The yellow deck is optional: the black deck works alone. The watch app needs the yellow deck for
@@ -46,9 +46,15 @@ The Pokéface watch face that used to live here moved to
   using the animated walk cycles from the PMD sprite archive.
 - **Synced lyrics** in the battle dialogue box, from LRCLIB, including accented Latin and
   Japanese/Chinese text.
+- **Karaoke view:** with the yellow deck's KARAOKE switch on, the black deck shows the song's
+  lyrics full screen in the yellow deck's terminal look and colours: the song and artist on one
+  row at the top, the progress bar with the song's Pokémon walking on it, the line just sung, the
+  current line large (up to three rows) lighting up as it is sung, and the next line under it.
+  A song without synced lyrics shows "no lyrics" for 30 s, then the normal screen.
 - **Genre badge** styled like a Pokémon type, from Apple's iTunes catalogue.
 - **Night mode** from 18:00 to 06:00 in your time zone: the black deck takes a night palette and a
-  dimmer backlight; the yellow deck dims and gives each theme a vivid, fully saturated night colour.
+  dimmer backlight; the yellow deck dims. Its colours, and the black deck's karaoke view, are each theme's vivid,
+  fully saturated night colour day and night.
 - **Boot scene:** a pixel-art night drive with a BIOS-style log and a boot sound, then a
   montage of your own photos. Each boot picks one opening at random, never last boot's: your
   intro video with the log typed over it, the car's night drive, a pixel McQueen's drive, or a
@@ -165,7 +171,7 @@ there); on any other network they use DHCP and mDNS names.
 
 | Deck | Build | On the iPhone hotspot | mDNS name (other networks) | Endpoints |
 |---|---|---|---|---|
-| Black deck | `s3` | `172.20.10.10` | `cardeck.local` | phone page `/?k=<REMOTE_TOKEN>`, `/state`, `/music` |
+| Black deck | `s3` | `172.20.10.10` | `cardeck.local` | phone page `/?k=<REMOTE_TOKEN>`, `/state`, `/music`, `/karaoke` |
 | Yellow deck | `ledpanel` | `172.20.10.11` | `cardeck-leds.local` | `/say`, `/state`, `/presets`, `/status` ([yellow-deck.md](docs/yellow-deck.md#voice-and-http)) |
 
 - **The hotspot goes first in `WIFI_NETWORKS`.** It gets three tries at boot (~24 s, time to

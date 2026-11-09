@@ -3,6 +3,7 @@
 #include "app_state.h"
 #include "statusscene.h"
 #include "qrcard.h"
+#include "../../util/black/walkrect.h"
 namespace ui {
 // Album art target rect inside the art battle box (main pushes the cover here).
 constexpr int ART_X = 11, ART_Y = 27, ART_W = 92, ART_H = 92;
@@ -27,6 +28,12 @@ void drawProgressRegion(TFT_eSPI& t, const AppState& st);
 // Walker on the HP bar. animMs = play-time animation clock (PMD frame timing);
 // step = frame counter (fallback bob/mirror).
 void drawWalker(TFT_eSPI& t, const AppState& st, uint32_t animMs, int step);
+// The walker's width (0 while none is ready), for a caller placing it by its centre.
+int walkerWidth();
+// The walker centred on cx with its feet on feetY, over `fill`; prev: the caller's last drawn
+// rect (walkrect), w == 0 for none (a repainted screen). drawWalker and ui/karaokeview share it.
+void blitWalker(TFT_eSPI& t, int cx, int feetY, uint32_t animMs, int step, uint16_t fill,
+                walkrect::Rect& prev);
 // Dialogue-box text (a lyric line or a status message), redrawn only when it changes.
 // notes: draw the note icons (off for plain lyrics, whose timing is approximate).
 void drawLyricArea(TFT_eSPI& t, const char* text, bool notes);

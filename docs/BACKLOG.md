@@ -4,6 +4,9 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Done (moved out of the lists below)
 
+- **Karaoke on the black deck** (2026-11-09): the lyrics moved off the yellow deck, which keeps
+  only the KARAOKE switch (the free heap went from ~31-33 KB to ~44-52 KB); the black deck shows
+  them full screen with a sweep and the walking Pokémon (`GET /karaoke`). Not yet driven in the car.
 - **Yellow deck slimmed to lights, karaoke, music mode, the PS3 controller and the watch**
   (2026-11-08): Bluedroid's dual mode for the PS3 controller left ~16 KB of heap and lwIP aborted
   once WiFi joined. The weather, speed cameras, car health (screens, trip band, warnings, fill-ups)
@@ -12,7 +15,8 @@ Open items, not scheduled. Newest decisions first within each section.
 - **Yellow deck** (the CYD as the car's light panel): the car LEDs over BLE by touch, voice, the
   controller (Xbox until 2026-11-06, now PS3) and the watch (#13, tested in the car 2026-10-22); the CYBERDECK dashboard, presets,
   LYRICS, weather, trip and themes (#18, tested in the car 2026-10-24: "works great");
-  Japanese lyrics (#21).
+  Japanese lyrics (#21; the yellow deck's Unifont subset is gone since the karaoke moved to the
+  black deck, which draws CJK with its own Unifont glyphs).
 - **Updates over WiFi** on both decks (#9, #19; the yellow deck's first OTA went through on
   2026-10-24 and kept its touch calibration), with their own `OTA_PASSWORD` (#25) and the
   rollback of new firmware that resets in its first minute (#27).
@@ -368,4 +372,4 @@ Portuguese voice commands for the black deck through a cloud agent (spec
   says "brownout" if it happens).
 - Touch controls on the black deck (play/pause/skip). The unused groundwork was removed in the
   2026-10-08 cleanup; see git history.
-- Korean / Cyrillic lyrics (blank on the black deck; Korean shows as boxes on the yellow deck).
+- Korean / Cyrillic lyrics (blank on the black deck's karaoke view, as on its dialogue box).

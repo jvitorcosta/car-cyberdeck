@@ -205,6 +205,33 @@ void test_music_mode() {
     TEST_ASSERT_FALSE(ledvoice::parse("mode", &c));
 }
 
+// Karaoke, like the yellow deck's KARAOKE switch: "karaoke" turns it on, with an off word off, and
+// it is a command of its own like music mode.
+void test_karaoke_on() {
+    const char* const on[] = {"karaoke", "Karaoke mode", "karaokê", "caraoquê", "turn on karaoke"};
+    for (const char* text : on) {
+        const ledvoice::Command c = parsed(text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(1, c.karaoke, text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(-1, c.music, text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(-1, c.color, text);
+        TEST_ASSERT_EQUAL_INT_MESSAGE(-1, c.power, text);
+    }
+    TEST_ASSERT_EQUAL_INT(-1, parsed("music").karaoke);
+    TEST_ASSERT_EQUAL_INT(-1, parsed("purple").karaoke);
+}
+
+void test_karaoke_off() {
+    TEST_ASSERT_EQUAL_INT(0, parsed("karaoke off").karaoke);
+    TEST_ASSERT_EQUAL_INT(0, parsed("desliga o karaokê").karaoke);
+    TEST_ASSERT_EQUAL_INT(-1, parsed("karaoke off").power);
+}
+
+void test_karaoke_only() {
+    const ledvoice::Command c = parsed("karaoke red");
+    TEST_ASSERT_EQUAL_INT(1, c.karaoke);
+    TEST_ASSERT_EQUAL_INT(-1, c.color);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_colour_alone);
@@ -232,5 +259,8 @@ int main(int, char**) {
     RUN_TEST(test_favourite_with_filler_before_the_number);
     RUN_TEST(test_a_command_word_cancels_the_slot);
     RUN_TEST(test_music_mode);
+    RUN_TEST(test_karaoke_on);
+    RUN_TEST(test_karaoke_off);
+    RUN_TEST(test_karaoke_only);
     return UNITY_END();
 }

@@ -44,6 +44,15 @@ struct LyricPair {
     uint32_t lineStartMs, nextStartMs;
 };
 void lyricPair(uint32_t gen, uint32_t posMs, LyricPair& out);
+// The karaoke view's lines (util/black/karaokepick): the line just sung, the one being sung and the
+// next, blank lines skipped, with the sung line's sweep; "" for a line there isn't, zeros when the
+// lyrics aren't gen's. durationMs: the song's, for the last line's end.
+struct KaraokeLines {
+    lyricstatus::Status status;
+    char prev[160], cur[160], next[160];
+    uint32_t startMs, endMs;
+};
+void karaokeLines(uint32_t gen, uint32_t posMs, uint32_t durationMs, KaraokeLines& out);
 
 // Walker: posted once the new walker is promoted for the track generation.
 void postWalker(uint32_t gen);

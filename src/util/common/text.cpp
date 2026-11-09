@@ -185,6 +185,15 @@ static Mark markLatin1(unsigned int cp) {
     }
 }
 
+uint8_t latin1(char base, Mark mark) {
+    if (mark == Mark::None) return 0;
+    for (unsigned int cp = 0xC0; cp <= 0xFF; ++cp) {
+        const char* r = foldLatin1(cp);
+        if (r && r[0] == base && !r[1] && markLatin1(cp) == mark) return static_cast<uint8_t>(cp);
+    }
+    return 0;
+}
+
 size_t foldMarks(const char* src, char* dst, Mark* marks, size_t n) {
     size_t o = 0;
     if (n == 0) return 0;
@@ -256,7 +265,7 @@ size_t latin1Fold(const char* utf8, char* dst, size_t n) {
         i += k;
         if (more == 0 || k <= more) continue;   // malformed: dropped
         if (cp <= 0xFF) {
-            // the no-break space a plain one (lyricrun::wrap breaks lines at ' '); the C1 controls and
+            // the no-break space a plain one (a line wraps at ' '); the C1 controls and
             // the soft hyphen dropped
             if (cp == 0xA0) dst[o++] = ' ';
             else if (cp > 0xA0 && cp != 0xAD) dst[o++] = (char)cp;

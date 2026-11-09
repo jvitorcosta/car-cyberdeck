@@ -226,6 +226,65 @@ void test_zwj_unknown_sequence_shows_its_first_emoji() {
     expectEmoji(0, 0x1F408);
     expectAscii(1, 'z');
 }
+// wrapRows: rows as text (Ascii items only), for the checks below.
+static void rowText(const glyphrun::Rows& r, int i, char* out) {
+    size_t k = 0;
+    for (size_t j = r.start[i]; j < r.end[i]; ++j) out[k++] = buf[j].ch;
+    out[k] = 0;
+}
+static glyphrun::Rows rows(const char* s, int maxW, int maxRows, size_t* n) {
+    *n = glyphrun::decode(s, buf, 128, aw, ww, nullptr);
+    return glyphrun::wrapRows(buf, *n, maxW, 18, maxRows);
+}
+void test_rows_one_row_when_it_fits() {
+    size_t n;
+    const glyphrun::Rows r = rows("short line", 60, 3, &n);
+    TEST_ASSERT_EQUAL_INT(1, r.n);
+    TEST_ASSERT_FALSE(r.ellipsis);
+    TEST_ASSERT_EQUAL_UINT(n, r.end[0]);
+}
+void test_rows_three_rows_by_spaces() {
+    size_t n;
+    const glyphrun::Rows r = rows("aaaa bbbb cccc dddd eeee ffff", 60, 3, &n);
+    char t[64];
+    TEST_ASSERT_EQUAL_INT(3, r.n);
+    TEST_ASSERT_FALSE(r.ellipsis);
+    rowText(r, 0, t); TEST_ASSERT_EQUAL_STRING("aaaa bbbb", t);
+    rowText(r, 1, t); TEST_ASSERT_EQUAL_STRING("cccc dddd", t);
+    rowText(r, 2, t); TEST_ASSERT_EQUAL_STRING("eeee ffff", t);
+}
+void test_rows_ellipsis_on_last_row() {
+    size_t n;
+    const glyphrun::Rows r = rows("aaaa bbbb cccc dddd eeee ffff gggg", 60, 3, &n);
+    TEST_ASSERT_EQUAL_INT(3, r.n);
+    TEST_ASSERT_TRUE(r.ellipsis);
+    TEST_ASSERT_TRUE(glyphrun::width(buf + r.start[2], r.end[2] - r.start[2]) + 18 <= 60);
+}
+void test_rows_hard_break_long_word() {
+    size_t n;
+    const glyphrun::Rows r = rows("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 60, 3, &n);   // 35
+    TEST_ASSERT_EQUAL_INT(3, r.n);
+    TEST_ASSERT_EQUAL_UINT(10, r.end[0] - r.start[0]);
+    TEST_ASSERT_EQUAL_UINT(10, r.end[1] - r.start[1]);
+    TEST_ASSERT_TRUE(r.ellipsis);
+    TEST_ASSERT_TRUE(glyphrun::width(buf + r.start[2], r.end[2] - r.start[2]) + 18 <= 60);
+}
+void test_rows_break_beside_cjk() {
+    size_t n;
+    // "ab" + 6 kana (16 px each): 12 + 96 px over rows of 60
+    const glyphrun::Rows r = rows("ab\xE3\x81\x82\xE3\x81\x82\xE3\x81\x82\xE3\x81\x82\xE3\x81\x82\xE3\x81\x82", 60, 3, &n);
+    TEST_ASSERT_FALSE(r.ellipsis);
+    TEST_ASSERT_EQUAL_UINT(n, r.end[r.n - 1]);
+    for (int i = 0; i < r.n; ++i) TEST_ASSERT_TRUE(glyphrun::width(buf + r.start[i], r.end[i] - r.start[i]) <= 60);
+}
+void test_rows_skip_a_row_start_space() {
+    size_t n;
+    const glyphrun::Rows r = rows("aaaaaaaaaa bbb", 60, 3, &n);
+    char t[64];
+    TEST_ASSERT_EQUAL_INT(2, r.n);
+    rowText(r, 1, t); TEST_ASSERT_EQUAL_STRING("bbb", t);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_decode_mixed_ascii_accent_cjk);
@@ -248,5 +307,11 @@ int main(int, char**) {
     RUN_TEST(test_zwj_sequence_is_one_picture);
     RUN_TEST(test_zwj_skin_tone_falls_back_to_the_plain_sequence);
     RUN_TEST(test_zwj_unknown_sequence_shows_its_first_emoji);
+    RUN_TEST(test_rows_one_row_when_it_fits);
+    RUN_TEST(test_rows_three_rows_by_spaces);
+    RUN_TEST(test_rows_ellipsis_on_last_row);
+    RUN_TEST(test_rows_hard_break_long_word);
+    RUN_TEST(test_rows_break_beside_cjk);
+    RUN_TEST(test_rows_skip_a_row_start_space);
     return UNITY_END();
 }

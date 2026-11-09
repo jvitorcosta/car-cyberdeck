@@ -142,6 +142,45 @@ static size_t fitCount(const Item* it, size_t start, size_t n, int maxW) {
 static bool isSpace(const Item& x) { return x.kind == Kind::Ascii && x.ch == ' '; }
 static bool isPicture(const Item& x) { return x.kind == Kind::Wide || x.kind == Kind::Emoji; }
 
+// Where a row from `from` that doesn't fit maxW breaks: its end (cut) and the next row's start
+// (next). At the last fitting space, or between characters next to a picture, else hard.
+struct Break { size_t cut, next; };
+static Break breakRow(const Item* it, size_t from, size_t n, int maxW) {
+    const size_t fit = from + fitCount(it, from, n, maxW);
+    size_t cut = fit, next = fit;
+    for (size_t k = fit; k > from; --k) {
+        if (isSpace(it[k])) { cut = k; next = k + 1; break; }
+        if (isPicture(it[k]) || isPicture(it[k - 1])) { cut = next = k; break; }
+    }
+    if (cut == from) cut = next = fit;
+    if (cut == from) cut = next = from + 1;   // not even one item fits: one per row, never stuck
+    return {cut, next};
+}
+
+Rows wrapRows(const Item* it, size_t n, int maxW, int ellipsisW, int maxRows) {
+    if (maxRows < 1) maxRows = 1;
+    if (maxRows > MAX_ROWS) maxRows = MAX_ROWS;
+    Rows r{};
+    size_t from = 0;
+    while (r.n < maxRows) {
+        while (from < n && isSpace(it[from]) && r.n > 0) ++from;
+        r.start[r.n] = from;
+        if (width(it + from, n - from) <= maxW) {
+            r.end[r.n++] = n;
+            return r;
+        }
+        if (r.n == maxRows - 1) {   // the last row: cut it for "..."
+            r.end[r.n++] = from + fitCount(it, from, n, maxW - ellipsisW);
+            r.ellipsis = true;
+            return r;
+        }
+        const Break b = breakRow(it, from, n, maxW);
+        r.end[r.n++] = b.cut;
+        from = b.next;
+    }
+    return r;
+}
+
 Wrap wrapTwo(const Item* it, size_t n, int maxW, int ellipsisW) {
     size_t fitA = fitCount(it, 0, n, maxW);
     if (fitA >= n) return {n, n, n, false};

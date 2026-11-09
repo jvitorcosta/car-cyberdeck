@@ -14,6 +14,10 @@ as GFXglyph / GFXfont), so the header builds on the host too.
 
 Usage (from the repo root; Pillow only):
     python tools/gfxfont.py tools/fonts/VT323-Regular.ttf 24 src/yellow/fonts/vt323_24.h VT323_24
+Another font, for another deck, names its own types, the header that declares them and its credit
+line (the defaults are VT323's for the yellow deck):
+    python tools/gfxfont.py FONT.ttf 22 OUT.h NAME --ns lyricface --include ../../util/black/lyricface.h
+        --credit "Font: ..., SIL OFL 1.1, see tools/fonts/....txt"
 """
 import os
 import sys
@@ -23,6 +27,11 @@ from PIL import Image, ImageDraw, ImageFont
 FIRST, LAST = 0x20, 0xFF
 CONTROLS = range(0x7F, 0xA0)  # DEL and the C1 controls: no character
 LICENCE = "SIL OFL 1.1, see tools/fonts/VT323-OFL.txt"
+DEFAULTS = {
+    "ns": "termfont",
+    "include": "../ui/termfont.h",
+    "credit": "Font: VT323, Copyright 2011 The VT323 Project Authors (Google Fonts), %s." % LICENCE,
+}
 
 
 def glyph(font, ch, ascent, descent):
@@ -71,16 +80,20 @@ def convert(ttf, size, name):
     return bitmap, glyphs, ascent + descent
 
 
-def header(ttf, size, path, name):
+def header(ttf, size, path, name, opts=None):
+    opts = dict(DEFAULTS, **(opts or {}))
     bitmap, glyphs, y_adv = convert(ttf, size, name)
     cmd = "python tools/gfxfont.py %s %d %s %s" % (ttf.replace("\\", "/"), size, path.replace("\\", "/"), name)
+    for key in ("ns", "include", "credit"):
+        if opts[key] != DEFAULTS[key]:
+            cmd += ' --%s "%s"' % (key, opts[key]) if " " in opts[key] else " --%s %s" % (key, opts[key])
     lines = [
         "// %s at %d px: Adafruit-GFX tables, 1-bit, Latin-1 0x20-0xFF." % (os.path.basename(ttf), size),
-        "// Font: VT323, Copyright 2011 The VT323 Project Authors (Google Fonts), %s." % LICENCE,
+        "// " + opts["credit"],
         "// Generated, do not edit:",
         "//   " + cmd,
         "#pragma once",
-        '#include "../ui/termfont.h"',
+        '#include "%s"' % opts["include"],
         "",
         "static const uint8_t %sBitmaps[] = {" % name,
     ]
@@ -88,7 +101,7 @@ def header(ttf, size, path, name):
         lines.append("    " + ", ".join("0x%02X" % b for b in bitmap[i:i + 16]) + ",")
     lines.append("};")
     lines.append("")
-    lines.append("static const termfont::Glyph %sGlyphs[] = {" % name)
+    lines.append("static const %s::Glyph %sGlyphs[] = {" % (opts["ns"], name))
     for off, w, h, adv, xo, yo, ch in glyphs:
         code = ord(ch)
         shown = ("space" if ch == " " else "0x%02X" % code if code in CONTROLS else "nbsp" if code == 0xA0
@@ -96,13 +109,17 @@ def header(ttf, size, path, name):
         lines.append("    {%d, %d, %d, %d, %d, %d},  // '%s'" % (off, w, h, adv, xo, yo, shown))
     lines.append("};")
     lines.append("")
-    lines.append("static const termfont::Font %s = {%sBitmaps, %sGlyphs, 0x%02X, 0x%02X, %d};"
-                 % (name, name, name, FIRST, LAST, y_adv))
+    lines.append("static const %s::Font %s = {%sBitmaps, %sGlyphs, 0x%02X, 0x%02X, %d};"
+                 % (opts["ns"], name, name, name, FIRST, LAST, y_adv))
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
+    args, opts = sys.argv[1:5], {}
+    rest = sys.argv[5:]
+    if len(args) != 4 or len(rest) % 2 or any(k[2:] not in DEFAULTS for k in rest[::2]):
         sys.exit(__doc__)
-    header(sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4])
+    for k, v in zip(rest[::2], rest[1::2]):
+        opts[k[2:]] = v
+    header(args[0], int(args[1]), args[2], args[3], opts)

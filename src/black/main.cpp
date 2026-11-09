@@ -10,6 +10,9 @@
 #include "core/nettask.h"
 #include "core/mem.h"
 #include "ui/screen_now.h"
+#include "ui/karaokeview.h"
+#include "core/karaoke.h"
+#include "../util/black/karaokepick.h"
 #include "ui/cjkdata.h"
 #include "ui/pokeball.h"
 #include "ui/lyricmsg.h"
@@ -108,6 +111,61 @@ static void drawDialogue(const AppState& view, uint32_t gen) {
     lyricmsg::compose(in, out);
     ui::drawLyricArea(s_tft, out.text, out.notes);
     s_notesDance = out.dance;
+}
+
+// The karaoke view (ui/karaokeview) for the track on screen: the lines when they change (whole: the
+// screen), the bar with the Pokémon on it at the song's progress, and the sweep
+// (util/black/karaokepick). The message in the sung line's place while searching, or for the
+// "no lyrics" screen (plain lyrics count as none: nothing to sweep).
+static void drawKaraokeView(const AppState& view, const shared::KaraokeLines& k, karaokemode::Screen sc,
+                            uint32_t gen, bool walker, uint32_t animMs, int& step, bool whole) {
+    using lyricstatus::Status;
+    static uint32_t lastDraw = 0, lastWalk = 0, shownStart = 0;
+    static char shownCur[sizeof k.cur], shownNext[sizeof k.next], shownMsg[lyricmsg::TEXT_CAP];
+    static int shownPx = 0;
+    static lyricmsg::Out msg;
+    static int shownLight = -2;   // the look on screen: the inside light's swatch
+    const uint32_t now = millis();
+    const int light = karaoke::light();
+    if (light != shownLight) whole = true;   // a new colour: all of it
+    if (whole) {
+        shownLight = light;
+        ui::setKaraokeLook(light);
+    }
+
+    const char* message = nullptr;
+    if (sc == karaokemode::Screen::NoLyrics || k.status == Status::Searching || k.status == Status::Retrying) {
+        const Status s = sc != karaokemode::Screen::NoLyrics ? k.status
+                         : k.status == Status::Instrumental ? Status::Instrumental : Status::None;
+        lyricmsg::In in{s, 0, view.progressMs, 0, "", view.pokeName, gen};   // age 0: the first message
+        lyricmsg::compose(in, msg);
+        message = msg.text;
+    }
+    const char* msgNow = message ? message : "";
+    if (whole || k.startMs != shownStart || strcmp(k.cur, shownCur) != 0 || strcmp(k.next, shownNext) != 0 ||
+        strcmp(msgNow, shownMsg) != 0) {
+        shownPx = 0;
+        ui::drawKaraoke(s_tft, view, k, message, whole);
+        shownStart = k.startMs;
+        strlcpy(shownCur, k.cur, sizeof shownCur);
+        strlcpy(shownNext, k.next, sizeof shownNext);
+        strlcpy(shownMsg, msgNow, sizeof shownMsg);
+        lastWalk = 0;   // the sweep and the Pokémon at once, not a frame later
+    }
+    if (now - lastDraw >= PROGRESS_MS) {
+        lastDraw = now;
+        ui::drawKaraokeBar(s_tft, view);
+    }
+    if (now - lastWalk < WALK_FRAME_MS) return;
+    lastWalk = now;
+    const int lineW = ui::karaokeLineW();
+    const int raw = k.cur[0] ? karaokepick::sweepPx(view.progressMs, k.startMs, k.endMs, lineW) : 0;
+    const int px = karaokepick::steadyPx(shownPx, raw, lineW, k.startMs, k.endMs);
+    shownPx = px;
+    ui::drawKaraokeSweep(s_tft, px);
+    if (!walker) return;
+    if (view.isPlaying) step++;
+    ui::drawKaraokeWalker(s_tft, view, animMs, step);
 }
 
 // This boot's opening (util/intropick): random, never last boot's (NVS "boot"/"last"), only
@@ -454,11 +512,29 @@ void loop() {
     if (camRows) {
         const camband::Rect v = camband::screens(cam, s_tft.width(), s_tft.height());
         s_tft.setViewport(v.x, v.y, v.w, v.h, false);
+        ui::setKaraokeClip(v.x, v.y, v.w, v.h);
+    } else {
+        ui::setKaraokeClip(0, 0, s_tft.width(), s_tft.height());
     }
     bool topDrawn = false;   // a screen drew its top strip this loop (over the GPS -- tag)
 
     static uint32_t shownGen = 0;
     static bool walkerOn = false;
+    // Karaoke (core/karaoke): which deck screen the song gets, and its lines.
+    static karaokemode::Screen shownKaraoke = karaokemode::Screen::Normal;
+    static shared::KaraokeLines kl;   // static: keep the loop stack small
+    karaokemode::Screen kScreen = karaokemode::Screen::Normal;
+    if (mode == 0) {
+        shared::karaokeLines(st.trackGen, view.progressMs, view.durationMs, kl);
+        kScreen = karaoke::screen(kl.status, st.trackGen);
+    }
+    static uint32_t animMs = 0, lastTick = 0;   // walk cycle: runs only while playing
+    static int walkStep = 0;
+    {
+        const uint32_t now = millis();
+        if (mode == 0 && st.isPlaying) animMs += now - lastTick;
+        lastTick = now;
+    }
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen
     if (updateDayNight()) lastMode = -1;   // redraw the deck or the status screen in the new palette
     if (mode != 0) {
@@ -514,7 +590,7 @@ void loop() {
         strlcpy(shownTitle, title, sizeof shownTitle);
         shownKind = kind;
         lastMode = mode;
-    } else if (lastMode != 0 || st.trackGen != shownGen) {
+    } else if (lastMode != 0 || st.trackGen != shownGen || kScreen != shownKaraoke) {
         // Full deck redraw: immediately on track change (text + Pokemon name; art, lyric
         // and walker fill in as the network task delivers them), or back from a status screen.
         bool newTrack = st.trackGen != shownGen;
@@ -527,66 +603,77 @@ void loop() {
         }
         uint8_t cached;   // a cached badge is posted with the track change: draw it with the title
         if (shared::takeGenre(shownGen, &cached)) shownGenre = cached;
-        ui::drawNow(s_tft, view, shownGenre);
+        if (kScreen != shownKaraoke)
+            Serial.printf("[karaoke] screen %s\n", kScreen == karaokemode::Screen::Karaoke ? "karaoke"
+                                                   : kScreen == karaokemode::Screen::NoLyrics ? "no lyrics"
+                                                                                            : "normal");
+        shownKaraoke = kScreen;
         topDrawn = true;
         s_topSig[0] = '\0';
-        pushArtIfValid(shownGen);   // back from a status screen: same track's art is still valid
-        drawDialogue(view, shownGen);
+        if (kScreen != karaokemode::Screen::Normal) {
+            drawKaraokeView(view, kl, kScreen, shownGen, walkerOn, animMs, walkStep, true);
+        } else {
+            ui::drawNow(s_tft, view, shownGenre);
+            pushArtIfValid(shownGen);   // back from a status screen: same track's art is still valid
+            drawDialogue(view, shownGen);
+        }
         mem::log("track");
     } else {
-        // Media arriving from the network task for the track on screen.
-        if (shared::takeArt(shownGen)) pushArtIfValid(shownGen);
+        // Media arriving from the network task for the track on screen (the karaoke view shows
+        // neither the art nor the badge: they wait for the normal screen's whole draw).
+        const bool karaokeOn = shownKaraoke != karaokemode::Screen::Normal;
+        if (shared::takeArt(shownGen) && !karaokeOn) pushArtIfValid(shownGen);
         if (shared::takeWalker(shownGen)) walkerOn = true;
         uint8_t g;
         if (shared::takeGenre(shownGen, &g)) {   // genre arrived (or was cached): artist row only
             shownGenre = g;
-            ui::drawArtistRow(s_tft, view, g);
+            if (!karaokeOn) ui::drawArtistRow(s_tft, view, g);
         }
+        if (karaokeOn) {
+            drawKaraokeView(view, kl, shownKaraoke, shownGen, walkerOn, animMs, walkStep, false);
+        } else {
+            static uint32_t lastDraw = 0, lastWalk = 0, lastCd = 0;
+            static int cdFrame = 0, ballFrame = 0;
+            uint32_t now = millis();
 
-        static uint32_t lastDraw = 0, lastWalk = 0, lastCd = 0, lastTick = 0, animMs = 0;
-        static int walkStep = 0, cdFrame = 0, ballFrame = 0;
-        uint32_t now = millis();
-        uint32_t dt = now - lastTick;
-        lastTick = now;
-        if (st.isPlaying) animMs += dt;   // walk cycle runs only while playing
-
-        // top strip: redraw only when device / shuffle / repeat change
-        char sig[96];
-        snprintf(sig, sizeof(sig), "%s|%s|%d|%d|%d", st.deviceName, st.deviceType,
-                 (int)st.shuffle, st.repeat, (int)st.isPlaying);
-        if (strcmp(sig, s_topSig) != 0) {
-            strcpy(s_topSig, sig);
-            ui::drawTopStrip(s_tft, st);
-            topDrawn = true;
-        }
-        if (st.isPlaying && now - lastCd >= CD_FRAME_MS) {   // spinning CD ~6 fps
-            lastCd = now;
-            ui::drawCdFrame(s_tft, cdFrame = (cdFrame + 1) & 3);
-            ui::drawPokeballFrame(s_tft, ballFrame = (ballFrame + 1) % pokeball::FRAMES);
-        }
-        if (now - lastDraw >= PROGRESS_MS) {
-            lastDraw = now;
-            ui::drawProgressRegion(s_tft, view);
-            drawDialogue(view, shownGen);
-        }
-        // Note icons bob while timed lyrics are shown and the music plays; at rest otherwise.
-        static uint32_t lastNotes = 0;
-        static int noteFrame = 0;
-        static bool notesMoved = false;
-        if (s_notesDance && st.isPlaying) {
-            if (now - lastNotes >= NOTES_MS) {            // ~3 steps/s: alive, not distracting
-                lastNotes = now;
-                ui::drawNoteFrame(s_tft, ++noteFrame & 0x7FFF);
-                notesMoved = true;
+            // top strip: redraw only when device / shuffle / repeat change
+            char sig[96];
+            snprintf(sig, sizeof(sig), "%s|%s|%d|%d|%d", st.deviceName, st.deviceType,
+                     (int)st.shuffle, st.repeat, (int)st.isPlaying);
+            if (strcmp(sig, s_topSig) != 0) {
+                strcpy(s_topSig, sig);
+                ui::drawTopStrip(s_tft, st);
+                topDrawn = true;
             }
-        } else if (notesMoved) {
-            ui::drawNoteFrame(s_tft, -1);
-            notesMoved = false;
-        }
-        if (walkerOn && now - lastWalk >= WALK_FRAME_MS) {     // ~8 fps walker
-            lastWalk = now;
-            if (st.isPlaying) walkStep++;
-            ui::drawWalker(s_tft, view, animMs, walkStep);
+            if (st.isPlaying && now - lastCd >= CD_FRAME_MS) {   // spinning CD ~6 fps
+                lastCd = now;
+                ui::drawCdFrame(s_tft, cdFrame = (cdFrame + 1) & 3);
+                ui::drawPokeballFrame(s_tft, ballFrame = (ballFrame + 1) % pokeball::FRAMES);
+            }
+            if (now - lastDraw >= PROGRESS_MS) {
+                lastDraw = now;
+                ui::drawProgressRegion(s_tft, view);
+                drawDialogue(view, shownGen);
+            }
+            // Note icons bob while timed lyrics are shown and the music plays; at rest otherwise.
+            static uint32_t lastNotes = 0;
+            static int noteFrame = 0;
+            static bool notesMoved = false;
+            if (s_notesDance && st.isPlaying) {
+                if (now - lastNotes >= NOTES_MS) {            // ~3 steps/s: alive, not distracting
+                    lastNotes = now;
+                    ui::drawNoteFrame(s_tft, ++noteFrame & 0x7FFF);
+                    notesMoved = true;
+                }
+            } else if (notesMoved) {
+                ui::drawNoteFrame(s_tft, -1);
+                notesMoved = false;
+            }
+            if (walkerOn && now - lastWalk >= WALK_FRAME_MS) {     // ~8 fps walker
+                lastWalk = now;
+                if (st.isPlaying) walkStep++;
+                ui::drawWalker(s_tft, view, animMs, walkStep);
+            }
         }
     }
     s_tft.resetViewport();

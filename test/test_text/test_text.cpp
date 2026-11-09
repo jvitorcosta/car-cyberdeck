@@ -214,6 +214,15 @@ void test_strip_html_odd_input() {
     TEST_ASSERT_EQUAL_size_t(0, txt::stripHtml(nullptr));
 }
 
+void test_latin1_compose() {
+    TEST_ASSERT_EQUAL_HEX8(0xE7, txt::latin1('c', txt::Mark::Cedilla));
+    TEST_ASSERT_EQUAL_HEX8(0xE3, txt::latin1('a', txt::Mark::Tilde));
+    TEST_ASSERT_EQUAL_HEX8(0xEA, txt::latin1('e', txt::Mark::Circumflex));
+    TEST_ASSERT_EQUAL_HEX8(0xC9, txt::latin1('E', txt::Mark::Acute));
+    TEST_ASSERT_EQUAL_HEX8(0, txt::latin1('x', txt::Mark::Acute));
+    TEST_ASSERT_EQUAL_HEX8(0, txt::latin1('a', txt::Mark::None));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_copy_truncates_and_terminates);
@@ -234,5 +243,6 @@ int main(int, char**) {
     RUN_TEST(test_latin1_upper);
     RUN_TEST(test_strip_html_tags_and_entities);
     RUN_TEST(test_strip_html_odd_input);
+    RUN_TEST(test_latin1_compose);
     return UNITY_END();
 }
