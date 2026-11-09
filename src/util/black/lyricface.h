@@ -27,7 +27,8 @@ const Font& font(Face f);
 // The pen's advance for a Latin-1 code; 0 outside the font.
 int advance(Face f, uint8_t latin1);
 int lineHeight(Face f);
-// Rows from a line's top to its baseline: the font's ascent, as the tallest capital's top.
+// Rows from a line's top to its baseline: the highest ink in the font (Á's mark), so a row's clear
+// and the sweep's clip hold its accents.
 int ascent(Face f);
 
 }  // namespace lyricface

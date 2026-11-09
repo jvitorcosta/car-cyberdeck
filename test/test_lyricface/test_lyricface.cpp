@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <initializer_list>
 #include "../../src/util/black/lyricface.h"
 
 using lyricface::Face;
@@ -24,10 +25,26 @@ void test_line_heights() {
     TEST_ASSERT_TRUE(lyricface::lineHeight(Face::SUNG_SMALL) < lyricface::lineHeight(Face::SUNG));
 }
 
+// Every glyph's ink, accents and descenders included, inside its row: from the row's top (ascent
+// rows above the baseline) to the line height. The sweep clips to the row and a new line clears it.
+void test_every_glyph_inside_its_row() {
+    for (Face f : {Face::SUNG, Face::SUNG_SMALL, Face::LINE, Face::SMALL}) {
+        const lyricface::Font& ft = lyricface::font(f);
+        for (int c = ft.first; c <= ft.last; ++c) {
+            const lyricface::Glyph& g = ft.glyph[c - ft.first];
+            if (!g.height) continue;
+            const int top = lyricface::ascent(f) + g.yOffset;   // rows under the row's top
+            TEST_ASSERT_TRUE_MESSAGE(top >= 0, "ink above the row");
+            TEST_ASSERT_TRUE_MESSAGE(top + g.height <= lyricface::lineHeight(f), "ink below the row");
+        }
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_faces_shrink);
     RUN_TEST(test_latin1_covered);
     RUN_TEST(test_line_heights);
+    RUN_TEST(test_every_glyph_inside_its_row);
     return UNITY_END();
 }

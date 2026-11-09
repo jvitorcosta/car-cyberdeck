@@ -26,8 +26,10 @@ int lineHeight(Face f) { return font(f).yAdvance; }
 
 int ascent(Face f) {
     const Font& ft = font(f);
-    const Glyph& cap = ft.glyph['A' - ft.first];   // as tall as any capital
-    return -cap.yOffset;
+    int top = 0;   // the highest ink over the baseline: an accented capital's mark
+    for (int c = ft.first; c <= ft.last; ++c)
+        if (ft.glyph[c - ft.first].height && -ft.glyph[c - ft.first].yOffset > top) top = -ft.glyph[c - ft.first].yOffset;
+    return top;
 }
 
 }  // namespace lyricface
