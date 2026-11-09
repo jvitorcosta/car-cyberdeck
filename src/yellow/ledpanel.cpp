@@ -107,6 +107,7 @@
 #include "../util/yellow/dashtext.h"
 #include "../util/common/daynight.h"
 #include "../util/yellow/deckaddr.h"
+#include "../util/yellow/keepalive.h"
 #include "../util/yellow/deckmenu.h"
 #include "../util/yellow/elkcmd.h"
 #include "../util/common/hotspotip.h"
@@ -1918,7 +1919,7 @@ static int musicAsk(bool on) {
     return rc;
 }
 
-static int musicGet(bool on) {
+static int musicGet(bool on, int) {
     const int rc = musicAsk(on);
     // the deck's own answers (200, "stopping" 409, low memory 503); 3 misses in a row: look it up again
     if (rc != NOT_SIGNED) deckAnswered(rc == 200 || rc == 409 || rc == 503);
@@ -1926,47 +1927,60 @@ static int musicGet(bool on) {
 }
 
 // A keep-alive's state (music mode's, karaoke's): while wanted, `get(true)` at once and every
-// MUSIC_KEEP_MS (MUSIC_RETRY_MS after a miss); `get(false)` once when it goes. The log tells each
-// change of answer.
+// MUSIC_KEEP_MS (MUSIC_RETRY_MS after a miss), and at once when the light it carries changed
+// (util/yellow/keepalive); `get(false)` once when it goes. The log tells each change of answer.
 struct KeepAlive {
     const char* tag;  // the log's
-    int (*get)(bool on);
-    bool asked = false;  // an on=1 went out since the last on=0
-    uint32_t nextAt = 0;
+    int (*get)(bool on, int light);
+    int (*light)();   // what on=1 carries; nullptr: nothing (-1)
+    keepalive::State st;
     int lastRc = 0;
 };
 
 static void keepAlive(KeepAlive& k, bool want) {
     if (ota::active()) return;
-    if (!want) {
-        if (k.asked) {
-            k.asked = false;
-            k.lastRc = 0;
-            Serial.printf("[%s] off (rc=%d)\n", k.tag, k.get(false));
-        }
+    const int light = k.light ? k.light() : -1;
+    switch (keepalive::due(k.st, want, millis(), light)) {
+    case keepalive::Ask::None: return;
+    case keepalive::Ask::Off:
+        k.st.asked = false;
+        k.lastRc = 0;
+        Serial.printf("[%s] off (rc=%d)\n", k.tag, k.get(false, -1));
         return;
+    case keepalive::Ask::On: break;
     }
-    if (k.asked && static_cast<int32_t>(millis() - k.nextAt) < 0) return;
-    const int rc = k.get(true);
+    const int rc = k.get(true, light);
     if (rc != k.lastRc) Serial.printf("[%s] on=1: rc=%d\n", k.tag, rc);
     k.lastRc = rc;
-    k.asked = true;
-    k.nextAt = millis() + (rc == 200 || rc == 503 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
+    k.st.asked = true;
+    k.st.sentLight = light;
+    k.st.nextAt = millis() + (rc == 200 || rc == 503 ? MUSIC_KEEP_MS : MUSIC_RETRY_MS);
 }
 
-// Karaoke: GET /karaoke?on=1 at music mode's pace (the black deck goes back to its normal screen 30 s
-// without one), on=0 once when it goes; each ask counts toward deckAddr's misses.
-static int karaokeGet(bool on) {
+// The INSIDE light's swatch for the black deck's karaoke colour: what it shows (music mode's look
+// while that drives it), or -1 while it is off or has no link. Read from the deck task without a
+// lock: a look read mid-change is put right on the next pass, 100 ms later.
+static int insideLight() {
+    const Look l = shownLook(0);
+    return l.lit && linkUp(controllers[0]) ? l.swatch : -1;
+}
+
+// Karaoke: GET /karaoke?on=1&light=N at music mode's pace (the black deck goes back to its normal
+// screen 30 s without one) and on a change of light, on=0 once when it goes; each ask counts toward
+// deckAddr's misses.
+static int karaokeGet(bool on, int light) {
     crashlog::at("karaoke ask");
-    const sigreq::Param p[] = {{"on", on ? "1" : "0"}};
+    char lightText[8];
+    snprintf(lightText, sizeof(lightText), "%d", light);
+    const sigreq::Param p[] = {{"on", on ? "1" : "0"}, {"light", lightText}};
     char reply[32];
-    const int rc = deckGet("/karaoke", p, 1, reply, sizeof(reply));
+    const int rc = deckGet("/karaoke", p, on ? 2 : 1, reply, sizeof(reply));
     if (rc != NOT_SIGNED) deckAnswered(rc == 200);
     return rc;
 }
 
 static void deckTask(void*) {
-    static KeepAlive music{"music", musicGet}, karaoke{"karaoke", karaokeGet};
+    static KeepAlive music{"music", musicGet, nullptr, {}, 0}, karaoke{"karaoke", karaokeGet, insideLight, {}, 0};
     watchdog::watch();  // each pass: two GETs of 1.5 s and an mDNS query of 1.5 s at most
     for (;;) {
         watchdog::feed();
