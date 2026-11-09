@@ -111,9 +111,24 @@ void drawProgressRegion(TFT_eSPI& t, const AppState& st) {
     expBar(t, FILL_X, EXP_Y, FILL_W, st.volume / 100.0f);
 }
 
+int walkerWidth() {
+    shared::Guard lockWalker;
+    const walk::Info& wi = walk::info();
+    return wi.ready ? wi.w : 0;
+}
+
 void drawWalker(TFT_eSPI& t, const AppState& st, uint32_t animMs, int step) {
-    static constexpr int SLACK = 8;
     static walkrect::Rect prev{0, 0, 0, 0};
+    const int w = walkerWidth();
+    if (!w) return;
+    float frac = st.durationMs ? (float)st.progressMs / (float)st.durationMs : 0.0f;
+    int cx = interp::walkX(frac, FILL_X, FILL_W, w);   // drained/remaining boundary
+    blitWalker(t, cx, BAR_Y, animMs, step, theme::pal().boxFill, prev);   // feet rest on the bar top
+}
+
+void blitWalker(TFT_eSPI& t, int cx, int feetY, uint32_t animMs, int step, uint16_t fill,
+                walkrect::Rect& prev) {
+    static constexpr int SLACK = 8;
     // ~7.8 KB in PSRAM: filled by the CPU, sent by pushImage (no DMA on this deck)
     static uint16_t* buf = (uint16_t*)mem::bigAlloc((walk::MAX_W + 2 * SLACK) *
                                                     (walk::BAND_H + 1 + 2 * SLACK) * sizeof(uint16_t));
@@ -133,16 +148,14 @@ void drawWalker(TFT_eSPI& t, const AppState& st, uint32_t animMs, int step) {
     const uint8_t* msk = walk::mask(fr);
     int w = wi.w, h = wi.h;
 
-    float frac = st.durationMs ? (float)st.progressMs / (float)st.durationMs : 0.0f;
-    int cx = interp::walkX(frac, FILL_X, FILL_W, w);   // drained/remaining boundary
     int bob = (!wi.pmd && (step % 2)) ? 1 : 0;           // fallback fake-walk only
     bool mirror = !wi.pmd && ((step / 4) % 2);
-    int x0 = cx - w / 2, y0 = BAR_Y - h - bob;          // feet rest on the bar top
+    int x0 = cx - w / 2, y0 = feetY - h - bob;
 
-    walkrect::Plan p = walkrect::plan(prev, {x0, BAR_Y - h - 1, w, h + 1}, SLACK);
-    if (p.clearPrev) t.fillRect(prev.x, prev.y, prev.w, prev.h, theme::pal().boxFill);
+    walkrect::Plan p = walkrect::plan(prev, {x0, feetY - h - 1, w, h + 1}, SLACK);
+    if (p.clearPrev) t.fillRect(prev.x, prev.y, prev.w, prev.h, fill);
     const walkrect::Rect& r = p.push;
-    const uint16_t fillBE = theme::be(theme::pal().boxFill);
+    const uint16_t fillBE = theme::be(fill);
     for (int i = 0; i < r.w * r.h; ++i) buf[i] = fillBE;
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x) {
