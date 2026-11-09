@@ -181,11 +181,11 @@ static void handleMusic() {
 }
 
 // The karaoke view (core/karaoke): the yellow deck sends on=1 every 10 s while its KARAOKE switch is
-// on, on=0 to stop at once. Signed by the yellow deck; the key also does (a test by hand).
+// on (with light=N, its INSIDE light's swatch, for the view's colour), on=0 to stop at once. Signed by the yellow deck; the key also does (a test by hand).
 static void handleKaraoke() {
     if (!reqauth::pass(*s_server, s_gate, "/karaoke", "wrong key")) return;
     const String on = s_server->arg("on");
-    if (on == "1") karaoke::keepAlive();
+    if (on == "1") karaoke::keepAlive(karaokemode::parseLight(s_server->arg("light").c_str()));
     else if (on == "0") karaoke::stop();
     else { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
     s_server->send(200, "application/json", on == "1" ? "{\"on\":1}" : "{\"on\":0}");

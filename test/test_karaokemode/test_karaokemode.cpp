@@ -1,4 +1,5 @@
 #include <unity.h>
+#include <initializer_list>
 #include "../../src/util/black/karaokemode.h"
 
 using karaokemode::Mode;
@@ -77,6 +78,17 @@ void test_stop_is_at_once() {
     TEST_ASSERT_TRUE(m.screen(Status::Synced, 1, 1) == Screen::Normal);
 }
 
+void test_parse_light_reads_swatches() {
+    TEST_ASSERT_EQUAL_INT(0, karaokemode::parseLight("0"));
+    TEST_ASSERT_EQUAL_INT(8, karaokemode::parseLight("8"));
+    TEST_ASSERT_EQUAL_INT(-1, karaokemode::parseLight("-1"));
+}
+void test_parse_light_rejects_junk() {
+    for (const char* s : {"", "12", "9", "-5", "abc", "3x", " 3", "-"})
+        TEST_ASSERT_EQUAL_INT(-1, karaokemode::parseLight(s));
+    TEST_ASSERT_EQUAL_INT(-1, karaokemode::parseLight(nullptr));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_off_is_normal);
@@ -87,5 +99,7 @@ int main(int, char**) {
     RUN_TEST(test_a_new_song_restarts_the_timer);
     RUN_TEST(test_keepalive_lapse_turns_it_off);
     RUN_TEST(test_stop_is_at_once);
+    RUN_TEST(test_parse_light_reads_swatches);
+    RUN_TEST(test_parse_light_rejects_junk);
     return UNITY_END();
 }

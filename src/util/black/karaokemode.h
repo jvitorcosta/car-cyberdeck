@@ -48,4 +48,13 @@ private:
     bool noneSeen_ = false;
     uint32_t noneSince_ = 0;
 };
+
+// The yellow deck's INSIDE light with each on=1 (light=N): a ledlook swatch 0..MAX_LIGHT, or -1 for
+// off, no link, or anything else (missing, empty, not a plain number, out of range).
+constexpr int MAX_LIGHT = 8;
+inline int parseLight(const char* s) {
+    if (!s || s[0] < '0' || s[0] > '9' || s[1]) return -1;  // one digit and nothing after it
+    const int n = s[0] - '0';
+    return n <= MAX_LIGHT ? n : -1;
+}
 }  // namespace karaokemode

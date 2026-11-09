@@ -5,13 +5,22 @@ namespace karaoke {
 namespace {
 portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 karaokemode::Mode s_mode;  // under s_mux
+int s_light = -1;          // under s_mux
 bool s_logged = false;     // the last state logged: on or off, not every keep-alive
 }  // namespace
 
-void keepAlive() {
+void keepAlive(int light) {
     portENTER_CRITICAL(&s_mux);
     s_mode.keepAlive(millis());
+    s_light = light;
     portEXIT_CRITICAL(&s_mux);
+}
+
+int light() {
+    portENTER_CRITICAL(&s_mux);
+    const int l = s_light;
+    portEXIT_CRITICAL(&s_mux);
+    return l;
 }
 
 void stop() {
