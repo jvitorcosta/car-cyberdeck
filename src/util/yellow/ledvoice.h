@@ -19,6 +19,7 @@ struct Command {
     int zone = ZONE_NONE;
     int preset = -1;     // preset 1..6 ("rose", "favourite two"), or -1
     int music = -1;      // music mode: 1 on ("music", "music mode"), 0 off ("music off"), -1 not asked
+    int karaoke = -1;    // the KARAOKE switch, the same way: 1 on ("karaoke"), 0 off ("karaoke off")
 };
 
 namespace detail {
@@ -100,6 +101,9 @@ static const Word PRESET_NAMES[] = {
 // phrase is then that and nothing else ("music red off" only turns the mode off). "mode" / "modo" are
 // filler, like any unknown word.
 static const char* const MUSIC[] = {"music", "musica", "música"};
+// The KARAOKE switch (the black deck's karaoke view), by the same rules; with a music word too, the
+// karaoke one wins.
+static const char* const KARAOKE[] = {"karaoke", "karaokê", "caraoquê"};
 #define LEDVOICE_N(t) static_cast<int>(sizeof(t) / sizeof(t[0]))
 }  // namespace detail
 
@@ -112,6 +116,7 @@ inline bool parse(const char* text, Command* out) {
     bool light = false;  // the word before was "light"
     bool blue = false;   // the word before was a blue colour word
     bool music = false;  // a music word was heard
+    bool karaoke = false;  // a karaoke word was heard
     char w[24];
     for (const char* p = text; *p;) {
         // a word: letters, digits and UTF-8 bytes (accents); everything else separates
@@ -165,6 +170,11 @@ inline bool parse(const char* text, Command* out) {
             armed = false;
             continue;
         }
+        if (among(w, KARAOKE, LEDVOICE_N(KARAOKE))) {
+            karaoke = true;
+            armed = false;
+            continue;
+        }
         if (lookup(w, FAVS, LEDVOICE_N(FAVS)) >= 0) {
             armed = true;  // not a command by itself: "favourite" alone parses to nothing
             continue;
@@ -185,10 +195,11 @@ inline bool parse(const char* text, Command* out) {
         armed = false;  // a command word means no slot is coming
         any = true;
     }
-    if (music) {  // a music command only: on, or off with an off word
+    if (music || karaoke) {  // a music or karaoke command only: on, or off with an off word
         const int on = out->power == 0 ? 0 : 1, zone = out->zone;
         *out = Command{};
-        out->music = on;
+        if (karaoke) out->karaoke = on;
+        else out->music = on;
         out->zone = zone;
         return true;
     }
