@@ -105,7 +105,8 @@ labels. By day every colour clears a contrast on black of at least 4.5:1 (WCAG; 
 - **PS3 shortcuts**, on any screen, for both lights: **START** on / off, **L2 / R2** the previous /
   next preset, **SELECT** music mode on / off, **L1 / R1** `-` / `+` (on a look page they stay that
   page's), **PS** back to the main screen. The controller buzzes once when a shortcut went out, twice
-  when a light isn't connected. Its LEDs: **1** connected to the deck (always lit while it is),
+  when a light isn't connected. L2 and R2 count past half travel (their pressure, so a resting
+  finger does nothing; each press logs it: `[pad] trigger pressure L2 255, R2 0`). Its LEDs: **1** connected to the deck (always lit while it is),
   **2** the inside light connected, **3** the outside one, **4** its own battery low. Its battery shows at the top right of the main screen ("PAD" and four
   cells; red when it's dying, filling round while it charges).
 
@@ -389,10 +390,22 @@ over WiFi (the car's health is the OBD deck's). It still keeps two app slots
 for the boot guard: three crashes in a row before a firmware has run a minute online boot the
 other slot (`[ota] rolled back`); `[ota] this firmware is good` marks it proven.
 
-Every minute the serial log prints the free heap, its low-water mark and each task's unused stack
-(`[mem] heap 37632 (min 30496)  stack left: link 3428, voice 2468, karaoke 3644, ...`, from a desk
-run with WiFi up). If a feature comes back, watch the `min`: lwIP aborts when a socket can't get
-its semaphore, and the deck reboots.
+Every 10 s the serial log prints the free heap, its low-water mark, its largest free block, the
+allocations that failed and each task's unused stack (`[mem] heap 30948 (min 27376, block 14324,
+fails 0)  stack left: link 3568, voice 2472, karaoke 3876, ...`, from a desk run with WiFi up). If
+a feature comes back, watch the `min` and the `block`: lwIP aborts when a socket can't get its
+semaphore, and a library that takes one big buffer fails first on a heap in pieces.
+
+Why it last restarted is kept across the restart: each boot prints `[boot] reset reason`
+(power-on, panic, task watchdog, brownout...) and, after a reset, `[crash] last run:` with how long
+that run lasted, its heap in its last second, the allocations that failed and what it was doing
+(`at state get`, `led write`, `pad press`, `music ask`). The last six stay in NVS (`[crash] 1:` ..
+`6:` at each boot), so after a restart in the car plug the deck in at home and read the boot log.
+A brownout is the car's power, not the firmware.
+
+The radio prefers Bluetooth over WiFi (`esp_coex_preference_set`): on the default balance the PS3
+controller's reports came through ~20 times a second and quick taps went missing; `[pad] 45
+reports/s` every 10 s tells how it's doing.
 
 ## Notes
 

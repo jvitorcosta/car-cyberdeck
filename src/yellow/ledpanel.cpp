@@ -84,16 +84,20 @@
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <WiFi.h>
+#include <atomic>
 #include <cstddef>
 #include <type_traits>
 #include <Ps3Controller.h>  // esp32-ps3: the DualShock 3 over Bluedroid's Bluetooth Classic
 #include <Preferences.h>
 #include <TFT_eSPI.h>
 #include <WebServer.h>
+#include <esp_coexist.h>
+#include <esp_heap_caps.h>
 #include <lwip/sockets.h>
 #include "pins.h"
 #include "../common/ui/backlight.h"
 #include "../common/core/embed.h"
+#include "../common/core/crashlog.h"
 #include "../common/core/watchdog.h"
 #include "elklink.h"
 #include "padhid.h"
@@ -127,6 +131,7 @@
 #include "../util/yellow/lightstatus.h"
 #include "../util/yellow/padbattery.h"
 #include "../util/yellow/padfeel.h"
+#include "../util/yellow/padtrigger.h"
 #include "../util/yellow/pollpace.h"
 #include "../util/yellow/karaoke.h"
 #include "../util/common/remotegate.h"
@@ -272,6 +277,7 @@ static int indexOf(const Controller& c) { return static_cast<int>(&c - controlle
 static bool linkUp(const Controller& c) { return elklink::up(indexOf(c)); }
 
 static void write(Controller& c, const elkcmd::Frame& f) {
+    crashlog::at("led write");
     if (linkUp(c) && !elklink::write(indexOf(c), f.b, sizeof(f.b))) {
         Serial.printf("[leds] %s: write failed\n", c.label);
     }
@@ -303,6 +309,13 @@ struct LightFade {
 };
 static LightFade lightFade[N_CTRL];
 
+// A look goes out at most every PUSH_GAP_MS per light, the latest one: the inside controller takes
+// ~7 writes a second and a look is four, so a burst of presses (L1/R1 held down, the pad's
+// shortcuts) queued writes on the stack faster than the light took them. A fade or the welcome drops a look still waiting. Loop-owned.
+static constexpr uint32_t PUSH_GAP_MS = 300;
+static bool pushWanted[N_CTRL] = {};
+static uint32_t pushAt[N_CTRL] = {};
+
 // The colour frame push() sends for `l` (black when off).
 static songpalette::Rgb frameOf(const Look& l) {
     if (!l.lit) return {0, 0, 0};
@@ -326,6 +339,7 @@ static void writeFrame(int i, const songpalette::Rgb& c) {
 // the first step, so the light never shows its old colour; else the first step waits for its gap.
 static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rgb& to, bool powerOn, int steps, uint32_t every) {
     LightFade& f = lightFade[i];
+    pushWanted[i] = false;  // the fade writes from here on
     f.intro.n = 0;  // a fade ends the welcome
     f.from = from;
     f.to = to;
@@ -369,6 +383,7 @@ static void startIntro(int i) {
     const Look l = shownLook(i);
     const Rgb s = ledRgb(l.swatch);
     LightFade& f = lightFade[i];
+    pushWanted[i] = false;  // the welcome writes from here on
     f = LightFade();
     f.intro = ledintro::plan(i == 0, {s.r, s.g, s.b}, l.pct);
     f.steps = f.intro.n;
@@ -378,9 +393,8 @@ static void startIntro(int i) {
     f.done = 1;
 }
 
-// Controller i's look (power + dimmed colour), both header variants. Ends a running fade.
-static void push(int i) {
-    lightFade[i].done = lightFade[i].steps;
+// Controller i's look (power + dimmed colour), both header variants: four writes.
+static void pushNow(int i) {
     Controller& c = controllers[i];
     const Look l = shownLook(i);
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) write(c, elkcmd::power(v, l.lit));
@@ -389,6 +403,24 @@ static void push(int i) {
     for (elkcmd::Variant v : {elkcmd::V0, elkcmd::V1}) {
         write(c, elkcmd::color(v, elkcmd::dim(s.r, l.pct), elkcmd::dim(s.g, l.pct), elkcmd::dim(s.b, l.pct)));
     }
+}
+
+
+// Each loop pass, and from push(): the wanted look of each light whose gap has passed.
+static void pushTick() {
+    for (int i = 0; i < N_CTRL; i++) {
+        if (!pushWanted[i] || (pushAt[i] && millis() - pushAt[i] < PUSH_GAP_MS)) continue;
+        pushWanted[i] = false;
+        pushAt[i] = millis() | 1;
+        pushNow(i);
+    }
+}
+
+// Controller i gets its look: now, or once its gap has passed (pushTick). Ends a running fade.
+static void push(int i) {
+    lightFade[i].done = lightFade[i].steps;
+    pushWanted[i] = true;
+    pushTick();
 }
 
 // One change on `page` (a tap, Y, voice): on BOTH it goes to both lights (bothlook), on INSIDE or
@@ -1941,13 +1973,59 @@ static void padPreset(int dir) {
     padFelt();
 }
 
+// The buttons the loop acts on, from each report (onPadReport, Ps3.attach, the Bluetooth task):
+// the held ones, and every one seen down since the loop last looked. The DS3 reports only ~19
+// times a second next to WiFi and the lights, so a quick tap is a single report, ~50 ms, and a
+// loop pass busy drawing could miss it; the latch keeps it. Bits as the DS3's report has them
+// (ps3_parser.c's masks).
+static std::atomic<uint32_t> padHeld{0}, padSeen{0};
+static std::atomic<uint32_t> padReports{0};  // reports since boot: the [pad] rate line
+
+// L2 / R2 by their pressure (util/padtrigger), the Bluetooth task's alone; the loop logs the
+// pressure of each press it acts on, to tune PRESS_AT on the hand.
+static padtrigger::Trigger padL2, padR2;
+static std::atomic<uint8_t> padL2At{0}, padR2At{0};
+// A new connection's first report can carry junk (every face button down at once): the buttons
+// count only from the first report with none held. handlePad disarms it on each connect.
+static std::atomic<bool> padArmed{false};
+// X / O pressed hard (their pressure) in a report without their on/off bit: the loop logs it, to
+// tell a worn button from one the deck drops. 0: none since the last log.
+static std::atomic<uint8_t> padXNoBit{0}, padONoBit{0};
+
+static void onPadReport() {
+    const ps3_button_t& b = Ps3.data.button;
+    const uint8_t l2 = Ps3.data.analog.button.l2, r2 = Ps3.data.analog.button.r2;
+    padL2At.store(l2);
+    padR2At.store(r2);
+    if (!b.cross && Ps3.data.analog.button.cross > 60) padXNoBit.store(Ps3.data.analog.button.cross);
+    if (!b.circle && Ps3.data.analog.button.circle > 60) padONoBit.store(Ps3.data.analog.button.circle);
+    const bool l2Down = padL2.feed(l2), r2Down = padR2.feed(r2);
+    const uint32_t raw = (b.select ? 1u << 0 : 0) | (b.start ? 1u << 3 : 0) | (b.up ? 1u << 4 : 0) |
+                         (b.right ? 1u << 5 : 0) | (b.down ? 1u << 6 : 0) | (b.left ? 1u << 7 : 0) |
+                         (l2Down ? 1u << 8 : 0) | (r2Down ? 1u << 9 : 0) | (b.l1 ? 1u << 10 : 0) |
+                         (b.r1 ? 1u << 11 : 0) | (b.triangle ? 1u << 12 : 0) | (b.circle ? 1u << 13 : 0) |
+                         (b.cross ? 1u << 14 : 0) | (b.square ? 1u << 15 : 0) | (b.ps ? 1u << 16 : 0);
+    padReports.fetch_add(1);
+    if (!padArmed.load()) {
+        if (raw) return;  // still the connect's junk, or a button held through it
+        padArmed.store(true);
+    }
+    padHeld.store(raw);
+    padSeen.fetch_or(raw);
+}
+
 static void handlePad() {
     const bool is = Ps3.isConnected();
     if (is != padUp) {
         padUp = is;
         Serial.printf("[pad] %s\n", is ? "connected" : "gone");
         setFocus(is ? homeFocus() : -1);
-        if (!is) padBattery = padbattery::Look{};  // the next controller starts unknown
+        padArmed.store(false);  // each connection's buttons count from its first clear report
+        if (!is) {
+            padBattery = padbattery::Look{};  // the next controller starts unknown
+            padHeld.store(0);  // nothing held while it's gone
+            padSeen.store(0);
+        }
         padLeds = -1;  // a new connection shows the links (and stops the four LEDs blinking)
         padBuzz = padfeel::Buzz{};
         if (screen == Screen::Menu) drawPadBattery();
@@ -1962,8 +2040,24 @@ static void handlePad() {
     }
     if (!is) return;
 
-    // the held buttons, as the last report left them (the Bluetooth task writes Ps3.data)
-    const auto& n = Ps3.data.button;
+    // every 10 s: how often the controller reports (a quick tap is one report)
+    static uint32_t rateAt = 0, rateFrom = 0;
+    if (millis() - rateAt >= 10000) {
+        const uint32_t now = padReports.load();
+        if (rateAt) Serial.printf("[pad] %u reports/s\n", static_cast<unsigned>((now - rateFrom) * 1000 / (millis() - rateAt)));
+        rateAt = millis();
+        rateFrom = now;
+    }
+    if (const uint8_t p = padXNoBit.exchange(0)) Serial.printf("[pad] X pressed to %u without its bit\n", p);
+    if (const uint8_t p = padONoBit.exchange(0)) Serial.printf("[pad] O pressed to %u without its bit\n", p);
+    // the held buttons, and any tapped since the last pass (onPadReport)
+    const uint32_t m = padHeld.load() | padSeen.exchange(0);
+    struct {
+        bool select, start, up, right, down, left, l2, r2, l1, r1, triangle, circle, cross, square, ps;
+    } n = {(m & 1u << 0) != 0,  (m & 1u << 3) != 0,  (m & 1u << 4) != 0,  (m & 1u << 5) != 0,
+           (m & 1u << 6) != 0,  (m & 1u << 7) != 0,  (m & 1u << 8) != 0,  (m & 1u << 9) != 0,
+           (m & 1u << 10) != 0, (m & 1u << 11) != 0, (m & 1u << 12) != 0, (m & 1u << 13) != 0,
+           (m & 1u << 14) != 0, (m & 1u << 15) != 0, (m & 1u << 16) != 0};
     // D-pad only: the sticks drift, which would wander the ring on its own.
     int dx = (n.right ? 1 : 0) - (n.left ? 1 : 0);
     int dy = (n.down ? 1 : 0) - (n.up ? 1 : 0);
@@ -1999,9 +2093,11 @@ static void handlePad() {
     const bool home = edge(n.ps, pPs);
     // every press in the log, to tell a real press from the deck acting by itself
     if (a || b || x || y || lb || rb || start || select || l2 || r2 || home) {
+        crashlog::at("pad press");
         Serial.printf("[pad] press%s%s%s%s%s%s%s%s%s%s%s\n", a ? " cross" : "", b ? " circle" : "", x ? " square" : "",
                       y ? " triangle" : "", lb ? " L1" : "", rb ? " R1" : "", start ? " START" : "",
                       select ? " SELECT" : "", l2 ? " L2" : "", r2 ? " R2" : "", home ? " PS" : "");
+        if (l2 || r2) Serial.printf("[pad] trigger pressure L2 %u, R2 %u\n", padL2At.load(), padR2At.load());
     }
 
     // the shortcuts, on any screen; one per tick, before the screen's own buttons
@@ -2178,7 +2274,10 @@ static void deckAnswered(bool valid) {
 // GET /state into lyricsBody (cut at MAX_JSON, always terminated).
 static int lyricsGet() {
     lyricsBody[0] = 0;
-    return deckGet("/state", nullptr, 0, lyricsBody, sizeof(lyricsBody));
+    crashlog::at("state get");
+    const int rc = deckGet("/state", nullptr, 0, lyricsBody, sizeof(lyricsBody));
+    crashlog::at("state done");
+    return rc;
 }
 
 // ---- Music mode: the black deck sends the song's palette ----
@@ -2195,6 +2294,7 @@ static volatile uint32_t musicPeer = 0;  // IPv4, network order (IPAddress's dwo
 static volatile uint32_t musicBoot = 0;  // the black deck's proven boot id; 0: none yet
 
 static int musicAsk(bool on) {
+    crashlog::at("music ask");
     const sigreq::Param p[] = {{"on", on ? "1" : "0"}};
     uint32_t peer = 0;
     char reply[96], nonce[17] = "";
@@ -2893,6 +2993,7 @@ static void repaint() {
 void setup() {
     Serial.begin(115200);
     Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
+    crashlog::begin();  // why the last run ended, and the runs before it (common/core/crashlog)
     ota::checkBoot();  // may boot the other app slot (net/ota), before anything else starts
     // The task watchdog at 90 s (common/core/watchdog), before any task subscribes: the link,
     // voice, lyrics, car, music and weather tasks, and this loop from the end of setup().
@@ -2919,6 +3020,11 @@ void setup() {
     // Bluedroid in dual mode: the PS3 library starts the controller and the stack (Classic for the
     // pad), then the lights' GATT client registers on the same stack (yellow/elklink).
     if (!Ps3.begin()) Serial.println("[pad] Bluetooth didn't start");
+    Ps3.attach(onPadReport);  // each report: the held and tapped buttons, L2 / R2 by pressure
+    // The radio's time to Bluetooth first: on the default balance the DS3 got ~20 reports a second
+    // of its ~100 next to WiFi and the lights, so a quick X or O fell between two that arrived.
+    // WiFi carries only the black deck's small polls here.
+    esp_coex_preference_set(ESP_COEX_PREFER_BT);
     Serial.printf("[pad] deck address %s (the PS3 controller's master)\n", Ps3.getAddress().c_str());
     elklink::begin();
     for (const Controller& c : controllers) {
@@ -3116,12 +3222,16 @@ void loop() {
     if (voiceQueue && xQueueReceive(voiceQueue, &voice, 0) == pdTRUE) applyVoice(voice);
     flushSave();
 
-    // every minute: free heap and the least stack each task has had to spare
+    // every 10 s: free heap, its largest block, failed allocations and the least stack each task
+    // has had to spare; crashlog keeps the last second's heap for after a restart
+    crashlog::tick();
     static uint32_t memAt = 0;
-    if (millis() - memAt > 60000) {
+    if (millis() - memAt > 10000) {
         memAt = millis();
-        Serial.printf("[mem] heap %u (min %u)  stack left: link %u, voice %u, karaoke %u, music %u, loop %u\n",
+        Serial.printf("[mem] heap %u (min %u, block %u, fails %u)  stack left: link %u, voice %u, karaoke %u, music %u, loop %u\n",
                       static_cast<unsigned>(ESP.getFreeHeap()), static_cast<unsigned>(ESP.getMinFreeHeap()),
+                      static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT)),
+                      static_cast<unsigned>(crashlog::fails()),
                       linkHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(linkHandle)) : 0u,
                       voiceHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(voiceHandle)) : 0u,
                       lyricsHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(lyricsHandle)) : 0u,
@@ -3130,6 +3240,8 @@ void loop() {
     }
 
     handlePad();
+    padhid::retry();
+    pushTick();
     lyricsTick();
     musicTick();
     fadeTick();

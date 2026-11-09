@@ -1,4 +1,5 @@
 #include "padhid.h"
+#include <Arduino.h>
 #include <cstdlib>
 #include <cstring>
 
@@ -51,4 +52,51 @@ bool send(uint8_t leds, uint32_t rumbleMs, uint8_t intensity) {
     memcpy(reinterpret_cast<uint8_t*>(buf + 1) + L2CAP_OFFSET, report, sizeof(report));
     return L2CA_DataWrite(HIDC_CID, buf) != L2CA_FAILED;
 }
+
+namespace {
+// esp32-ps3's hid_cmd_t (ps3_int.h): code, identifier, then up to 48 data bytes; `len` counts the data.
+constexpr int CMD_HEAD = 2, CMD_MAX = 2 + DATA_LEN;
+constexpr uint32_t RETRY_MS = 500;
+constexpr int RETRIES = 10;
+uint8_t s_cmd[CMD_MAX];       // the command that found no memory
+volatile int s_cmdLen = 0;    // its bytes; 0: none waiting
+volatile int s_triesLeft = 0;
+uint32_t s_triedAt = 0;
+
+// The command on the control channel in a buffer of its own size. False: no memory.
+bool sendCmd(const uint8_t* cmd, int n) {
+    auto* buf = static_cast<BtHdr*>(malloc(sizeof(BtHdr) + L2CAP_OFFSET + n));
+    if (!buf) return false;
+    buf->event = 0;
+    buf->layer_specific = 0;
+    buf->len = static_cast<uint16_t>(n);
+    buf->offset = L2CAP_OFFSET;
+    memcpy(reinterpret_cast<uint8_t*>(buf + 1) + L2CAP_OFFSET, cmd, n);
+    L2CA_DataWrite(HIDC_CID, buf);  // the stack frees it, sent or not
+    return true;
+}
+}  // namespace
+
+void retry() {
+    if (!s_cmdLen || millis() - s_triedAt < RETRY_MS) return;
+    s_triedAt = millis();
+    if (sendCmd(s_cmd, s_cmdLen)) {
+        Serial.println("[pad] its start command went out on a retry");
+        s_cmdLen = 0;
+    } else if (--s_triesLeft <= 0) {
+        Serial.println("[pad] no memory for its start command: press PS again");
+        s_cmdLen = 0;
+    }
+}
 }  // namespace padhid
+
+// In place of esp32-ps3's ps3_l2cap_send_hid (the link's --wrap): see padhid.h. The Bluetooth task.
+extern "C" void __wrap_ps3_l2cap_send_hid(const uint8_t* hidCmd, uint8_t len) {
+    using namespace padhid;
+    const int n = CMD_HEAD + (len > DATA_LEN ? DATA_LEN : len);
+    if (sendCmd(hidCmd, n)) return;
+    memcpy(s_cmd, hidCmd, n);
+    s_triesLeft = RETRIES;
+    s_triedAt = millis();
+    s_cmdLen = n;
+}
