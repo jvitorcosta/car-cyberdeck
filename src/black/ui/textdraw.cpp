@@ -110,6 +110,34 @@ int drawRunScaled(TFT_eSPI& t, const glyphrun::Item* it, size_t n, int x, int y,
     return w;
 }
 
+int faceWidth(char c, void* ctx) {
+    const auto f = static_cast<lyricface::Face>(reinterpret_cast<intptr_t>(ctx));
+    return lyricface::advance(f, static_cast<uint8_t>(c));
+}
+
+int drawRunFace(TFT_eSPI& t, const glyphrun::Item* it, size_t n, int x, int y, uint16_t fg,
+                lyricface::Face f) {
+    t.setFreeFont(reinterpret_cast<const GFXfont*>(&lyricface::font(f)));
+    const int base = y + lyricface::ascent(f);
+    const int pictureTop = y + (lyricface::lineHeight(f) - 16) / 2;
+    int px = x;
+    for (size_t i = 0; i < n; ++i) {
+        const glyphrun::Item& g = it[i];
+        if (g.kind == glyphrun::Kind::Wide) {
+            drawWide(t, g.cp, px, pictureTop - CJK_DY, fg, 1);
+        } else if (g.kind == glyphrun::Kind::Emoji) {
+            drawEmoji(t, g.cp, px, pictureTop - CJK_DY, 1);
+        } else {
+            const uint8_t whole = txt::latin1(g.ch, g.mark);
+            // bg == fg: drawn transparent, over whatever is there (the sweep repaints in place)
+            t.drawChar(px, base, whole ? whole : static_cast<uint8_t>(g.ch), fg, fg, 1);
+        }
+        px += g.w;
+    }
+    t.setFreeFont(nullptr);
+    return px - x;
+}
+
 int drawText(TFT_eSPI& t, const char* utf8, int x, int y, uint16_t fg,
              uint16_t shadow, uint8_t datum, int maxW, bool upper) {
     constexpr size_t MAX_ITEMS = 96;   // AppState strings are < 96 bytes
