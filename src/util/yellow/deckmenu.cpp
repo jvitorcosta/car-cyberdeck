@@ -12,10 +12,9 @@ bool inside(const Rect& r, int x, int y) { return x >= r.x && x < r.x + r.w && y
 
 bool displayOnly(Screen s, int x, int y) {
     if (s == Screen::Menu) {
-        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(NOW_BAND, x, y) || inside(LIGHTS_BAND, x, y) ||
+        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(LIGHTS_BAND, x, y) ||
                inside(PROMPT_BAND, x, y);
     }
-    if (s == Screen::Karaoke) return inside(KARAOKE_BODY, x, y);
     if (s == Screen::Presets) return inside(STATUS, x, y);
     return inside(STATUS, x, y) || inside(LEVEL, x, y);
 }
@@ -28,7 +27,6 @@ Rect mk(int x, int y, int w, int h) {
 
 int count(Screen s) {
     if (s == Screen::Menu) return M_N;
-    if (s == Screen::Karaoke) return K_N;
     if (s == Screen::Presets) return P_N;
     return L_N;
 }
@@ -36,7 +34,6 @@ int count(Screen s) {
 Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
     if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 106, 192, 100, 44);  // LIGHTS, KARAOKE, MUSIC
-    if (s == Screen::Karaoke) return mk(4, 2, 70, 36);                        // K_BACK, where Lights has its Back
     // Lights and Presets: < BACK, then the four tabs in x 80..316 (56 px: five 70 px buttons don't fit)
     if (id == L_BACK) return mk(4, 2, 70, 36);
     if (id < L_TAB0 + N_TABS) return mk(80 + (id - L_TAB0) * 60, 2, 56, 36);

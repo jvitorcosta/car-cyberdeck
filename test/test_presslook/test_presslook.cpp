@@ -31,8 +31,7 @@ void test_pressed_differs_from_idle_and_selected() {
 void test_ring_fits_every_button() {
     constexpr int edge = presslook::INSET + presslook::RING;
     TEST_ASSERT_TRUE(presslook::INSET >= 2 && presslook::RING >= 2);  // off the bar's 1 px margin, 2 px thick
-    for (deckmenu::Screen s : {deckmenu::Screen::Menu, deckmenu::Screen::Lights, deckmenu::Screen::Presets,
-                               deckmenu::Screen::Karaoke}) {
+    for (deckmenu::Screen s : {deckmenu::Screen::Menu, deckmenu::Screen::Lights, deckmenu::Screen::Presets}) {
         for (int id = 0; id < deckmenu::count(s); id++) {
             const deckmenu::Rect r = deckmenu::rect(s, id);
             if (r.w <= 0) continue;
