@@ -86,6 +86,7 @@
 #include <esp_heap_caps.h>
 #include <lwip/sockets.h>
 #include "pins.h"
+#include <irrx.h>
 #include "../common/ui/backlight.h"
 #include "../common/core/embed.h"
 #include "../common/core/crashlog.h"
@@ -111,6 +112,7 @@
 #include "../util/yellow/keepalive.h"
 #include "../util/yellow/deckmenu.h"
 #include "../util/yellow/elkcmd.h"
+#include "../util/yellow/irkeys.h"
 #include "../util/common/hotspotip.h"
 #include "../util/lights/ledintro.h"
 #include "../util/lights/ledlook.h"
@@ -1620,12 +1622,9 @@ static void padPreset(int dir) {
     padFelt(padfeel::Feel::Tick, true, true, true);
 }
 
-// The right stick's flick: the previous / next grid colour on both lights, from the inside one's;
-// each keeps its own level and on/off (bothlook::recolour). Ends music mode like any manual change.
-static void padColour(int dir) {
-    const int sw = ledlook::stepGrid(looks[INSIDE].swatch, dir);
-    musicYield();
-    bothlook::recolour(sw, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+// After a colour on both lights (the right stick, the IR remote): both pushed and saved, and its
+// name as the message (">RED").
+static void colourShown(int sw) {
     for (int i = 0; i < N_CTRL; i++) push(i);
     save();
     char m[16];
@@ -1633,6 +1632,15 @@ static void padColour(int dir) {
     for (char* c = m; *c; c++) *c = static_cast<char>(toupper(static_cast<unsigned char>(*c)));
     setMessage(m);
     if (!drawLooks()) drawMessage();
+}
+
+// The right stick's flick: the previous / next grid colour on both lights, from the inside one's;
+// each keeps its own level and on/off (bothlook::recolour). Ends music mode like any manual change.
+static void padColour(int dir) {
+    const int sw = ledlook::stepGrid(looks[INSIDE].swatch, dir);
+    musicYield();
+    bothlook::recolour(sw, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+    colourShown(sw);
     Serial.printf("[pad] colour %s\n", ledlook::SWATCHES[sw].word);
     padFelt(padfeel::Feel::Tick, true, true, true);
 }
@@ -1642,6 +1650,50 @@ static void padKaraoke() {
     setKaraoke(!karaokeOn);
     drawKaraokeItem();
     padFelt(padfeel::Feel::Long, karaokeOn, false, false);
+}
+
+// The light kit's IR remote, on the dash next to the deck (lib/irrx, util/yellow/irkeys): every
+// key acts on both lights, as the PS3 controller's do but without a buzz. A held brightness key
+// steps about four times a second; every other key acts once per press.
+static irkeys::Repeat irRepeat;
+
+static void irTick() {
+    uint16_t address;
+    uint8_t command;
+    bool repeat;
+    if (!irrx::poll(&address, &command, &repeat)) return;
+    irkeys::Key k;
+    if (!irkeys::lookup(address, command, &k)) {
+        Serial.printf("[ir] not the lights' remote: %04X %02X\n", address, command);
+        return;
+    }
+    if (!irRepeat.accept(k, repeat, millis())) return;
+    const irkeys::Action a = irkeys::action(k);
+    Serial.printf("[ir] key %u%s\n", static_cast<unsigned>(command), repeat ? " held" : "");
+    bothlook::Change c;
+    switch (a.kind) {
+        case irkeys::Kind::Level:
+            c.step = a.value;
+            change(BOTH, c);
+            save();
+            drawLooks();
+            break;
+        case irkeys::Kind::Power:
+            c.power = a.value;
+            change(BOTH, c);
+            save();
+            setMessage(c.power ? ">LIGHTS ON" : ">LIGHTS OFF");
+            if (!drawLooks()) drawMessage();
+            break;
+        case irkeys::Kind::Colour:
+            musicYield();
+            bothlook::paint(a.value, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+            colourShown(a.value);
+            break;
+        case irkeys::Kind::Effect:
+        case irkeys::Kind::Playlist:
+            break;  // Tasks 4 and 6
+    }
 }
 
 // The buttons the loop acts on, from each report (onPadReport, Ps3.attach, the Bluetooth task):
@@ -2739,6 +2791,7 @@ void setup() {
     // Bluedroid in dual mode: the PS3 library starts the controller and the stack (Classic for the
     // pad), then the lights' GATT client registers on the same stack (yellow/elklink).
     if (!Ps3.begin()) Serial.println("[pad] Bluetooth didn't start");
+    irrx::begin(PIN_IR);
     Ps3.attach(onPadReport);  // each report: the held and tapped buttons, L2 / R2 by pressure
     // The radio's time to Bluetooth first: on the default balance the DS3 got ~20 reports a second
     // of its ~100 next to WiFi and the lights, so a quick X or O fell between two that arrived.
@@ -2959,6 +3012,7 @@ void loop() {
     }
 
     handlePad();
+    irTick();
     padhid::retry();
     pushTick();
     musicTick();

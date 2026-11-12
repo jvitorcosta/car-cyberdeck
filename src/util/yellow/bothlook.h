@@ -60,6 +60,13 @@ inline void recolour(int swatch, ledlook::Look* both, ledlook::Look* in, ledlook
     both->swatch = in->swatch = out->swatch = swatch;
 }
 
+// A colour on both lights that also turns them on (the IR remote's colour keys): recolour, and
+// every look lit at its own level, so a light that was off comes back at the % it had.
+inline void paint(int swatch, ledlook::Look* both, ledlook::Look* in, ledlook::Look* out) {
+    recolour(swatch, both, in, out);
+    both->lit = in->lit = out->lit = true;
+}
+
 // The BOTH page's level line: one "60%" (or "OFF") while both lights show the same level whatever
 // their colours, else each one's ("IN 60%  OUT 40%", "IN OFF  OUT 80%"; one space where two would
 // pass MAX_LEVEL_TEXT, so it fits the level rect: "IN 100% OUT 90%"). Cut to fit `n`.

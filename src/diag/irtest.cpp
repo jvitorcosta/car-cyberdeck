@@ -11,7 +11,6 @@
 
 #include "pins.h"
 
-static const int PIN_IR = 27;  // CN1, next to the RGB LED
 
 static TFT_eSPI s_tft;
 static uint32_t s_presses = 0;
