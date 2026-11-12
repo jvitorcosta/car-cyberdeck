@@ -17,8 +17,8 @@
 //           lights together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK
 //           2/2", or "OUTSIDE: NO LINK" in ALERT), then on the three look pages 2x4 colour buttons
 //           (tap one to set it and turn on, double-tap the lit one to turn the lights off) and
-//           [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two lights
-//           differ]  [+]; on PRESETS the six presets, two rows of three, each its name over its
+//           [-]  [level: a 10-cell block bar and the %, OFF, or on BOTH while the two lights'
+//           levels differ each one's, "IN 60%  OUT 40%"]  [+]; on PRESETS the six presets, two rows of three, each its name over its
 //           inside and outside chips (tap: apply, ">ROSE APPLIED"; the tab stays). GOJIRA's name is
 //           ゴジラ on screen (">ゴジラ APPLIED"): three Unifont glyphs (ui/gojiraname), as VT323 has
 //           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, cyan,
@@ -160,7 +160,7 @@ static int currentTab() { return presetsTab ? deckmenu::TAB_PRESETS : static_cas
 static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
 static Look& cur() { return looks[target]; }
 // The BOTH page is on screen while the lights differ (after a preset or the INSIDE / OUTSIDE
-// pages): it shows no selected colour and "MIX" for the level.
+// pages): it shows no selected colour, and each light's level when those differ.
 static bool bothMixed() { return target == BOTH && bothlook::mixed(looks[INSIDE], looks[OUTSIDE]); }
 
 using deckmenu::Rect;
@@ -766,26 +766,30 @@ static void drawButton(int id, bool pressed = false) {
 }
 
 // The block bar: 10 cells, one filled per 10 % (the terminal's full block), the rest outlined (its
-// shade block; the font's ASCII table has neither glyph), and the % under it (TITLE). "MIX" on BOTH
-// while the lights differ (the main screen's lights band has each light's %), "OFF" in DIM when off.
+// shade block; the font's ASCII table has neither glyph), and the % under it (TITLE), "OFF" in DIM
+// when off. On BOTH while the lights differ the bar is the inside light's and the line has both
+// levels when they differ ("IN 60%  OUT 40%", SMALL: TITLE doesn't fit the 108 px rect).
 static void drawLevel() {
     const Rect& r = deckmenu::LEVEL;
-    const Look& l = cur();
-    const bool mixed = bothMixed(), live = mixed || l.lit;
+    const bool mixed = bothMixed();
+    const Look& l = mixed ? looks[INSIDE] : cur();
+    const bool live = mixed || l.lit;
     clearBg(r);
     tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
     constexpr int N_CELL = 10, CELL = 8, GAP = 2;
-    const int full = live && !mixed ? l.pct / 10 : 0;
+    const int full = l.lit ? l.pct / 10 : 0;
     const int x0 = r.x + (r.w - (N_CELL * (CELL + GAP) - GAP)) / 2;
     for (int k = 0; k < N_CELL; k++) {
         const int x = x0 + k * (CELL + GAP);
         if (k < full) tft.fillRect(x, r.y + 7, CELL, 14, pal(termpal::TEXT));
         else tft.drawRect(x, r.y + 7, CELL, 14, pal(live ? termpal::MID : termpal::DIM));
     }
-    char pct[8];
-    snprintf(pct, sizeof(pct), "%u%%", static_cast<unsigned>(l.pct));
+    char line[24];
+    if (mixed) bothlook::levelText(looks[INSIDE], looks[OUTSIDE], line, sizeof(line));
+    else bothlook::levelText(l, l, line, sizeof(line));
     tft.setTextColor(pal(live ? termpal::TEXT : termpal::DIM));
-    text(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, Face::TITLE, MC_DATUM);
+    const bool both = strchr(line, ' ') != nullptr;  // "IN 60%  OUT 40%"
+    text(line, r.x + r.w / 2, r.y + 34, both ? Face::SMALL : Face::TITLE, MC_DATUM);
 }
 
 // A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS
@@ -1324,7 +1328,7 @@ static void tripTick() {
 
 // Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
-// shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
+// shows each light's level, and the main screen's lights band tells each light's look. From a tap, A, voice or
 // the watch. The lights fade to it from what they show (even a song's): the inside over ~1 s, the
 // outside, whose controller takes ~1 write a second, half now and the rest 1 s later.
 static constexpr int PRESET_FADE_IN = 4, PRESET_FADE_OUT = 2;
