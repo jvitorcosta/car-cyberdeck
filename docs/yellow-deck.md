@@ -89,13 +89,15 @@ full saturation; the paler day colours, which clear 4.5:1 on black, looked dull 
   `[LIGHTS]` can't press a button on the next screen.
 - **PS3 controller**: the D-pad moves the focus (an inverted bar on the main screen's buttons, a
   ring on Lights), **cross** presses (on KARAOKE or MUSIC MODE it flips the switch), **circle** goes back to the main screen. On Lights only:
-  **square** next page (BOTH, INSIDE, OUTSIDE, PRESETS, round again); on the look pages
-  **triangle** this page's lights on/off and **L1 / R1** `-` / `+`. The focus shows only while a
+  **square** next page (BOTH, INSIDE, OUTSIDE, PRESETS, round again). The focus shows only while a
   controller is connected.
-- **PS3 shortcuts**, on any screen, for both lights: **START** on / off, **L2 / R2** the previous /
-  next preset, **SELECT** music mode on / off, **L1 / R1** `-` / `+` (on a look page they stay that
-  page's), **PS** back to the main screen. The controller buzzes once when a shortcut went out, twice
-  when a light isn't connected. A press counts past a quarter of the button's travel (L2 and R2
+- **PS3 shortcuts**, on any screen, for both lights: **START** on / off, **SELECT** music mode on /
+  off, **triangle** karaoke on / off, **L2 / R2** the previous / next preset, **L1 / R1** `-` / `+`,
+  the **right stick** flicked left / right the previous / next colour (each light keeps its own
+  level and on/off, so a split preset stays split; `>BLUE`), **PS** back to the main screen. Each
+  buzzes its own way: a step (preset, level, colour) one short tick, music mode two ticks, karaoke
+  one long buzz, the lights one firm buzz; turning something off feels softer, and a weak long buzz
+  follows when a light it was for isn't connected. A press counts past a quarter of the button's travel (L2 and R2
   past ~80 %; each press logs it: `[pad] trigger pressure L2 255, R2 0`), so a resting thumb does
   nothing. Three or more buttons at once count as nothing (setting the pad down presses many
   lightly: `[pad] ignored: 6 buttons at once`); presses wait half a second after the pad is picked

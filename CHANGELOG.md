@@ -24,6 +24,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   presses many lightly), presses wait half a second after the pad is picked up off a table or put
   down on one, and a button held for 5 s is ignored until it's let go (`util/padguard`). The log
   says why: `[pad] ignored: 6 buttons at once`, `[pad] resting`, `[pad] picked up`, `[pad] stuck: up`.
+- **Changed:** the PS3 controller's shortcuts: **triangle** turns karaoke on / off on any screen
+  (it no longer turns a look page's lights on / off), **L1 / R1** step both lights on every screen
+  (also on the look pages), and a flick of the **right stick** left / right is the previous / next
+  colour on both lights, each keeping its own level and on/off. Each kind of shortcut buzzes its
+  own way on the pad's two motors (a tick for a step, two for music mode, a long buzz for karaoke,
+  a firm one for the lights; softer for off; a weak long one after when a light isn't connected).
 - **Changed:** KARAOKE on the main screen is an on/off switch like MUSIC MODE (an `ON` / `OFF` tag;
   a tap or the PS3 controller's cross on the focus toggles it; `>KARAOKE OFF`, and when it goes on
   `>KARAOKE: CONNECTING...` until the black deck answers, then `>KARAOKE ON`, or `>BLACK DECK NOT
