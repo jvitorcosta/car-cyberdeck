@@ -1662,7 +1662,8 @@ static std::atomic<uint8_t> padChord{0};   // bits on as a set-down began; 0: no
 static std::atomic<uint8_t> padRest{0};    // 1 resting, 2 picked up; 0: no change since the last log
 static std::atomic<uint32_t> padStuck{0};  // buttons the guard dropped as stuck since the last log
 // A new connection's first report can carry junk (every face button down at once): the buttons
-// count only from the first report with none held. handlePad disarms it on each connect.
+// count only from the first report with none past its press line (padguard::idle). handlePad
+// disarms it on each connect.
 static std::atomic<bool> padArmed{false};
 // X / O pressed hard (their pressure) in a report without their on/off bit: the loop logs it, to
 // tell a worn button from one the deck drops. 0: none since the last log.
@@ -1714,7 +1715,7 @@ static void onPadReport() {
         padFlick.reset();
         chord = resting = false;
         stuck = 0;
-        if (r.bits) return;  // still the connect's junk, or a button held through it
+        if (!idle(r)) return;  // the connect's junk, or a button held through it (a light touch is fine)
         padArmed.store(true);
     }
     const uint32_t held = padGuard.feed(r);

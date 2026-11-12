@@ -38,6 +38,15 @@ struct Report {
     uint32_t now;
 };
 
+// True when no button in the report is past its press line: a new connection arms on this, so a
+// resting finger or a trigger touched in the grip (a light bit) can't keep the pad dead.
+inline bool idle(const Report& r) {
+    for (int b = 0; b < N_BITS; b++) {
+        if (r.pressure[b] >= (b == L2 || b == R2 ? TRIGGER_PRESS_AT : PRESS_AT)) return false;
+    }
+    return true;
+}
+
 class Guard {
 public:
     // The bits that count as held right now.

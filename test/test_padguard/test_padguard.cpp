@@ -160,6 +160,16 @@ void test_paused_and_stuck_report_their_state() {
     TEST_ASSERT_EQUAL_UINT32(0, s.stuck());
 }
 
+// A new connection arms once no button is past its press line: a resting finger (a light bit) or
+// a trigger touched in the grip must not keep the pad dead.
+void test_idle_ignores_light_touches() {
+    TEST_ASSERT_TRUE(idle(rep(0, {})));
+    TEST_ASSERT_TRUE(idle(rep(0, {{UP, 30}, {L2, 150}})));
+    TEST_ASSERT_FALSE(idle(rep(0, {{CROSS, 64}})));
+    TEST_ASSERT_FALSE(idle(rep(0, {{R2, 200}})));
+    TEST_ASSERT_FALSE(idle(rep(0, {{START, 255}})));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_a_light_touch_is_not_a_press);
@@ -176,5 +186,6 @@ int main(int, char**) {
     RUN_TEST(test_reset_forgets_held_presses_and_rest);
     RUN_TEST(test_millis_wrap);
     RUN_TEST(test_paused_and_stuck_report_their_state);
+    RUN_TEST(test_idle_ignores_light_touches);
     return UNITY_END();
 }
