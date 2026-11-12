@@ -211,7 +211,7 @@ static void handlePlaylistPlay() {
     const String id = s_server->arg("id");
     if (!playlists::validId(id.c_str())) { s_server->send(400, "text/plain", "bad id"); return; }
     char out[48];
-    const int code = spclient::watchPlay(id.c_str(), out, sizeof out);
+    const int code = spclient::watchPlay(id.c_str(), s_server->arg("shuffle") == "1", out, sizeof out);
     s_server->send(code, "text/plain", out);
 }
 

@@ -108,6 +108,33 @@ void test_play_body_names_the_playlist() {
     TEST_ASSERT_EQUAL_STRING("", tiny);
 }
 
+void test_read_total() {
+    int total = 0;
+    TEST_ASSERT_TRUE(playlists::readTotal("{\"tracks\":{\"total\":57}}", &total));
+    TEST_ASSERT_EQUAL_INT(57, total);
+    TEST_ASSERT_FALSE(playlists::readTotal("{\"name\":\"x\"}", &total));
+    TEST_ASSERT_FALSE(playlists::readTotal(nullptr, &total));
+}
+
+void test_play_body_at_a_position() {
+    char out[96];
+    TEST_ASSERT_TRUE(playlists::playBodyAt("37i9dQZF1DXcBWIGoYBM5M", 12, out, sizeof out));
+    TEST_ASSERT_EQUAL_STRING("{\"context_uri\":\"spotify:playlist:37i9dQZF1DXcBWIGoYBM5M\",\"offset\":{\"position\":12}}", out);
+    char plain[96];
+    TEST_ASSERT_TRUE(playlists::playBodyAt("37i9dQZF1DXcBWIGoYBM5M", -1, out, sizeof out));
+    TEST_ASSERT_TRUE(playlists::playBody("37i9dQZF1DXcBWIGoYBM5M", plain, sizeof plain));
+    TEST_ASSERT_EQUAL_STRING(plain, out);
+    TEST_ASSERT_FALSE(playlists::playBodyAt("bad\"id", 3, out, sizeof out));
+    TEST_ASSERT_EQUAL_STRING("", out);
+}
+
+void test_play_position_without_a_total() {
+    TEST_ASSERT_EQUAL_INT(-1, playlists::startPosition(0, 7));
+    TEST_ASSERT_EQUAL_INT(-1, playlists::startPosition(-3, 7));
+    TEST_ASSERT_EQUAL_INT(2, playlists::startPosition(5, 7));
+    TEST_ASSERT_EQUAL_INT(0, playlists::startPosition(5, 0xFFFFFFFFu));
+}
+
 void test_spotify_errors_read_as_what_to_do() {
     const char* noDevice =
         "{\"error\":{\"status\":404,\"message\":\"Player command failed: No active device found\","
@@ -139,6 +166,9 @@ int main() {
     RUN_TEST(test_bad_bodies_and_short_buffers_fail_empty);
     RUN_TEST(test_a_full_page_fits_the_reply_buffer);
     RUN_TEST(test_play_body_names_the_playlist);
+    RUN_TEST(test_read_total);
+    RUN_TEST(test_play_body_at_a_position);
+    RUN_TEST(test_play_position_without_a_total);
     RUN_TEST(test_spotify_errors_read_as_what_to_do);
     return UNITY_END();
 }

@@ -333,11 +333,12 @@ static Job s_job = Job::None;               // waiting for the network task
 static bool s_jobRunning = false;
 static uint32_t s_jobSeq = 0, s_doneSeq = 0;
 static int s_jobOffset = 0;
+static bool s_jobShuffle = false;
 static char s_jobId[playlists::ID_LEN + 1];
 static char s_reply[playlists::REPLY_MAX];
 static int s_replyCode = 0;
 
-static int watchRequest(Job job, int offset, const char* id, char* out, size_t n) {
+static int watchRequest(Job job, int offset, const char* id, bool shuffle, char* out, size_t n) {
     if (n) out[0] = '\0';
     if (!hasToken()) { txt::copy(out, "No Spotify login", n); return 502; }
     if (!s_jobDone) s_jobDone = xSemaphoreCreateBinary();   // this task only; serveWatch needs a job first
@@ -347,6 +348,7 @@ static int watchRequest(Job job, int offset, const char* id, char* out, size_t n
     if (!busy) {
         s_job = job;
         s_jobOffset = offset;
+        s_jobShuffle = shuffle;
         txt::copy(s_jobId, id ? id : "", sizeof s_jobId);
         seq = ++s_jobSeq;
     }
@@ -372,8 +374,8 @@ static int watchRequest(Job job, int offset, const char* id, char* out, size_t n
     return 504;
 }
 
-int watchPlaylists(int offset, char* out, size_t n) { return watchRequest(Job::Page, offset, nullptr, out, n); }
-int watchPlay(const char* id, char* out, size_t n) { return watchRequest(Job::Play, 0, id, out, n); }
+int watchPlaylists(int offset, char* out, size_t n) { return watchRequest(Job::Page, offset, nullptr, false, out, n); }
+int watchPlay(const char* id, bool shuffle, char* out, size_t n) { return watchRequest(Job::Play, 0, id, shuffle, out, n); }
 
 static void answer(int code, const char* text) {
     s_replyCode = code;
@@ -400,13 +402,30 @@ static void runPage(int offset) {
     answer(502, "Spotify error");
 }
 
-static void runPlay(const char* id) {
-    char body[64];
-    if (!playlists::playBody(id, body, sizeof body)) { answer(400, "bad id"); return; }
+// shuffle: from a random track (the playlist's total asked first; without it, the first track),
+// then Spotify's shuffle on, so what follows is shuffled too. A shuffle that fails is only logged:
+// the music plays.
+static void runPlay(const char* id, bool shuffle) {
+    int position = -1;
+    if (shuffle && playlists::validId(id)) {
+        char path[80];
+        snprintf(path, sizeof path, "/v1/playlists/%s?fields=tracks.total", id);
+        int total = 0;
+        const int rc = apiGet(path);
+        if (rc == 200 && playlists::readTotal(s_body, &total)) position = playlists::startPosition(total, esp_random());
+        else Serial.printf("[spotify] playlist %s total: HTTP %d\n", id, rc);
+    }
+    char body[96];
+    if (!playlists::playBodyAt(id, position, body, sizeof body)) { answer(400, "bad id"); return; }
     const int rc = apiCall("PUT", "/v1/me/player/play", body, nullptr);
-    Serial.printf("[spotify] play playlist %s: HTTP %d\n", id, rc);
-    if (rc == 200 || rc == 202 || rc == 204) { answer(200, "playing"); return; }
-    answer(502, playlists::why(rc, s_body, true));
+    if (shuffle) Serial.printf("[spotify] play playlist %s shuffled at %d: HTTP %d\n", id, position, rc);
+    else Serial.printf("[spotify] play playlist %s: HTTP %d\n", id, rc);
+    if (rc != 200 && rc != 202 && rc != 204) { answer(502, playlists::why(rc, s_body, true)); return; }
+    if (shuffle) {
+        const int sh = apiCall("PUT", "/v1/me/player/shuffle?state=true", nullptr, nullptr);
+        if (sh != 200 && sh != 202 && sh != 204) Serial.printf("[spotify] shuffle on: HTTP %d\n", sh);
+    }
+    answer(200, "playing");
 }
 
 void serveWatch(bool rateLimited) {
@@ -414,6 +433,7 @@ void serveWatch(bool rateLimited) {
     const Job job = s_job;
     const uint32_t seq = s_jobSeq;
     const int offset = s_jobOffset;
+    const bool shuffle = s_jobShuffle;
     char id[sizeof s_jobId];
     memcpy(id, s_jobId, sizeof id);
     if (job != Job::None) { s_job = Job::None; s_jobRunning = true; }
@@ -426,7 +446,7 @@ void serveWatch(bool rateLimited) {
     } else if (job == Job::Page) {
         runPage(offset);
     } else {
-        runPlay(id);
+        runPlay(id, shuffle);
     }
     portENTER_CRITICAL(&s_jobMux);
     s_doneSeq = seq;

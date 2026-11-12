@@ -72,6 +72,24 @@ bool playBody(const char* id, char* out, size_t n) {
     return true;
 }
 
+bool playBodyAt(const char* id, int position, char* out, size_t n) {
+    if (position < 0) return playBody(id, out, n);
+    if (n) out[0] = '\0';
+    if (!validId(id)) return false;
+    const int len = snprintf(out, n, "{\"context_uri\":\"spotify:playlist:%s\",\"offset\":{\"position\":%d}}", id, position);
+    if (len < 0 || (size_t)len >= n) { if (n) out[0] = '\0'; return false; }
+    return true;
+}
+
+bool readTotal(const char* body, int* total) {
+    long v = 0;
+    if (!body || !jsonpath::num(body, "tracks.total", &v) || v < 0) return false;
+    *total = (int)v;
+    return true;
+}
+
+int startPosition(int total, unsigned random) { return total > 0 ? (int)(random % (unsigned)total) : -1; }
+
 const char* why(int code, const char* body, bool play) {
     const bool has = body && *body;
     if (code < 0) return "Spotify not answering";
