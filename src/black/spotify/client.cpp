@@ -409,7 +409,7 @@ static void runPlay(const char* id, bool shuffle) {
     int position = -1;
     if (shuffle && playlists::validId(id)) {
         char path[80];
-        snprintf(path, sizeof path, "/v1/playlists/%s?fields=tracks.total", id);
+        snprintf(path, sizeof path, "/v1/playlists/%s?fields=items.total", id);
         int total = 0;
         const int rc = apiGet(path);
         if (rc == 200 && playlists::readTotal(s_body, &total)) position = playlists::startPosition(total, esp_random());
@@ -417,7 +417,20 @@ static void runPlay(const char* id, bool shuffle) {
     }
     char body[96];
     if (!playlists::playBodyAt(id, position, body, sizeof body)) { answer(400, "bad id"); return; }
-    const int rc = apiCall("PUT", "/v1/me/player/play", body, nullptr);
+    int rc = apiCall("PUT", "/v1/me/player/play", body, nullptr);
+    if (rc == 404) {   // no active device: Spotify open but idle; play on one it lists (a phone first)
+        char device[64];
+        const int dr = apiGet("/v1/me/player/devices");
+        if (dr == 200 && playlists::pickDevice(s_body, device, sizeof device)) {
+            char path[112];
+            snprintf(path, sizeof path, "/v1/me/player/play?device_id=%s", device);
+            rc = apiCall("PUT", path, body, nullptr);
+            Serial.printf("[spotify] no active device: asked device %s: HTTP %d\n", device, rc);
+        } else {
+            Serial.printf("[spotify] no active device, none listed (HTTP %d)\n", dr);
+            rc = 404;
+        }
+    }
     if (shuffle) Serial.printf("[spotify] play playlist %s shuffled at %d: HTTP %d\n", id, position, rc);
     else Serial.printf("[spotify] play playlist %s: HTTP %d\n", id, rc);
     if (rc != 200 && rc != 202 && rc != 204) { answer(502, playlists::why(rc, s_body, true)); return; }

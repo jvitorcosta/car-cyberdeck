@@ -116,6 +116,35 @@ void test_read_total() {
     TEST_ASSERT_FALSE(playlists::readTotal(nullptr, &total));
 }
 
+void test_read_total_after_the_2026_rename() {
+    int total = 0;
+    TEST_ASSERT_TRUE(playlists::readTotal("{\"items\":{\"total\":31}}", &total));
+    TEST_ASSERT_EQUAL_INT(31, total);
+}
+
+void test_pick_device_prefers_the_active_one() {
+    char id[48];
+    const char* body = "{\"devices\":[{\"id\":\"pc1\",\"is_active\":false,\"is_restricted\":false,\"type\":\"Computer\"},"
+                       "{\"id\":\"ph2\",\"is_active\":true,\"is_restricted\":false,\"type\":\"Smartphone\"}]}";
+    TEST_ASSERT_TRUE(playlists::pickDevice(body, id, sizeof id));
+    TEST_ASSERT_EQUAL_STRING("ph2", id);
+}
+
+void test_pick_device_takes_a_phone_when_none_is_active() {
+    char id[48];
+    const char* body = "{\"devices\":[{\"id\":\"tv0\",\"is_active\":false,\"is_restricted\":true,\"type\":\"TV\"},"
+                       "{\"id\":\"pc1\",\"is_active\":false,\"is_restricted\":false,\"type\":\"Computer\"},"
+                       "{\"id\":\"ph2\",\"is_active\":false,\"is_restricted\":false,\"type\":\"Smartphone\"}]}";
+    TEST_ASSERT_TRUE(playlists::pickDevice(body, id, sizeof id));
+    TEST_ASSERT_EQUAL_STRING("ph2", id);
+    const char* noPhone = "{\"devices\":[{\"id\":\"tv0\",\"is_active\":false,\"is_restricted\":true},"
+                          "{\"id\":\"pc1\",\"is_active\":false,\"is_restricted\":false,\"type\":\"Computer\"}]}";
+    TEST_ASSERT_TRUE(playlists::pickDevice(noPhone, id, sizeof id));
+    TEST_ASSERT_EQUAL_STRING("pc1", id);
+    TEST_ASSERT_FALSE(playlists::pickDevice("{\"devices\":[]}", id, sizeof id));
+    TEST_ASSERT_EQUAL_STRING("", id);
+}
+
 void test_play_body_at_a_position() {
     char out[96];
     TEST_ASSERT_TRUE(playlists::playBodyAt("37i9dQZF1DXcBWIGoYBM5M", 12, out, sizeof out));
@@ -167,6 +196,9 @@ int main() {
     RUN_TEST(test_a_full_page_fits_the_reply_buffer);
     RUN_TEST(test_play_body_names_the_playlist);
     RUN_TEST(test_read_total);
+    RUN_TEST(test_read_total_after_the_2026_rename);
+    RUN_TEST(test_pick_device_prefers_the_active_one);
+    RUN_TEST(test_pick_device_takes_a_phone_when_none_is_active);
     RUN_TEST(test_play_body_at_a_position);
     RUN_TEST(test_play_position_without_a_total);
     RUN_TEST(test_spotify_errors_read_as_what_to_do);

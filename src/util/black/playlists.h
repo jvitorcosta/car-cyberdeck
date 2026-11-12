@@ -28,8 +28,13 @@ bool playBody(const char* id, char* out, size_t n);
 // The same, starting at track `position` of the playlist (0-based; Spotify's "offset"):
 // {"context_uri":"spotify:playlist:<id>","offset":{"position":N}}. position < 0: playBody's body.
 bool playBodyAt(const char* id, int position, char* out, size_t n);
-// A playlist's track count from GET /v1/playlists/<id>?fields=tracks.total ({"tracks":{"total":N}}).
+// A playlist's track count from GET /v1/playlists/<id>?fields=items.total ({"items":{"total":N}};
+// "tracks" before Spotify's February 2026 rename, still read).
 bool readTotal(const char* body, int* total);
+// Where to play when Spotify has no active device (start-playback's 404): from GET
+// /v1/me/player/devices, the active one, else a phone with Spotify open, else any other; never a
+// restricted one. False (out "") when there is none.
+bool pickDevice(const char* body, char* out, size_t n);
 // Where a shuffled start begins: random % total, or -1 (the first track, Spotify's own) when the
 // total isn't known.
 int startPosition(int total, unsigned random);
