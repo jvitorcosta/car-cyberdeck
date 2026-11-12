@@ -1701,6 +1701,7 @@ static const char* const IR_PLAYLIST_NAMES[4] = {IR_PLAYLIST_1_NAME, IR_PLAYLIST
                                                  IR_PLAYLIST_4_NAME};
 static constexpr uint32_t IR_PLAY_WAIT_MS = 16000;
 static std::atomic<int8_t> irPlaylistWant{-1}, irPlaylistDone{-1};
+static std::atomic<int8_t> irPlaylistBusy{-1};  // the key the deck task is asking for, or -1
 static std::atomic<int16_t> irPlaylistRc{0};
 static char irPlaylistWhy[40];
 
@@ -1790,6 +1791,9 @@ static void irTick() {
                 drawMessage();
                 break;
             }
+            // the same key again while it is being asked: nothing (a second play would cut the
+            // first song off); another key still wins
+            if (irPlaylistBusy.load() == a.value) break;
             irPlaylistWant.store(static_cast<int8_t>(a.value));
             irSay(">STARTING ", IR_PLAYLIST_NAMES[a.value], IR_PLAY_WAIT_MS);
             break;
@@ -2119,7 +2123,7 @@ static int deckAsk(const char* path, const sigreq::Param* params, int count, cha
         return -1;
     IPAddress a;
     if (peer && a.fromString(host)) *peer = static_cast<uint32_t>(a);
-    return net::httpGet(url, timeoutMs, body, bodyLen, body ? 3000 : 0);
+    return net::httpGet(url, timeoutMs, body, bodyLen, body ? 3000 : 0, 1500);  // the deck is one hop away
 }
 
 static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
@@ -2269,7 +2273,11 @@ static void deckTask(void*) {
     for (;;) {
         watchdog::feed();
         const int8_t playlist = irPlaylistWant.exchange(-1);
-        if (playlist >= 0) irPlay(playlist);
+        if (playlist >= 0) {
+            irPlaylistBusy.store(playlist);
+            irPlay(playlist);
+            irPlaylistBusy.store(-1);
+        }
         keepAlive(music, musicWant);
         // want before taps: setKaraoke counts the tap first, so a switch on seen here is counted
         static keepalive::Confirm confirm;

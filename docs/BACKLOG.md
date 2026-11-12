@@ -42,7 +42,7 @@ Open items, not scheduled. Newest decisions first within each section.
   four music keys started their playlist shuffled): from the driver's seat to the remote on its
   holder, the range and angle that still reach the receiver; whether sunlight on the receiver
   drops or fakes presses; presses while a light is reconnecting, with the PS3 controller
-  connected, and during music mode (any key ends it). On the hotspot, whether a music key's first
+  connected, and during music mode (any key but ♪ ends it). On the hotspot, whether a music key's first
   press after a quiet while still misses (`[ir] playlist N: rc=-1 in .. ms`; the deck now asks a
   second time by itself).
 

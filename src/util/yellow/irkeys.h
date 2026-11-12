@@ -62,7 +62,7 @@ constexpr uint8_t EFFECT_SPEED = 50;
 // however long it is held. NEC sends a repeat frame every ~110 ms while held; some remotes send the
 // whole frame again instead, so a frame of the same key within SAME_FRAME_MS of its last one is a
 // repeat too (or ON, a colour or a playlist would act twice).
-constexpr uint32_t STEP_MS = 250, SAME_FRAME_MS = 200;
+constexpr uint32_t STEP_MS = 250, SAME_FRAME_MS = 200, STALE_MS = 250;
 
 class Repeat {
 public:
@@ -72,6 +72,10 @@ public:
             frameAt_ = actAt_ = now;
             return true;
         }
+        // A repeat frame long after this key's last frame isn't this key held: IRremote reports a
+        // repeat as the last command it decoded, so another key whose first frame was lost would
+        // step the lights. Its whole train is ignored (frameAt_ stays), until a full frame comes.
+        if (repeat && since(frameAt_, now) > STALE_MS) return false;
         const bool again = repeat || since(frameAt_, now) < SAME_FRAME_MS;
         frameAt_ = now;
         if (!again || ((k == Key::BrightUp || k == Key::BrightDown) && since(actAt_, now) >= STEP_MS)) {

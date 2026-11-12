@@ -139,8 +139,9 @@ void test_pick_device_takes_a_phone_when_none_is_active() {
     TEST_ASSERT_EQUAL_STRING("ph2", id);
     const char* noPhone = "{\"devices\":[{\"id\":\"tv0\",\"is_active\":false,\"is_restricted\":true},"
                           "{\"id\":\"pc1\",\"is_active\":false,\"is_restricted\":false,\"type\":\"Computer\"}]}";
-    TEST_ASSERT_TRUE(playlists::pickDevice(noPhone, id, sizeof id));
-    TEST_ASSERT_EQUAL_STRING("pc1", id);
+    // an idle PC or speaker at home is never picked: the music would play away from the car
+    TEST_ASSERT_FALSE(playlists::pickDevice(noPhone, id, sizeof id));
+    TEST_ASSERT_EQUAL_STRING("", id);
     TEST_ASSERT_FALSE(playlists::pickDevice("{\"devices\":[]}", id, sizeof id));
     TEST_ASSERT_EQUAL_STRING("", id);
 }

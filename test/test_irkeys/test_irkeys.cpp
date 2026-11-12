@@ -94,8 +94,11 @@ void test_another_key_acts_at_once() {
 
 void test_repeat_survives_millis_wrap() {
     irkeys::Repeat r;
-    TEST_ASSERT_TRUE(r.accept(Key::BrightUp, false, 0xFFFFFF00u));
-    TEST_ASSERT_TRUE(r.accept(Key::BrightUp, true, 0xFFFFFF00u + 260));
+    const uint32_t t0 = 0xFFFFFF80u;  // the 2nd and 3rd repeats fall after millis() wraps
+    TEST_ASSERT_TRUE(r.accept(Key::BrightUp, false, t0));
+    TEST_ASSERT_FALSE(r.accept(Key::BrightUp, true, t0 + 110));
+    TEST_ASSERT_FALSE(r.accept(Key::BrightUp, true, t0 + 220));
+    TEST_ASSERT_TRUE(r.accept(Key::BrightUp, true, t0 + 330));
 }
 
 void test_effect_modes_are_distinct() {
@@ -104,6 +107,16 @@ void test_effect_modes_are_distinct() {
         for (int j = 0; j < i; j++) TEST_ASSERT_NOT_EQUAL(irkeys::EFFECT_MODE[j], irkeys::EFFECT_MODE[i]);
     }
     TEST_ASSERT_TRUE(irkeys::EFFECT_SPEED <= 100);
+}
+
+void test_a_stale_repeat_does_nothing() {
+    irkeys::Repeat r;
+    TEST_ASSERT_TRUE(r.accept(Key::BrightUp, false, 0));
+    // OFF's first frame lost: its repeats decode as the last key's (IRremote keeps the last command)
+    TEST_ASSERT_FALSE(r.accept(Key::BrightUp, true, 5000));
+    TEST_ASSERT_FALSE(r.accept(Key::BrightUp, true, 5110));
+    TEST_ASSERT_FALSE(r.accept(Key::BrightUp, true, 5480));
+    TEST_ASSERT_TRUE(r.accept(Key::BrightUp, false, 6000));
 }
 
 int main(int, char**) {
@@ -118,5 +131,6 @@ int main(int, char**) {
     RUN_TEST(test_another_key_acts_at_once);
     RUN_TEST(test_repeat_survives_millis_wrap);
     RUN_TEST(test_effect_modes_are_distinct);
+    RUN_TEST(test_a_stale_repeat_does_nothing);
     return UNITY_END();
 }

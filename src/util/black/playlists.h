@@ -32,8 +32,8 @@ bool playBodyAt(const char* id, int position, char* out, size_t n);
 // "tracks" before Spotify's February 2026 rename, still read).
 bool readTotal(const char* body, int* total);
 // Where to play when Spotify has no active device (start-playback's 404): from GET
-// /v1/me/player/devices, the active one, else a phone with Spotify open, else any other; never a
-// restricted one. False (out "") when there is none.
+// /v1/me/player/devices, the active one, else a phone with Spotify open; never an idle PC or
+// speaker (the music would play at home), never a restricted one. False (out "") when none fits.
 bool pickDevice(const char* body, char* out, size_t n);
 // Where a shuffled start begins: random % total, or -1 (the first track, Spotify's own) when the
 // total isn't known.

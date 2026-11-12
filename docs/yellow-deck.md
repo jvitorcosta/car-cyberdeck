@@ -121,7 +121,7 @@ codes count (NEC, address `0xEF00`); a TV remote does nothing (`[ir] not the lig
 | JUMP3, JUMP7, FADE3, FADE7 | the controllers' own effects on the lights that are on (`>FADE7`); the next colour, level or power key ends it. The four modes are starting values until the car check (`irkeys::EFFECT_MODE`) |
 | ♪1-♪4 | a playlist on the phone's Spotify through the black deck, from a random track with shuffle on (`>STARTING DIVAS POP`, then `>PLAYING DIVAS POP`, or what went wrong: `>BLACK DECK NOT ANSWERING`, `>SPOTIFY: CHECK THE PHONE`) |
 
-Any key ends music mode, like any other manual change. Every key but the brightness ones acts once
+Any key but ♪ ends music mode, like any other manual change (a playlist only changes the song). Every key but the brightness ones acts once
 however long it is held. The four playlists are set in `src/config.h` (`IR_PLAYLIST_1`..`4`, the id
 from the playlist's link, and `IR_PLAYLIST_n_NAME`, what the screen shows; see
 `include/config.example.h`); a key with no id shows `>NO PLAYLIST SET`. If Spotify is open but

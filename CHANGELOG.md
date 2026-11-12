@@ -100,7 +100,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - **Added:** `/playlists/play` takes `&shuffle=1`: it starts the playlist at a random track and
   turns Spotify's shuffle on (the yellow deck's music keys).
 - **Fixed:** a playlist from the watch or the yellow deck now starts when Spotify is open but
-  idle (no active device): the black deck plays it on a device Spotify lists, the phone first.
+  idle (no active device): the black deck plays it on your phone (never an idle PC or speaker).
 - **Added:** a full-screen karaoke view, switched by the yellow deck's KARAOKE item: `GET
   /karaoke?on=1|0` (signed like `/music`; `on=1` is a keep-alive every 10 s, 30 s without one or
   `on=0` turns it off; `[karaoke] on` / `off` in the log). It has the yellow deck's terminal look, so

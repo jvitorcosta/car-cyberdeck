@@ -92,7 +92,8 @@ bool readTotal(const char* body, int* total) {
 bool pickDevice(const char* body, char* out, size_t n) {
     if (n) out[0] = '\0';
     if (!body) return false;
-    int pick = -1, rank = 0;   // rank 3: active, 2: a phone, 1: any other
+    // rank 2: active, 1: a phone; never an idle PC or speaker (the music would play at home)
+    int pick = -1, rank = 0;
     char path[40], type[24];
     for (int i = 0; i < 20; ++i) {
         snprintf(path, sizeof path, "devices.%d", i);
@@ -104,7 +105,7 @@ bool pickDevice(const char* body, char* out, size_t n) {
         jsonpath::boolean(body, path, &active);
         snprintf(path, sizeof path, "devices.%d.type", i);
         jsonpath::str(body, path, type, sizeof type);
-        const int r = active ? 3 : strcmp(type, "Smartphone") == 0 ? 2 : 1;
+        const int r = active ? 2 : strcmp(type, "Smartphone") == 0 ? 1 : 0;
         if (r > rank) { rank = r; pick = i; }
     }
     if (pick < 0) return false;
