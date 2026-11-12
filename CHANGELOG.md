@@ -18,6 +18,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Added:** the light kit's IR remote works the deck through a KY-022 receiver on GPIO 27. Its
+  keys act on both lights: brightness up / down (held, about four steps a second), on / off, eight
+  colours (each light keeps its level, an off light comes back on), JUMP / FADE as the
+  controllers' own effects, and four music keys that start the playlists set in `config.h` on the
+  phone's Spotify, from a random track with shuffle on. Only that remote's codes count.
 - **Fixed:** setting the PS3 controller down, picking it up or resting a thumb on it no longer
   changes the preset, the brightness or karaoke, or buzzes. A press counts past a quarter of the
   button's travel (L2 / R2 past ~80 %), three or more buttons at once count as nothing (a set-down
@@ -92,6 +97,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the rest. The scanlines lose their amber tint.
 
 ### Black deck (S3)
+- **Added:** `/playlists/play` takes `&shuffle=1`: it starts the playlist at a random track and
+  turns Spotify's shuffle on (the yellow deck's music keys).
+- **Fixed:** a playlist from the watch or the yellow deck now starts when Spotify is open but
+  idle (no active device): the black deck plays it on a device Spotify lists, the phone first.
 - **Added:** a full-screen karaoke view, switched by the yellow deck's KARAOKE item: `GET
   /karaoke?on=1|0` (signed like `/music`; `on=1` is a keep-alive every 10 s, 30 s without one or
   `on=0` turns it off; `[karaoke] on` / `off` in the log). It has the yellow deck's terminal look, so
