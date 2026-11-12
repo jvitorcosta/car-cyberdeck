@@ -52,6 +52,12 @@ inline Action action(Key k) {
     return {Kind::Playlist, i - static_cast<int>(Key::Music1)};
 }
 
+// The controllers' built-in effect (elkcmd::effect, 0..212) for JUMP3, JUMP7, FADE3 and FADE7, at
+// EFFECT_SPEED (0..100). TUNE: starting values, to be found in the car with the IR_EFFECT_PROBE
+// build (docs/BACKLOG.md).
+constexpr uint8_t EFFECT_MODE[4] = {0, 1, 2, 3};
+constexpr uint8_t EFFECT_SPEED = 50;
+
 // A held brightness key steps once every STEP_MS (about four a second); every other key acts once
 // however long it is held. NEC sends a repeat frame every ~110 ms while held; some remotes send the
 // whole frame again instead, so a frame of the same key within SAME_FRAME_MS of its last one is a

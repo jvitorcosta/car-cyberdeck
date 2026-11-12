@@ -98,6 +98,14 @@ void test_repeat_survives_millis_wrap() {
     TEST_ASSERT_TRUE(r.accept(Key::BrightUp, true, 0xFFFFFF00u + 260));
 }
 
+void test_effect_modes_are_distinct() {
+    for (int i = 0; i < 4; i++) {
+        TEST_ASSERT_TRUE(irkeys::EFFECT_MODE[i] <= 212);
+        for (int j = 0; j < i; j++) TEST_ASSERT_NOT_EQUAL(irkeys::EFFECT_MODE[j], irkeys::EFFECT_MODE[i]);
+    }
+    TEST_ASSERT_TRUE(irkeys::EFFECT_SPEED <= 100);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_every_key_maps);
@@ -109,5 +117,6 @@ int main(int, char**) {
     RUN_TEST(test_playlist_presses_coalesce);
     RUN_TEST(test_another_key_acts_at_once);
     RUN_TEST(test_repeat_survives_millis_wrap);
+    RUN_TEST(test_effect_modes_are_distinct);
     return UNITY_END();
 }

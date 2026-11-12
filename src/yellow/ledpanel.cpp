@@ -1657,7 +1657,45 @@ static void padKaraoke() {
 // steps about four times a second; every other key acts once per press.
 static irkeys::Repeat irRepeat;
 
+// The outside light's effect frame, sent 1 s after its speed frame (its controller drops a write
+// within ~1 s of the last): the mode, or -1. A later key drops it.
+static int irEffectDue = -1;
+static uint32_t irEffectAt = 0;
+
+// JUMP / FADE: the controllers' own effect `mode` on each lit light (elkcmd: speed, then the
+// effect; the MELK frames, the ELK one ignores them). The looks don't change: the next colour,
+// level or power press ends the effect with its colour frame. Ends music mode like any manual
+// change, and stops a fade or the welcome that would write over it.
+static void irEffect(uint8_t mode, const char* name) {
+    musicYield();
+    bool lit = false;
+    for (int i = 0; i < N_CTRL; i++) {
+        if (!shownLook(i).lit) continue;
+        lit = true;
+        pushWanted[i] = false;
+        lightFade[i].intro.n = 0;
+        lightFade[i].done = lightFade[i].steps;
+        if (!linkUp(controllers[i])) continue;
+        write(controllers[i], elkcmd::speed(irkeys::EFFECT_SPEED));
+        if (i == 0) {
+            write(controllers[i], elkcmd::effect(mode));
+        } else {
+            irEffectDue = mode;
+            irEffectAt = millis();
+        }
+    }
+    Serial.printf("[ir] effect mode %u%s\n", static_cast<unsigned>(mode), lit ? "" : " (lights off)");
+    char m[16];
+    snprintf(m, sizeof(m), ">%s", lit ? name : "LIGHTS OFF");
+    setMessage(m);
+    drawMessage();
+}
+
 static void irTick() {
+    if (irEffectDue >= 0 && millis() - irEffectAt >= 1000) {
+        write(controllers[1], elkcmd::effect(static_cast<uint8_t>(irEffectDue)));
+        irEffectDue = -1;
+    }
     uint16_t address;
     uint8_t command;
     bool repeat;
@@ -1670,6 +1708,7 @@ static void irTick() {
     if (!irRepeat.accept(k, repeat, millis())) return;
     const irkeys::Action a = irkeys::action(k);
     Serial.printf("[ir] key %u%s\n", static_cast<unsigned>(command), repeat ? " held" : "");
+    if (a.kind != irkeys::Kind::Playlist) irEffectDue = -1;
     bothlook::Change c;
     switch (a.kind) {
         case irkeys::Kind::Level:
@@ -1690,9 +1729,30 @@ static void irTick() {
             bothlook::paint(a.value, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
             colourShown(a.value);
             break;
-        case irkeys::Kind::Effect:
+        case irkeys::Kind::Effect: {
+#ifdef IR_EFFECT_PROBE
+            // the car's tuning build: JUMP3 / JUMP7 step the mode, FADE3 sends it (FADE7 as usual)
+            static int probe = 0;
+            if (a.value < 2) {
+                probe = a.value == 0 ? (probe > 0 ? probe - 1 : 0) : (probe < 212 ? probe + 1 : 212);
+                char m[24];
+                snprintf(m, sizeof(m), ">MODE %d", probe);
+                setMessage(m);
+                drawMessage();
+                Serial.printf("[ir] probe mode %d\n", probe);
+                break;
+            }
+            if (a.value == 2) {
+                irEffect(static_cast<uint8_t>(probe), "PROBE");
+                break;
+            }
+#endif
+            static const char* const NAMES[4] = {"JUMP3", "JUMP7", "FADE3", "FADE7"};
+            irEffect(irkeys::EFFECT_MODE[a.value], NAMES[a.value]);
+            break;
+        }
         case irkeys::Kind::Playlist:
-            break;  // Tasks 4 and 6
+            break;  // Task 6
     }
 }
 

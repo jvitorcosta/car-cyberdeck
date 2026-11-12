@@ -32,6 +32,13 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **IR remote's JUMP / FADE modes in the car** (the four keys send starting values,
+  `irkeys::EFFECT_MODE` = 0..3, marked TUNE): flash `ledpanel_probe` over USB with both lights in
+  range; JUMP3 / JUMP7 step the mode (`>MODE N`), FADE3 sends it to both lights. Note the modes that
+  look like "jump 3 colours", "jump 7", "fade 3" and "fade 7", and whether the outside light runs
+  effects at all (if it ignores them it keeps its colour). Put the four numbers in `EFFECT_MODE`,
+  then flash `ledpanel` again.
+
 - **PS3 controller redesign in the car** (desk-checked 2026-11-12): at the desk set-downs and
   pick-ups fired nothing, and every press, flick, Triangle, SELECT and START acted once. Still to
   check while driving: that road motion never reads as "resting" / "picked up" (`[pad] resting`
