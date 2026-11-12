@@ -95,8 +95,12 @@ full saturation; the paler day colours, which clear 4.5:1 on black, looked dull 
 - **PS3 shortcuts**, on any screen, for both lights: **START** on / off, **L2 / R2** the previous /
   next preset, **SELECT** music mode on / off, **L1 / R1** `-` / `+` (on a look page they stay that
   page's), **PS** back to the main screen. The controller buzzes once when a shortcut went out, twice
-  when a light isn't connected. L2 and R2 count past half travel (their pressure, so a resting
-  finger does nothing; each press logs it: `[pad] trigger pressure L2 255, R2 0`). Its LEDs: **1** connected to the deck (always lit while it is),
+  when a light isn't connected. A press counts past a quarter of the button's travel (L2 and R2
+  past ~80 %; each press logs it: `[pad] trigger pressure L2 255, R2 0`), so a resting thumb does
+  nothing. Three or more buttons at once count as nothing (setting the pad down presses many
+  lightly: `[pad] ignored: 6 buttons at once`); presses wait half a second after the pad is picked
+  up off a table or put down on one (`[pad] resting`, `[pad] picked up`); a button held 5 s is
+  ignored until it's let go (`[pad] stuck: up`). The rules are `util/yellow/padguard.h`. Its LEDs: **1** connected to the deck (always lit while it is),
   **2** the inside light connected, **3** the outside one, **4** its own battery low. Its battery shows at the top right of the main screen ("PAD" and four
   cells; red when it's dying, filling round while it charges).
 

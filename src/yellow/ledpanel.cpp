@@ -121,7 +121,7 @@
 #include "../util/yellow/lightstatus.h"
 #include "../util/yellow/padbattery.h"
 #include "../util/yellow/padfeel.h"
-#include "../util/yellow/padtrigger.h"
+#include "../util/yellow/padguard.h"
 #include "../util/common/remotegate.h"
 #include "../util/yellow/tapguard.h"
 #include "../util/common/termpal.h"
@@ -1616,10 +1616,15 @@ static void padPreset(int dir) {
 static std::atomic<uint32_t> padHeld{0}, padSeen{0};
 static std::atomic<uint32_t> padReports{0};  // reports since boot: the [pad] rate line
 
-// L2 / R2 by their pressure (util/padtrigger), the Bluetooth task's alone; the loop logs the
-// pressure of each press it acts on, to tune PRESS_AT on the hand.
-static padtrigger::Trigger padL2, padR2;
+// The guard (util/padguard) decides which presses count: light touches, a set-down's many light
+// presses, the moments the pad is picked up or put down, and a button stuck on all do nothing.
+// The Bluetooth task's alone. The loop logs each press's trigger pressure and each of the guard's
+// verdicts (padChord, padRest, padStuck), to tune it on the hand.
+static padguard::Guard padGuard;
 static std::atomic<uint8_t> padL2At{0}, padR2At{0};
+static std::atomic<uint8_t> padChord{0};   // bits on as a set-down began; 0: none since the last log
+static std::atomic<uint8_t> padRest{0};    // 1 resting, 2 picked up; 0: no change since the last log
+static std::atomic<uint32_t> padStuck{0};  // buttons the guard dropped as stuck since the last log
 // A new connection's first report can carry junk (every face button down at once): the buttons
 // count only from the first report with none held. handlePad disarms it on each connect.
 static std::atomic<bool> padArmed{false};
@@ -1628,25 +1633,64 @@ static std::atomic<bool> padArmed{false};
 static std::atomic<uint8_t> padXNoBit{0}, padONoBit{0};
 
 static void onPadReport() {
+    using namespace padguard;
     const ps3_button_t& b = Ps3.data.button;
-    const uint8_t l2 = Ps3.data.analog.button.l2, r2 = Ps3.data.analog.button.r2;
-    padL2At.store(l2);
-    padR2At.store(r2);
-    if (!b.cross && Ps3.data.analog.button.cross > 60) padXNoBit.store(Ps3.data.analog.button.cross);
-    if (!b.circle && Ps3.data.analog.button.circle > 60) padONoBit.store(Ps3.data.analog.button.circle);
-    const bool l2Down = padL2.feed(l2), r2Down = padR2.feed(r2);
-    const uint32_t raw = (b.select ? 1u << 0 : 0) | (b.start ? 1u << 3 : 0) | (b.up ? 1u << 4 : 0) |
-                         (b.right ? 1u << 5 : 0) | (b.down ? 1u << 6 : 0) | (b.left ? 1u << 7 : 0) |
-                         (l2Down ? 1u << 8 : 0) | (r2Down ? 1u << 9 : 0) | (b.l1 ? 1u << 10 : 0) |
-                         (b.r1 ? 1u << 11 : 0) | (b.triangle ? 1u << 12 : 0) | (b.circle ? 1u << 13 : 0) |
-                         (b.cross ? 1u << 14 : 0) | (b.square ? 1u << 15 : 0) | (b.ps ? 1u << 16 : 0);
+    const ps3_analog_button_t& a = Ps3.data.analog.button;
+    padL2At.store(a.l2);
+    padR2At.store(a.r2);
+    if (!b.cross && a.cross > 60) padXNoBit.store(a.cross);
+    if (!b.circle && a.circle > 60) padONoBit.store(a.circle);
+    Report r{};
+    r.bits = (b.select ? 1u << SELECT : 0) | (b.start ? 1u << START : 0) | (b.up ? 1u << UP : 0) |
+             (b.right ? 1u << RIGHT : 0) | (b.down ? 1u << DOWN : 0) | (b.left ? 1u << LEFT : 0) |
+             (b.l2 ? 1u << L2 : 0) | (b.r2 ? 1u << R2 : 0) | (b.l1 ? 1u << L1 : 0) | (b.r1 ? 1u << R1 : 0) |
+             (b.triangle ? 1u << TRIANGLE : 0) | (b.circle ? 1u << CIRCLE : 0) | (b.cross ? 1u << CROSS : 0) |
+             (b.square ? 1u << SQUARE : 0) | (b.ps ? 1u << HOME : 0);
+    r.pressure[SELECT] = b.select ? 255 : 0;
+    r.pressure[START] = b.start ? 255 : 0;
+    r.pressure[HOME] = b.ps ? 255 : 0;
+    r.pressure[UP] = a.up;
+    r.pressure[RIGHT] = a.right;
+    r.pressure[DOWN] = a.down;
+    r.pressure[LEFT] = a.left;
+    r.pressure[L2] = a.l2;
+    r.pressure[R2] = a.r2;
+    r.pressure[L1] = a.l1;
+    r.pressure[R1] = a.r1;
+    r.pressure[TRIANGLE] = a.triangle;
+    r.pressure[CIRCLE] = a.circle;
+    r.pressure[CROSS] = a.cross;
+    r.pressure[SQUARE] = a.square;
+    r.ax = Ps3.data.sensor.accelerometer.x;
+    r.ay = Ps3.data.sensor.accelerometer.y;
+    r.az = Ps3.data.sensor.accelerometer.z;
+    r.now = millis();
     padReports.fetch_add(1);
+    // the guard's last verdicts, to log each change once
+    static bool chord = false, resting = false;
+    static uint32_t stuck = 0;
     if (!padArmed.load()) {
-        if (raw) return;  // still the connect's junk, or a button held through it
+        padGuard.reset();  // a new connection starts with nothing held and not resting
+        chord = resting = false;
+        stuck = 0;
+        if (r.bits) return;  // still the connect's junk, or a button held through it
         padArmed.store(true);
     }
-    padHeld.store(raw);
-    padSeen.fetch_or(raw);
+    const uint32_t held = padGuard.feed(r);
+    int on = 0;
+    for (uint32_t v = r.bits; v; v &= v - 1) on++;
+    if ((on >= CHORD) != chord) {
+        chord = on >= CHORD;
+        if (chord) padChord.store(static_cast<uint8_t>(on));
+    }
+    if (padGuard.resting() != resting) {
+        resting = padGuard.resting();
+        padRest.store(resting ? 1 : 2);
+    }
+    if (padGuard.stuck() & ~stuck) padStuck.fetch_or(padGuard.stuck() & ~stuck);
+    stuck = padGuard.stuck();
+    padHeld.store(held);
+    padSeen.fetch_or(held);
 }
 
 static void handlePad() {
@@ -1685,6 +1729,14 @@ static void handlePad() {
     }
     if (const uint8_t p = padXNoBit.exchange(0)) Serial.printf("[pad] X pressed to %u without its bit\n", p);
     if (const uint8_t p = padONoBit.exchange(0)) Serial.printf("[pad] O pressed to %u without its bit\n", p);
+    if (const uint8_t k = padChord.exchange(0)) Serial.printf("[pad] ignored: %u buttons at once\n", k);
+    if (const uint8_t k = padRest.exchange(0)) Serial.println(k == 1 ? "[pad] resting" : "[pad] picked up");
+    if (const uint32_t k = padStuck.exchange(0)) {
+        static const char* const NAMES[padguard::N_BITS] = {"SELECT", "L3", "R3", "START", "up", "right", "down", "left", "L2",
+                                                            "R2", "L1", "R1", "triangle", "circle", "cross", "square", "PS"};
+        for (int i = 0; i < padguard::N_BITS; i++)
+            if (k & 1u << i) Serial.printf("[pad] stuck: %s\n", NAMES[i]);
+    }
     // the held buttons, and any tapped since the last pass (onPadReport)
     const uint32_t m = padHeld.load() | padSeen.exchange(0);
     struct {

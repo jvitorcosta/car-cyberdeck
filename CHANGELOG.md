@@ -18,6 +18,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Fixed:** setting the PS3 controller down, picking it up or resting a thumb on it no longer
+  changes the preset, the brightness or karaoke, or buzzes. A press counts past a quarter of the
+  button's travel (L2 / R2 past ~80 %), three or more buttons at once count as nothing (a set-down
+  presses many lightly), presses wait half a second after the pad is picked up off a table or put
+  down on one, and a button held for 5 s is ignored until it's let go (`util/padguard`). The log
+  says why: `[pad] ignored: 6 buttons at once`, `[pad] resting`, `[pad] picked up`, `[pad] stuck: up`.
 - **Changed:** KARAOKE on the main screen is an on/off switch like MUSIC MODE (an `ON` / `OFF` tag;
   a tap or the PS3 controller's cross on the focus toggles it; `>KARAOKE OFF`, and when it goes on
   `>KARAOKE: CONNECTING...` until the black deck answers, then `>KARAOKE ON`, or `>BLACK DECK NOT

@@ -16,10 +16,10 @@
 #include <cstdlib>
 
 namespace padguard {
-// The bit layout onPadReport has always used.
+// The bit layout onPadReport has always used. HOME is the PS button (the ESP32 SDK defines PS).
 enum Bit : uint8_t {
     SELECT = 0, START = 3, UP = 4, RIGHT = 5, DOWN = 6, LEFT = 7,
-    L2 = 8, R2 = 9, L1 = 10, R1 = 11, TRIANGLE = 12, CIRCLE = 13, CROSS = 14, SQUARE = 15, PS = 16,
+    L2 = 8, R2 = 9, L1 = 10, R1 = 11, TRIANGLE = 12, CIRCLE = 13, CROSS = 14, SQUARE = 15, HOME = 16,
     N_BITS = 17
 };
 
@@ -30,7 +30,7 @@ constexpr uint32_t STUCK_MS = 5000, PAUSE_MS = 500, REST_MS = 1000;
 constexpr int REST_BAND = 12;  // |dx|+|dy|+|dz| from the rest reference, raw accelerometer units
 
 // One report from the pad. pressure[b] is that button's pressure; buttons without one (START,
-// SELECT, PS) report 255 while their bit is on.
+// SELECT, the PS button) report 255 while their bit is on.
 struct Report {
     uint32_t bits;
     uint8_t pressure[N_BITS];
