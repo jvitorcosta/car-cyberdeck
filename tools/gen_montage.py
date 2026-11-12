@@ -25,6 +25,14 @@ SHOTS = [("07-right-wide-turning.jpg", 325, 603, 610, 0.95, 14, 0.0019, 0),
          ("02-front-close.jpg", 282, 655, 556, 0.87, 11, 0.005, -1),
          ("04-left-closer.jpg", 291, 653, 570, 0.89, 12, 0.005, -1)]
 DETAIL = ("06-headlight-detail.jpg", 290, 18, 0.0045)       # plain crop at y, frames, push-in
+# Optional moving shots: a clip in <photo dir>/clips/ named after a photo (07-right-wide-turning.mp4)
+# replaces that still, from start (s) for frames at FPS, framed like the photo (same 9:16 picture,
+# same car position), with the same total push-in. The detail's entry also sets its crop y.
+CLIPS = {"07-right-wide-turning": (0.6, 22), "02-front-close": (0.4, 20),
+         "04-left-closer": (0.2, 20), "06-headlight-detail": (2.0, 28, 200)}
+# Optional wink: a clip frame with one eye closed, clips/<stem>-wink.png (same size as the clip). The shot
+# then plays the clip's first open-eye frames, holds the last one, shows the wink, and holds open again.
+WINK = {"06-headlight-detail": (8, 4, 5)}                  # frames: from the clip, held, winking
 # Optional end card: this logo (git-ignored with the photos) centred on white with a thin red frame.
 # The last photo fades to white, the logo fades in, holds, then everything fades to black.
 END_LOGO = "honda-logo.png"
@@ -40,19 +48,64 @@ def ffmpeg(args):
     subprocess.run(["ffmpeg", "-loglevel", "error", "-y"] + args, check=True)
 
 
-def shot_filter(cx, cy, w, target, n, rate, slide, first):
+def shot_filter(cx, cy, w, target, n, rate, slide, first, clip=False):
+    """A still held for n frames, or (clip) n frames of a clip, d=1 per frame."""
     s = max(1.0, target * 640 / w)             # never shrink: no margins to fill
     fw, fx, fy = 640 * s, CX - cx * s, CY - cy * s
     fx = min(0.0, max(640 - fw, fx))           # the photo always covers the full width
     x = "(iw-iw/zoom)*(0.5+0.45*(%d)*(on/%d-0.5))" % (slide, n)
     fade = ",fade=t=in:st=0:d=0.8" if first else ""
-    return ("scale=640:-1,scale=iw*%.4f:-1,crop=640:480:%d:%d,%s,"
+    return ("%sscale=640:-1,scale=iw*%.4f:-1,crop=640:480:%d:%d,%s,"
             "zoompan=z='1.0+%s*on':x='%s':y='(ih-ih/zoom)/2':d=%d:s=320x240:fps=%d,vignette=PI/8%s,format=yuv420p"
-            % (s, round(-fx), round(-fy), GRADE, rate, x, n, FPS, fade))
+            % ("fps=%d," % FPS if clip else "", s, round(-fx), round(-fy), GRADE, rate, x,
+               1 if clip else n, FPS, fade))
+
+
+def wink_sequence(frames, opened, hold, wink):
+    """The wink shot's frames: clip frame indexes, -1 for the wink frame."""
+    seq = list(range(opened)) + [opened - 1] * hold + [-1] * wink
+    return seq + [opened - 1] * (frames - len(seq))
+
+
+def wink_frame(photos, stem):
+    """The shot's wink frame, or None."""
+    path = os.path.join(photos, "clips", stem + "-wink.png")
+    return path if stem in WINK and os.path.isfile(path) else None
+
+
+def wink_clip(clip, start, frames, wink, stem, tmp):
+    """The clip's shot with the wink in it, as a clip of its own at FPS."""
+    d = os.path.join(tmp, "wink")
+    os.makedirs(d)
+    opened = WINK[stem][0]
+    ffmpeg(["-ss", "%.2f" % start, "-i", clip, "-vf", "fps=%d" % FPS, "-frames:v", str(opened),
+            "-start_number", "0", os.path.join(d, "c%03d.png")])
+    for i, k in enumerate(wink_sequence(frames, *WINK[stem])):
+        shutil.copy(wink if k < 0 else os.path.join(d, "c%03d.png" % k), os.path.join(d, "s%03d.png" % i))
+    out = os.path.join(tmp, stem + "-wink.mp4")
+    ffmpeg(["-framerate", str(FPS), "-i", os.path.join(d, "s%03d.png"), "-c:v", "libx264", "-crf", "12",
+            "-pix_fmt", "yuv420p", out])
+    return out
+
+
+def source(photos, name, n, rate, tmp=None):
+    """The ffmpeg input for a shot, its frames and push-in per frame: the photo, or its clip."""
+    stem = os.path.splitext(name)[0]
+    clip = os.path.join(photos, "clips", stem + ".mp4")
+    if stem in CLIPS and os.path.isfile(clip):
+        start, frames = CLIPS[stem][:2]
+        wink = wink_frame(photos, stem)
+        if wink and tmp:
+            return ["-i", wink_clip(clip, start, frames, wink, stem, tmp)], frames, rate * n / frames, True
+        return ["-ss", "%.2f" % start, "-i", clip], frames, rate * n / frames, True
+    src = os.path.join(photos, name)
+    if not os.path.isfile(src):
+        sys.exit("gen_montage: missing photo %s" % src)
+    return ["-i", src], n, rate, False
 
 
 def photo_frames():
-    """Frames of the photo part: every shot and the detail, minus the crossfade overlaps."""
+    """Frames of the photo part (stills): every shot and the detail, minus the crossfade overlaps."""
     n = [s[5] for s in SHOTS] + [DETAIL[2]]
     return sum(n) - XFADE * (len(n) - 1)
 
@@ -101,23 +154,22 @@ def build(photos):
     try:
         clips = []
         for i, (name, cx, cy, w, target, n, rate, slide) in enumerate(SHOTS):
-            src = os.path.join(photos, name)
-            if not os.path.isfile(src):
-                sys.exit("gen_montage: missing photo %s" % src)
+            inp, n, rate, moving = source(photos, name, n, rate, tmp)
             out = os.path.join(tmp, "c%d.mp4" % i)
-            ffmpeg(["-i", src, "-vf", shot_filter(cx, cy, w, target, n, rate, slide, i == 0),
-                    "-frames:v", str(n), "-c:v", "libx264", "-crf", "14", out])
+            ffmpeg(inp + ["-vf", shot_filter(cx, cy, w, target, n, rate, slide, i == 0, moving),
+                          "-frames:v", str(n), "-c:v", "libx264", "-crf", "14", out])
             clips.append((out, n))
         name, y, n, rate = DETAIL
-        src = os.path.join(photos, name)
-        if not os.path.isfile(src):
-            sys.exit("gen_montage: missing photo %s" % src)
+        inp, n, rate, moving = source(photos, name, n, rate, tmp)
+        if moving and len(CLIPS[os.path.splitext(name)[0]]) > 2:
+            y = CLIPS[os.path.splitext(name)[0]][2]
         out = os.path.join(tmp, "c%d.mp4" % len(clips))
-        ffmpeg(["-i", src, "-vf",
-                "scale=640:-1,crop=640:480:0:%d,%s,zoompan=z='1.0+%s*on':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':"
-                "d=%d:s=320x240:fps=%d,vignette=PI/8,fade=t=out:st=%.1f:d=0.6:color=%s,format=yuv420p"
-                % (y, GRADE, rate, n, FPS, n / FPS - 0.6,
-                   "white" if os.path.isfile(os.path.join(photos, END_LOGO)) else "black"), "-frames:v", str(n), "-c:v", "libx264", "-crf", "14", out])
+        ffmpeg(inp + ["-vf",
+                      "%sscale=640:-1,crop=640:480:0:%d,%s,zoompan=z='1.0+%s*on':x='(iw-iw/zoom)/2':y='(ih-ih/zoom)/2':"
+                      "d=%d:s=320x240:fps=%d,vignette=PI/8,fade=t=out:st=%.1f:d=0.6:color=%s,format=yuv420p"
+                      % ("fps=%d," % FPS if moving else "", y, GRADE, rate, 1 if moving else n, FPS, n / FPS - 0.6,
+                         "white" if os.path.isfile(os.path.join(photos, END_LOGO)) else "black"),
+                      "-frames:v", str(n), "-c:v", "libx264", "-crf", "14", out])
         clips.append((out, n))
         inputs, graph, last, t = [], "", "[0]", clips[0][1] / FPS - XFADE / FPS
         for c, _ in clips:
