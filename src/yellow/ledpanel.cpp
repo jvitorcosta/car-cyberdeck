@@ -1691,7 +1691,40 @@ static void irEffect(uint8_t mode, const char* name) {
     drawMessage();
 }
 
+// ♪1-♪4: the four playlists in config.h, started on the black deck's Spotify shuffled (its GET
+// /playlists/play&shuffle=1, which waits up to 15 s on Spotify). The loop leaves the press in
+// irPlaylistWant (a second one while the first waits replaces it: the last press wins); the deck
+// task asks (irPlay) and leaves the answer: irPlaylistWhy's text, then the code, then
+// irPlaylistDone, the key it was for.
+static const char* const IR_PLAYLISTS[4] = {IR_PLAYLIST_1, IR_PLAYLIST_2, IR_PLAYLIST_3, IR_PLAYLIST_4};
+static const char* const IR_PLAYLIST_NAMES[4] = {IR_PLAYLIST_1_NAME, IR_PLAYLIST_2_NAME, IR_PLAYLIST_3_NAME,
+                                                 IR_PLAYLIST_4_NAME};
+static constexpr uint32_t IR_PLAY_WAIT_MS = 16000;
+static std::atomic<int8_t> irPlaylistWant{-1}, irPlaylistDone{-1};
+static std::atomic<int16_t> irPlaylistRc{0};
+static char irPlaylistWhy[40];
+
+// `prefix` and `name` in capitals as the message (">PLAYING DIVAS POP").
+static void irSay(const char* prefix, const char* name, uint32_t ms = MESSAGE_MS, bool alert = false) {
+    char m[sizeof(message)];
+    snprintf(m, sizeof(m), "%s%s", prefix, name);
+    for (char* c = m; *c; c++) *c = static_cast<char>(toupper(static_cast<unsigned char>(*c)));
+    setMessage(m, ms, alert);
+    drawMessage();
+}
+
+// The black deck's answer to a playlist key, once it came.
+static void irPlaylistShown() {
+    const int i = irPlaylistDone.exchange(-1);
+    if (i < 0) return;
+    const int rc = irPlaylistRc.load();
+    if (rc == 200) irSay(">PLAYING ", IR_PLAYLIST_NAMES[i]);
+    else if (rc <= 0) irSay(">BLACK DECK NOT ANSWERING", "", MESSAGE_MS, true);
+    else irSay(">", irPlaylistWhy, MESSAGE_MS, true);
+}
+
 static void irTick() {
+    irPlaylistShown();
     if (irEffectDue >= 0 && millis() - irEffectAt >= 1000) {
         write(controllers[1], elkcmd::effect(static_cast<uint8_t>(irEffectDue)));
         irEffectDue = -1;
@@ -1752,7 +1785,14 @@ static void irTick() {
             break;
         }
         case irkeys::Kind::Playlist:
-            break;  // Task 6
+            if (!IR_PLAYLISTS[a.value][0]) {
+                setMessage(">NO PLAYLIST SET");
+                drawMessage();
+                break;
+            }
+            irPlaylistWant.store(static_cast<int8_t>(a.value));
+            irSay(">STARTING ", IR_PLAYLIST_NAMES[a.value], IR_PLAY_WAIT_MS);
+            break;
     }
 }
 
@@ -2050,9 +2090,10 @@ static constexpr uint32_t DECK_LOCK_MS = 7000;
 // A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
 // body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
 // peer: the address asked; nonce: the request's n (16 hex). Short timeouts: the deck is one hop
-// away, and a missing deck must not hold the polls up. Under deckLock (deckGet).
+// away, and a missing deck must not hold the polls up. timeoutMs: the wait for its answer (longer
+// for a playlist, which the black deck answers once Spotify has). Under deckLock (deckGet).
 static int deckAsk(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
-                   uint32_t* peer, char* nonce) {
+                   uint32_t* peer, char* nonce, uint32_t timeoutMs) {
     if (!net::isOnline()) return -1;
     char auth[sigreq::AUTH_LEN];
     if (!reqauth::signGet(path, params, count, auth, sizeof(auth))) {
@@ -2068,7 +2109,7 @@ static int deckAsk(const char* path, const sigreq::Param* params, int count, cha
         const char* at = strstr(auth, "&n=");
         snprintf(nonce, 17, "%.16s", at ? at + 3 : "");
     }
-    char host[40], query[32] = "", url[160];
+    char host[40], query[48] = "", url[224];  // query: "id=<22>&shuffle=1&" at most
     if (!deckHost(host, sizeof(host))) return -1;
     for (int i = 0; i < count; ++i) {
         const size_t at = strlen(query);
@@ -2078,13 +2119,13 @@ static int deckAsk(const char* path, const sigreq::Param* params, int count, cha
         return -1;
     IPAddress a;
     if (peer && a.fromString(host)) *peer = static_cast<uint32_t>(a);
-    return net::httpGet(url, 1500, body, bodyLen, body ? 3000 : 0);
+    return net::httpGet(url, timeoutMs, body, bodyLen, body ? 3000 : 0);
 }
 
 static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
-                   uint32_t* peer = nullptr, char* nonce = nullptr) {
+                   uint32_t* peer = nullptr, char* nonce = nullptr, uint32_t timeoutMs = 1500) {
     if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return -1;
-    const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce);
+    const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce, timeoutMs);
     xSemaphoreGive(deckLock);
     return rc;
 }
@@ -2191,11 +2232,35 @@ static int karaokeGet(bool on, int light) {
     return rc;
 }
 
+// A playlist key's ask (irPlaylistWant): GET /playlists/play?id=..&shuffle=1, waiting up to
+// IR_PLAY_WAIT_MS. Only a 200's body comes back (net::httpGet), so the black deck's other answers
+// are told by their code: 502 is what Spotify said (most often no phone playing), 503 busy or low
+// on memory, 504 Spotify slow, 403 a wrong key.
+static void irPlay(int i) {
+    crashlog::at("ir play");
+    const sigreq::Param p[] = {{"id", IR_PLAYLISTS[i]}, {"shuffle", "1"}};
+    char reply[16];
+    const int rc = deckGet("/playlists/play", p, 2, reply, sizeof(reply), nullptr, nullptr, IR_PLAY_WAIT_MS);
+    if (rc != NOT_SIGNED) deckAnswered(rc > 0);
+    Serial.printf("[ir] playlist %d: rc=%d\n", i + 1, rc);
+    const char* why = rc == 502 ? "SPOTIFY: CHECK THE PHONE"
+                      : rc == 503 ? "BLACK DECK BUSY"
+                      : rc == 504 ? "SPOTIFY SLOW: RETRY"
+                      : rc == 403 ? "WRONG KEY"
+                                  : "SPOTIFY ERROR";
+    snprintf(irPlaylistWhy, sizeof(irPlaylistWhy), "%s", why);
+    irPlaylistRc.store(static_cast<int16_t>(rc < -32000 ? -1 : rc));
+    irPlaylistDone.store(static_cast<int8_t>(i));
+}
+
 static void deckTask(void*) {
     static KeepAlive music{"music", musicGet, nullptr, {}, 0}, karaoke{"karaoke", karaokeGet, insideLight, {}, 0};
-    watchdog::watch();  // each pass: two GETs of 1.5 s and an mDNS query of 1.5 s at most
+    // each pass: two GETs of 1.5 s and an mDNS query of 1.5 s at most, and a playlist's 16 s
+    watchdog::watch();
     for (;;) {
         watchdog::feed();
+        const int8_t playlist = irPlaylistWant.exchange(-1);
+        if (playlist >= 0) irPlay(playlist);
         keepAlive(music, musicWant);
         // want before taps: setKaraoke counts the tap first, so a switch on seen here is counted
         static keepalive::Confirm confirm;

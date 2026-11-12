@@ -60,3 +60,16 @@ static const int WIFI_NETWORK_COUNT = 2;
 // The all-zero placeholders build, but the deck then logs "[leds] INSIDE: no address in config.h".
 #define LED_INSIDE_MAC        "00:00:00:00:00:00"
 #define LED_OUTSIDE_MAC       "00:00:00:00:00:00"
+
+// The IR remote's four music keys on the yellow deck: each starts a playlist on the black deck's
+// Spotify, from a random track with shuffle on. The 22-character id from the playlist's link
+// (open.spotify.com/playlist/<id>), and the name the screen shows (">PLAYING <NAME>"). An empty id:
+// that key shows ">NO PLAYLIST SET".
+#define IR_PLAYLIST_1         ""
+#define IR_PLAYLIST_1_NAME    ""
+#define IR_PLAYLIST_2         ""
+#define IR_PLAYLIST_2_NAME    ""
+#define IR_PLAYLIST_3         ""
+#define IR_PLAYLIST_3_NAME    ""
+#define IR_PLAYLIST_4         ""
+#define IR_PLAYLIST_4_NAME    ""
