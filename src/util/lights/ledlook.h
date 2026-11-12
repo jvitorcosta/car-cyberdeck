@@ -37,6 +37,12 @@ inline constexpr Swatch SWATCHES[N_SWATCH] = {
 // focus, the terminal's theme): itself, or blue for cyan.
 constexpr int gridSwatch(int sw) { return sw == CYAN ? static_cast<int>(BLUE) : sw; }
 
+// The grid colour after (dir +1) or before (-1) swatch sw, round the grid's eight; from a colour
+// the grid doesn't have (cyan), its first or its last.
+constexpr int stepGrid(int sw, int dir) {
+    return sw < 0 || sw >= N_GRID ? (dir > 0 ? 0 : N_GRID - 1) : (sw + dir + N_GRID) % N_GRID;
+}
+
 // The grid colours' words, English and Portuguese, lowercase and without accents: what voice commands
 // (ledvoice) and song titles, albums, playlist names and #tags (songmood) call them. Cyan has
 // none here (never a song colour): ledvoice adds its words, and the homophones Siri makes of a lone

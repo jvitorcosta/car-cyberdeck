@@ -49,4 +49,11 @@ inline void apply(const Change& c, ledlook::Look* both, ledlook::Look* in, ledlo
     edit(out, c);
     *both = seed(*in, *out);  // equal again (a step that met at 100 %): the page is that look
 }
+
+// A colour on both lights that changes only the colour (the PS3 controller's right stick): each
+// light keeps its own level and on/off, so a split preset stays split and a light that was off
+// stays off. Not the usual copy, which would make them one look.
+inline void recolour(int swatch, ledlook::Look* both, ledlook::Look* in, ledlook::Look* out) {
+    both->swatch = in->swatch = out->swatch = swatch;
+}
 }  // namespace bothlook

@@ -112,6 +112,27 @@ void test_edit_one_look() {
     assertLook(look(PINK, 40, false), l);
 }
 
+void test_recolour_keeps_each_level() {
+    ledlook::Look in{ledlook::PINK, 60, true}, out{ledlook::PINK, 40, true}, both = bothlook::seed(in, out);
+    bothlook::recolour(ledlook::BLUE, &both, &in, &out);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, in.swatch);
+    TEST_ASSERT_EQUAL(60, in.pct);
+    TEST_ASSERT_TRUE(in.lit);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, out.swatch);
+    TEST_ASSERT_EQUAL(40, out.pct);
+    TEST_ASSERT_TRUE(out.lit);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, both.swatch);
+}
+
+void test_recolour_keeps_an_off_light_off() {
+    ledlook::Look in{ledlook::PINK, 60, true}, out{ledlook::PINK, 80, false}, both = bothlook::seed(in, out);
+    bothlook::recolour(ledlook::BLUE, &both, &in, &out);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, out.swatch);
+    TEST_ASSERT_FALSE(out.lit);
+    TEST_ASSERT_EQUAL(80, out.pct);
+    TEST_ASSERT_TRUE(in.lit);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_mixed_is_computed_from_the_two_lights);
@@ -123,5 +144,7 @@ int main(int, char**) {
     RUN_TEST(test_mixed_absolute_level_sets_each_pct_and_keeps_each_colour);
     RUN_TEST(test_not_mixed_copies_the_page_like_before);
     RUN_TEST(test_edit_one_look);
+    RUN_TEST(test_recolour_keeps_each_level);
+    RUN_TEST(test_recolour_keeps_an_off_light_off);
     return UNITY_END();
 }
