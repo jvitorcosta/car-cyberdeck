@@ -435,7 +435,8 @@ static void runPlay(const char* id, bool shuffle) {
     else Serial.printf("[spotify] play playlist %s: HTTP %d\n", id, rc);
     if (rc != 200 && rc != 202 && rc != 204) { answer(502, playlists::why(rc, s_body, true)); return; }
     if (shuffle) {
-        const int sh = apiCall("PUT", "/v1/me/player/shuffle?state=true", nullptr, nullptr);
+        // "{}", not no body: HTTPClient sends no Content-Length for an empty PUT, and Spotify answers 411
+        const int sh = apiCall("PUT", "/v1/me/player/shuffle?state=true", "{}", nullptr);
         if (sh != 200 && sh != 202 && sh != 204) Serial.printf("[spotify] shuffle on: HTTP %d\n", sh);
     }
     answer(200, "playing");
