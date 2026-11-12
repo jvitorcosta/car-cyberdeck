@@ -100,7 +100,7 @@ Hardware, wiring, the remote's layout and the test sketch are in the earlier han
 - **Shuffle stays on** after a ♪ press, as it would if he'd tapped shuffle in Spotify; later
   playlist picks (the watch) then play shuffled too.
 - **The ♪ ask waits for the black deck:** one ask on the `deck` task, with its own longer timeout
-  (about 6 s, for shuffle + track count + play), then `>PLAYING ...` or the honest failure. The
+  (16 s: the black deck itself waits up to 15 s on Spotify for the track count, play and shuffle), then `>PLAYING ...` or the honest failure. The
   keep-alives wait behind it; a missed one is retried on the next round as today.
 - **Heap gate:** the low water since #57 is ~30 KB at its worst (music mode streaming). Record
   `[mem]` with and without IRremote; if the low water drops more than ~1 KB, stop and look before
