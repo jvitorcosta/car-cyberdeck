@@ -2240,9 +2240,18 @@ static void irPlay(int i) {
     crashlog::at("ir play");
     const sigreq::Param p[] = {{"id", IR_PLAYLISTS[i]}, {"shuffle", "1"}};
     char reply[16];
-    const int rc = deckGet("/playlists/play", p, 2, reply, sizeof(reply), nullptr, nullptr, IR_PLAY_WAIT_MS);
+    // The first ask after a quiet while can find no connection (-1: nothing was sent, so asking
+    // again can't start the playlist twice); the owner's second press always went through, so
+    // the deck makes it, once, after a short pause.
+    int rc = -1;
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (attempt) vTaskDelay(pdMS_TO_TICKS(300));
+        const uint32_t at = millis();
+        rc = deckGet("/playlists/play", p, 2, reply, sizeof(reply), nullptr, nullptr, IR_PLAY_WAIT_MS);
+        Serial.printf("[ir] playlist %d: rc=%d in %u ms\n", i + 1, rc, static_cast<unsigned>(millis() - at));
+        if (rc != -1) break;
+    }
     if (rc != NOT_SIGNED) deckAnswered(rc > 0);
-    Serial.printf("[ir] playlist %d: rc=%d\n", i + 1, rc);
     const char* why = rc == 502 ? "SPOTIFY: CHECK THE PHONE"
                       : rc == 503 ? "BLACK DECK BUSY"
                       : rc == 504 ? "SPOTIFY SLOW: RETRY"
