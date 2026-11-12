@@ -6,6 +6,9 @@
 // carries no colour acts on each light's own look: power sets each one's on/off, a level step
 // steps each one's %, an absolute level sets each one's %. A colour makes them one look again, the
 // usual copy. PURE, host-tested.
+#include <cstddef>
+#include <cstdio>
+#include <cstring>
 #include "../lights/ledlook.h"
 
 namespace bothlook {
@@ -48,5 +51,29 @@ inline void apply(const Change& c, ledlook::Look* both, ledlook::Look* in, ledlo
     edit(in, c);
     edit(out, c);
     *both = seed(*in, *out);  // equal again (a step that met at 100 %): the page is that look
+}
+
+// A colour on both lights that changes only the colour (the PS3 controller's right stick): each
+// light keeps its own level and on/off, so a split preset stays split and a light that was off
+// stays off. Not the usual copy, which would make them one look.
+inline void recolour(int swatch, ledlook::Look* both, ledlook::Look* in, ledlook::Look* out) {
+    both->swatch = in->swatch = out->swatch = swatch;
+}
+
+// The BOTH page's level line: one "60%" (or "OFF") while both lights show the same level whatever
+// their colours, else each one's ("IN 60%  OUT 40%", "IN OFF  OUT 80%"; one space where two would
+// pass MAX_LEVEL_TEXT, so it fits the level rect: "IN 100% OUT 90%"). Cut to fit `n`.
+constexpr size_t MAX_LEVEL_TEXT = 15;
+inline void levelText(const ledlook::Look& in, const ledlook::Look& out, char* buf, size_t n) {
+    if (!n) return;
+    auto one = [](const ledlook::Look& l, char* b, size_t m) {
+        if (l.lit) snprintf(b, m, "%u%%", static_cast<unsigned>(l.pct));
+        else snprintf(b, m, "OFF");
+    };
+    char a[8], b[8];
+    one(in, a, sizeof(a));
+    one(out, b, sizeof(b));
+    if (strcmp(a, b) == 0) snprintf(buf, n, "%s", a);
+    else snprintf(buf, n, strlen(a) + strlen(b) + 9 > MAX_LEVEL_TEXT ? "IN %s OUT %s" : "IN %s  OUT %s", a, b);
 }
 }  // namespace bothlook

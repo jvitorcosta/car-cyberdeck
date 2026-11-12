@@ -32,6 +32,13 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Verification (on device)
 
+- **PS3 controller redesign in the car** (desk-checked 2026-11-12): at the desk set-downs and
+  pick-ups fired nothing, and every press, flick, Triangle, SELECT and START acted once. Still to
+  check while driving: that road motion never reads as "resting" / "picked up" (`[pad] resting`
+  lines while the car moves would mean a lost press); that a firm set-down on the seat is caught
+  (`[pad] ignored: N buttons at once`); and each feel by hand with both lights linked (at the desk
+  every buzz carried the weak "not linked" one after it, since the lights were away). Tune in
+  `util/yellow/padguard.h` and `padfeel.h`.
 - **Wave 4, the rest**: music by voice, the watch's Music mode item and "Cyan" were confirmed in
   the car (2026-10-28). Still unchecked: `/status` says `music=`, and the colour lists follow the
   deck's order.

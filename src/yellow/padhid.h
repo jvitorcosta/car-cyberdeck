@@ -11,9 +11,10 @@
 #include <cstdint>
 
 namespace padhid {
-// leds: bit 0 = LED 1 .. bit 3 = LED 4. rumbleMs 0: none (the DS3 counts ~20 ms units). False when
-// the report wasn't sent (no memory, or the stack refused it).
-bool send(uint8_t leds, uint32_t rumbleMs, uint8_t intensity);
+// leds: bit 0 = LED 1 .. bit 3 = LED 4. The small motor (on or off) for smallMs, the big one at
+// bigPower for bigMs; 0 ms: that motor stays off (the DS3 counts ~20 ms units). False when the
+// report wasn't sent (no memory, or the stack refused it).
+bool send(uint8_t leds, uint32_t smallMs, uint32_t bigMs, uint8_t bigPower);
 // From the loop: a library command that found no memory goes again (every RETRY_MS, RETRIES times).
 void retry();
 }

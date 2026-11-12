@@ -44,10 +44,23 @@ void test_words_are_unique_lowercase_ascii() {
     }
 }
 
+void test_step_grid_wraps() {
+    TEST_ASSERT_EQUAL(ledlook::RED, ledlook::stepGrid(ledlook::YELLOW, 1));
+    TEST_ASSERT_EQUAL(ledlook::YELLOW, ledlook::stepGrid(ledlook::RED, -1));
+    TEST_ASSERT_EQUAL(ledlook::ORANGE, ledlook::stepGrid(ledlook::RED, 1));
+}
+
+void test_step_grid_from_cyan() {
+    TEST_ASSERT_EQUAL(ledlook::RED, ledlook::stepGrid(ledlook::CYAN, 1));
+    TEST_ASSERT_EQUAL(ledlook::YELLOW, ledlook::stepGrid(ledlook::CYAN, -1));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_colour_names_follow_the_swatch_table);
     RUN_TEST(test_every_grid_colour_has_words);
     RUN_TEST(test_words_are_unique_lowercase_ascii);
+    RUN_TEST(test_step_grid_wraps);
+    RUN_TEST(test_step_grid_from_cyan);
     return UNITY_END();
 }

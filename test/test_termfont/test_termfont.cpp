@@ -7,6 +7,7 @@
 #include "../../src/yellow/ui/termlayout.h"
 #include "../../src/util/yellow/dashtext.h"
 #include "../../src/util/yellow/deckmenu.h"
+#include "../../src/util/yellow/bothlook.h"
 #include "../../src/util/lights/ledlook.h"
 #include "../../src/util/yellow/ledpresets.h"
 #include "../../src/util/yellow/tripmeter.h"
@@ -352,6 +353,20 @@ void test_status_fits() {
     for (const char* s : {"OUTSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED"}) fitsLeft(Face::SMALL, s, STATUS_TEXT_X, deckmenu::STATUS.w);
 }
 
+// The BOTH page's level line while the two lights' levels differ (drawLevel): the longest fits the
+// level rect between - and + in SMALL, with a few px to spare.
+void test_both_level_line_fits() {
+    char line[24];
+    for (int in = 0; in <= 100; in += 10) {
+        for (int out = 0; out <= 100; out += 10) {
+            const ledlook::Look a{ledlook::PINK, static_cast<uint8_t>(in ? in : 50), in != 0};
+            const ledlook::Look b{ledlook::PINK, static_cast<uint8_t>(out ? out : 50), out != 0};
+            bothlook::levelText(a, b, line, sizeof(line));  // 0: that light off
+            TEST_ASSERT_LESS_OR_EQUAL_INT_MESSAGE(deckmenu::LEVEL.w - 4, termfont::width(Face::SMALL, line), line);
+        }
+    }
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_width_follows_tft_espi);
@@ -369,5 +384,6 @@ int main() {
     RUN_TEST(test_dash_prompt_fits);
     RUN_TEST(test_song_colours_fit);
     RUN_TEST(test_status_fits);
+    RUN_TEST(test_both_level_line_fits);
     return UNITY_END();
 }

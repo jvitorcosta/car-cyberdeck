@@ -17,8 +17,8 @@
 //           lights together; INSIDE and OUTSIDE each keep their own look), the status line ("LINK
 //           2/2", or "OUTSIDE: NO LINK" in ALERT), then on the three look pages 2x4 colour buttons
 //           (tap one to set it and turn on, double-tap the lit one to turn the lights off) and
-//           [-]  [level: a 10-cell block bar and the %, OFF, or MIX on BOTH while the two lights
-//           differ]  [+]; on PRESETS the six presets, two rows of three, each its name over its
+//           [-]  [level: a 10-cell block bar and the %, OFF, or on BOTH while the two lights'
+//           levels differ each one's, "IN 60%  OUT 40%"]  [+]; on PRESETS the six presets, two rows of three, each its name over its
 //           inside and outside chips (tap: apply, ">ROSE APPLIED"; the tab stays). GOJIRA's name is
 //           ゴジラ on screen (">ゴジラ APPLIED"): three Unifont glyphs (ui/gojiraname), as VT323 has
 //           no kana; "GOJIRA" on the wire, in the logs and the voice replies. Its colour, cyan,
@@ -121,7 +121,8 @@
 #include "../util/yellow/lightstatus.h"
 #include "../util/yellow/padbattery.h"
 #include "../util/yellow/padfeel.h"
-#include "../util/yellow/padtrigger.h"
+#include "../util/yellow/padflick.h"
+#include "../util/yellow/padguard.h"
 #include "../util/common/remotegate.h"
 #include "../util/yellow/tapguard.h"
 #include "../util/common/termpal.h"
@@ -159,7 +160,7 @@ static int currentTab() { return presetsTab ? deckmenu::TAB_PRESETS : static_cas
 static Look looks[3];  // indexed by Target; controller i shows looks[i + 1]
 static Look& cur() { return looks[target]; }
 // The BOTH page is on screen while the lights differ (after a preset or the INSIDE / OUTSIDE
-// pages): it shows no selected colour and "MIX" for the level.
+// pages): it shows no selected colour, and each light's level when those differ.
 static bool bothMixed() { return target == BOTH && bothlook::mixed(looks[INSIDE], looks[OUTSIDE]); }
 
 using deckmenu::Rect;
@@ -765,26 +766,30 @@ static void drawButton(int id, bool pressed = false) {
 }
 
 // The block bar: 10 cells, one filled per 10 % (the terminal's full block), the rest outlined (its
-// shade block; the font's ASCII table has neither glyph), and the % under it (TITLE). "MIX" on BOTH
-// while the lights differ (the main screen's lights band has each light's %), "OFF" in DIM when off.
+// shade block; the font's ASCII table has neither glyph), and the % under it (TITLE), "OFF" in DIM
+// when off. On BOTH while the lights differ the bar is the inside light's and the line has both
+// levels when they differ ("IN 60%  OUT 40%", SMALL: TITLE doesn't fit the 108 px rect).
 static void drawLevel() {
     const Rect& r = deckmenu::LEVEL;
-    const Look& l = cur();
-    const bool mixed = bothMixed(), live = mixed || l.lit;
+    const bool mixed = bothMixed();
+    const Look& l = mixed ? looks[INSIDE] : cur();
+    const bool live = mixed || l.lit;
     clearBg(r);
     tft.drawRect(r.x, r.y, r.w, r.h, pal(termpal::MID));
     constexpr int N_CELL = 10, CELL = 8, GAP = 2;
-    const int full = live && !mixed ? l.pct / 10 : 0;
+    const int full = l.lit ? l.pct / 10 : 0;
     const int x0 = r.x + (r.w - (N_CELL * (CELL + GAP) - GAP)) / 2;
     for (int k = 0; k < N_CELL; k++) {
         const int x = x0 + k * (CELL + GAP);
         if (k < full) tft.fillRect(x, r.y + 7, CELL, 14, pal(termpal::TEXT));
         else tft.drawRect(x, r.y + 7, CELL, 14, pal(live ? termpal::MID : termpal::DIM));
     }
-    char pct[8];
-    snprintf(pct, sizeof(pct), "%u%%", static_cast<unsigned>(l.pct));
+    char line[24];
+    if (mixed) bothlook::levelText(looks[INSIDE], looks[OUTSIDE], line, sizeof(line));
+    else bothlook::levelText(l, l, line, sizeof(line));
     tft.setTextColor(pal(live ? termpal::TEXT : termpal::DIM));
-    text(mixed ? "MIX" : l.lit ? pct : "OFF", r.x + r.w / 2, r.y + 34, Face::TITLE, MC_DATUM);
+    const bool both = strchr(line, ' ') != nullptr;  // "IN 60%  OUT 40%"
+    text(line, r.x + r.w / 2, r.y + 34, both ? Face::SMALL : Face::TITLE, MC_DATUM);
 }
 
 // A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS
@@ -1323,7 +1328,7 @@ static void tripTick() {
 
 // Preset slot0 (0..5) onto the lights: each light gets the preset's look. The BOTH page copies them
 // when they match; otherwise it takes the inside look, lit if either light is (bothlook::seed),
-// shows "MIX", and the main screen's lights band tells each light's look. From a tap, A, voice or
+// shows each light's level, and the main screen's lights band tells each light's look. From a tap, A, voice or
 // the watch. The lights fade to it from what they show (even a song's): the inside over ~1 s, the
 // outside, whose controller takes ~1 write a second, half now and the rest 1 s later.
 static constexpr int PRESET_FADE_IN = 4, PRESET_FADE_OUT = 2;
@@ -1453,6 +1458,7 @@ static void pressLights(int id) {
 static void setMusic(bool on, bool restore = true);
 static void drawMusicItem();
 static void setKaraoke(bool on);
+static void drawKaraokeItem();
 
 // One settled tap on a button of the current screen.
 static void press(int id) {
@@ -1480,15 +1486,17 @@ static void act() {
 }
 
 // ---- PS3 controller input ----
+// Every press goes through the guard first (util/padguard): light touches, set-downs and stuck
+// buttons do nothing.
 // Moving around (the screen's buttons):
-//   D-pad: move the focus (held: repeats; the sticks are ignored; on the Menu left / right along
-//          its three items, no wrap)    cross: press the focused button
-//   circle: back to the Menu (from Lights; on the Menu: nothing)
+//   D-pad: move the focus (held: repeats; on the Menu left / right along its three items, no wrap)
+//   cross: press the focused button    circle: back to the Menu (from Lights; on the Menu: nothing)
 //   Lights only: square next page (BOTH, INSIDE, OUTSIDE, PRESETS, round)
-//   the look pages only: triangle this page's lights on/off    L1 / R1: this page's - / +
-// Shortcuts, on any screen (both lights; padfeel buzzes once, twice when a light isn't linked):
-//   START: lights on / off    L2 / R2: previous / next preset    SELECT: music mode on / off
-//   L1 / R1 (off the look pages): both lights - / +    PS: back to the Menu
+// Shortcuts, on any screen, for both lights; each buzzes its own way (util/padfeel):
+//   START: lights on / off (firm)    SELECT: music mode on / off (two ticks)
+//   triangle: karaoke on / off (long)    L2 / R2: previous / next preset (tick)
+//   L1 / R1: both lights - / + (tick)    right stick flicked left / right: previous / next colour,
+//   each light keeping its level and on/off (tick)    PS: back to the Menu
 // The player LEDs: 1 connected, 2 the inside light linked, 3 the outside one, 4 the pad's battery low.
 
 // Moves the focus to `to` (-1: hides it). On the Menu the bar is part of the button, so both are
@@ -1553,9 +1561,10 @@ static int padLeds = -1;
 
 static uint32_t padRetryAt = 0;  // after a report that didn't go out: the LEDs' next try
 
-static void padSend(bool rumble) {
+// The LEDs, with a buzz when `p` is one (nullptr: LEDs only).
+static void padSend(const padfeel::Pulse* p) {
     const uint8_t bits = padfeel::leds(linkUp(controllers[0]), linkUp(controllers[1]), padBattery.alert);
-    if (padhid::send(bits, rumble ? padfeel::BUZZ_MS : 0, 200)) {
+    if (padhid::send(bits, p ? p->smallMs : 0, p ? p->bigMs : 0, p ? p->bigPower : 0)) {
         padLeds = bits;
     } else {  // the LEDs try again in 500 ms; a lost buzz is just lost
         padLeds = -1;
@@ -1563,20 +1572,23 @@ static void padSend(bool rumble) {
     }
 }
 
-// The buzz for a shortcut that went to both lights.
-static void padFelt() {
-    padBuzz.start(padfeel::buzzes(true, true, linkUp(controllers[0]), linkUp(controllers[1])), millis());
+// The buzz for a shortcut (util/padfeel): its feel, whether it turned something on, and the lights
+// it was for (one that isn't linked adds a weak long buzz).
+static void padFelt(padfeel::Feel f, bool on, bool toIn, bool toOut) {
+    const bool partial = (toIn && !linkUp(controllers[0])) || (toOut && !linkUp(controllers[1]));
+    padBuzz.start(f, on, partial, millis());
 }
 
 // Each tick while connected: a due buzz, else the LEDs when a link or the battery changed them.
 static void padFeelTick() {
-    if (padBuzz.due(millis())) {
+    padfeel::Pulse p;
+    if (padBuzz.due(millis(), &p)) {
         Serial.println("[pad] buzz");
-        padSend(true);
+        padSend(&p);
         return;
     }
     const int bits = padfeel::leds(linkUp(controllers[0]), linkUp(controllers[1]), padBattery.alert);
-    if (bits != padLeds && static_cast<int32_t>(millis() - padRetryAt) >= 0) padSend(false);
+    if (bits != padLeds && static_cast<int32_t>(millis() - padRetryAt) >= 0) padSend(nullptr);
 }
 
 // START: both lights on, or off if either is on.
@@ -1587,17 +1599,17 @@ static void padLightsPower() {
     save();
     setMessage(c.power ? ">LIGHTS ON" : ">LIGHTS OFF");
     if (!drawLooks()) drawMessage();
-    padFelt();
+    padFelt(padfeel::Feel::Firm, c.power == 1, true, true);
 }
 
-// L1 / R1 off the look pages: both lights a step down / up.
+// L1 / R1: both lights a step down / up.
 static void padLevel(int step) {
     bothlook::Change c;
     c.step = step;
     change(BOTH, c);
     save();
     drawLooks();
-    padFelt();
+    padFelt(padfeel::Feel::Tick, true, true, true);
 }
 
 // L2 / R2: the previous / next preset, round; the first press goes to the first (R2) or last (L2).
@@ -1605,7 +1617,31 @@ static void padPreset(int dir) {
     static int slot = -1;
     slot = slot < 0 ? (dir > 0 ? 0 : ledpresets::N - 1) : (slot + dir + ledpresets::N) % ledpresets::N;
     applyPreset(slot);
-    padFelt();
+    padFelt(padfeel::Feel::Tick, true, true, true);
+}
+
+// The right stick's flick: the previous / next grid colour on both lights, from the inside one's;
+// each keeps its own level and on/off (bothlook::recolour). Ends music mode like any manual change.
+static void padColour(int dir) {
+    const int sw = ledlook::stepGrid(looks[INSIDE].swatch, dir);
+    musicYield();
+    bothlook::recolour(sw, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+    for (int i = 0; i < N_CTRL; i++) push(i);
+    save();
+    char m[16];
+    snprintf(m, sizeof(m), ">%s", ledlook::SWATCHES[sw].name);
+    for (char* c = m; *c; c++) *c = static_cast<char>(toupper(static_cast<unsigned char>(*c)));
+    setMessage(m);
+    if (!drawLooks()) drawMessage();
+    Serial.printf("[pad] colour %s\n", ledlook::SWATCHES[sw].word);
+    padFelt(padfeel::Feel::Tick, true, true, true);
+}
+
+// Triangle: karaoke on / off, as the Menu's KARAOKE item.
+static void padKaraoke() {
+    setKaraoke(!karaokeOn);
+    drawKaraokeItem();
+    padFelt(padfeel::Feel::Long, karaokeOn, false, false);
 }
 
 // The buttons the loop acts on, from each report (onPadReport, Ps3.attach, the Bluetooth task):
@@ -1616,37 +1652,89 @@ static void padPreset(int dir) {
 static std::atomic<uint32_t> padHeld{0}, padSeen{0};
 static std::atomic<uint32_t> padReports{0};  // reports since boot: the [pad] rate line
 
-// L2 / R2 by their pressure (util/padtrigger), the Bluetooth task's alone; the loop logs the
-// pressure of each press it acts on, to tune PRESS_AT on the hand.
-static padtrigger::Trigger padL2, padR2;
+// The guard (util/padguard) decides which presses count: light touches, a set-down's many light
+// presses, the moments the pad is picked up or put down, and a button stuck on all do nothing.
+// The Bluetooth task's alone. The loop logs each press's trigger pressure and each of the guard's
+// verdicts (padChord, padRest, padStuck), to tune it on the hand.
+static padguard::Guard padGuard;
 static std::atomic<uint8_t> padL2At{0}, padR2At{0};
+static std::atomic<uint8_t> padChord{0};   // bits on as a set-down began; 0: none since the last log
+static std::atomic<uint8_t> padRest{0};    // 1 resting, 2 picked up; 0: no change since the last log
+static std::atomic<uint32_t> padStuck{0};  // buttons the guard dropped as stuck since the last log
 // A new connection's first report can carry junk (every face button down at once): the buttons
-// count only from the first report with none held. handlePad disarms it on each connect.
+// count only from the first report with none past its press line (padguard::idle). handlePad
+// disarms it on each connect.
 static std::atomic<bool> padArmed{false};
 // X / O pressed hard (their pressure) in a report without their on/off bit: the loop logs it, to
 // tell a worn button from one the deck drops. 0: none since the last log.
 static std::atomic<uint8_t> padXNoBit{0}, padONoBit{0};
+// The right stick's flicks (util/padflick), the Bluetooth task's: -1 / +1 waiting for the loop
+// (the last one wins), 0 none.
+static padflick::Flick padFlick;
+static std::atomic<int8_t> padFlickDir{0};
 
 static void onPadReport() {
+    using namespace padguard;
     const ps3_button_t& b = Ps3.data.button;
-    const uint8_t l2 = Ps3.data.analog.button.l2, r2 = Ps3.data.analog.button.r2;
-    padL2At.store(l2);
-    padR2At.store(r2);
-    if (!b.cross && Ps3.data.analog.button.cross > 60) padXNoBit.store(Ps3.data.analog.button.cross);
-    if (!b.circle && Ps3.data.analog.button.circle > 60) padONoBit.store(Ps3.data.analog.button.circle);
-    const bool l2Down = padL2.feed(l2), r2Down = padR2.feed(r2);
-    const uint32_t raw = (b.select ? 1u << 0 : 0) | (b.start ? 1u << 3 : 0) | (b.up ? 1u << 4 : 0) |
-                         (b.right ? 1u << 5 : 0) | (b.down ? 1u << 6 : 0) | (b.left ? 1u << 7 : 0) |
-                         (l2Down ? 1u << 8 : 0) | (r2Down ? 1u << 9 : 0) | (b.l1 ? 1u << 10 : 0) |
-                         (b.r1 ? 1u << 11 : 0) | (b.triangle ? 1u << 12 : 0) | (b.circle ? 1u << 13 : 0) |
-                         (b.cross ? 1u << 14 : 0) | (b.square ? 1u << 15 : 0) | (b.ps ? 1u << 16 : 0);
+    const ps3_analog_button_t& a = Ps3.data.analog.button;
+    padL2At.store(a.l2);
+    padR2At.store(a.r2);
+    if (!b.cross && a.cross > 60) padXNoBit.store(a.cross);
+    if (!b.circle && a.circle > 60) padONoBit.store(a.circle);
+    Report r{};
+    r.bits = (b.select ? 1u << SELECT : 0) | (b.start ? 1u << START : 0) | (b.up ? 1u << UP : 0) |
+             (b.right ? 1u << RIGHT : 0) | (b.down ? 1u << DOWN : 0) | (b.left ? 1u << LEFT : 0) |
+             (b.l2 ? 1u << L2 : 0) | (b.r2 ? 1u << R2 : 0) | (b.l1 ? 1u << L1 : 0) | (b.r1 ? 1u << R1 : 0) |
+             (b.triangle ? 1u << TRIANGLE : 0) | (b.circle ? 1u << CIRCLE : 0) | (b.cross ? 1u << CROSS : 0) |
+             (b.square ? 1u << SQUARE : 0) | (b.ps ? 1u << HOME : 0);
+    r.pressure[SELECT] = b.select ? 255 : 0;
+    r.pressure[START] = b.start ? 255 : 0;
+    r.pressure[HOME] = b.ps ? 255 : 0;
+    r.pressure[UP] = a.up;
+    r.pressure[RIGHT] = a.right;
+    r.pressure[DOWN] = a.down;
+    r.pressure[LEFT] = a.left;
+    r.pressure[L2] = a.l2;
+    r.pressure[R2] = a.r2;
+    r.pressure[L1] = a.l1;
+    r.pressure[R1] = a.r1;
+    r.pressure[TRIANGLE] = a.triangle;
+    r.pressure[CIRCLE] = a.circle;
+    r.pressure[CROSS] = a.cross;
+    r.pressure[SQUARE] = a.square;
+    r.ax = Ps3.data.sensor.accelerometer.x;
+    r.ay = Ps3.data.sensor.accelerometer.y;
+    r.az = Ps3.data.sensor.accelerometer.z;
+    r.now = millis();
     padReports.fetch_add(1);
+    // the guard's last verdicts, to log each change once
+    static bool chord = false, resting = false;
+    static uint32_t stuck = 0;
     if (!padArmed.load()) {
-        if (raw) return;  // still the connect's junk, or a button held through it
+        padGuard.reset();  // a new connection starts with nothing held and not resting
+        padFlick.reset();
+        chord = resting = false;
+        stuck = 0;
+        if (!idle(r)) return;  // the connect's junk, or a button held through it (a light touch is fine)
         padArmed.store(true);
     }
-    padHeld.store(raw);
-    padSeen.fetch_or(raw);
+    const uint32_t held = padGuard.feed(r);
+    const int flick = padFlick.feed(Ps3.data.analog.stick.rx);
+    if (flick && !padGuard.paused(r.now)) padFlickDir.store(static_cast<int8_t>(flick));
+    int on = 0;
+    for (uint32_t v = r.bits; v; v &= v - 1) on++;
+    if ((on >= CHORD) != chord) {
+        chord = on >= CHORD;
+        if (chord) padChord.store(static_cast<uint8_t>(on));
+    }
+    if (padGuard.resting() != resting) {
+        resting = padGuard.resting();
+        padRest.store(resting ? 1 : 2);
+    }
+    if (padGuard.stuck() & ~stuck) padStuck.fetch_or(padGuard.stuck() & ~stuck);
+    stuck = padGuard.stuck();
+    padHeld.store(held);
+    padSeen.fetch_or(held);
 }
 
 static void handlePad() {
@@ -1685,6 +1773,14 @@ static void handlePad() {
     }
     if (const uint8_t p = padXNoBit.exchange(0)) Serial.printf("[pad] X pressed to %u without its bit\n", p);
     if (const uint8_t p = padONoBit.exchange(0)) Serial.printf("[pad] O pressed to %u without its bit\n", p);
+    if (const uint8_t k = padChord.exchange(0)) Serial.printf("[pad] ignored: %u buttons at once\n", k);
+    if (const uint8_t k = padRest.exchange(0)) Serial.println(k == 1 ? "[pad] resting" : "[pad] picked up");
+    if (const uint32_t k = padStuck.exchange(0)) {
+        static const char* const NAMES[padguard::N_BITS] = {"SELECT", "L3", "R3", "START", "up", "right", "down", "left", "L2",
+                                                            "R2", "L1", "R1", "triangle", "circle", "cross", "square", "PS"};
+        for (int i = 0; i < padguard::N_BITS; i++)
+            if (k & 1u << i) Serial.printf("[pad] stuck: %s\n", NAMES[i]);
+    }
     // the held buttons, and any tapped since the last pass (onPadReport)
     const uint32_t m = padHeld.load() | padSeen.exchange(0);
     struct {
@@ -1735,7 +1831,9 @@ static void handlePad() {
         if (l2 || r2) Serial.printf("[pad] trigger pressure L2 %u, R2 %u\n", padL2At.load(), padR2At.load());
     }
 
-    // the shortcuts, on any screen; one per tick, before the screen's own buttons
+    // the shortcuts, on any screen; one per tick, before the screen's own buttons (a flick doesn't
+    // take the tick: a press in the same pass still acts)
+    if (const int8_t d = padFlickDir.exchange(0)) padColour(d);
     if (home) {
         if (screen != Screen::Menu) show(Screen::Menu);
         return;
@@ -1751,10 +1849,14 @@ static void handlePad() {
     if (select) {
         setMusic(!musicOn);
         drawMusicItem();
-        padFelt();
+        padFelt(padfeel::Feel::Double, musicOn, false, false);
         return;
     }
-    if ((lb || rb) && screen != Screen::Lights) {  // on a look page they are its own - / + (below)
+    if (y) {
+        padKaraoke();
+        return;
+    }
+    if (lb || rb) {
         padLevel(rb ? 1 : -1);
         return;
     }
@@ -1768,16 +1870,6 @@ static void handlePad() {
     }
     if (!onLights()) return;  // the rest is the Lights screen's
     if (x) padPress(L_TAB0 + (currentTab() + 1) % deckmenu::N_TABS);
-    if (screen != Screen::Lights) return;  // PRESETS (X may just have shown it): no look for Y, LB or RB
-    if (lb) padPress(L_MINUS);
-    if (rb) padPress(L_PLUS);
-    if (y) {  // on / off; on BOTH while the lights differ, off if either is on
-        bothlook::Change c;
-        c.power = (bothMixed() ? looks[INSIDE].lit || looks[OUTSIDE].lit : cur().lit) ? 0 : 1;
-        change(target, c);
-        drawLooks();
-        save();
-    }
 }
 
 // ---- The black deck: its address, signed asks and the keep-alives ----

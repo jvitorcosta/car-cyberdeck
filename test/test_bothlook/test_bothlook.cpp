@@ -1,3 +1,4 @@
+#include <cstring>
 #include <unity.h>
 #include "../../src/util/yellow/bothlook.h"
 
@@ -112,6 +113,60 @@ void test_edit_one_look() {
     assertLook(look(PINK, 40, false), l);
 }
 
+void test_recolour_keeps_each_level() {
+    ledlook::Look in{ledlook::PINK, 60, true}, out{ledlook::PINK, 40, true}, both = bothlook::seed(in, out);
+    bothlook::recolour(ledlook::BLUE, &both, &in, &out);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, in.swatch);
+    TEST_ASSERT_EQUAL(60, in.pct);
+    TEST_ASSERT_TRUE(in.lit);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, out.swatch);
+    TEST_ASSERT_EQUAL(40, out.pct);
+    TEST_ASSERT_TRUE(out.lit);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, both.swatch);
+}
+
+void test_recolour_keeps_an_off_light_off() {
+    ledlook::Look in{ledlook::PINK, 60, true}, out{ledlook::PINK, 80, false}, both = bothlook::seed(in, out);
+    bothlook::recolour(ledlook::BLUE, &both, &in, &out);
+    TEST_ASSERT_EQUAL(ledlook::BLUE, out.swatch);
+    TEST_ASSERT_FALSE(out.lit);
+    TEST_ASSERT_EQUAL(80, out.pct);
+    TEST_ASSERT_TRUE(in.lit);
+}
+
+static const char* level(ledlook::Look in, ledlook::Look out) {
+    static char buf[24];
+    bothlook::levelText(in, out, buf, sizeof(buf));
+    return buf;
+}
+
+void test_level_text_matching() {
+    TEST_ASSERT_EQUAL_STRING("60%", level({ledlook::PINK, 60, true}, {ledlook::PINK, 60, true}));
+    TEST_ASSERT_EQUAL_STRING("OFF", level({ledlook::PINK, 60, false}, {ledlook::PINK, 60, false}));
+}
+
+void test_level_text_mixed() {
+    TEST_ASSERT_EQUAL_STRING("IN 60%  OUT 40%", level({ledlook::PINK, 60, true}, {ledlook::PINK, 40, true}));
+    TEST_ASSERT_EQUAL_STRING("60%", level({ledlook::PINK, 60, true}, {ledlook::BLUE, 60, true}));  // only the colours differ
+}
+
+void test_level_text_one_off() {
+    TEST_ASSERT_EQUAL_STRING("IN OFF  OUT 80%", level({ledlook::PINK, 60, false}, {ledlook::PINK, 80, true}));
+}
+
+void test_level_text_both_off_is_off() {
+    TEST_ASSERT_EQUAL_STRING("OFF", level({ledlook::PINK, 60, false}, {ledlook::BLUE, 80, false}));
+}
+
+void test_level_text_fits() {
+    TEST_ASSERT_EQUAL_STRING("IN 100% OUT 90%", level({ledlook::PINK, 100, true}, {ledlook::BLUE, 90, true}));
+    TEST_ASSERT_EQUAL_STRING("IN OFF OUT 100%", level({ledlook::PINK, 100, false}, {ledlook::BLUE, 100, true}));
+    char small[8];
+    memset(small, 'x', sizeof(small));
+    bothlook::levelText({ledlook::PINK, 100, true}, {ledlook::BLUE, 40, true}, small, sizeof(small));
+    TEST_ASSERT_EQUAL_STRING("IN 100%", small);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_mixed_is_computed_from_the_two_lights);
@@ -123,5 +178,12 @@ int main(int, char**) {
     RUN_TEST(test_mixed_absolute_level_sets_each_pct_and_keeps_each_colour);
     RUN_TEST(test_not_mixed_copies_the_page_like_before);
     RUN_TEST(test_edit_one_look);
+    RUN_TEST(test_recolour_keeps_each_level);
+    RUN_TEST(test_recolour_keeps_an_off_light_off);
+    RUN_TEST(test_level_text_matching);
+    RUN_TEST(test_level_text_mixed);
+    RUN_TEST(test_level_text_one_off);
+    RUN_TEST(test_level_text_both_off_is_off);
+    RUN_TEST(test_level_text_fits);
     return UNITY_END();
 }
