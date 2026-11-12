@@ -1553,9 +1553,10 @@ static int padLeds = -1;
 
 static uint32_t padRetryAt = 0;  // after a report that didn't go out: the LEDs' next try
 
-static void padSend(bool rumble) {
+// The LEDs, with a buzz when `p` is one (nullptr: LEDs only).
+static void padSend(const padfeel::Pulse* p) {
     const uint8_t bits = padfeel::leds(linkUp(controllers[0]), linkUp(controllers[1]), padBattery.alert);
-    if (padhid::send(bits, rumble ? padfeel::BUZZ_MS : 0, 200)) {
+    if (padhid::send(bits, p ? p->smallMs : 0, p ? p->bigMs : 0, p ? p->bigPower : 0)) {
         padLeds = bits;
     } else {  // the LEDs try again in 500 ms; a lost buzz is just lost
         padLeds = -1;
@@ -1563,20 +1564,23 @@ static void padSend(bool rumble) {
     }
 }
 
-// The buzz for a shortcut that went to both lights.
-static void padFelt() {
-    padBuzz.start(padfeel::buzzes(true, true, linkUp(controllers[0]), linkUp(controllers[1])), millis());
+// The buzz for a shortcut (util/padfeel): its feel, whether it turned something on, and the lights
+// it was for (one that isn't linked adds a weak long buzz).
+static void padFelt(padfeel::Feel f, bool on, bool toIn, bool toOut) {
+    const bool partial = (toIn && !linkUp(controllers[0])) || (toOut && !linkUp(controllers[1]));
+    padBuzz.start(f, on, partial, millis());
 }
 
 // Each tick while connected: a due buzz, else the LEDs when a link or the battery changed them.
 static void padFeelTick() {
-    if (padBuzz.due(millis())) {
+    padfeel::Pulse p;
+    if (padBuzz.due(millis(), &p)) {
         Serial.println("[pad] buzz");
-        padSend(true);
+        padSend(&p);
         return;
     }
     const int bits = padfeel::leds(linkUp(controllers[0]), linkUp(controllers[1]), padBattery.alert);
-    if (bits != padLeds && static_cast<int32_t>(millis() - padRetryAt) >= 0) padSend(false);
+    if (bits != padLeds && static_cast<int32_t>(millis() - padRetryAt) >= 0) padSend(nullptr);
 }
 
 // START: both lights on, or off if either is on.
@@ -1587,7 +1591,7 @@ static void padLightsPower() {
     save();
     setMessage(c.power ? ">LIGHTS ON" : ">LIGHTS OFF");
     if (!drawLooks()) drawMessage();
-    padFelt();
+    padFelt(padfeel::Feel::Tick, true, true, true);
 }
 
 // L1 / R1 off the look pages: both lights a step down / up.
@@ -1597,7 +1601,7 @@ static void padLevel(int step) {
     change(BOTH, c);
     save();
     drawLooks();
-    padFelt();
+    padFelt(padfeel::Feel::Tick, true, true, true);
 }
 
 // L2 / R2: the previous / next preset, round; the first press goes to the first (R2) or last (L2).
@@ -1605,7 +1609,7 @@ static void padPreset(int dir) {
     static int slot = -1;
     slot = slot < 0 ? (dir > 0 ? 0 : ledpresets::N - 1) : (slot + dir + ledpresets::N) % ledpresets::N;
     applyPreset(slot);
-    padFelt();
+    padFelt(padfeel::Feel::Tick, true, true, true);
 }
 
 // The buttons the loop acts on, from each report (onPadReport, Ps3.attach, the Bluetooth task):
@@ -1803,7 +1807,7 @@ static void handlePad() {
     if (select) {
         setMusic(!musicOn);
         drawMusicItem();
-        padFelt();
+        padFelt(padfeel::Feel::Tick, true, true, true);
         return;
     }
     if ((lb || rb) && screen != Screen::Lights) {  // on a look page they are its own - / + (below)

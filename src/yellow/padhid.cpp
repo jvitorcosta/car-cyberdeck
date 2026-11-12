@@ -30,13 +30,22 @@ constexpr uint8_t LED_ON[5] = {0xff, 0x27, 0x10, 0x00, 0x32};  // steady
 constexpr uint8_t L2CA_FAILED = 0;  // L2CAP_DW_FAILED
 }  // namespace
 
-bool send(uint8_t leds, uint32_t rumbleMs, uint8_t intensity) {
+// A rumble time in the DS3's ~20 ms units, at least one.
+static uint8_t units(uint32_t ms) {
+    const uint32_t u = ms / 20;
+    return static_cast<uint8_t>(u > 254 ? 254 : u ? u : 1);
+}
+
+bool send(uint8_t leds, uint32_t smallMs, uint32_t bigMs, uint8_t bigPower) {
     uint8_t report[2 + DATA_LEN] = {SET_REPORT_OUTPUT, REPORT_CONTROL};
     uint8_t* d = report + 2;
-    if (rumbleMs) {
-        const uint32_t units = rumbleMs / 20;
-        d[RUMBLE_R_DUR] = d[RUMBLE_L_DUR] = static_cast<uint8_t>(units > 254 ? 254 : units ? units : 1);
-        d[RUMBLE_R_POW] = d[RUMBLE_L_POW] = intensity;
+    if (smallMs) {  // the right, small motor: on or off
+        d[RUMBLE_R_DUR] = units(smallMs);
+        d[RUMBLE_R_POW] = 1;
+    }
+    if (bigMs) {  // the left, big one, with a strength
+        d[RUMBLE_L_DUR] = units(bigMs);
+        d[RUMBLE_L_POW] = bigPower;
     }
     for (int i = 0; i < 4; i++) {
         if (!(leds & (1 << i))) continue;
