@@ -12,6 +12,9 @@ namespace net {
 // always terminated; "" for anything else). Returns the HTTP status, or HTTPClient's negative codes:
 // -1 no connection (or a URL it can't ask), -2 the request didn't go out, -5 the connection closed
 // before the head ended, -7 no status in the answer, -11 the head stopped arriving.
-int httpGet(const char* url, uint32_t timeoutMs, char* body = nullptr, size_t cap = 0, uint32_t deadlineMs = 0);
+// connectMs: the connect alone, when it should be shorter than the wait for the answer (a
+// playlist, which the black deck answers once Spotify has); 0: timeoutMs.
+int httpGet(const char* url, uint32_t timeoutMs, char* body = nullptr, size_t cap = 0, uint32_t deadlineMs = 0,
+            uint32_t connectMs = 0);
 
 }

@@ -25,6 +25,19 @@ int writePage(const char* body, int offset, char* out, size_t n);
 // start-playback's body: {"context_uri":"spotify:playlist:<id>"}. False (out "") for a bad id or a
 // short buffer.
 bool playBody(const char* id, char* out, size_t n);
+// The same, starting at track `position` of the playlist (0-based; Spotify's "offset"):
+// {"context_uri":"spotify:playlist:<id>","offset":{"position":N}}. position < 0: playBody's body.
+bool playBodyAt(const char* id, int position, char* out, size_t n);
+// A playlist's track count from GET /v1/playlists/<id>?fields=items.total ({"items":{"total":N}};
+// "tracks" before Spotify's February 2026 rename, still read).
+bool readTotal(const char* body, int* total);
+// Where to play when Spotify has no active device (start-playback's 404): from GET
+// /v1/me/player/devices, the active one, else a phone with Spotify open; never an idle PC or
+// speaker (the music would play at home), never a restricted one. False (out "") when none fits.
+bool pickDevice(const char* body, char* out, size_t n);
+// Where a shuffled start begins: random % total, or -1 (the first track, Spotify's own) when the
+// total isn't known.
+int startPosition(int total, unsigned random);
 
 // What the watch is told about a Spotify answer that isn't the one wanted (code < 0: no answer).
 // play: the answer was start-playback's (its 404 is "no active device"); body: its JSON or "".

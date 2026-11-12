@@ -106,6 +106,31 @@ full saturation; the paler day colours, which clear 4.5:1 on black, looked dull 
   **2** the inside light connected, **3** the outside one, **4** its own battery low. Its battery shows at the top right of the main screen ("PAD" and four
   cells; red when it's dying, filling round while it charges).
 
+## IR remote
+
+The light kit's 20-button remote, on a phone holder next to the deck, works the deck through a
+**KY-022 IR receiver** on CN1: signal on **GPIO 27** (`PIN_IR`), power from the 3.3 V pin, ground.
+Every key acts on **both lights**, like the PS3 shortcuts but without a buzz. Only this remote's
+codes count (NEC, address `0xEF00`); a TV remote does nothing (`[ir] not the lights' remote`).
+
+| Key | What it does |
+|---|---|
+| ☀▲ / ☀▼ | both lights 10 % up / down (as `-` / `+` on BOTH); held, about four steps a second |
+| ON / OFF | both lights on / off (`>LIGHTS ON`, `>LIGHTS OFF`) |
+| RED, GREEN, BLUE, WHITE, ORANGE, YELLOW, CYAN, PURPLE | that colour on both lights; each keeps its own level, and a light that was off comes back on at its level (`>BLUE`) |
+| JUMP3, JUMP7, FADE3, FADE7 | the controllers' own effects on the lights that are on (`>FADE7`); the next colour, level or power key ends it. The four modes are starting values until the car check (`irkeys::EFFECT_MODE`) |
+| ♪1-♪4 | a playlist on the phone's Spotify through the black deck, from a random track with shuffle on (`>STARTING DIVAS POP`, then `>PLAYING DIVAS POP`, or what went wrong: `>BLACK DECK NOT ANSWERING`, `>SPOTIFY: CHECK THE PHONE`) |
+
+Any key but ♪ ends music mode, like any other manual change (a playlist only changes the song). Every key but the brightness ones acts once
+however long it is held. The four playlists are set in `src/config.h` (`IR_PLAYLIST_1`..`4`, the id
+from the playlist's link, and `IR_PLAYLIST_n_NAME`, what the screen shows; see
+`include/config.example.h`); a key with no id shows `>NO PLAYLIST SET`. If Spotify is open but
+idle, the black deck starts the music on your phone.
+
+To see what the receiver gets from any remote, flash the `irtest` env: it shows each frame's
+protocol, address and command on the screen and in the log. The effects' modes are found with
+the `ledpanel_probe` env (JUMP3 / JUMP7 step the mode, FADE3 sends it).
+
 ## Karaoke
 
 `KARAOKE` on the main screen is a switch for the black deck's karaoke view, like `MUSIC MODE`: a

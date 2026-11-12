@@ -35,6 +35,9 @@ static const int TOUCH_RAW_Y0 = 560, TOUCH_RAW_Y1 = 3540;
 // Backlight
 static const int PIN_BL = 21;
 
+// IR receiver (KY-022 signal) on CN1, next to the RGB LED: the light kit's remote (lib/irrx)
+static const int PIN_IR = 27;
+
 #else
 #error "No board: build with -D BOARD_CYD or -D BOARD_S3 (platformio.ini)"
 #endif

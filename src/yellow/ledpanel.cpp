@@ -86,6 +86,7 @@
 #include <esp_heap_caps.h>
 #include <lwip/sockets.h>
 #include "pins.h"
+#include <irrx.h>
 #include "../common/ui/backlight.h"
 #include "../common/core/embed.h"
 #include "../common/core/crashlog.h"
@@ -111,6 +112,7 @@
 #include "../util/yellow/keepalive.h"
 #include "../util/yellow/deckmenu.h"
 #include "../util/yellow/elkcmd.h"
+#include "../util/yellow/irkeys.h"
 #include "../util/common/hotspotip.h"
 #include "../util/lights/ledintro.h"
 #include "../util/lights/ledlook.h"
@@ -1620,12 +1622,9 @@ static void padPreset(int dir) {
     padFelt(padfeel::Feel::Tick, true, true, true);
 }
 
-// The right stick's flick: the previous / next grid colour on both lights, from the inside one's;
-// each keeps its own level and on/off (bothlook::recolour). Ends music mode like any manual change.
-static void padColour(int dir) {
-    const int sw = ledlook::stepGrid(looks[INSIDE].swatch, dir);
-    musicYield();
-    bothlook::recolour(sw, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+// After a colour on both lights (the right stick, the IR remote): both pushed and saved, and its
+// name as the message (">RED").
+static void colourShown(int sw) {
     for (int i = 0; i < N_CTRL; i++) push(i);
     save();
     char m[16];
@@ -1633,6 +1632,15 @@ static void padColour(int dir) {
     for (char* c = m; *c; c++) *c = static_cast<char>(toupper(static_cast<unsigned char>(*c)));
     setMessage(m);
     if (!drawLooks()) drawMessage();
+}
+
+// The right stick's flick: the previous / next grid colour on both lights, from the inside one's;
+// each keeps its own level and on/off (bothlook::recolour). Ends music mode like any manual change.
+static void padColour(int dir) {
+    const int sw = ledlook::stepGrid(looks[INSIDE].swatch, dir);
+    musicYield();
+    bothlook::recolour(sw, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+    colourShown(sw);
     Serial.printf("[pad] colour %s\n", ledlook::SWATCHES[sw].word);
     padFelt(padfeel::Feel::Tick, true, true, true);
 }
@@ -1642,6 +1650,154 @@ static void padKaraoke() {
     setKaraoke(!karaokeOn);
     drawKaraokeItem();
     padFelt(padfeel::Feel::Long, karaokeOn, false, false);
+}
+
+// The light kit's IR remote, on the dash next to the deck (lib/irrx, util/yellow/irkeys): every
+// key acts on both lights, as the PS3 controller's do but without a buzz. A held brightness key
+// steps about four times a second; every other key acts once per press.
+static irkeys::Repeat irRepeat;
+
+// The outside light's effect frame, sent 1 s after its speed frame (its controller drops a write
+// within ~1 s of the last): the mode, or -1. A later key drops it.
+static int irEffectDue = -1;
+static uint32_t irEffectAt = 0;
+
+// JUMP / FADE: the controllers' own effect `mode` on each lit light (elkcmd: speed, then the
+// effect; the MELK frames, the ELK one ignores them). The looks don't change: the next colour,
+// level or power press ends the effect with its colour frame. Ends music mode like any manual
+// change, and stops a fade or the welcome that would write over it.
+static void irEffect(uint8_t mode, const char* name) {
+    musicYield();
+    bool lit = false;
+    for (int i = 0; i < N_CTRL; i++) {
+        if (!shownLook(i).lit) continue;
+        lit = true;
+        pushWanted[i] = false;
+        lightFade[i].intro.n = 0;
+        lightFade[i].done = lightFade[i].steps;
+        if (!linkUp(controllers[i])) continue;
+        write(controllers[i], elkcmd::speed(irkeys::EFFECT_SPEED));
+        if (i == 0) {
+            write(controllers[i], elkcmd::effect(mode));
+        } else {
+            irEffectDue = mode;
+            irEffectAt = millis();
+        }
+    }
+    Serial.printf("[ir] effect mode %u%s\n", static_cast<unsigned>(mode), lit ? "" : " (lights off)");
+    char m[16];
+    snprintf(m, sizeof(m), ">%s", lit ? name : "LIGHTS OFF");
+    setMessage(m);
+    drawMessage();
+}
+
+// ♪1-♪4: the four playlists in config.h, started on the black deck's Spotify shuffled (its GET
+// /playlists/play&shuffle=1, which waits up to 15 s on Spotify). The loop leaves the press in
+// irPlaylistWant (a second one while the first waits replaces it: the last press wins); the deck
+// task asks (irPlay) and leaves the answer: irPlaylistWhy's text, then the code, then
+// irPlaylistDone, the key it was for.
+static const char* const IR_PLAYLISTS[4] = {IR_PLAYLIST_1, IR_PLAYLIST_2, IR_PLAYLIST_3, IR_PLAYLIST_4};
+static const char* const IR_PLAYLIST_NAMES[4] = {IR_PLAYLIST_1_NAME, IR_PLAYLIST_2_NAME, IR_PLAYLIST_3_NAME,
+                                                 IR_PLAYLIST_4_NAME};
+static constexpr uint32_t IR_PLAY_WAIT_MS = 16000;
+static std::atomic<int8_t> irPlaylistWant{-1}, irPlaylistDone{-1};
+static std::atomic<int8_t> irPlaylistBusy{-1};  // the key the deck task is asking for, or -1
+static std::atomic<int16_t> irPlaylistRc{0};
+static char irPlaylistWhy[40];
+
+// `prefix` and `name` in capitals as the message (">PLAYING DIVAS POP").
+static void irSay(const char* prefix, const char* name, uint32_t ms = MESSAGE_MS, bool alert = false) {
+    char m[sizeof(message)];
+    snprintf(m, sizeof(m), "%s%s", prefix, name);
+    for (char* c = m; *c; c++) *c = static_cast<char>(toupper(static_cast<unsigned char>(*c)));
+    setMessage(m, ms, alert);
+    drawMessage();
+}
+
+// The black deck's answer to a playlist key, once it came.
+static void irPlaylistShown() {
+    const int i = irPlaylistDone.exchange(-1);
+    if (i < 0) return;
+    const int rc = irPlaylistRc.load();
+    if (rc == 200) irSay(">PLAYING ", IR_PLAYLIST_NAMES[i]);
+    else if (rc <= 0) irSay(">BLACK DECK NOT ANSWERING", "", MESSAGE_MS, true);
+    else irSay(">", irPlaylistWhy, MESSAGE_MS, true);
+}
+
+static void irTick() {
+    irPlaylistShown();
+    if (irEffectDue >= 0 && millis() - irEffectAt >= 1000) {
+        write(controllers[1], elkcmd::effect(static_cast<uint8_t>(irEffectDue)));
+        irEffectDue = -1;
+    }
+    uint16_t address;
+    uint8_t command;
+    bool repeat;
+    if (!irrx::poll(&address, &command, &repeat)) return;
+    irkeys::Key k;
+    if (!irkeys::lookup(address, command, &k)) {
+        Serial.printf("[ir] not the lights' remote: %04X %02X\n", address, command);
+        return;
+    }
+    if (!irRepeat.accept(k, repeat, millis())) return;
+    const irkeys::Action a = irkeys::action(k);
+    Serial.printf("[ir] key %u%s\n", static_cast<unsigned>(command), repeat ? " held" : "");
+    if (a.kind != irkeys::Kind::Playlist) irEffectDue = -1;
+    bothlook::Change c;
+    switch (a.kind) {
+        case irkeys::Kind::Level:
+            c.step = a.value;
+            change(BOTH, c);
+            save();
+            drawLooks();
+            break;
+        case irkeys::Kind::Power:
+            c.power = a.value;
+            change(BOTH, c);
+            save();
+            setMessage(c.power ? ">LIGHTS ON" : ">LIGHTS OFF");
+            if (!drawLooks()) drawMessage();
+            break;
+        case irkeys::Kind::Colour:
+            musicYield();
+            bothlook::paint(a.value, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+            colourShown(a.value);
+            break;
+        case irkeys::Kind::Effect: {
+#ifdef IR_EFFECT_PROBE
+            // the car's tuning build: JUMP3 / JUMP7 step the mode, FADE3 sends it (FADE7 as usual)
+            static int probe = 0;
+            if (a.value < 2) {
+                probe = a.value == 0 ? (probe > 0 ? probe - 1 : 0) : (probe < 212 ? probe + 1 : 212);
+                char m[24];
+                snprintf(m, sizeof(m), ">MODE %d", probe);
+                setMessage(m);
+                drawMessage();
+                Serial.printf("[ir] probe mode %d\n", probe);
+                break;
+            }
+            if (a.value == 2) {
+                irEffect(static_cast<uint8_t>(probe), "PROBE");
+                break;
+            }
+#endif
+            static const char* const NAMES[4] = {"JUMP3", "JUMP7", "FADE3", "FADE7"};
+            irEffect(irkeys::EFFECT_MODE[a.value], NAMES[a.value]);
+            break;
+        }
+        case irkeys::Kind::Playlist:
+            if (!IR_PLAYLISTS[a.value][0]) {
+                setMessage(">NO PLAYLIST SET");
+                drawMessage();
+                break;
+            }
+            // the same key again while it is being asked: nothing (a second play would cut the
+            // first song off); another key still wins
+            if (irPlaylistBusy.load() == a.value) break;
+            irPlaylistWant.store(static_cast<int8_t>(a.value));
+            irSay(">STARTING ", IR_PLAYLIST_NAMES[a.value], IR_PLAY_WAIT_MS);
+            break;
+    }
 }
 
 // The buttons the loop acts on, from each report (onPadReport, Ps3.attach, the Bluetooth task):
@@ -1938,9 +2094,10 @@ static constexpr uint32_t DECK_LOCK_MS = 7000;
 // A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
 // body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
 // peer: the address asked; nonce: the request's n (16 hex). Short timeouts: the deck is one hop
-// away, and a missing deck must not hold the polls up. Under deckLock (deckGet).
+// away, and a missing deck must not hold the polls up. timeoutMs: the wait for its answer (longer
+// for a playlist, which the black deck answers once Spotify has). Under deckLock (deckGet).
 static int deckAsk(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
-                   uint32_t* peer, char* nonce) {
+                   uint32_t* peer, char* nonce, uint32_t timeoutMs) {
     if (!net::isOnline()) return -1;
     char auth[sigreq::AUTH_LEN];
     if (!reqauth::signGet(path, params, count, auth, sizeof(auth))) {
@@ -1956,7 +2113,7 @@ static int deckAsk(const char* path, const sigreq::Param* params, int count, cha
         const char* at = strstr(auth, "&n=");
         snprintf(nonce, 17, "%.16s", at ? at + 3 : "");
     }
-    char host[40], query[32] = "", url[160];
+    char host[40], query[48] = "", url[224];  // query: "id=<22>&shuffle=1&" at most
     if (!deckHost(host, sizeof(host))) return -1;
     for (int i = 0; i < count; ++i) {
         const size_t at = strlen(query);
@@ -1966,13 +2123,13 @@ static int deckAsk(const char* path, const sigreq::Param* params, int count, cha
         return -1;
     IPAddress a;
     if (peer && a.fromString(host)) *peer = static_cast<uint32_t>(a);
-    return net::httpGet(url, 1500, body, bodyLen, body ? 3000 : 0);
+    return net::httpGet(url, timeoutMs, body, bodyLen, body ? 3000 : 0, 1500);  // the deck is one hop away
 }
 
 static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
-                   uint32_t* peer = nullptr, char* nonce = nullptr) {
+                   uint32_t* peer = nullptr, char* nonce = nullptr, uint32_t timeoutMs = 1500) {
     if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return -1;
-    const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce);
+    const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce, timeoutMs);
     xSemaphoreGive(deckLock);
     return rc;
 }
@@ -2079,11 +2236,48 @@ static int karaokeGet(bool on, int light) {
     return rc;
 }
 
+// A playlist key's ask (irPlaylistWant): GET /playlists/play?id=..&shuffle=1, waiting up to
+// IR_PLAY_WAIT_MS. Only a 200's body comes back (net::httpGet), so the black deck's other answers
+// are told by their code: 502 is what Spotify said (most often no phone playing), 503 busy or low
+// on memory, 504 Spotify slow, 403 a wrong key.
+static void irPlay(int i) {
+    crashlog::at("ir play");
+    const sigreq::Param p[] = {{"id", IR_PLAYLISTS[i]}, {"shuffle", "1"}};
+    char reply[16];
+    // The first ask after a quiet while can find no connection (-1: nothing was sent, so asking
+    // again can't start the playlist twice); the owner's second press always went through, so
+    // the deck makes it, once, after a short pause.
+    int rc = -1;
+    for (int attempt = 0; attempt < 2; attempt++) {
+        if (attempt) vTaskDelay(pdMS_TO_TICKS(300));
+        const uint32_t at = millis();
+        rc = deckGet("/playlists/play", p, 2, reply, sizeof(reply), nullptr, nullptr, IR_PLAY_WAIT_MS);
+        Serial.printf("[ir] playlist %d: rc=%d in %u ms\n", i + 1, rc, static_cast<unsigned>(millis() - at));
+        if (rc != -1) break;
+    }
+    if (rc != NOT_SIGNED) deckAnswered(rc > 0);
+    const char* why = rc == 502 ? "SPOTIFY: CHECK THE PHONE"
+                      : rc == 503 ? "BLACK DECK BUSY"
+                      : rc == 504 ? "SPOTIFY SLOW: RETRY"
+                      : rc == 403 ? "WRONG KEY"
+                                  : "SPOTIFY ERROR";
+    snprintf(irPlaylistWhy, sizeof(irPlaylistWhy), "%s", why);
+    irPlaylistRc.store(static_cast<int16_t>(rc < -32000 ? -1 : rc));
+    irPlaylistDone.store(static_cast<int8_t>(i));
+}
+
 static void deckTask(void*) {
     static KeepAlive music{"music", musicGet, nullptr, {}, 0}, karaoke{"karaoke", karaokeGet, insideLight, {}, 0};
-    watchdog::watch();  // each pass: two GETs of 1.5 s and an mDNS query of 1.5 s at most
+    // each pass: two GETs of 1.5 s and an mDNS query of 1.5 s at most, and a playlist's 16 s
+    watchdog::watch();
     for (;;) {
         watchdog::feed();
+        const int8_t playlist = irPlaylistWant.exchange(-1);
+        if (playlist >= 0) {
+            irPlaylistBusy.store(playlist);
+            irPlay(playlist);
+            irPlaylistBusy.store(-1);
+        }
         keepAlive(music, musicWant);
         // want before taps: setKaraoke counts the tap first, so a switch on seen here is counted
         static keepalive::Confirm confirm;
@@ -2739,6 +2933,7 @@ void setup() {
     // Bluedroid in dual mode: the PS3 library starts the controller and the stack (Classic for the
     // pad), then the lights' GATT client registers on the same stack (yellow/elklink).
     if (!Ps3.begin()) Serial.println("[pad] Bluetooth didn't start");
+    irrx::begin(PIN_IR);
     Ps3.attach(onPadReport);  // each report: the held and tapped buttons, L2 / R2 by pressure
     // The radio's time to Bluetooth first: on the default balance the DS3 got ~20 reports a second
     // of its ~100 next to WiFi and the lights, so a quick X or O fell between two that arrived.
@@ -2959,6 +3154,7 @@ void loop() {
     }
 
     handlePad();
+    irTick();
     padhid::retry();
     pushTick();
     musicTick();

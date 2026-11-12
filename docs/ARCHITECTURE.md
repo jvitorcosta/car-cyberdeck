@@ -243,10 +243,10 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 
 | Task | Core | What it does |
 |---|---|---|
-| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the screens (Menu, Lights: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`; the screen is in `util/termpal`'s night palette all day), saves to NVS |
+| `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the IR remote's keys (`lib/irrx` over IRremote, NEC only, on GPIO 27; `util/yellow/irkeys`), the screens (Menu, Lights: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`; the screen is in `util/termpal`'s night palette all day), saves to NVS |
 | `leds-link` | 0 | connects the two LED controllers (`yellow/elklink` on Bluedroid's GATT client, sharing the stack with the PS3 controller's Bluetooth Classic; service FFF0, characteristic FFF3, written by handle; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing. The PS3 controller connects by itself (PS button) |
 | `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply |
-| `deck` | 1, idle | 6 KB of stack; sends the black deck its keep-alives: `GET /music?on=1` while music mode is on and `GET /karaoke?on=1` while the KARAOKE switch is on, each every 10 s (`on=0` once when switched off). It reads nothing from the black deck |
+| `deck` | 1, idle | 6 KB of stack; sends the black deck its keep-alives: `GET /music?on=1` while music mode is on and `GET /karaoke?on=1` while the KARAOKE switch is on, each every 10 s (`on=0` once when switched off); and an IR remote's music key: `GET /playlists/play?id=..&shuffle=1`, waiting up to 16 s, the last press winning. It reads nothing else from the black deck |
 | `music` | 1, idle | while music mode is on: a UDP socket on port 4210 that takes the black deck's signed palettes (`util/wire/musicwire`) |
 
 The deck does lights, the karaoke switch, music mode and the watch's routes only: Bluedroid's dual mode
@@ -271,6 +271,11 @@ OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks
   grid's eight, the inside light at its level under the palette's cap (40 % floor), the outside at 100 %, a ~3 s fade per new
   song. The pages' looks are never saved over while it runs. On and off from the button, voice
   ("music") or the watch; `/status` says `music=on|off`.
+- **IR remote** (`lib/irrx`, `util/yellow/irkeys`): IRremote is header-only and `#warning`s, so
+  it lives in a library under `lib/`, outside `src/`'s `-Werror`. `irkeys` maps the 20 codes to
+  level, power, colour, effect and playlist actions and holds the repeat rules (a held brightness
+  key steps every 250 ms, any other key acts once). Colours go through `bothlook::paint`; effects
+  through `elkcmd::speed` / `effect` (the outside light's second frame 1 s after its first).
 - **Network** (`net/wifi`, `util/{roam,netup,hotspotip,deckaddr}`): the black deck at
   `BLACK_DECK_ADDR` on the hotspot, by mDNS (`cardeck`) elsewhere, kept through blips.
 - **Memory**: no PSRAM, so everything that downloads uses fixed buffers

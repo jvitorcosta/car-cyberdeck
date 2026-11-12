@@ -167,6 +167,19 @@ void test_level_text_fits() {
     TEST_ASSERT_EQUAL_STRING("IN 100%", small);
 }
 
+void test_paint_turns_lights_on_at_their_levels() {
+    ledlook::Look in{ledlook::PINK, 60, false}, out{ledlook::PINK, 40, false}, both = bothlook::seed(in, out);
+    bothlook::paint(ledlook::RED, &both, &in, &out);
+    TEST_ASSERT_EQUAL(ledlook::RED, in.swatch);
+    TEST_ASSERT_TRUE(in.lit);
+    TEST_ASSERT_EQUAL(60, in.pct);
+    TEST_ASSERT_EQUAL(ledlook::RED, out.swatch);
+    TEST_ASSERT_TRUE(out.lit);
+    TEST_ASSERT_EQUAL(40, out.pct);
+    TEST_ASSERT_EQUAL(ledlook::RED, both.swatch);
+    TEST_ASSERT_TRUE(both.lit);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_mixed_is_computed_from_the_two_lights);
@@ -185,5 +198,6 @@ int main(int, char**) {
     RUN_TEST(test_level_text_one_off);
     RUN_TEST(test_level_text_both_off_is_off);
     RUN_TEST(test_level_text_fits);
+    RUN_TEST(test_paint_turns_lights_on_at_their_levels);
     return UNITY_END();
 }

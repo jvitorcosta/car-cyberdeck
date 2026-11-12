@@ -8,7 +8,7 @@ namespace net {
 
 static constexpr int ERR_CONNECT = -1, ERR_SEND = -2, ERR_LOST = -5, ERR_NO_HTTP = -7, ERR_TIMEOUT = -11;
 
-int httpGet(const char* url, uint32_t timeoutMs, char* body, size_t cap, uint32_t deadlineMs) {
+int httpGet(const char* url, uint32_t timeoutMs, char* body, size_t cap, uint32_t deadlineMs, uint32_t connectMs) {
     if (body && cap) body[0] = 0;
     httphead::Url u;
     if (!httphead::split(url, &u)) return ERR_CONNECT;
@@ -21,7 +21,7 @@ int httpGet(const char* url, uint32_t timeoutMs, char* body, size_t cap, uint32_
     if (n <= 0 || static_cast<size_t>(n) >= sizeof(req)) return ERR_SEND;
 
     WiFiClient c;
-    if (!c.connect(u.host, u.port, static_cast<int32_t>(timeoutMs))) return ERR_CONNECT;
+    if (!c.connect(u.host, u.port, static_cast<int32_t>(connectMs ? connectMs : timeoutMs))) return ERR_CONNECT;
     c.setTimeout((timeoutMs + 500) / 1000);  // seconds: the socket's send / receive waits
     if (c.write(reinterpret_cast<const uint8_t*>(req), static_cast<size_t>(n)) != static_cast<size_t>(n)) {
         c.stop();

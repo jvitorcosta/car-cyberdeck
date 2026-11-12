@@ -72,6 +72,49 @@ bool playBody(const char* id, char* out, size_t n) {
     return true;
 }
 
+bool playBodyAt(const char* id, int position, char* out, size_t n) {
+    if (position < 0) return playBody(id, out, n);
+    if (n) out[0] = '\0';
+    if (!validId(id)) return false;
+    const int len = snprintf(out, n, "{\"context_uri\":\"spotify:playlist:%s\",\"offset\":{\"position\":%d}}", id, position);
+    if (len < 0 || (size_t)len >= n) { if (n) out[0] = '\0'; return false; }
+    return true;
+}
+
+bool readTotal(const char* body, int* total) {
+    long v = 0;
+    if (!body || !(jsonpath::num(body, "items.total", &v) || jsonpath::num(body, "tracks.total", &v)) || v < 0)
+        return false;
+    *total = (int)v;
+    return true;
+}
+
+bool pickDevice(const char* body, char* out, size_t n) {
+    if (n) out[0] = '\0';
+    if (!body) return false;
+    // rank 2: active, 1: a phone; never an idle PC or speaker (the music would play at home)
+    int pick = -1, rank = 0;
+    char path[40], type[24];
+    for (int i = 0; i < 20; ++i) {
+        snprintf(path, sizeof path, "devices.%d", i);
+        if (!jsonpath::find(body, path)) break;
+        bool active = false, restricted = false;
+        snprintf(path, sizeof path, "devices.%d.is_restricted", i);
+        if (jsonpath::boolean(body, path, &restricted) && restricted) continue;
+        snprintf(path, sizeof path, "devices.%d.is_active", i);
+        jsonpath::boolean(body, path, &active);
+        snprintf(path, sizeof path, "devices.%d.type", i);
+        jsonpath::str(body, path, type, sizeof type);
+        const int r = active ? 2 : strcmp(type, "Smartphone") == 0 ? 1 : 0;
+        if (r > rank) { rank = r; pick = i; }
+    }
+    if (pick < 0) return false;
+    snprintf(path, sizeof path, "devices.%d.id", pick);
+    return jsonpath::str(body, path, out, n) && out[0];
+}
+
+int startPosition(int total, unsigned random) { return total > 0 ? (int)(random % (unsigned)total) : -1; }
+
 const char* why(int code, const char* body, bool play) {
     const bool has = body && *body;
     if (code < 0) return "Spotify not answering";
