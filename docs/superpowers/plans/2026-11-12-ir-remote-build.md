@@ -38,18 +38,20 @@
 
 - [ ] **Step 1:** `git stash apply stash@{0}` on `feat/ir-remote` (keep the stash until the branch merges). `pio run -e irtest` → `[SUCCESS]`.
 - [ ] **Step 2:** With the owner: confirm red = 3.3 V and black = GND on the CN1 cable (multimeter, module unplugged), then `pio run -e irtest -t upload --upload-port COM16` → `Hash of data verified`.
-- [ ] **Step 3:** Record serial (pyserial on COM16, 115200) while the owner presses the 24 buttons once each in row order, then holds ☀▲ for 2 s. Expected: one `[ir] NEC addr 0x.... cmd 0x..` line per press, all one address, 24 distinct commands, and `(held)` lines while ☀▲ is held. Note whether a hold gives `(held)` repeat frames or full frames again.
+- [ ] **Step 3:** Record serial (pyserial on COM16, 115200) while the owner presses the 20 buttons once each in row order, then holds ☀▲ for 2 s. Expected: one `[ir] NEC addr 0x.... cmd 0x..` line per press, all one address, 24 distinct commands, and `(held)` lines while ☀▲ is held. Note whether a hold gives `(held)` repeat frames or full frames again.
 - [ ] **Step 4:** Fill this table here and commit `docs(plan): the remote's IR codes`.
 
 | Key | cmd | Key | cmd | Key | cmd | Key | cmd |
 |---|---|---|---|---|---|---|---|
-| ☀▲ | | ☀▼ | | ON | | OFF | |
-| RED | | GREEN | | BLUE | | WHITE | |
-| ORANGE | | YELLOW | | CYAN | | PURPLE | |
-| JUMP3 | | JUMP7 | | FADE3 | | FADE7 | |
-| ♪1 | | ♪2 | | ♪3 | | ♪4 | |
+| ☀▲ | 0x00 | ☀▼ | 0x01 | ON | 0x02 | OFF | 0x03 |
+| RED | 0x04 | GREEN | 0x05 | BLUE | 0x06 | WHITE | 0x07 |
+| ORANGE | 0x08 | YELLOW | 0x09 | CYAN | 0x0A | PURPLE | 0x0B |
+| JUMP3 | 0x0C | JUMP7 | 0x0D | FADE3 | 0x0E | FADE7 | 0x0F |
+| ♪1 | 0x10 | ♪2 | 0x11 | ♪3 | 0x12 | ♪4 | 0x13 |
 
-Address: ______. Hold sends: repeat frames / full frames, every ___ ms.
+Address: `0xEF00` (NEC; raw `~cmd<<24 | cmd<<16 | 0xEF00`). Hold sends NEC repeat frames (`(held)`,
+command repeated by IRremote). Captured 2026-11-12; the remote has 20 buttons, not 24. Stray
+frames happen (UNKNOWN, PulseDistance, LG decodes of noise): only NEC at `0xEF00` counts.
 
 ### Task 2: `irkeys`: codes, actions and the repeat rule (pure)
 
@@ -59,13 +61,13 @@ Address: ______. Hold sends: repeat frames / full frames, every ___ ms.
 **Interfaces:**
 - Produces:
   - `namespace irkeys`: `enum class Key : uint8_t { BrightUp, BrightDown, On, Off, Red, Green, Blue, White, Orange, Yellow, Cyan, Purple, Jump3, Jump7, Fade3, Fade7, Music1, Music2, Music3, Music4, N };`
-  - `constexpr uint16_t ADDRESS` = Task 1's address; a `constexpr` table `{uint8_t command; Key key;}` of Task 1's 24 codes.
+  - `constexpr uint16_t ADDRESS` = Task 1's address; a `constexpr` table `{uint8_t command; Key key;}` of Task 1's 20 codes.
   - `bool lookup(uint16_t address, uint8_t command, Key* out);`: false for another address or an unknown command.
   - `enum class Kind : uint8_t { Level, Power, Colour, Effect, Playlist };` `struct Action { Kind kind; int value; };` and `Action action(Key k);`. Level ±1, Power 1/0, Colour = the `ledlook::Colour` swatch, Effect 0..3 (JUMP3, JUMP7, FADE3, FADE7), Playlist 0..3.
   - `constexpr uint32_t STEP_MS = 250, SAME_FRAME_MS = 200;` and `class Repeat { public: bool accept(Key k, bool repeat, uint32_t now); };`. Brightness keys act on the first frame, then on repeats at most once per `STEP_MS`. Every other key acts on its first frame only. A non-repeat frame of the same key within `SAME_FRAME_MS` of that key's last frame counts as a repeat. `now` compares wrap-safe (`int32_t` difference).
 
 - [ ] **Step 1: Failing tests:**
-  - `test_every_key_maps`: each of the 24 table codes looks up to its `Key`, and `action` gives the table in the spec (e.g. `Cyan` → `{Colour, ledlook::CYAN}`, `Fade7` → `{Effect, 3}`, `Music2` → `{Playlist, 1}`, `BrightDown` → `{Level, -1}`, `Off` → `{Power, 0}`).
+  - `test_every_key_maps`: each of the 20 table codes looks up to its `Key`, and `action` gives the table in the spec (e.g. `Cyan` → `{Colour, ledlook::CYAN}`, `Fade7` → `{Effect, 3}`, `Music2` → `{Playlist, 1}`, `BrightDown` → `{Level, -1}`, `Off` → `{Power, 0}`).
   - `test_foreign_address_is_ignored`: a known command with `ADDRESS ^ 1` → false.
   - `test_unknown_command_is_ignored`: `ADDRESS` with a command not in the table → false.
   - `test_brightness_repeats_four_a_second`: BrightUp at t=0 (first) → true; repeats at 110, 220 → false, false; 330 → true; 440 → false; 580 → true.
