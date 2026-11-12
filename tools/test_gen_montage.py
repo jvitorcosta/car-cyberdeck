@@ -50,6 +50,29 @@ class Clips(unittest.TestCase):
         self.assertLessEqual(s, 8.5)
 
 
+class Wink(unittest.TestCase):
+    # The clip's open-eye frames, its last one held, the wink frame (-1), then held open again.
+    def test_wink_sequence(self):
+        self.assertEqual(gm.wink_sequence(10, 3, 2, 2), [0, 1, 2, 2, 2, -1, -1, 2, 2, 2])
+
+    def test_wink_shot_keeps_the_clip_length(self):
+        for stem, (opened, hold, wink) in gm.WINK.items():
+            n = gm.CLIPS[stem][1]
+            seq = gm.wink_sequence(n, opened, hold, wink)
+            self.assertEqual(len(seq), n)
+            self.assertEqual(seq.count(-1), wink)
+
+    def test_a_wink_frame_makes_the_clip_a_sequence(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, "clips"))
+        for f in ("06-headlight-detail.mp4", "06-headlight-detail-wink.png"):
+            open(os.path.join(d, "clips", f), "wb").close()
+        self.assertEqual(gm.wink_frame(d, "06-headlight-detail"),
+                         os.path.join(d, "clips", "06-headlight-detail-wink.png"))
+        self.assertIsNone(gm.wink_frame(d, "02-front-close"))
+
+
 class EndCard(unittest.TestCase):
     def test_caption_in_red_under_a_raised_logo(self):
         f = gm.end_filter(100, 40, 0, 0, text="POWERED BY HONDA")
