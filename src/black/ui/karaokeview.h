@@ -20,6 +20,10 @@ void drawKaraoke(TFT_eSPI& t, const AppState& st, const shared::KaraokeLines& k,
 // Where the screens may draw this pass (ui/camband::screens: all of it, or left of the camera sign
 // and above its band), as main set the viewport. The sweep clips inside it and restores it.
 void setKaraokeClip(int x, int y, int w, int h);
+// The GPS and link tags at the song row's right ("GPS" "DECK", SMALL): DIM while fine, ALERT struck
+// through when not (no fix; the yellow deck doesn't ask). Kept for the view's own whole draws (a
+// new colour). Inside the screens' clip, as main set the viewport: a camera panel covers them.
+void drawKaraokeTags(TFT_eSPI& t, bool fix, bool linked);
 // The progress bar under the song's row: the played part solid, the rest a thin line (the Pokémon
 // walks at their meeting).
 void drawKaraokeBar(TFT_eSPI& t, const AppState& st);

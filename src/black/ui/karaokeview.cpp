@@ -8,6 +8,7 @@
 #include "../../util/black/karaokepal.h"
 #include "../../util/black/lyricface.h"
 #include "../../util/common/rgb565.h"
+#include "../../util/common/termpal.h"
 
 namespace ui {
 
@@ -34,6 +35,8 @@ static int s_w[glyphrun::MAX_ROWS] = {};    // its rows' widths; all 0 for a mes
 static int s_lit = 0;                       // px swept so far
 static walkrect::Rect s_walk{0, 0, 0, 0};
 static int s_clipX = 0, s_clipY = 0, s_clipW = 320, s_clipH = 240;   // setKaraokeClip
+static int s_light = -1;                    // setKaraokeLook's: termpal's theme for the ALERT colour
+static bool s_tagFix = true, s_tagLinked = false;   // drawKaraokeTags' last
 
 void setKaraokeClip(int x, int y, int w, int h) {
     s_clipX = x;
@@ -44,6 +47,7 @@ void setKaraokeClip(int x, int y, int w, int h) {
 
 void setKaraokeLook(int light) {
     const karaokepal::Pal p = karaokepal::of(light);
+    s_light = light;
     s_c = {rgb565::hex(p.bg),     rgb565::hex(p.song),  rgb565::hex(p.artist),
            rgb565::hex(p.barOn),  rgb565::hex(p.barOff), rgb565::hex(p.lit),
            rgb565::hex(p.unsung), rgb565::hex(p.prev),  rgb565::hex(p.next)};
@@ -69,18 +73,51 @@ static void litBand(TFT_eSPI& t, int row, int x0, int x1) {
     t.setViewport(s_clipX, s_clipY, s_clipW, s_clipH, false);
 }
 
-// One row of text in a face at y, cut with "..." to maxW, from TEXT_X or (right) ending at TEXT_X +
-// TEXT_W. Its width.
+// One row of text in a face at y, cut with "..." to maxW, from TEXT_X or (right) ending at
+// rightEnd. Its width.
 static int drawLine(TFT_eSPI& t, const char* utf8, Face f, int y, uint16_t fg, bool upper = false,
-                    int maxW = TEXT_W, bool right = false) {
+                    int maxW = TEXT_W, bool right = false, int rightEnd = TEXT_X + TEXT_W) {
     constexpr size_t MAX_ITEMS = 96;   // more than TEXT_W holds in any face
     glyphrun::Item items[MAX_ITEMS];
     size_t n = glyphrun::decode(utf8, items, MAX_ITEMS, faceWidth, wideWidth, faceCtx(f), upper, emojiWidth,
                                 emojiSeq);
     n = glyphrun::fit(items, n, MAX_ITEMS, maxW, faceWidth, faceCtx(f));
     const int w = glyphrun::width(items, n);
-    drawRunFace(t, items, n, right ? TEXT_X + TEXT_W - w : TEXT_X, y, fg, f);
+    drawRunFace(t, items, n, right ? rightEnd - w : TEXT_X, y, fg, f);
     return w;
+}
+
+// The link tags (drawKaraokeTags): "GPS" and "DECK" in SMALL, TAG_GAP apart, right-aligned at the
+// row's end, on the song row's middle.
+static constexpr const char* TAG_GPS = "GPS";
+static constexpr const char* TAG_DECK = "DECK";
+static constexpr int TAG_GAP = 6;
+static int asciiW(const char* s, Face f) {
+    int w = 0;
+    for (; *s; ++s) w += faceWidth(*s, faceCtx(f));
+    return w;
+}
+static int tagsW() { return asciiW(TAG_GPS, Face::SMALL) + TAG_GAP + asciiW(TAG_DECK, Face::SMALL); }
+static void drawTag(TFT_eSPI& t, const char* s, int x, int y, uint16_t fg, bool strike) {
+    glyphrun::Item items[8];
+    const size_t n = glyphrun::decode(s, items, 8, faceWidth, wideWidth, faceCtx(Face::SMALL), false, emojiWidth,
+                                      emojiSeq);
+    drawRunFace(t, items, n, x, y, fg, Face::SMALL);
+    if (strike) t.drawFastHLine(x, y + lyricface::lineHeight(Face::SMALL) / 2, asciiW(s, Face::SMALL), fg);
+}
+static void drawTags(TFT_eSPI& t) {
+    const int w = tagsW(), x = TEXT_X + TEXT_W - w, h = lyricface::lineHeight(Face::LINE);
+    const int y = SONG_Y + (h - lyricface::lineHeight(Face::SMALL)) / 2;
+    t.fillRect(x, SONG_Y, w, h, s_c.bg);
+    const uint16_t alert = rgb565::hex(termpal::rgb(termpal::ALERT, s_light, true));
+    drawTag(t, TAG_GPS, x, y, s_tagFix ? s_c.unsung : alert, !s_tagFix);
+    drawTag(t, TAG_DECK, x + asciiW(TAG_GPS, Face::SMALL) + TAG_GAP, y, s_tagLinked ? s_c.unsung : alert, !s_tagLinked);
+}
+
+void drawKaraokeTags(TFT_eSPI& t, bool fix, bool linked) {
+    s_tagFix = fix;
+    s_tagLinked = linked;
+    drawTags(t);
 }
 
 // The sung line (or a message) in s_items, wrapped in the largest face that fits it in its rows (2 in
@@ -145,9 +182,13 @@ void drawKaraoke(TFT_eSPI& t, const AppState& st, const shared::KaraokeLines& k,
                  bool whole) {
     if (whole) {
         t.fillScreen(s_c.bg);
+        // the link tags at the row's end, then the artist left of them, the song left of that
+        const int tags = tagsW() + SONG_GAP;
         const int artistW = st.artist[0] ? drawLine(t, st.artist, Face::LINE, SONG_Y, s_c.artist, true,
-                                                    ARTIST_MAX_W, true) + SONG_GAP : 0;
-        drawLine(t, st.trackName, Face::LINE, SONG_Y, s_c.song, true, TEXT_W - artistW);
+                                                    ARTIST_MAX_W - tags, true, TEXT_X + TEXT_W - tags) + SONG_GAP
+                                         : 0;
+        drawLine(t, st.trackName, Face::LINE, SONG_Y, s_c.song, true, TEXT_W - tags - artistW);
+        drawTags(t);
         drawKaraokeBar(t, st);
         s_walk = {0, 0, 0, 0};
     }

@@ -44,6 +44,8 @@ struct Shown {
     int bar = -1;             // the countdown bar's width
     bool red = false;         // the limit sign shows its red face (alarm blink)
     uint16_t over = 0;        // the `+N` shown, 0 = the badge / bump sign
+    bool linked = false;      // Off / NoFix: the link icon shown (or would be, off the strip)
+    bool strip = true;        // Off / NoFix: drawn on a top strip
 };
 static Shown s_shown;
 // Kept apart from s_shown: an invalidate() (the screen drew over us) is no new alert, and must not
@@ -197,22 +199,29 @@ static void band(TFT_eSPI& tft, bool alarm, Kind k, int barW, uint16_t dist, uin
     numbers(tft, y0, bg, dist, kmh);
 }
 
-// The GPS icon centred in the strip's empty middle, in the strip's icon colours (a 12 x 12 icon
-// fits any gap the device name leaves): the pin with a fix, struck through without one.
-static void tag(TFT_eSPI& tft, bool fix) {
+// The GPS icon and the link icon centred as a pair in the strip's empty middle, TAG_GAP apart, in
+// the strip's icon colours (two 12 x 12 icons fit any gap the device name leaves): the pin with a
+// fix, struck through without one; the two screens while the yellow deck asks, struck through not.
+static constexpr int TAG_GAP = 4;
+static void tag(TFT_eSPI& tft, bool fix, bool linked) {
     int x0, x1;
     ui::topGap(x0, x1);
-    ui::drawIcon(tft, fix ? icons::Icon::Gps : icons::Icon::GpsOff, (x0 + x1 - icons::SIZE) / 2, 4,
+    const int x = (x0 + x1 - (2 * icons::SIZE + TAG_GAP)) / 2;
+    ui::drawIcon(tft, fix ? icons::Icon::Gps : icons::Icon::GpsOff, x, 4, theme::pal().topText, theme::pal().top);
+    ui::drawIcon(tft, linked ? icons::Icon::Link : icons::Icon::LinkOff, x + icons::SIZE + TAG_GAP, 4,
                  theme::pal().topText, theme::pal().top);
 }
 
-void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active, bool mute) {
+void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active, bool mute, bool linked,
+          bool strip) {
     if (s.stage == Stage::Off || s.stage == Stage::NoFix) s_barOn = false;   // the next alert is new
-    if (s.stage == Stage::Off || s.stage == Stage::NoFix) {   // the icon only: it swaps in place
-        if (s_shown.on && s_shown.stage == s.stage) return;
-        tag(tft, s.stage == Stage::Off);
+    if (s.stage == Stage::Off || s.stage == Stage::NoFix) {   // the icons only: they swap in place
+        if (s_shown.on && s_shown.stage == s.stage && s_shown.linked == linked && s_shown.strip == strip) return;
+        if (strip) tag(tft, s.stage == Stage::Off, linked);
         s_shown.on = true;
         s_shown.stage = s.stage;
+        s_shown.linked = linked;
+        s_shown.strip = strip;
         return;
     }
     const char* id = active ? active->id : "";

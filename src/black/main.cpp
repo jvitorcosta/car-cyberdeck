@@ -34,6 +34,7 @@ MEDIA_DECL(data_shadow_bin); // Shadow skating on its rail (tools/gen_shadow_rid
 #include "car/camsvc.h"
 #include "car/camsound.h"
 #include "ui/camband.h"
+#include "../util/common/decklink.h"
 #include "../common/net/remote_config.h"
 #include "../common/net/ota.h"
 #include "ui/otascreen.h"
@@ -509,6 +510,12 @@ void loop() {
     if (camRowsNow < camRows || (camTag && !camTagNow)) lastMode = -1;
     camRows = camRowsNow;
     camTag = camTagNow;
+    // The yellow deck's link (it asks /link every 5 s; net/remote) and the GPS's fix, for the strip's
+    // icons and the karaoke view's tags. tagsShown: what the view's tags show (fix | linked << 1).
+    const bool camFix = cam.stage != cameras::Stage::NoFix;
+    const bool yellowLinked = decklink::linked(remote::yellowHeardAt(), millis());
+    const int tagsNow = (camFix ? 1 : 0) | (yellowLinked ? 2 : 0);
+    static int tagsShown = -1;
     if (camRows) {
         const camband::Rect v = camband::screens(cam, s_tft.width(), s_tft.height());
         s_tft.setViewport(v.x, v.y, v.w, v.h, false);
@@ -612,6 +619,8 @@ void loop() {
         s_topSig[0] = '\0';
         if (kScreen != karaokemode::Screen::Normal) {
             drawKaraokeView(view, kl, kScreen, shownGen, walkerOn, animMs, walkStep, true);
+            ui::drawKaraokeTags(s_tft, camFix, yellowLinked);
+            tagsShown = tagsNow;
         } else {
             ui::drawNow(s_tft, view, shownGenre);
             pushArtIfValid(shownGen);   // back from a status screen: same track's art is still valid
@@ -631,6 +640,10 @@ void loop() {
         }
         if (karaokeOn) {
             drawKaraokeView(view, kl, shownKaraoke, shownGen, walkerOn, animMs, walkStep, false);
+            if (tagsNow != tagsShown) {
+                ui::drawKaraokeTags(s_tft, camFix, yellowLinked);
+                tagsShown = tagsNow;
+            }
         } else {
             static uint32_t lastDraw = 0, lastWalk = 0, lastCd = 0;
             static int cdFrame = 0, ballFrame = 0;
@@ -678,6 +691,8 @@ void loop() {
     }
     s_tft.resetViewport();
     if (topDrawn && camTag) camband::invalidate();
-    camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr, camMute);
+    // the strip's icons only on a screen with the strip: not over the karaoke view (its own tags)
+    const bool strip = !(mode == 0 && shownKaraoke != karaokemode::Screen::Normal);
+    camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr, camMute, yellowLinked, strip);
     delay(10);
 }

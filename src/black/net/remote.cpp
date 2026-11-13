@@ -23,6 +23,8 @@
 #include "../car/camsvc.h"
 #include "../car/camsound.h"
 #include "../../util/car/camwire.h"
+#include "../../util/common/decklink.h"
+#include <atomic>
 #include <WiFi.h>
 
 
@@ -149,10 +151,32 @@ static void handlePlay() {
     }
 }
 
+// When the yellow deck last asked (millis() | 1, 0: never): /link, /music and /karaoke are its asks;
+// /playlists/play isn't (the watch sends it too). decklink::linked turns it into the link icon.
+static std::atomic<uint32_t> s_yellowAt{0};
+static void noteYellow() { s_yellowAt.store(millis() | 1); }
+uint32_t yellowHeardAt() { return s_yellowAt.load(); }
+
+// The yellow deck's link check (util/common/decklink): GET /link every 5 s, signed; the answer says
+// whether the GPS (the iPhone's, car/camsvc) has a fix: "gps=1" / "gps=0".
+static void handleLink() {
+    if (!reqauth::pass(*s_server, s_gate, "/link", "wrong key")) return;
+    noteYellow();
+    cameras::Status st;
+    static camlist::Point pt;   // static: off this task's 4 KB stack (one request at a time)
+    bool mute = false;
+    camsvc::snapshot(&st, &pt, &mute);
+    char body[8];
+    decklink::body(st.stage != cameras::Stage::NoFix, body, sizeof body);
+    s_server->sendHeader("Cache-Control", "no-store");
+    s_server->send(200, "text/plain", body);
+}
+
 // Music mode (audio/musicsvc): the yellow deck sends on=1 every 10 s while it wants the song's
 // palette over UDP, on=0 to stop at once. Signed by the yellow deck; the key also does (a test by hand).
 static void handleMusic() {
     if (!reqauth::pass(*s_server, s_gate, "/music", "wrong key")) return;
+    noteYellow();
     const String on = s_server->arg("on");
     if (on == "0") {
         musicsvc::stop();
@@ -184,6 +208,7 @@ static void handleMusic() {
 // on (with light=N, its INSIDE light's swatch, for the view's colour), on=0 to stop at once. Signed by the yellow deck; the key also does (a test by hand).
 static void handleKaraoke() {
     if (!reqauth::pass(*s_server, s_gate, "/karaoke", "wrong key")) return;
+    noteYellow();
     const String on = s_server->arg("on");
     if (on == "1") karaoke::keepAlive(karaokemode::parseLight(s_server->arg("light").c_str()));
     else if (on == "0") karaoke::stop();
@@ -324,6 +349,7 @@ void begin(bool (*hold)()) {
     s_server->on("/music", HTTP_GET, handleMusic);
     s_server->on("/music/debug", HTTP_GET, handleMusicDebug);
     s_server->on("/karaoke", HTTP_GET, handleKaraoke);
+    s_server->on("/link", HTTP_GET, handleLink);
     s_server->on("/playlists", HTTP_GET, handlePlaylists);
     s_server->on("/playlists/play", HTTP_GET, handlePlaylistPlay);
     s_server->on("/trip/reset", HTTP_POST, [] {
