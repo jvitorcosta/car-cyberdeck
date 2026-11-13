@@ -23,8 +23,8 @@ constexpr int QUIET_PCT = 55;
 
 // c mixed into base at pct % (0..100), per channel, rounded.
 uint32_t tint(uint32_t c, int pct, uint32_t base);
-// The colours for a ledlook swatch (0..8): -1 or out of range is termpal's default (green); cyan
-// (8), which termpal has no theme for, takes blue's, as on the yellow deck.
+// The colours for a ledlook swatch (0..8, cyan its own as on the yellow deck): -1 or out of range is
+// termpal's default (green).
 Pal of(int swatch);
 
 }  // namespace karaokepal

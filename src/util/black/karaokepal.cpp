@@ -3,7 +3,7 @@
 
 namespace karaokepal {
 
-static constexpr int BLUE = 4, CYAN = 8;
+static constexpr int N_THEME = 9;  // ledlook's swatches, cyan (8) the last
 
 uint32_t tint(uint32_t c, int pct, uint32_t base) {
     uint32_t out = 0;
@@ -23,8 +23,7 @@ static uint32_t quiet(uint32_t text, uint32_t dim) {
 
 Pal of(int swatch) {
     constexpr bool VIVID = true;   // the yellow deck's vivid colours, day and night
-    if (swatch == CYAN) swatch = BLUE;
-    if (swatch < 0 || swatch >= CYAN) swatch = -1;   // termpal's default, the yellow deck's green
+    if (swatch < 0 || swatch >= N_THEME) swatch = -1;   // termpal's default, the yellow deck's green
     const uint32_t t = termpal::rgb(termpal::TEXT, swatch, VIVID);
     const uint32_t m = termpal::rgb(termpal::MID, swatch, VIVID);
     const uint32_t d = quiet(t, termpal::rgb(termpal::DIM, swatch, VIVID));

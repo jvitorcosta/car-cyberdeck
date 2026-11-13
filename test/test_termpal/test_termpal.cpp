@@ -49,8 +49,8 @@ void test_hues() {
 }
 
 // ---- Themes: the terminal in the INSIDE light's colour (a ledlook swatch index, -1 the default) ----
-static constexpr int N_THEME = 8;  // red, orange, pink, purple, blue, green, white, yellow (ledlook's order)
-static constexpr int RED_T = 0, ORANGE_T = 1, PINK_T = 2, PURPLE_T = 3, BLUE_T = 4, GREEN_T = 5, WHITE_T = 6, YELLOW_T = 7;
+static constexpr int N_THEME = 9;  // red, orange, pink, purple, blue, green, white, yellow, cyan (ledlook's order)
+static constexpr int RED_T = 0, ORANGE_T = 1, PINK_T = 2, PURPLE_T = 3, BLUE_T = 4, GREEN_T = 5, WHITE_T = 6, YELLOW_T = 7, CYAN_T = 8;
 static bool warmAlertTheme(int t) { return t == RED_T || t == ORANGE_T || t == PINK_T; }
 static uint32_t chanDiff(uint32_t a, uint32_t b) {
     uint32_t d = 0;
@@ -116,6 +116,8 @@ void test_theme_hues() {
         TEST_ASSERT_TRUE_MESSAGE(red(c) >= green(c) && green(c) > 2 * blue(c), "yellow");
         c = rgb(role, WHITE_T);
         TEST_ASSERT_TRUE_MESSAGE(chanDiff(c, (red(c) << 16) | (red(c) << 8) | red(c)) <= 0x10, "white: grey");
+        c = rgb(role, CYAN_T);
+        TEST_ASSERT_TRUE_MESSAGE(blue(c) >= green(c) && green(c) > red(c) && green(c) >= 0xA0, "cyan");
     }
 }
 
@@ -147,7 +149,7 @@ void test_night_values() {
     static const uint32_t PICKED[N_THEME][3] = {
         {0xFF0000, 0xE00000, 0xBC0000}, {0xFF4600, 0xE03400, 0xBC2800}, {0xFF0040, 0xE00038, 0xBC0030},
         {0xD200FF, 0xB800E0, 0x9A00BC}, {0x0046FF, 0x003CE0, 0x0032BC}, {0x50FF46, 0x46E03C, 0x3ABC32},
-        {0xFFFFFF, 0xEBEBEB, 0xD2D2D2}, {0xFFB400, 0xFFB400, 0xFFB400},
+        {0xFFFFFF, 0xEBEBEB, 0xD2D2D2}, {0xFFB400, 0xFFB400, 0xFFB400}, {0x00E6FF, 0x00C8E0, 0x00A5BC},
     };
     for (int t = 0; t < N_THEME; t++) {
         for (int k = 0; k < 3; k++) TEST_ASSERT_EQUAL_HEX32(PICKED[t][k], rgb(static_cast<Role>(TEXT + k), t, true));
@@ -192,6 +194,10 @@ void test_night_hues() {
         TEST_ASSERT_TRUE_MESSAGE(red(c) >= green(c) && green(c) > 2 * blue(c), "yellow");
         c = rgb(role, WHITE_T, true);
         TEST_ASSERT_TRUE_MESSAGE(chanDiff(c, (red(c) << 16) | (red(c) << 8) | red(c)) == 0, "white: neutral");
+        c = rgb(role, CYAN_T, true);
+        TEST_ASSERT_TRUE_MESSAGE(blue(c) >= green(c) && green(c) >= 0xA0 && red(c) == 0, "cyan");
+        // GOJIRA (cyan) next to OCEAN (blue): their green alone is a long way apart
+        TEST_ASSERT_TRUE_MESSAGE(green(c) >= green(rgb(role, BLUE_T, true)) + 0x60, "cyan apart from blue");
         for (int t = 0; t < N_THEME; t++) {
             if (t == WHITE_T) continue;
             c = rgb(role, t, true);

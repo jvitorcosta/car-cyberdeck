@@ -29,9 +29,9 @@ void test_none_is_the_default_green() {
     TEST_ASSERT_EQUAL_HEX32(0x50FF46, karaokepal::of(42).lit);
 }
 
-void test_cyan_follows_blue() {
-    TEST_ASSERT_EQUAL_HEX32(karaokepal::of(4).lit, karaokepal::of(8).lit);
-    TEST_ASSERT_EQUAL_HEX32(karaokepal::of(4).unsung, karaokepal::of(8).unsung);
+void test_cyan_has_its_own() {
+    TEST_ASSERT_EQUAL_HEX32(0x00E6FF, karaokepal::of(8).lit);   // termpal's cyan, not blue's
+    TEST_ASSERT_TRUE(karaokepal::of(4).lit != karaokepal::of(8).lit);
 }
 
 // The sweep shows: the sung words clearly brighter than the rest, for every theme (yellow is one
@@ -51,7 +51,7 @@ int main(int, char**) {
     RUN_TEST(test_tint_mixes_per_channel);
     RUN_TEST(test_orange_is_the_yellow_decks);
     RUN_TEST(test_none_is_the_default_green);
-    RUN_TEST(test_cyan_follows_blue);
+    RUN_TEST(test_cyan_has_its_own);
     RUN_TEST(test_lit_is_brightest);
     return UNITY_END();
 }

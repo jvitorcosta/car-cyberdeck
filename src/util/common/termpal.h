@@ -12,7 +12,7 @@ enum Role : uint8_t { BG, TEXT, MID, DIM, ALERT };
 // BG 0x000000, TEXT 0xAAFF8C (17.4:1), MID 0x5ABE28 (8.8:1), DIM 0x308A24 (4.8:1), ALERT 0xFF3C28 (5.9:1).
 uint32_t rgb(Role r);
 // The same roles in a theme: the colour of the car's INSIDE light, `theme` a ledlook swatch index
-// (0..7: red, orange, pink, purple, blue, green, white, yellow); -1 (or anything out of range) is the
+// (0..8: red, orange, pink, purple, blue, green, white, yellow, cyan); -1 (or anything out of range) is the
 // default above. Each theme is its hue at three brightnesses with the same rules as the default (TEXT
 // >= 7:1, MID and DIM >= 4.5:1). Blue and purple are lightened so they read; green is the default
 // green; white is a neutral grey-white, held back so it doesn't glare. ALERT is white on red, orange
@@ -26,6 +26,7 @@ uint32_t rgb(Role r);
 //   green   AAFF8C 17.4 5ABE28 8.8  308A24 4.8  FF3C28 5.9
 //   white   D2D2C8 13.8 9C9C94 7.6  7C7C74 5.0  FF3C28 5.9
 //   yellow  FFDC5A 15.6 FF9900 9.8  D27E00 6.7  FF3C28 5.9
+//   cyan    8CF0FF 16.0 32D2F0 11.6 00AACC 7.6  FF3C28 5.9
 uint32_t rgb(Role r, int theme);
 // The same at night (18:00-06:00, under the deck's night backlight): each theme's own hue at full
 // saturation, so it stays vivid on the dimmed panel (the day's pale tints go grey there). Picked by
@@ -44,6 +45,9 @@ uint32_t rgb(Role r, int theme);
 //   green   50FF46 15.7 46E03C 12.0 3ABC32 8.4  FF0000 5.3
 //   white   FFFFFF 21   EBEBEB 17.6 D2D2D2 13.9 FF0000 5.3
 //   yellow  FFB400 11.8 FFB400 11.8 FFB400 11.8 FF0000 5.3
+//   cyan    00E6FF 13.8 00C8E0 10.3 00A5BC 7.1  FF0000 5.3
+// Cyan (GOJIRA's light) has its own theme, green-blue, so it doesn't read as blue (OCEAN's): its
+// green channel is far above blue's.
 // `night` false is rgb(r, theme).
 uint32_t rgb(Role r, int theme, bool night);
 // The scanline colour drawn over the screen.
