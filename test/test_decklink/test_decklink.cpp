@@ -15,6 +15,21 @@ void test_linked_window() {
 
 void test_wrap() { TEST_ASSERT_TRUE(linked(0xFFFFF000u, 0x00000F00u)); }
 
+// millis() | 1 stored in an even millisecond, or a stamp taken after the reader's now (another
+// task preempted it): heardAt a little ahead of now is linked, not a 49-day-old exchange.
+void test_stamp_just_ahead_is_linked() {
+    TEST_ASSERT_TRUE(linked(1001, 1000));
+    TEST_ASSERT_TRUE(linked(1500, 1000));
+    TEST_ASSERT_TRUE(linked(0x00000001u, 0xFFFFFFFFu));  // ahead across the wrap
+}
+
+// The not-answering skip holds for a stamp just ahead of now too.
+void test_tracker_skips_after_not_answering_stamp_ahead() {
+    Tracker t;
+    t.update(true, Gps::Fix, 1000, 0);
+    TEST_ASSERT_NULL(t.update(false, Gps::Unknown, 20000, 20001));
+}
+
 void test_body_and_parse() {
     char b[16];
     body(true, b, sizeof b);
@@ -99,6 +114,8 @@ int main(int, char**) {
     RUN_TEST(test_never_heard_is_not_linked);
     RUN_TEST(test_linked_window);
     RUN_TEST(test_wrap);
+    RUN_TEST(test_stamp_just_ahead_is_linked);
+    RUN_TEST(test_tracker_skips_after_not_answering_stamp_ahead);
     RUN_TEST(test_body_and_parse);
     RUN_TEST(test_shown);
     RUN_TEST(test_is_alert);

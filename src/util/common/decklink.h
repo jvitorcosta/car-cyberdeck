@@ -12,11 +12,14 @@
 namespace decklink {
 
 constexpr uint32_t LINK_MS = 15000, CHECK_MS = 5000;
+// A stamp up to AHEAD_MS after now still counts as recent (see linked).
+constexpr uint32_t AHEAD_MS = 1000;
 
 enum class Gps : uint8_t { Unknown, Fix, NoFix };
 
 // heardAt: millis() of the last valid exchange, 0 = never (callers store millis() | 1, so a real
-// time is never 0). millis() wrap-safe.
+// time is never 0). millis() wrap-safe. A heardAt up to AHEAD_MS after now is linked too: the | 1
+// can put it 1 ms ahead, and on the black deck the web task can stamp it after loop() read now.
 bool linked(uint32_t heardAt, uint32_t now);
 // /link's body: "gps=1" with a fix, "gps=0" without one. Cut to n bytes.
 void body(bool fix, char* out, size_t n);

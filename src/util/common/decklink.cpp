@@ -10,7 +10,14 @@ const char* const NOLINK_MSG = ">DECK: NO LINK";
 const char* const FIX_MSG = ">GPS: FIX";
 const char* const NOFIX_MSG = ">GPS: NO FIX";
 
-bool linked(uint32_t heardAt, uint32_t now) { return heardAt != 0 && static_cast<uint32_t>(now - heardAt) < LINK_MS; }
+// at (0 = never) under ms before now, or up to AHEAD_MS after it: a millis() | 1 stamp, or one taken
+// by another task after the reader read now, lands a little ahead.
+static bool recent(uint32_t at, uint32_t now, uint32_t ms) {
+    if (at == 0) return false;
+    return static_cast<uint32_t>(now - at) < ms || static_cast<uint32_t>(at - now) <= AHEAD_MS;
+}
+
+bool linked(uint32_t heardAt, uint32_t now) { return recent(heardAt, now, LINK_MS); }
 
 void body(bool fix, char* out, size_t n) {
     if (n) snprintf(out, n, "gps=%c", fix ? '1' : '0');
@@ -36,7 +43,7 @@ const char* Tracker::update(bool isLinked, Gps g, uint32_t now, uint32_t notAnsw
         link_ = l;
         if (!first) {
             if (l) return LINKED_MSG;
-            if (notAnsweringAt != 0 && static_cast<uint32_t>(now - notAnsweringAt) < LINK_MS) return nullptr;
+            if (recent(notAnsweringAt, now, LINK_MS)) return nullptr;
             return NOLINK_MSG;
         }
         // the first link state is silent; the GPS's first state is recorded (silently) below
