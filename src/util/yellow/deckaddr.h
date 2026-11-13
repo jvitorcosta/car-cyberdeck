@@ -16,7 +16,16 @@ public:
     void found(uint32_t addr) {
         addr_ = addr;
         misses_ = 0;
+        last_ = addr;
     }
+    // The address saved from an earlier boot (NVS): the last one, not yet asked.
+    void remember(uint32_t addr) { last_ = addr; }
+    // The last address the name was found at, kept through forget(): off the hotspot, where the
+    // name lookup often finds nothing next to Bluetooth, the deck asks there instead (0: none yet).
+    uint32_t last() const { return last_; }
+    // No address found nor saved yet: the deck task looks the name up in the background (off the
+    // hotspot) until one is, so a press has an address to ask even when its own lookup finds nothing.
+    bool searching() const { return addr_ == 0 && last_ == 0; }
     // valid: the deck answered as itself. Counts for the looked-up address when there is one, else
     // for the fixed address (only the hotspot asks with no looked-up address).
     void onPoll(bool valid) {
@@ -42,5 +51,6 @@ private:
     uint32_t addr_ = 0;
     int misses_ = 0;
     int fixedMisses_ = 0;
+    uint32_t last_ = 0;
 };
 }
