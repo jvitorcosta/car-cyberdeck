@@ -11,12 +11,9 @@ bool built(const Rect& r) { return r.w > 0 && r.h > 0; }
 bool inside(const Rect& r, int x, int y) { return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h; }
 
 bool displayOnly(Screen s, int x, int y) {
-    if (s == Screen::Menu) {
-        return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y) || inside(LIGHTS_BAND, x, y) ||
-               inside(PROMPT_BAND, x, y);
-    }
-    if (s == Screen::Presets) return inside(STATUS, x, y);
-    return inside(STATUS, x, y) || inside(LEVEL, x, y);
+    if (inside(PROMPT_BAND, x, y)) return true;
+    if (s == Screen::Menu) return inside(HEADER, x, y) || inside(CLOCK_BAND, x, y);
+    return s == Screen::Lights && inside(LEVEL, x, y);
 }
 
 Rect mk(int x, int y, int w, int h) {
@@ -33,20 +30,23 @@ int count(Screen s) {
 
 Rect rect(Screen s, int id) {
     if (id < 0 || id >= count(s)) return NONE;
-    if (s == Screen::Menu) return mk(4 + (id - M_ITEM0) * 106, 130, 100, 106);  // LIGHTS, KARAOKE, MUSIC
+    if (s == Screen::Menu) {
+        if (id == M_ITEM0 + LIGHTS) return mk(4, 58, 312, 86);  // the lights panel
+        return mk(4 + (id - M_ITEM0 - KARAOKE) * 158, 150, 154, 64);  // KARAOKE, MUSIC
+    }
     // Lights and Presets: < BACK, then the four tabs in x 80..316 (56 px: five 70 px buttons don't fit)
     if (id == L_BACK) return mk(4, 2, 70, 36);
     if (id < L_TAB0 + N_TABS) return mk(80 + (id - L_TAB0) * 60, 2, 56, 36);
-    if (s == Screen::Presets) {  // two rows of three, centred under STATUS
+    if (s == Screen::Presets) {  // two rows of three, between the tabs and the prompt line
         const int i = id - P_PRE0;
-        return mk(4 + (i % 3) * 106, 80 + (i / 3) * 70, 100, 60);
+        return mk(4 + (i % 3) * 106, 48 + (i / 3) * 84, 100, 72);
     }
-    if (id < L_MINUS) {  // the 2x4 colours, down to the level row
+    if (id < L_MINUS) {  // the 2x4 colours, under the tabs, down to the level row
         const int i = id - L_TILE0;
-        return mk(4 + (i % 4) * 79, 54 + (i / 4) * 68, 75, 64);
+        return mk(4 + (i % 4) * 79, 42 + (i / 4) * 66, 75, 62);
     }
-    if (id == L_MINUS) return mk(4, 190, 96, 46);
-    return mk(220, 190, 96, 46);  // L_PLUS
+    if (id == L_MINUS) return mk(4, 176, 96, 38);
+    return mk(220, 176, 96, 38);  // L_PLUS
 }
 
 // The distance to a button is the Chebyshev gap from the point to its rect (0 inside it).

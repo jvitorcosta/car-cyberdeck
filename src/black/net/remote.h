@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <cstdint>
 // Phone remote: a one-button web page on port 80 that plays a wolf howl on the deck.
 // http://cardeck.local/?k=<REMOTE_TOKEN> (REMOTE_NAME to change) or http://<deck-ip>/...;
 // POST /play?clip=howl&k=... answers 202 (playing), 403 (wrong key), 409 (a clip is playing), 429 (< 3 s since the last howl; see util/remotegate)
@@ -15,4 +16,6 @@ void setStatus(const char* title, const char* detail);
 // The page's full link from the deck's current address ("http://<ip>/?k=<token>", util/qrfit)
 // for the QR code; false when the remote is off or WiFi is down.
 bool link(char* out, size_t n);
+// When the yellow deck last asked (GET /link, /music or /karaoke): millis() | 1, 0 = never. Any task.
+uint32_t yellowHeardAt();
 }

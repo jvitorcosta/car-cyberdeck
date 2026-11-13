@@ -14,10 +14,12 @@
 //   it while the chime and voice are off (a mute nobody meant shows where the driver looks), the
 //   distance and the speed large, and along its top a 4 px countdown bar from the alert distance
 //   to the point (util/camsign: it never grows back). Solid red for an alarm.
-// For Off and NoFix the GPS icon in the top strip's empty middle (ui::topGap: between the spinning
+// For Off and NoFix the GPS icon and the yellow deck's link icon, side by side, in the top strip's empty middle (ui::topGap: between the spinning
 // CD and the shuffle icon, or left of the firmware label on the status screens), in the strip's
 // icon colours: a pin while the GPS has a fix (Off: nothing near), the pin struck through without
-// one (NoFix). main.cpp keeps the screens inside screens() (a TFT viewport, left of
+// one (NoFix); beside it two screens and a cable while the yellow deck asks (decklink::linked), struck
+// through when it doesn't. Over the karaoke view (`strip` false: it has no strip) neither shows:
+// it has its own tags (ui::drawKaraokeTags). main.cpp keeps the screens inside screens() (a TFT viewport, left of
 // the panel and above the band) while the band shows; the icon needs no rows: it sits on the strip,
 // which the screens redraw only whole, and main.cpp calls invalidate() then. When either goes, the
 // screen redraws whole. Assumes the 320 x 240 landscape screen. UI loop only.
@@ -34,7 +36,8 @@ Rect screens(const cameras::Status& s, int w, int h);
 // numbers (distance in 10 m steps, speed), the countdown bar, the alarm's `+N` and the sign at a
 // blink flip, so the panel costs the battle screen nothing between fixes.
 // `active` is the point at s.index, nullptr when none; `mute`: the chime and voice are off. Off
-// and NoFix draw only the GPS icon.
-void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active, bool mute);
+// and NoFix draw only the GPS and link icons, and only on a screen with the top strip (`strip`).
+void draw(TFT_eSPI& tft, const cameras::Status& s, const camlist::Point* active, bool mute, bool linked,
+          bool strip);
 void invalidate();   // something drew over it: the next draw() is whole
 }  // namespace camband

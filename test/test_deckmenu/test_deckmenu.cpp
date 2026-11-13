@@ -32,11 +32,11 @@ static void check_screen(Screen s, const Rect* shown, int nShown) {
 }
 
 void test_rects_inside_screen_and_apart() {
-    const Rect menu[] = {HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND};
-    const Rect lights[] = {STATUS, LEVEL};
-    check_screen(Screen::Menu, menu, 4);
+    const Rect menu[] = {HEADER, CLOCK_BAND, PROMPT_BAND};
+    const Rect lights[] = {PROMPT_BAND, LEVEL};
+    check_screen(Screen::Menu, menu, 3);
     check_screen(Screen::Lights, lights, 2);
-    check_screen(Screen::Presets, lights, 1);  // STATUS only: no level row on the PRESETS tab
+    check_screen(Screen::Presets, lights, 1);  // PROMPT_BAND only: no level row on the PRESETS tab
 }
 
 // < BACK and the four tabs (BOTH, INSIDE, OUTSIDE, PRESETS) on the top row, the same on Lights and on
@@ -65,44 +65,47 @@ void test_tab_row() {
     TEST_ASSERT_EQUAL_INT(L_TAB0, P_TAB0);
 }
 
-// The colour pages: the 2x4 tiles take the height the old preset row had (x 4..316, y 54..186),
-// the level row ([-] bar [+]) right under them where it was.
+// The colour pages: the 2x4 tiles right under the tabs (clear of their focus rings), the level row
+// ([-] bar [+]) under them, ending 4 px above the prompt line's rule.
 void test_lights_tiles_fill_the_body() {
     TEST_ASSERT_EQUAL_INT(L_TILE0 + 8, L_MINUS);
     for (int i = 0; i < 8; i++) {
         const Rect r = rect(Screen::Lights, L_TILE0 + i);
         TEST_ASSERT_EQUAL_INT(4 + (i % 4) * 79, r.x);
-        TEST_ASSERT_EQUAL_INT(54 + (i / 4) * 68, r.y);
-        TEST_ASSERT_TRUE(r.w == 75 && r.h == 64);
+        TEST_ASSERT_EQUAL_INT(42 + (i / 4) * 66, r.y);
+        TEST_ASSERT_TRUE(r.w == 75 && r.h == 62);
+        TEST_ASSERT_TRUE(r.y >= 40);
     }
-    TEST_ASSERT_EQUAL_INT(186, rect(Screen::Lights, L_TILE0 + 7).y + rect(Screen::Lights, L_TILE0 + 7).h);
     const Rect minus = rect(Screen::Lights, L_MINUS), plus = rect(Screen::Lights, L_PLUS);
-    TEST_ASSERT_TRUE(minus.x == 4 && minus.y == 190 && minus.w == 96 && minus.h == 46);
-    TEST_ASSERT_TRUE(plus.x == 220 && plus.y == 190 && plus.w == 96 && plus.h == 46);
-    TEST_ASSERT_TRUE(LEVEL.x == 106 && LEVEL.y == 190 && LEVEL.w == 108 && LEVEL.h == 46);
+    TEST_ASSERT_TRUE(minus.x == 4 && minus.y == 176 && minus.w == 96 && minus.h == 38);
+    TEST_ASSERT_TRUE(plus.x == 220 && plus.y == 176 && plus.w == 96 && plus.h == 38);
+    TEST_ASSERT_TRUE(LEVEL.x == 106 && LEVEL.y == 176 && LEVEL.w == 108 && LEVEL.h == 38);
+    const Rect t7 = rect(Screen::Lights, L_TILE0 + 7);
+    TEST_ASSERT_TRUE(t7.y + t7.h <= minus.y);
+    TEST_ASSERT_TRUE(minus.y + minus.h <= 214 && LEVEL.y + LEVEL.h <= 214);
     TEST_ASSERT_EQUAL_INT(L_N, count(Screen::Lights));
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Lights, L_N).w);
 }
 
-// The PRESETS tab: the six presets, two rows of three, 100 x 60, 6 px apart side by side (as the
-// Menu's items) and 10 px row to row, the block centred under the status line.
+// The PRESETS tab: the six presets, two rows of three, 100 x 72, 6 px apart side by side and
+// 12 px row to row, between the tabs and the prompt line.
 void test_presets_tab() {
     TEST_ASSERT_EQUAL_INT(P_PRE0 + 6, P_N);
     TEST_ASSERT_EQUAL_INT(P_N, count(Screen::Presets));
     for (int i = 0; i < 6; i++) {
         const Rect r = rect(Screen::Presets, P_PRE0 + i);
         TEST_ASSERT_EQUAL_INT(4 + (i % 3) * 106, r.x);
-        TEST_ASSERT_EQUAL_INT(80 + (i / 3) * 70, r.y);
-        TEST_ASSERT_TRUE(r.w == 100 && r.h == 60);
+        TEST_ASSERT_EQUAL_INT(48 + (i / 3) * 84, r.y);
+        TEST_ASSERT_TRUE(r.w == 100 && r.h == 72);
+        TEST_ASSERT_TRUE(r.y >= 40 && r.y + r.h <= 214 && r.h >= 60);
         TEST_ASSERT_EQUAL_INT(P_PRE0 + i, hit(Screen::Presets, r.x + 50, r.y + 30));
     }
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Presets, P_N).w);
-    // the gaps snap to the nearer preset; the status line is display only; far below the block, nothing
+    // the gaps snap to the nearer preset; the prompt line is display only
     TEST_ASSERT_EQUAL_INT(P_PRE0, hit(Screen::Presets, 106, 100));
     TEST_ASSERT_EQUAL_INT(P_PRE0 + 1, hit(Screen::Presets, 107, 100));
-    TEST_ASSERT_EQUAL_INT(P_PRE0, hit(Screen::Presets, 50, 144));
-    TEST_ASSERT_EQUAL_INT(P_PRE0 + 3, hit(Screen::Presets, 50, 145));
-    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Presets, 50, 45));
+    TEST_ASSERT_EQUAL_INT(P_PRE0, hit(Screen::Presets, 50, 125));
+    TEST_ASSERT_EQUAL_INT(P_PRE0 + 3, hit(Screen::Presets, 50, 126));
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Presets, 160, 236));
     for (int y = 0; y < 240; y += 3)
         for (int x = 0; x < 320; x += 3) {
@@ -125,16 +128,19 @@ void test_presets_tab() {
     TEST_ASSERT_TRUE(down >= P_PRE0 && down < P_N);
 }
 
-// The dashboard: header, clock + the trip's time, the lights, the prompt
-// line, then the three items at the bottom, top to bottom, each band right under the one before.
+// The dashboard (layout B): header, clock + the trip's time, the lights panel (a button), the two
+// switches side by side, then the prompt line at the bottom, top to bottom without overlap.
 void test_menu_bands_stack() {
-    const Rect bands[] = {HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND};
+    const Rect lights = rect(Screen::Menu, M_ITEM0 + LIGHTS), karaoke = rect(Screen::Menu, M_ITEM0 + KARAOKE),
+               music = rect(Screen::Menu, M_ITEM0 + MUSIC);
     TEST_ASSERT_EQUAL_INT(0, HEADER.y);
-    for (int i = 1; i < 4; i++) TEST_ASSERT_EQUAL_INT(bands[i - 1].y + bands[i - 1].h, bands[i].y);
-    for (const Rect& r : bands) TEST_ASSERT_TRUE(r.x == 0 && r.w == 320 && r.h > 0);
-    const Rect items = rect(Screen::Menu, M_ITEM0);
-    TEST_ASSERT_EQUAL_INT(items.y - 4, PROMPT_BAND.y + PROMPT_BAND.h);  // 4 rows that snap to the items
-    TEST_ASSERT_EQUAL_INT(236, items.y + items.h);  // 4 px off the screen's bottom, as off its sides
+    TEST_ASSERT_EQUAL_INT(HEADER.y + HEADER.h, CLOCK_BAND.y);
+    TEST_ASSERT_TRUE(CLOCK_BAND.y + CLOCK_BAND.h <= lights.y);
+    TEST_ASSERT_TRUE(lights.y + lights.h <= karaoke.y);
+    TEST_ASSERT_EQUAL_INT(karaoke.y, music.y);
+    TEST_ASSERT_TRUE(karaoke.y + karaoke.h <= 214 && music.y + music.h <= 214);  // 4 px above the rule
+    TEST_ASSERT_TRUE(PROMPT_BAND.x == 0 && PROMPT_BAND.y == 219 && PROMPT_BAND.w == 320 && PROMPT_BAND.h == 21);
+    for (const Rect& r : {HEADER, CLOCK_BAND, PROMPT_BAND}) TEST_ASSERT_TRUE(r.x == 0 && r.w == 320 && r.h > 0);
 }
 
 void test_menu_ids_and_hits() {
@@ -142,26 +148,18 @@ void test_menu_ids_and_hits() {
     TEST_ASSERT_EQUAL_INT(3, N_ITEMS);
     TEST_ASSERT_EQUAL_INT(0, M_ITEM0);
     TEST_ASSERT_EQUAL_INT(3, M_N);
-    // LIGHTS, KARAOKE and MUSIC side by side, finger-sized.
     const Rect lights = rect(Screen::Menu, M_ITEM0 + LIGHTS), karaoke = rect(Screen::Menu, M_ITEM0 + KARAOKE),
                music = rect(Screen::Menu, M_ITEM0 + MUSIC);
-    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 130 && lights.w == 100 && lights.h == 106);
-    TEST_ASSERT_TRUE(karaoke.x == 110 && karaoke.y == 130 && karaoke.w == 100 && karaoke.h == 106);
-    TEST_ASSERT_TRUE(music.x == 216 && music.y == 130 && music.w == 100 && music.h == 106);
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 214));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 214));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 270, 214));
-    // the gaps between them (x 104..109, 210..215) snap to the nearer
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 106, 214));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 107, 214));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 212, 214));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 213, 214));
-    // just above the row (under the prompt line) and below it (the screen's last rows), still the item
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 126));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 50, 127));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 54, 230));   // anywhere in the tall button
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 160, 239));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 319, 239));
+    TEST_ASSERT_TRUE(lights.x == 4 && lights.y == 58 && lights.w == 312 && lights.h == 86);
+    TEST_ASSERT_TRUE(karaoke.x == 4 && karaoke.y == 150 && karaoke.w == 154 && karaoke.h == 64);
+    TEST_ASSERT_TRUE(music.x == 162 && music.y == 150 && music.w == 154 && music.h == 64);
+    TEST_ASSERT_TRUE(karaoke.w >= 150 && karaoke.h >= 60 && music.w >= 150 && music.h >= 60);
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 160, 100));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 80, 180));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 240, 180));
+    // the gap between the switches (x 158..161) snaps to the nearer
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 159, 180));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 160, 180));
     // Out-of-range ids have no rect, and any tap is -1 or a valid id.
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, M_N).w);
     TEST_ASSERT_EQUAL_INT(0, rect(Screen::Menu, 99).w);
@@ -173,10 +171,21 @@ void test_menu_ids_and_hits() {
         }
 }
 
-// The lights band is display only: a tap on it is no item, however big its colour blocks are.
-void test_lights_band_is_no_hit() {
-    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, 60, 75));
-    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, 200, 90));
+// The gap between the lights panel (last row 143) and the switches (first row 150) snaps to the
+// nearer one.
+void test_menu_gap_snaps() {
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, hit(Screen::Menu, 80, 147));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, hit(Screen::Menu, 80, 146));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, hit(Screen::Menu, 240, 148));
+}
+
+// The prompt line at the bottom is display only on every screen.
+void test_prompt_band_is_no_hit_everywhere() {
+    for (Screen s : {Screen::Menu, Screen::Lights, Screen::Presets}) {
+        TEST_ASSERT_EQUAL_INT(-1, hit(s, 50, 230));
+        for (int y = PROMPT_BAND.y; y < PROMPT_BAND.y + PROMPT_BAND.h; y++)
+            for (int x = 0; x < 320; x += 7) TEST_ASSERT_EQUAL_INT(-1, hit(s, x, y));
+    }
 }
 
 void test_hit_snaps_and_ignores_display_rects() {
@@ -184,14 +193,13 @@ void test_hit_snaps_and_ignores_display_rects() {
     TEST_ASSERT_EQUAL_INT(L_TILE0, hit(Screen::Lights, t0.x + 10, t0.y + 10));
     // In the gap between tiles 0 and 1, one px off tile 1 and four off tile 0.
     TEST_ASSERT_EQUAL_INT(L_TILE0 + 1, hit(Screen::Lights, t1.x - 1, t1.y + 10));
-    // Just under the Back button, in the gap above the status line.
+    // Just under the Back button, in the gap above the tiles.
     const Rect back = rect(Screen::Lights, L_BACK);
     TEST_ASSERT_EQUAL_INT(L_BACK, hit(Screen::Lights, back.x + 5, back.y + back.h + 1));
     // Display only: no snapping to a neighbour from inside them.
     TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, LEVEL.x + 50, LEVEL.y + 20));
-    TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Lights, STATUS.x + 50, STATUS.y + 5));
-    // The dashboard's bands are display only, even the rows next to the items.
-    for (const Rect& r : {HEADER, CLOCK_BAND, LIGHTS_BAND, PROMPT_BAND}) {
+    // The dashboard's bands are display only.
+    for (const Rect& r : {HEADER, CLOCK_BAND, PROMPT_BAND}) {
         for (int y = r.y; y < r.y + r.h; y++)
             for (int x = 0; x < 320; x += 7) TEST_ASSERT_EQUAL_INT(-1, hit(Screen::Menu, x, y));
     }
@@ -215,18 +223,18 @@ void test_neighbour() {
     TEST_ASSERT_EQUAL_INT(L_TILE0 + 7, neighbour(Screen::Lights, L_PLUS, 0, -1));
     TEST_ASSERT_EQUAL_INT(L_TILE0, neighbour(Screen::Lights, L_BACK, 0, 1));
     TEST_ASSERT_EQUAL_INT(L_TILE0, neighbour(Screen::Lights, L_TILE0 + 1, -1, 0));
-    // The Menu: left / right along the three items, one step at a time; up, down and past the ends
-    // (no wrap) nothing lies that way.
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, 1, 0));
+    // The Menu: the lights panel above, the two switches under it. Down from the panel the first
+    // switch (KARAOKE); up from either switch the panel; left / right between the switches; nothing
+    // past the edges.
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, 0, 1));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, 0, -1));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, 1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + MUSIC, 0, -1));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + MUSIC, -1, 0));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, -1, 0));
-    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, -1, 0));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, -1, 0));
     TEST_ASSERT_EQUAL_INT(M_ITEM0 + MUSIC, neighbour(Screen::Menu, M_ITEM0 + MUSIC, 1, 0));
-    for (int i = 0; i < N_ITEMS; i++) {
-        TEST_ASSERT_EQUAL_INT(M_ITEM0 + i, neighbour(Screen::Menu, M_ITEM0 + i, 0, 1));
-        TEST_ASSERT_EQUAL_INT(M_ITEM0 + i, neighbour(Screen::Menu, M_ITEM0 + i, 0, -1));
-    }
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + LIGHTS, neighbour(Screen::Menu, M_ITEM0 + LIGHTS, 0, -1));
+    TEST_ASSERT_EQUAL_INT(M_ITEM0 + KARAOKE, neighbour(Screen::Menu, M_ITEM0 + KARAOKE, 0, 1));
 }
 
 // Presets are the PRESETS tab's only: the colour pages and the Menu have none.
@@ -254,7 +262,8 @@ int main(int, char**) {
     RUN_TEST(test_presets_tab);
     RUN_TEST(test_menu_bands_stack);
     RUN_TEST(test_menu_ids_and_hits);
-    RUN_TEST(test_lights_band_is_no_hit);
+    RUN_TEST(test_menu_gap_snaps);
+    RUN_TEST(test_prompt_band_is_no_hit_everywhere);
     RUN_TEST(test_hit_snaps_and_ignores_display_rects);
     RUN_TEST(test_neighbour);
     RUN_TEST(test_preset_slots);

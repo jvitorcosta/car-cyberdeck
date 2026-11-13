@@ -6,6 +6,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Both decks
+- **Added:** each deck shows whether it reaches the other and whether the GPS has a fix. The
+  yellow deck asks the black deck every 5 s; the yellow deck's header has `GPS` and `DECK` tags
+  (red and struck through when something's wrong, with `>DECK: NO LINK` / `>GPS: NO FIX` on the
+  prompt line), and the black deck has a small link icon beside its GPS pin, and `GPS` / `DECK`
+  at the top right of the karaoke view.
 - **Changed:** the decks wait longer for the iPhone hotspot at boot (three 8 s tries, time to
   unlock the phone) before falling back to another network, and a deck on the fallback moves to
   the hotspot once a minute's scan finds it. Before, a hotspot that wasn't advertising yet lost to
@@ -18,6 +23,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Changed:** the prompt line (`>` and the cursor, the messages) sits at the bottom of every
+  screen, like a terminal's. The main screen's three tall buttons are gone: the lights are one
+  outlined panel you tap to open Lights, and KARAOKE and MUSIC MODE are two wide switches under it.
+  On Lights and Presets the line under the tabs is gone; the prompt line shows the lights' link
+  (`>LINK 2/2`). With the PS3 controller the focused panel is inverted like the switches. The touch
+  calibration is in the terminal look too.
 - **Added:** the light kit's IR remote works the deck through a KY-022 receiver on GPIO 27. Its
   keys act on both lights: brightness up / down (held, about four steps a second), on / off, eight
   colours (each light keeps its level, an off light comes back on), JUMP / FADE as the
