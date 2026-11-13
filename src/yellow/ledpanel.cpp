@@ -471,9 +471,9 @@ static_assert(static_cast<int>(deckmenu::TAB_BOTH) == BOTH && static_cast<int>(d
 
 static bool built(int id) { return deckmenu::rect(screen, id).w > 0; }
 
-// The button the PS3 controller points at; -1 while none is connected. On the Menu the switches
-// draw it as an inverted bar and the lights panel as a 2 px TEXT outline (an inverted panel would
-// hide the lights), on Lights as a TEXT ring around the button (the lit colour is the bar there).
+// The button the PS3 controller points at; -1 while none is connected. On the Menu it is drawn as
+// an inverted bar (the lights panel's colour blocks kept on it), on Lights as a TEXT ring around the
+// button (the lit colour is the bar there).
 static int focus = -1;
 static bool padUp = false;  // a PS3 controller is connected
 static void drawFocus(int id, bool on);
@@ -936,53 +936,42 @@ static void drawTripTime() {
 // MID) and under it what lightstatus::of says of it (LIGHT_VALUE_FACE): on, the block filled and
 // "ROSE 40%" (TEXT); off, a DIM outlined block and OFF in DIM; no link, "-- NO LINK" in ALERT and no
 // block (never its last look: the deck can't tell what a light it has lost shows). Bottom right the
-// hint "LIGHTS >" in DIM. Focused (the PS3 controller), the outline is 2 px of TEXT and the hint an
-// inverted tag: an inverted panel would hide the lights while a pad is connected. Pressed, drawBox's
-// bar with its ring and the hint on it.
+// hint "LIGHTS >" in DIM. Focused (the PS3 controller), the inverted bar as the switches have it
+// (a thin outline was too faint to see while driving): every word and the rule in BG on it, the
+// blocks kept with drawChip's BG edge. Pressed, drawBox's bar with its ring and the hint on it.
 static_assert(N_CTRL == N_LIGHT_LABELS, "a label per light");
 static void drawPanel(const Rect& r, bool pressed, bool focused) {
-    if (presslook::box(pressed, false).bar) {
-        tft.setTextColor(drawBox(r, pressed, false, 1, pal(termpal::TEXT)));
+    if (pressed) {
+        tft.setTextColor(drawBox(r, true, false, 1, pal(termpal::TEXT)));
         text(PANEL_HINT, r.x + r.w / 2, r.y + r.h / 2, Face::TITLE, MC_DATUM);
         return;
     }
-    clearBg(r);
-    const int edge = focused ? 2 : 1;
-    for (int k = 0; k < edge; k++) {
-        tft.drawRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, pal(focused ? termpal::TEXT : termpal::MID));
-    }
-    tft.drawFastVLine(PANEL_SPLIT, LIGHT_BLOCK_Y, LIGHT_BLOCK_H, pal(termpal::MID));
+    drawBox(r, false, focused, 1, pal(termpal::TEXT));  // the bar when focused
+    const auto ink = [focused](termpal::Role role) { return pal(focused ? termpal::BG : role); };
+    tft.drawFastVLine(PANEL_SPLIT, LIGHT_BLOCK_Y, LIGHT_BLOCK_H, ink(termpal::MID));
     for (int i = 0; i < N_CTRL; i++) {
         const Look l = shownLook(i);  // music mode's while it drives the lights
-        tft.setTextColor(pal(termpal::MID));
+        tft.setTextColor(ink(termpal::MID));
         text(LIGHT_LABELS[i], lightTextX(i), LIGHT_LABEL_Y, Face::SMALL, TL_DATUM);
         const lightstatus::State st = lightstatus::of(linkUp(controllers[i]), l.lit);
         if (st == lightstatus::State::NoLink) {
-            tft.setTextColor(pal(termpal::ALERT));
+            tft.setTextColor(ink(termpal::ALERT));
             text("-- NO LINK", lightTextX(i), LIGHT_VALUE_BASE, LIGHT_VALUE_FACE, BL_DATUM);
             continue;
         }
-        drawChip(lightX(i), LIGHT_BLOCK_Y, LIGHT_BLOCK_W, LIGHT_BLOCK_H, l, false);
+        drawChip(lightX(i), LIGHT_BLOCK_Y, LIGHT_BLOCK_W, LIGHT_BLOCK_H, l, focused);
         if (st == lightstatus::State::Off) {
-            tft.setTextColor(pal(termpal::DIM));
+            tft.setTextColor(ink(termpal::DIM));
             text("OFF", lightTextX(i), LIGHT_VALUE_BASE, LIGHT_VALUE_FACE, BL_DATUM);
             continue;
         }
         char name[12], s[32];
         upper(SWATCHES[l.swatch].name, name, sizeof(name));
         snprintf(s, sizeof(s), "%s %u%%", name, static_cast<unsigned>(l.pct));
-        tft.setTextColor(pal(termpal::TEXT));
+        tft.setTextColor(ink(termpal::TEXT));
         text(s, lightTextX(i), LIGHT_VALUE_BASE, LIGHT_VALUE_FACE, BL_DATUM);
     }
-    if (!focused) {
-        tft.setTextColor(pal(termpal::DIM));
-        text(PANEL_HINT, PANEL_HINT_RIGHT, PANEL_HINT_BASE, Face::SMALL, BR_DATUM);
-        return;
-    }
-    const int w = termfont::width(Face::SMALL, PANEL_HINT) + 2 * TAG_PAD, h = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
-    const int x = PANEL_HINT_RIGHT + TAG_PAD - w, y = PANEL_HINT_BASE + TAG_PAD - h;
-    tft.fillRect(x, y, w, h, pal(termpal::TEXT));
-    tft.setTextColor(pal(termpal::BG));
+    tft.setTextColor(ink(termpal::DIM));
     text(PANEL_HINT, PANEL_HINT_RIGHT, PANEL_HINT_BASE, Face::SMALL, BR_DATUM);
 }
 
