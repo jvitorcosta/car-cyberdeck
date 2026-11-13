@@ -151,6 +151,29 @@ void test_decode_rejects_junk() {
     sameSnap(keep, b);  // untouched on failure
 }
 
+void test_decode_rejects_non_json_numbers() {
+    // strtod also reads nan, inf, hex and a leading '+' or '.'; none is a JSON number, and a
+    // value too big for a float would land as inf. Each one must fail the whole decode.
+    const char* bad[] = {"nan", "NaN", "-nan", "inf", "-inf", "Infinity", "0x10", "-0X1p3",
+                         "+5", ".5", "1e39", "-1e39"};
+    for (const char* v : bad) {
+        char j[64];
+        snprintf(j, sizeof(j), "{\"v\":1,\"kmh\":%s}", v);
+        Snapshot b = full(), keep = full();
+        TEST_ASSERT_FALSE_MESSAGE(carwire::decode(j, &b), j);
+        sameSnap(keep, b);
+    }
+    const struct { const char* v; float want; } good[] = {{"0", 0.0f}, {"-12.5", -12.5f}, {"1e3", 1000.0f},
+                                                         {"0.25E-1", 0.025f}, {"-0", 0.0f}};
+    for (const auto& g : good) {
+        char j[64];
+        snprintf(j, sizeof(j), "{\"v\":1,\"kmh\":%s}", g.v);
+        Snapshot b;
+        TEST_ASSERT_TRUE_MESSAGE(carwire::decode(j, &b), j);
+        TEST_ASSERT_EQUAL_FLOAT(g.want, b.kmh);
+    }
+}
+
 void test_decode_rejects_wrong_or_missing_version() {
     Snapshot b;
     TEST_ASSERT_FALSE(carwire::decode("{\"v\":2,\"seq\":1}", &b));
@@ -316,6 +339,7 @@ int main() {
     RUN_TEST(test_why_with_quotes_and_backslashes_survives);
     RUN_TEST(test_encode_reports_no_fit);
     RUN_TEST(test_decode_rejects_junk);
+    RUN_TEST(test_decode_rejects_non_json_numbers);
     RUN_TEST(test_decode_rejects_wrong_or_missing_version);
     RUN_TEST(test_decode_rejects_every_truncation);
     RUN_TEST(test_unknown_keys_ignored_and_order_free);

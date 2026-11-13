@@ -286,8 +286,7 @@ Behaviour, to watch in the car test:
   engine on, so low risk.
 
 Small code gaps:
-- `/fill` accepts `nan` and `inf` (`strtof`; only the reply is affected); `carwire::getReal` accepts
-  them too, plus hex.
+- `/fill` accepts `nan` and `inf` (`strtof`; only the reply is affected).
 - `triplog`: a partial append plus a retry leaves a partial row mid-file; long ids can collide
   after the cut.
 - `obd::parse` answers NoData if "NO DATA" appears anywhere, before the multi-ECU status walk;

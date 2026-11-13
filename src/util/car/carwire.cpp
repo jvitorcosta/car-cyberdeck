@@ -82,15 +82,22 @@ const char* at(const char* json, const char* key) { return jsonpath::find(json, 
 
 bool isNull(const char* p) { return strncmp(p, "null", 4) == 0; }
 
-// Optional number: absent keeps *v, null -> NAN, a number is read, anything else is junk.
+// Optional number: absent keeps *v, null -> NAN, a finite JSON number is read, anything else is
+// junk. strtod alone would also take nan, inf, hex and a leading '+' or '.', and a number too big
+// for a float would land as inf, so the first character and the result are checked.
 bool getReal(const char* json, const char* key, float* v) {
     const char* p = at(json, key);
     if (!p) return true;
     if (isNull(p)) { *v = NAN; return true; }
+    const char* digit = (*p == '-') ? p + 1 : p;
+    if (*digit < '0' || *digit > '9') return false;
+    if (digit[0] == '0' && (digit[1] == 'x' || digit[1] == 'X')) return false;
     char* end = nullptr;
     const double d = strtod(p, &end);
     if (end == p) return false;
-    *v = static_cast<float>(d);
+    const float f = static_cast<float>(d);
+    if (!std::isfinite(f)) return false;
+    *v = f;
     return true;
 }
 
