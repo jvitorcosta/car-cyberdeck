@@ -12,8 +12,9 @@ struct Rect { int16_t x, y, w, h; };
 // presets in place of the colours and the level row.
 enum class Screen : uint8_t { Menu, Lights, Presets };
 
-// Menu (the dashboard): three items side by side, tall (easy to hit while driving), at the bottom under the prompt line;
-// everything else on it is display only (the bands below).
+// Menu (the dashboard, layout B): the lights panel across the screen under the clock (LIGHTS: a tap
+// opens the Lights screen), then the two switches side by side (KARAOKE, MUSIC); everything else on
+// it is display only (the bands below).
 enum MenuId : int { M_ITEM0 = 0, M_N = 3 };
 enum Item : uint8_t { LIGHTS, KARAOKE, MUSIC };  // later: CAR, HEART
 constexpr int N_ITEMS = 3;                     // items shown, in slot order
@@ -31,13 +32,13 @@ enum PresetsId : int { P_BACK = L_BACK, P_TAB0 = L_TAB0, P_PRE0 = L_TAB0 + N_TAB
 Rect rect(Screen s, int id);
 
 // Display only: never a hit, never a neighbour.
-// The Menu's bands, top to bottom, each from the rule above it: the header line, the clock and the
-// trip's time, the two lights on one row, the prompt line (the messages,
-// music mode's line), then (the items). A tap in a band doesn't snap to an item; the 4
-// rows between the prompt line and the items, and those under them, do.
-constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 30};                                // menu
-constexpr Rect LIGHTS_BAND{0, 52, 320, 49}, PROMPT_BAND{0, 101, 320, 25};                         // menu
-constexpr Rect STATUS{4, 40, 312, 12}, LEVEL{106, 190, 108, 46};  // lights (STATUS: presets too)
+// The Menu's bands, top to bottom: the header line, the clock and the trip's time (then the panel
+// and the switches, buttons). PROMPT_BAND is every screen's bottom row, the terminal's prompt line
+// (the messages, music mode's line, the Lights link state), from its MID rule at y 219. A tap in a
+// band doesn't snap to a button; the gaps between the buttons do.
+constexpr Rect HEADER{0, 0, 320, 22}, CLOCK_BAND{0, 22, 320, 30};  // menu
+constexpr Rect PROMPT_BAND{0, 219, 320, 21};                       // every screen
+constexpr Rect LEVEL{106, 176, 108, 38};                           // lights
 
 // Number of ids on a screen (M_N / L_N / P_N).
 int count(Screen s);
