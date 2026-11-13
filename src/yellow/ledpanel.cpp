@@ -109,6 +109,7 @@
 #include "../util/yellow/dashtext.h"
 #include "../util/common/daynight.h"
 #include "../util/yellow/deckaddr.h"
+#include "../util/common/decklink.h"
 #include "../util/yellow/keepalive.h"
 #include "../util/yellow/deckmenu.h"
 #include "../util/yellow/elkcmd.h"
@@ -603,7 +604,7 @@ static uint16_t pal(termpal::Role r) { return c565(termpal::rgb(r, theme, true))
 // A terminal message's colour: ALERT for a problem (a lost link, the wrong key, a car warning: alert),
 // else TEXT.
 static bool isAlertMsg(const char* m) {
-    return lightstatus::isAlert(m) || padbattery::isAlert(m);
+    return lightstatus::isAlert(m) || padbattery::isAlert(m) || decklink::isAlert(m);
 }
 static uint16_t msgInk(const char* m, bool alert) { return pal(alert || isAlertMsg(m) ? termpal::ALERT : termpal::TEXT); }
 
@@ -812,8 +813,14 @@ static uint32_t messageAt = 0;
 static uint32_t messageMs = MESSAGE_MS;
 static bool messageAlert = false;  // drawn in ALERT whatever it says (the car's warnings)
 
+// When ">BLACK DECK NOT ANSWERING" last showed (millis() | 1, 0: never): a link drop right after
+// it says nothing more (decklink::Tracker).
+static constexpr const char* NOT_ANSWERING = ">BLACK DECK NOT ANSWERING";
+static uint32_t notAnsweringAt = 0;
+
 // Sets the message; the caller redraws what shows it (drawMessage).
 static void setMessage(const char* m, uint32_t ms = MESSAGE_MS, bool alert = false) {
+    if (strcmp(m, NOT_ANSWERING) == 0) notAnsweringAt = millis() | 1;
     snprintf(message, sizeof(message), "%s", m);
     messageAt = millis();
     messageMs = ms;
@@ -832,14 +839,34 @@ static void setMessage(const char* m, uint32_t ms = MESSAGE_MS, bool alert = fal
 
 static void drawRule(int y) { tft.drawFastHLine(RULE_X0, y, RULE_X1 - RULE_X0, pal(termpal::MID)); }
 
-// The PS3 controller's battery at the header's right while one is connected (padUp): "PAD" (MID)
-// and a battery icon on the title's caps, its outline MID and 0-4 cells TEXT (both ALERT when it
-// is dying), cycling while it charges (util/yellow/padbattery). Nothing without a controller.
+// The header's right, right-aligned on the title's row: the link tags (TAG_GPS, TAG_DECK), then
+// while a PS3 controller is connected (padUp) its battery: "PAD" (MID) and a battery icon on the
+// title's caps, its outline MID and 0-4 cells TEXT (both ALERT when it is dying), cycling while it
+// charges (util/yellow/padbattery). The tags move right when the controller goes.
+// GPS: MID with a fix, ALERT struck through without one, DIM when not known (no link to ask);
+// DECK: MID while the black deck answers (decklink::linked), ALERT struck through when it doesn't.
 static padbattery::Look padBattery;  // what the controller last reported; loop-owned
-static void drawPadBattery() {
-    const int x0 = DASH_RIGHT - termlayout::padWidth();
-    clearBg(x0, 0, RULE_X1 - x0, HEADER_RULE_Y);
+static bool deckShown = false;                               // what the tags show; loop-owned
+static decklink::Gps gpsShown = decklink::Gps::Unknown;
+static void drawLinkTag(const char* s, int x, termpal::Role ink, bool strike) {
+    tft.setTextColor(pal(ink));
+    text(s, x, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
+    if (strike) {
+        tft.drawFastHLine(x, DASH_TITLE_Y + termfont::capHeight(Face::SMALL) / 2, termfont::width(Face::SMALL, s), pal(ink));
+    }
+}
+static void drawHeaderRight() {
+    const int clearX = termlayout::linkTagsX(true);
+    clearBg(clearX, 0, RULE_X1 - clearX, HEADER_RULE_Y);
+    const int tx = termlayout::linkTagsX(padUp);
+    const termpal::Role gps = gpsShown == decklink::Gps::Fix     ? termpal::MID
+                              : gpsShown == decklink::Gps::NoFix ? termpal::ALERT
+                                                                 : termpal::DIM;
+    drawLinkTag(TAG_GPS, tx, gps, gpsShown == decklink::Gps::NoFix);
+    drawLinkTag(TAG_DECK, tx + termfont::width(Face::SMALL, TAG_GPS) + LINK_TAG_GAP,
+                deckShown ? termpal::MID : termpal::ALERT, !deckShown);
     if (!padUp) return;
+    const int x0 = DASH_RIGHT - termlayout::padWidth();
     tft.setTextColor(pal(termpal::MID));
     const int ix = x0 + termfont::width(Face::SMALL, PAD_LABEL) + PAD_GAP;
     text(PAD_LABEL, x0, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
@@ -855,13 +882,13 @@ static void drawPadBattery() {
 }
 
 // The header: one MID line and its rule (the boot's welcome lines typed out before it), and the
-// controller's battery right-aligned on it, well clear of the title (test_termfont).
+// link tags and the controller's battery right-aligned on it, well clear of the title (test_termfont).
 static void drawHeader() {
     clearBg(deckmenu::HEADER);
     tft.setTextColor(pal(termpal::MID));
     text(DASH_TITLE, DASH_X, DASH_TITLE_Y, Face::SMALL, TL_DATUM);
     drawRule(HEADER_RULE_Y);
-    drawPadBattery();
+    drawHeaderRight();
 }
 
 // The clock's minute of the day on screen (-1: not synced, "--:--") and its date, read together
@@ -1574,7 +1601,7 @@ static void padBatteryTick() {
     if (now != padBattery) Serial.printf("[pad] battery %d cells%s (0x%02x)\n", now.cells, now.charging ? ", charging" : "", raw);
     padBattery = now;
     frameAt = millis();
-    if (screen == Screen::Menu) drawPadBattery();
+    if (screen == Screen::Menu) drawHeaderRight();
 }
 
 // The controller's rumble and LEDs go out together (one output report carries both, yellow/padhid),
@@ -1929,7 +1956,7 @@ static void handlePad() {
         }
         padLeds = -1;  // a new connection shows the links (and stops the four LEDs blinking)
         padBuzz = padfeel::Buzz{};
-        if (screen == Screen::Menu) drawPadBattery();
+        if (screen == Screen::Menu) drawHeaderRight();
     }
     if (is) {
         padBatteryTick();
@@ -2202,9 +2229,16 @@ static void deckSearch() {
     xSemaphoreGive(deckLock);
 }
 
+// When the black deck last gave a valid answer to any ask (millis() | 1, 0: never; decklink::linked
+// reads it from loop()), and the GPS state its last /link answer carried (a decklink::Gps). One
+// 32-bit store each: atomic on the ESP32.
+static volatile uint32_t deckHeardAt = 0;
+static volatile uint8_t deckGps = static_cast<uint8_t>(decklink::Gps::Unknown);
+
 // An asker's verdict on the address it asked (deckAddr: 3 misses in a row, look it up again),
-// under deckLock like the rest of the address keeping.
+// under deckLock like the rest of the address keeping; a valid one is also the link's proof.
 static void deckAnswered(bool valid) {
+    if (valid) deckHeardAt = millis() | 1;
     if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return;
     deckAddr.onPoll(valid);
     xSemaphoreGive(deckLock);
@@ -2334,6 +2368,22 @@ static void irPlay(int i) {
     irPlaylistDone.store(static_cast<int8_t>(i));
 }
 
+// The link check, from the deck task: GET /link every decklink::CHECK_MS whatever else asks, its
+// body the black deck's GPS state ("gps=1" / "gps=0"). A 200 is a valid answer; anything else but
+// an unsigned ask counts as a miss.
+static void linkGet() {
+    static uint32_t at = 0;
+    const uint32_t now = millis();
+    if (at && now - at < decklink::CHECK_MS) return;
+    at = now | 1;
+    if (ota::active() || !net::isOnline()) return;
+    crashlog::at("link ask");
+    char reply[16] = "";
+    const int rc = deckGet("/link", nullptr, 0, reply, sizeof(reply));
+    if (rc == 200) deckGps = static_cast<uint8_t>(decklink::parse(reply));
+    if (rc != NOT_SIGNED) deckAnswered(rc == 200);
+}
+
 static void deckTask(void*) {
     static KeepAlive music{"music", musicGet, nullptr, {}, 0}, karaoke{"karaoke", karaokeGet, insideLight, {}, 0};
     // each pass: two GETs of 1.5 s and an mDNS query of 1.5 s at most, and a playlist's 16 s
@@ -2348,6 +2398,7 @@ static void deckTask(void*) {
         }
         keepAlive(music, musicWant);
         deckSearch();
+        linkGet();
         // want before taps: setKaraoke counts the tap first, so a switch on seen here is counted
         static keepalive::Confirm confirm;
         static uint32_t seenTaps = 0;
@@ -2576,7 +2627,7 @@ static void karaokeAnswerTick() {
     karaokeShown = 0;
     if (!karaokeOn) return;
     if (s == static_cast<uint8_t>(keepalive::Shown::Connected)) setMessage(">KARAOKE ON");
-    else setMessage(">BLACK DECK NOT ANSWERING", KARAOKE_WAIT_MS, true);
+    else setMessage(NOT_ANSWERING, KARAOKE_WAIT_MS, true);
     drawMessage();
 }
 
@@ -3163,6 +3214,30 @@ static void shotTick() {
     }
 }
 
+// Every 250 ms from loop(): the link to the black deck and its GPS as the header's tags show them
+// (redrawn on a change, on the Menu), and their messages (decklink::Tracker). The deck always
+// boots unlinked: for the first LINK_MS that isn't a state (a deck that links by then says
+// nothing). The boot's ">LAST TRIP" keeps its 6 s: a link message that comes then is dropped.
+static void linkTick() {
+    static uint32_t at = 0;
+    const uint32_t now = millis();
+    if (now - at < 250) return;
+    at = now;
+    const bool up = decklink::linked(deckHeardAt, now);
+    const decklink::Gps g = decklink::shown(up, static_cast<decklink::Gps>(deckGps));
+    if (up != deckShown || g != gpsShown) {
+        deckShown = up;
+        gpsShown = g;
+        if (screen == Screen::Menu) drawHeaderRight();
+    }
+    if (!up && now < decklink::LINK_MS) return;
+    static decklink::Tracker tracker;
+    const char* m = tracker.update(up, g, now, notAnsweringAt);
+    if (!m || (message[0] && messageMs > MESSAGE_MS && millis() - messageAt < messageMs)) return;
+    setMessage(m);
+    drawMessage();
+}
+
 void loop() {
     shotTick();
     // Up bootguard::HEALTHY_MS and online at that moment (ota::onGoodPoll checks the time; with
@@ -3279,7 +3354,7 @@ void loop() {
             else lightstatus::linkChange(i == 0, up, m, sizeof(m));
             // the boot's ">LAST TRIP" has its 6 s: a link change doesn't cut it short (the lights still redraw)
             if (!(message[0] && messageMs > MESSAGE_MS && millis() - messageAt < messageMs)) setMessage(m);
-            drawLightState();  // STATUS on Lights (the message too), the lights band on the Menu: NO LINK while it's gone
+            drawLightState();  // the prompt line on Lights (the message too), the lights panel on the Menu: NO LINK while it's gone
             if (screen == Screen::Menu) drawMessage();
         }
     }
@@ -3288,6 +3363,7 @@ void loop() {
         drawMessage();
     }
     karaokeAnswerTick();
+    linkTick();
     updateTheme();  // a backstop: every path above has already called it
     publish();  // for /state and /status
     delay(10);
