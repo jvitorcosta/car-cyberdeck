@@ -583,16 +583,16 @@ static int textMarked(const char* s, int x, int y, Face f, uint8_t datum) {
 static uint16_t c565(uint32_t rgb) { return tft.color565(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF); }
 #ifdef NIGHT_TEST
 // The night tuner's palette (see tuneLine): each theme's night colours (index theme + 1), live.
-static uint32_t tuned[9][5];
+static uint32_t tuned[10][5];
 static bool tunedReady = false;
 static uint32_t tunedRgb(termpal::Role r) {
     if (!tunedReady) {
-        for (int t = -1; t < 8; t++) {
+        for (int t = -1; t < 9; t++) {
             for (int k = termpal::BG; k <= termpal::ALERT; k++) tuned[t + 1][k] = termpal::rgb(static_cast<termpal::Role>(k), t, true);
         }
         tunedReady = true;
     }
-    return tuned[theme < -1 || theme > 7 ? 0 : theme + 1][r];
+    return tuned[theme < -1 || theme > 8 ? 0 : theme + 1][r];
 }
 static uint16_t pal(termpal::Role r) { return c565(tunedRgb(r)); }  // vivid day and night
 #else
@@ -2924,7 +2924,7 @@ static int wantTheme() {
     return THEME_TEST;
 #else
     const Look l = shownLook(0);  // in music mode the song's swatch
-    return l.lit ? ledlook::gridSwatch(l.swatch) : -1;  // cyan: blue's
+    return l.lit ? static_cast<int>(l.swatch) : -1;  // cyan its own theme (termpal), not blue's
 #endif
 }
 
@@ -3024,8 +3024,8 @@ static void tuneLine(const char* s) {
         theme = -3;  // forces updateTheme's repaint, also when the theme is already shown
     } else if (cmd == 'T') {
         if (strchr(s, 'X')) tuneTheme = -2;
-        else if (n >= 2 && t >= -1 && t < 8) tuneTheme = t;
-        else tuneTheme = theme >= 7 ? -1 : theme + 1;
+        else if (n >= 2 && t >= -1 && t < 9) tuneTheme = t;
+        else tuneTheme = theme >= 8 ? -1 : theme + 1;
         Serial.printf("[tune] theme %d\n", tuneTheme);
     } else if (cmd == 'B' && n >= 2) {
         nightBacklight = t < 0 ? 0 : t > 255 ? 255 : t;
