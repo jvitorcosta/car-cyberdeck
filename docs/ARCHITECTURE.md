@@ -9,7 +9,7 @@ Code the decks share lives in `src/common/` and `src/util/`. See [HISTORY.md](HI
 ```
 Spotify, LRCLIB, iTunes, PokéAPI (HTTPS)
                |
-        +-------------+ GET /music, /karaoke (signed)  +-------------+   BLE    +-----------------+
+        +-------------+ GET /link, /music, /karaoke    +-------------+   BLE    +-----------------+
         | black deck  | <----------------------------- | yellow deck | -------> | 2 LED controllers|
         | ESP32-S3    |                                | ESP32 CYD   | <------- | PS3 controller  |
         | env s3      | -----------------------------> | env ledpanel|   BLE    +-----------------+
@@ -44,7 +44,7 @@ UDP sender (`audio/musicsvc`, started on demand), the update listener (`net/ota`
 boot the boot scene and intro video (core 1) and the one-shot sound task.
 
 Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, both public;
-`GET /state`, `GET /music`, `GET /karaoke`, `GET /playlists` and `GET /playlists/play`, which take
+`GET /state`, `GET /link`, `GET /music`, `GET /karaoke`, `GET /playlists` and `GET /playlists/play`, which take
 `k=<REMOTE_TOKEN>` or a signature (see [Between the devices](#between-the-devices)); and `POST /play?clip=howl`, `POST /trip/reset` and
 `GET /music/debug`, which take `k=` only.
 
@@ -209,6 +209,14 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
   `[music]` serial line tells each palette sent for a new song or a change.
+- **Link to the yellow deck** (`net/remote`, `util/common/decklink`, `ui/camband`, `ui/icon_map`) —
+  `GET /link` (signed) answers `gps=1` or `gps=0`: whether `car/camsvc` has a GPS fix (the stage
+  isn't NoFix). `/link`, `/music` and `/karaoke` count as hearing the yellow deck
+  (`remote::yellowHeardAt`), `/playlists/play` doesn't (the watch sends it too); linked is a valid
+  ask within 15 s (`decklink::linked`). While no camera alert shows, the top strip's middle has
+  the GPS pin and beside it the link icon (two screens and a cable, struck through when not
+  linked); the karaoke view, with no strip, has `GPS` / `DECK` at its song row's right instead
+  (`ui::drawKaraokeTags`), the artist cut to make room.
 - **Karaoke view** (`core/karaoke`, `ui/karaokeview`, `util/black/karaokepick`,
   `util/black/karaokemode`, `util/black/karaokepal`, `util/black/lyricface`) — `GET
   /karaoke?on=1|0` (with `light=N` on `on=1`, the yellow deck's INSIDE light: `karaokemode::parseLight`,
@@ -246,7 +254,7 @@ One file, `src/yellow/ledpanel.cpp`, with its touch layer (`yellow/touch`), font
 | `loop()` | 1 | owns the screen and the lights' state: touch (`util/{touchcal,touchmap,touchguard,tapguard}`), the PS3 controller's input (`Ps3.data`, written by the Bluetooth task), the IR remote's keys (`lib/irrx` over IRremote, NEC only, on GPIO 27; `util/yellow/irkeys`), the screens (Menu, Lights: `util/deckmenu`, `yellow/ui/termlayout`), voice jobs from the server, music mode's looks, the theme (`util/termpal`), night (`util/daynight`, `ui/backlight`; the screen is in `util/termpal`'s night palette all day), saves to NVS |
 | `leds-link` | 0 | connects the two LED controllers (`yellow/elklink` on Bluedroid's GATT client, sharing the stack with the PS3 controller's Bluetooth Classic; service FFF0, characteristic FFF3, written by handle; frames from `util/elkcmd`) in rounds 5 s apart, doubling to 60 s while one is missing. The PS3 controller connects by itself (PS button) |
 | `voice` | 1, idle | joins WiFi (`net/wifi`), then the web server: `/say`, `/state`, `/presets`, `/status`; a `/say` goes to `loop()` through a one-slot queue with a sequence number, and the handler waits for its reply |
-| `deck` | 1, idle | 6 KB of stack; sends the black deck its keep-alives: `GET /music?on=1` while music mode is on and `GET /karaoke?on=1` while the KARAOKE switch is on, each every 10 s (`on=0` once when switched off); and an IR remote's music key: `GET /playlists/play?id=..&shuffle=1`, waiting up to 16 s, the last press winning. It reads nothing else from the black deck |
+| `deck` | 1, idle | 6 KB of stack; sends the black deck its keep-alives: `GET /music?on=1` while music mode is on and `GET /karaoke?on=1` while the KARAOKE switch is on, each every 10 s (`on=0` once when switched off); the link check `GET /link` every 5 s whatever else it asks; and an IR remote's music key: `GET /playlists/play?id=..&shuffle=1`, waiting up to 16 s, the last press winning. Every valid answer stamps the link (`deckAnswered`, `util/common/decklink`) |
 | `music` | 1, idle | while music mode is on: a UDP socket on port 4210 that takes the black deck's signed palettes (`util/wire/musicwire`) |
 
 The deck does lights, the karaoke switch, music mode and the watch's routes only: Bluedroid's dual mode
@@ -258,10 +266,18 @@ OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks
   swatch, a level and on/off. The swatch table (`ledlook::SWATCHES`) holds each colour's LED mix
   and screen colour: the grid's eight, then the preset-only cyan. Presets: `util/ledpresets`.
   Voice: `util/ledvoice`. Replies and link words: `util/lightstatus`.
-- **Main screen** (`util/dashtext`, `util/tripmeter`, `util/lights/tripclock`): one row of the
-  clock and date and the trip's time, both lights (a block of each one's colour, its name and level
-  in TITLE), the prompt line and three tall items (`[LIGHTS]`, and the KARAOKE and MUSIC MODE
-  switches, each with an ON / OFF tag).
+- **Main screen** (`util/dashtext`, `util/tripmeter`, `util/lights/tripclock`; layout B): the
+  header with the `GPS` / `DECK` link tags and the pad's battery, one row of the clock and date and
+  the trip's time, the lights panel (the LIGHTS button: a block of each light's colour, its name
+  and level in TITLE, `LIGHTS >`), and the KARAOKE and MUSIC MODE switches side by side, each with
+  an ON / OFF tag.
+- **Prompt line**: every screen's bottom row (`deckmenu::PROMPT_BAND`, under a rule at y 219): a
+  message while one shows, else the main screen's `>` or music mode's line, Lights' link state
+  (`>LINK 2/2`), the touch calibration's steps; the block cursor after it.
+- **Link to the black deck** (`util/common/decklink`): linked while a valid answer came within
+  15 s; `GET /link`'s body carries the GPS's fix. The header's tags show both, and
+  `decklink::Tracker` turns their changes into prompt-line messages (`>DECK: NO LINK`,
+  `>GPS: NO FIX`; silent for the first state and right after `>BLACK DECK NOT ANSWERING`).
 - **Karaoke** (the switch only): an on/off state flipped by a tap, the PS3 controller's cross,
   voice or the watch (`util/ledvoice`), not kept over a reboot. The `deck` task sends
   `GET /karaoke?on=1&light=N` (the INSIDE light's shown swatch, the one its own theme takes; -1 while it is off) at once, every
@@ -325,6 +341,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
 
 | From → to | What | Contract |
 |---|---|---|
+| yellow → black | `GET /link` every 5 s (signed); the body is `gps=1` / `gps=0`. Each deck counts the link as up while a valid exchange came within 15 s | `net/remote`, `util/common/decklink` |
 | yellow → black | `GET /karaoke?on=1` / `on=0` (signed; a keep-alive every 10 s while on, 30 s without one turns it off) | `net/remote`, `util/black/karaokemode`; the screen per song is `util/black/karaokepick`, from `util/wire/lyricstatus` |
 | yellow → black | `GET /music?on=1` / `on=0` (signed); the reply proves the black deck's boot id for the request's nonce | `audio/musicsvc`, `util/wire/musicwire::readBoot` |
 | black → yellow | UDP port 4210: the song's palette (v2: boot id, rising counter, 8-byte HMAC tag) | `util/wire/musicwire`, `util/wire/songpalette`; the colour is `util/black/songmood`'s |
@@ -389,7 +406,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
   - `lights/` (the LED domain, both decks): hue, ledlook, musiclights, tripclock
   - `car/` (the car health check: the OBD deck):
     carhealth, carwire, fuelbook, fueleco, healthview, obd, obdble, obdpick, obdplan, triplog, tripsum
-  - `common/` (both decks): bootguard, daynight, hotspotip, jsonflat, jsonpath, netdiag, netup,
+  - `common/` (both decks): bootguard, daynight, decklink, hotspotip, jsonflat, jsonpath, netdiag, netup,
     otaview, readguard, remotegate, rgb565, roam, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
     genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,

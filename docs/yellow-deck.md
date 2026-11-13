@@ -25,8 +25,9 @@ controllers' addresses with `blescan`, fill `src/config.h` (`LED_INSIDE_MAC`, `L
 `WIFI_NETWORKS`, `TIMEZONE`, `REMOTE_TOKEN`, `BLACK_DECK_ADDR`), flash
 `pio run -e ledpanel -t upload` over USB (every update goes this way), then:
 
-- **Touch calibration.** The first boot shows "Touch calibration": tap the five crosses with the
-  pen. The fit is kept in NVS, through reboots and updates. Hold **BOOT** at power-up, or for 2 s
+- **Touch calibration.** The first boot shows `TOUCH CALIBRATION` in the terminal look: tap each
+  red cross with the pen (it turns green once tapped); the prompt line at the bottom says what to do,
+  then `>CALIBRATED` or `>MISSED A CROSS - AGAIN`. The fit is kept in NVS, through reboots and updates. Hold **BOOT** at power-up, or for 2 s
   at any time, to run it again.
 - **PS3 controller** (DualShock 3, Bluetooth Classic): it connects to the address stored in it,
   so write the deck's there once over USB (the boot log's `[pad] deck address`, with
@@ -52,43 +53,47 @@ labels. Day and night the screen is in the vivid colours of [Night](#night) (eac
 full saturation; the paler day colours, which clear 4.5:1 on black, looked dull and are not used);
 `src/util/common/termpal.h` lists each one's figure.
 
+- **Every screen** ends in the **prompt line**, like a terminal: a thin rule along the bottom, then
+  `>` and a block cursor. A message shows there while one is up (see Messages below); otherwise on
+  the main screen music mode's line or just `>`, and on Lights the lights' link state.
 - **Main screen**, top to bottom; it puts first what the car's panel and CarPlay don't show:
-  - the header `HONDA CITY TOURING`, with the PS3 controller's battery at the right;
+  - the header `HONDA CITY TOURING`, with the link tags `GPS` and `DECK` and the PS3 controller's
+    battery at the right (see [Link to the black deck](#link-to-the-black-deck));
   - one row: the clock with the date after it (`FRI 23 OCT`; `--:--` until WiFi has synced the
     clock), and on the right `TRIP` (dim) and the trip's time (`0:16`, hours:minutes since the deck
     started);
-  - both lights, big enough to read at a glance: on the left a block of the inside light's colour,
+  - the **lights panel**, an outlined box across the screen and a button: tap it (`LIGHTS >` at its
+    bottom right) to open the Lights page. On the left a block of the inside light's colour,
     `INSIDE` and under it its name and level in large type (`ROSE 40%`), the outside light the same
     on the right; an outlined block and `OFF` (dim) for a light that is off, `-- NO LINK` (red) and
     no block when the deck has no link to it;
-  - the prompt line: `>` and a block cursor; a message while one shows, and music mode's line
-    while it is on;
-  - three tall buttons filling the bottom half, easy to hit while driving: `[LIGHTS]` opens the
-    Lights page; `KARAOKE` and `MUSIC MODE` are on/off switches, each with an inverted `ON` / `OFF`
-    tag at its bottom right. KARAOKE shows the black deck's
-    lyrics on its own screen (see [Karaoke](#karaoke)). The deck shows no song or lyrics itself.
-- **Lights**: `< BACK` returns to the main screen. Tabs for BOTH / INSIDE / OUTSIDE / PRESETS,
-  then the status line. On BOTH, INSIDE and OUTSIDE: the 2x4 colour boxes (the chosen one is
+  - two wide switches side by side, `KARAOKE` and `MUSIC MODE`, each with an inverted `ON` / `OFF`
+    tag at its bottom right. KARAOKE shows the black deck's lyrics on its own screen (see
+    [Karaoke](#karaoke)). The deck shows no song or lyrics itself;
+  - the prompt line.
+- **Lights**: `< BACK` returns to the main screen. Tabs for BOTH / INSIDE / OUTSIDE / PRESETS.
+  On BOTH, INSIDE and OUTSIDE: the 2x4 colour boxes (the chosen one is
   inverted) and a 10-cell level bar with `-` / `+` (labelled with the %, `MIX` or `OFF`). Tap a
   tile to set the colour and turn on; double-tap the lit one to turn off. On **PRESETS**: the six
   presets as big buttons, two rows of three, each its name over its inside and outside chips; a
-  tap applies it (`>ROSE APPLIED`). The page last shown is kept over a reboot, and `[LIGHTS]`
-  opens on it.
+  tap applies it (`>ROSE APPLIED`). The page last shown is kept over a reboot, and the lights
+  panel opens on it.
 - **BOTH while the lights differ** (after a preset like ROSE, or after the INSIDE / OUTSIDE
   pages): no tile is ringed and the level box says `MIX`. On/off and `-` / `+` act on each
   light's own look; a spoken level ("50%") sets both to that level and keeps each colour; a colour
   sets both lights to it.
-- **Status line**: `LINK 2/2` while the deck holds both lights; when one is down, in red,
-  `OUTSIDE: NO LINK`, `INSIDE: NO LINK`, or `NO LINK` for both. What the deck shows as on is what
-  it last sent while connected: the controllers can't be read back.
-- **Messages**: a terminal line on the prompt line (on Lights: in place of the status line) for
-  2.5 s when something happens: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED`,
-  `>MUSIC ON`, `>KARAOKE ON`, and at boot the trip before (`>LAST TRIP 12.4 KM 0:47`; 6 s).
+- **Lights' prompt line**, with no message up: `>LINK 2/2` while the deck holds both lights; when
+  one is down, in red, `>OUTSIDE: NO LINK`, `>INSIDE: NO LINK`, or `>NO LINK` for both. What the
+  deck shows as on is what it last sent while connected: the controllers can't be read back.
+- **Messages**: a terminal line on the prompt line, on every screen, for 2.5 s when something
+  happens: `>ROSE APPLIED`, `>INSIDE: NO LINK`, `>OUTSIDE: LINKED`, `>MUSIC ON`, `>KARAOKE ON`,
+  `>DECK: NO LINK`, `>GPS: NO FIX`, and at boot the trip before (`>LAST TRIP 12.4 KM 0:47`; 6 s).
 - **Taps**: a pressed button is the solid bar with a ring cut into it. After a screen or page
   change the deck waits for the finger to lift and a quarter second to pass, so a double tap on
-  `[LIGHTS]` can't press a button on the next screen.
-- **PS3 controller**: the D-pad moves the focus (an inverted bar on the main screen's buttons, a
-  ring on Lights), **cross** presses (on KARAOKE or MUSIC MODE it flips the switch), **circle** goes back to the main screen. On Lights only:
+  the lights panel can't press a button on the next screen.
+- **PS3 controller**: the D-pad moves the focus (an inverted bar on the main screen's buttons,
+  the lights panel too with its colour blocks kept; a ring on Lights; up and down go between the
+  panel and the switches), **cross** presses (on KARAOKE or MUSIC MODE it flips the switch), **circle** goes back to the main screen. On Lights only:
   **square** next page (BOTH, INSIDE, OUTSIDE, PRESETS, round again). The focus shows only while a
   controller is connected.
 - **PS3 shortcuts**, on any screen, for both lights: **START** on / off, **SELECT** music mode on /
@@ -130,6 +135,23 @@ idle, the black deck starts the music on your phone.
 To see what the receiver gets from any remote, flash the `irtest` env: it shows each frame's
 protocol, address and command on the screen and in the log. The effects' modes are found with
 the `ledpanel_probe` env (JUMP3 / JUMP7 step the mode, FADE3 sends it).
+
+## Link to the black deck
+
+The header's `GPS` and `DECK` tags say whether the yellow deck reaches the black deck, and whether
+the GPS (the iPhone's location, which the black deck's speed-camera alerts run on) has a fix. The
+yellow deck asks the black deck's `GET /link` every 5 s, whatever else it asks; any valid answer
+from it (`/link`, `/music`, `/karaoke`, a playlist) within the last 15 s counts as linked.
+
+- `DECK` green while linked; red and struck through when the black deck hasn't answered in 15 s.
+- `GPS` green with a fix; red and struck through without one; dim while there's no link (the
+  yellow deck only knows the GPS through the black deck).
+- A change shows on the prompt line: `>DECK: LINKED`, `>DECK: NO LINK`, `>GPS: FIX`,
+  `>GPS: NO FIX`. The first state after boot says nothing, and `>DECK: NO LINK` is skipped right
+  after `>BLACK DECK NOT ANSWERING` (it said so already).
+
+The black deck shows the same link as a small icon (two screens and a cable) beside its GPS pin,
+and in karaoke as `GPS` / `DECK` at the song row's right.
 
 ## Karaoke
 
