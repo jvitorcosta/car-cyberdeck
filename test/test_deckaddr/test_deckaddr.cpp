@@ -65,6 +65,36 @@ void test_a_found_address_that_misses_goes_back_to_the_fixed_one() {
     TEST_ASSERT_TRUE(k.tryFixed());
 }
 
+void test_the_last_address_outlives_a_forget() {
+    deckaddr::Keep k;
+    TEST_ASSERT_EQUAL_UINT32(0, k.last());
+    k.found(0x0D64A8C0);
+    for (int i = 0; i < deckaddr::MISSES; i++) k.onPoll(false);
+    TEST_ASSERT_EQUAL_UINT32(0, k.addr());         // forgotten: the name is looked up again
+    TEST_ASSERT_EQUAL_UINT32(0x0D64A8C0, k.last()); // but kept for when the lookup finds nothing
+}
+
+void test_a_saved_address_is_the_last_one_at_boot() {
+    deckaddr::Keep k;
+    k.remember(0x0D64A8C0);
+    TEST_ASSERT_EQUAL_UINT32(0, k.addr());
+    TEST_ASSERT_EQUAL_UINT32(0x0D64A8C0, k.last());
+    k.found(0x0E64A8C0);
+    TEST_ASSERT_EQUAL_UINT32(0x0E64A8C0, k.last());
+}
+
+void test_it_searches_until_an_address_is_known() {
+    deckaddr::Keep k;
+    TEST_ASSERT_TRUE(k.searching());               // nothing found, nothing saved: look in the background
+    k.found(0x0D64A8C0);
+    TEST_ASSERT_FALSE(k.searching());
+    k.forget();
+    TEST_ASSERT_FALSE(k.searching());              // the last address is there to ask
+    deckaddr::Keep saved;
+    saved.remember(0x0D64A8C0);
+    TEST_ASSERT_FALSE(saved.searching());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_keeps_the_address_through_two_misses);
@@ -73,5 +103,8 @@ int main() {
     RUN_TEST(test_hotspot_falls_back_to_the_name);
     RUN_TEST(test_a_valid_answer_keeps_the_fixed_address);
     RUN_TEST(test_a_found_address_that_misses_goes_back_to_the_fixed_one);
+    RUN_TEST(test_the_last_address_outlives_a_forget);
+    RUN_TEST(test_a_saved_address_is_the_last_one_at_boot);
+    RUN_TEST(test_it_searches_until_an_address_is_known);
     return UNITY_END();
 }

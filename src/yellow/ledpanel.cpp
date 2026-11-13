@@ -2063,18 +2063,45 @@ static bool deckHost(char* out, size_t n) {
         return true;
     }
     mdnsUp();
+    // The address the name was last found at off the hotspot, kept in NVS over a reboot ("deck",
+    // its own namespace: loop() keeps "leds" open). Next to Bluetooth the mDNS answer is often
+    // lost, and at home the black deck keeps its address, so that's where it is asked then.
+    static bool savedRead = false;
+    if (!savedRead) {
+        savedRead = true;
+        Preferences p;
+        if (p.begin("deck", false)) {  // read-write: on the first boot it makes the namespace (read-only logs NOT_FOUND)
+            deckAddr.remember(p.getUInt("addr", 0));
+            p.end();
+        }
+    }
     if (deckAddr.addr() == 0) {
         const uint32_t now = millis();
         if (lookedUp && now - lookedUpAt < LOOKUP_GAP_MS) return false;
         lookedUp = true;
         lookedUpAt = now;
-        const IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
+        IPAddress a = MDNS.queryHost(DECK_MDNS_NAME, 1500);
+        if (static_cast<uint32_t>(a) == 0) a = MDNS.queryHost(DECK_MDNS_NAME, 1500);  // once more: a lost answer
         if (static_cast<uint32_t>(a) == 0) {
-            deckAddr.lookupFailed();  // on the hotspot: the fixed address again
-            return false;
+            if (hot || deckAddr.last() == 0) {
+                deckAddr.lookupFailed();  // on the hotspot: the fixed address again
+                return false;
+            }
+            deckAddr.found(deckAddr.last());  // its misses forget it, and the name is looked up again
+            Serial.printf("[karaoke] deck's name not found: asking its last address %s\n",
+                          IPAddress(deckAddr.addr()).toString().c_str());
+        } else {
+            const uint32_t was = deckAddr.last();
+            deckAddr.found(static_cast<uint32_t>(a));
+            Serial.printf("[karaoke] deck found at %s (mDNS%s)\n", a.toString().c_str(), hot ? ", off its fixed address" : "");
+            if (!hot && was != static_cast<uint32_t>(a)) {
+                Preferences p;
+                if (p.begin("deck", false)) {
+                    p.putUInt("addr", static_cast<uint32_t>(a));
+                    p.end();
+                }
+            }
         }
-        deckAddr.found(static_cast<uint32_t>(a));
-        Serial.printf("[karaoke] deck found at %s (mDNS%s)\n", a.toString().c_str(), hot ? ", off its fixed address" : "");
     }
     snprintf(out, n, "%s", IPAddress(deckAddr.addr()).toString().c_str());
     return true;
@@ -2085,11 +2112,11 @@ static bool deckHost(char* out, size_t n) {
 static constexpr int NOT_SIGNED = -1000;
 
 // Only the deck task asks the black deck (/music, /karaoke), under deckLock all the same: the address
-// keeping (deckHost, deckAddr) stays one asker's at a time if another comes. The longest hold is an
-// mDNS query and a GET (1.5 s, then 1.5 s and the body's 3 s): DECK_LOCK_MS waits that out, then
+// keeping (deckHost, deckAddr) stays one asker's at a time if another comes. The longest hold is a
+// name lookup and a GET (two 1.5 s mDNS queries, then 1.5 s and the body's 3 s): DECK_LOCK_MS waits that out, then
 // counts as no answer.
 static SemaphoreHandle_t deckLock = nullptr;  // beginVoice makes it, before any asker starts
-static constexpr uint32_t DECK_LOCK_MS = 7000;
+static constexpr uint32_t DECK_LOCK_MS = 9000;
 
 // A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
 // body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
@@ -2132,6 +2159,25 @@ static int deckGet(const char* path, const sigreq::Param* params, int count, cha
     const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce, timeoutMs);
     xSemaphoreGive(deckLock);
     return rc;
+}
+
+// From the deck task: until an address is found or saved, look the name up every SEARCH_GAP_MS
+// off the hotspot, so the first press has one to ask (next to Bluetooth most lookups find nothing;
+// one that does is saved for every boot after).
+static constexpr uint32_t SEARCH_GAP_MS = 20000;
+static void deckSearch() {
+    static uint32_t at = 0;
+    const uint32_t now = millis();
+    if (now - at < SEARCH_GAP_MS || !net::isOnline()) return;
+    at = now;
+    if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask())))
+        return;
+    if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return;
+    if (deckAddr.searching()) {
+        char host[16];
+        deckHost(host, sizeof(host));
+    }
+    xSemaphoreGive(deckLock);
 }
 
 // An asker's verdict on the address it asked (deckAddr: 3 misses in a row, look it up again),
@@ -2279,6 +2325,7 @@ static void deckTask(void*) {
             irPlaylistBusy.store(-1);
         }
         keepAlive(music, musicWant);
+        deckSearch();
         // want before taps: setKaraoke counts the tap first, so a switch on seen here is counted
         static keepalive::Confirm confirm;
         static uint32_t seenTaps = 0;
