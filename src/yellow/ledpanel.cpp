@@ -470,11 +470,13 @@ static_assert(static_cast<int>(deckmenu::TAB_BOTH) == BOTH && static_cast<int>(d
 
 static bool built(int id) { return deckmenu::rect(screen, id).w > 0; }
 
-// The button the PS3 controller points at; -1 while none is connected. On the Menu it is drawn as
-// an inverted bar, on Lights as a TEXT ring around the button (the lit colour is the bar there).
+// The button the PS3 controller points at; -1 while none is connected. On the Menu the switches
+// draw it as an inverted bar and the lights panel as a 2 px TEXT outline (an inverted panel would
+// hide the lights), on Lights as a TEXT ring around the button (the lit colour is the bar there).
 static int focus = -1;
 static bool padUp = false;  // a PS3 controller is connected
 static void drawFocus(int id, bool on);
+static void drawPanel(const deckmenu::Rect& r, bool pressed, bool focused);
 
 // Where the focus starts on each screen: the first item, the first preset, or the colour the page
 // shows (blue for cyan, which has no tile).
@@ -487,8 +489,7 @@ static int homeFocus() {
 // ---- Drawing ----
 // The lettering is VT323, a CRT terminal font, 1-bit at four sizes named by role (ui/termfont:
 // SMALL, BODY, TITLE, BIG); where each label goes so it fits is ui/termlayout's, which
-// test_termfont checks. Every label is upper case. The touch calibration
-// screens keep TFT_eSPI's built-in fonts.
+// test_termfont checks. Every label is upper case, the touch calibration's too.
 // The background is black with a faint scanline on every 3rd screen row: every clear goes through
 // clearBg(), which repaints a rect's lines on absolute rows, so a partial redraw stays aligned.
 // Text over it is drawn transparent (free fonts always are: no black box punching through the
@@ -651,12 +652,10 @@ static void drawChrome(const Rect& r, const char* s, Face f, bool pressed, bool 
     text(s, r.x + r.w / 2, r.y + r.h / 2, f, MC_DATUM);
 }
 
-// A Menu item ("[LIGHTS]"): a MID outline (it stands among the dashboard's text), the text top left;
-// the inverted bar when focused. Only the PS3 controller focuses (focus is -1 without it), so
-// without one the items look alike and the clock and the lights band lead. `tag` (KARAOKE's and
-// MUSIC MODE's ON / OFF; nullptr for none): under the text at the right edge, an
-// inverted mini-label in the text's ink with the ground's colour for letters (TEXT, not ALERT: red
-// is for problems).
+// A Menu switch (KARAOKE, MUSIC MODE): a MID outline (it stands among the dashboard's text), the
+// label at the left, centred top to bottom; the inverted bar when focused. Only the PS3 controller
+// focuses (focus is -1 without it). `tag` (ON / OFF): bottom right, an inverted mini-label in the
+// text's ink with the ground's colour for letters (TEXT, not ALERT: red is for problems).
 static void drawRow(const Rect& r, const char* s, bool pressed, bool inverted, const char* tag) {
     const uint16_t ink = drawBox(r, pressed, inverted, 1, pal(termpal::TEXT));
     tft.setTextColor(ink);
@@ -741,6 +740,10 @@ static void drawButtonBody(int id, bool pressed) {
     if (r.w <= 0) return;
     if (screen == Screen::Menu) {
         static_assert(N_MENU_ITEMS == deckmenu::N_ITEMS, "a label per Menu item");
+        if (id == M_ITEM0 + deckmenu::LIGHTS) {
+            drawPanel(r, pressed, id == focus);
+            return;
+        }
         const char* tag = nullptr;
         if (id == M_ITEM0 + deckmenu::KARAOKE) tag = karaokeOn ? ON_TAG : OFF_TAG;
         else if (id == M_ITEM0 + deckmenu::MUSIC) tag = musicOn ? ON_TAG : OFF_TAG;
@@ -767,8 +770,9 @@ static void drawButton(int id, bool pressed = false) {
     if (id == focus) drawFocus(id, true);  // on Lights its ring hugs the rect just drawn over
 }
 
-// The block bar: 10 cells, one filled per 10 % (the terminal's full block), the rest outlined (its
-// shade block; the font's ASCII table has neither glyph), and the % under it (TITLE), "OFF" in DIM
+// The block bar (38 px LEVEL, over the prompt line): 10 cells near the top, one filled per 10 % (the
+// terminal's full block), the rest outlined (its shade block; the font's ASCII table has neither
+// glyph), and the % under it (TITLE), "OFF" in DIM
 // when off. On BOTH while the lights differ the bar is the inside light's and the line has both
 // levels when they differ ("IN 60%  OUT 40%", SMALL: TITLE doesn't fit the 108 px rect).
 static void drawLevel() {
@@ -783,19 +787,19 @@ static void drawLevel() {
     const int x0 = r.x + (r.w - (N_CELL * (CELL + GAP) - GAP)) / 2;
     for (int k = 0; k < N_CELL; k++) {
         const int x = x0 + k * (CELL + GAP);
-        if (k < full) tft.fillRect(x, r.y + 7, CELL, 14, pal(termpal::TEXT));
-        else tft.drawRect(x, r.y + 7, CELL, 14, pal(live ? termpal::MID : termpal::DIM));
+        if (k < full) tft.fillRect(x, r.y + 5, CELL, 10, pal(termpal::TEXT));
+        else tft.drawRect(x, r.y + 5, CELL, 10, pal(live ? termpal::MID : termpal::DIM));
     }
     char line[24];
     if (mixed) bothlook::levelText(looks[INSIDE], looks[OUTSIDE], line, sizeof(line));
     else bothlook::levelText(l, l, line, sizeof(line));
     tft.setTextColor(pal(live ? termpal::TEXT : termpal::DIM));
     const bool both = strchr(line, ' ') != nullptr;  // "IN 60%  OUT 40%"
-    text(line, r.x + r.w / 2, r.y + 34, both ? Face::SMALL : Face::TITLE, MC_DATUM);
+    text(line, r.x + r.w / 2, r.y + 26, both ? Face::SMALL : Face::TITLE, MC_DATUM);
 }
 
-// A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") in place of the Lights page's STATUS
-// line, or on the Menu's prompt line (in place of ">" or music mode's line), for MESSAGE_MS since
+// A terminal message (">ROSE APPLIED", ">INSIDE: NO LINK") on the prompt line, every screen's
+// bottom row (in place of its idle line: ">", music mode's, Lights' link state), for MESSAGE_MS since
 // messageAt; loop() then puts the usual line back. A newer message replaces it, and so does a screen
 // change (show() drops it), so none outlives its screen. Only loop() touches it (and setup(), before
 // loop() starts).
@@ -808,7 +812,7 @@ static uint32_t messageAt = 0;
 static uint32_t messageMs = MESSAGE_MS;
 static bool messageAlert = false;  // drawn in ALERT whatever it says (the car's warnings)
 
-// Sets the message; the caller redraws what shows it (drawMessage, or drawStatus on Lights).
+// Sets the message; the caller redraws what shows it (drawMessage).
 static void setMessage(const char* m, uint32_t ms = MESSAGE_MS, bool alert = false) {
     snprintf(message, sizeof(message), "%s", m);
     messageAt = millis();
@@ -816,28 +820,12 @@ static void setMessage(const char* m, uint32_t ms = MESSAGE_MS, bool alert = fal
     messageAlert = alert;
 }
 
-// Lights: the line under the tabs, just the link state ("LINK 2/2" in TEXT; "OUTSIDE: NO LINK",
-// "INSIDE: NO LINK" or "NO LINK" in ALERT), or the message. SMALL, sat on the rect's bottom: STATUS
-// has 12 rows (40..51) between the tab rule (39) and the colours, and SMALL's "/" is 12 rows tall
-// (BODY's would need 15), so the line fills them with no margin: "/" starts the row under the rule.
-// Rows 52-53 can't give it room, as a top-row colour's focus ring is drawn there. The clear (the
-// rect) covers all its ink: the line and the messages are capitals, digits and "% / : - >", none
-// below the baseline (test_termfont checks).
-static void drawStatus() {
-    const Rect& r = deckmenu::STATUS;
-    char line[24];
-    const bool down = lightstatus::link(linkUp(controllers[0]), linkUp(controllers[1]), line, sizeof(line));
-    clearBg(r);
-    tft.setTextColor(message[0] ? msgInk(message, messageAlert) : pal(down ? termpal::ALERT : termpal::TEXT));
-    text(message[0] ? message : line, r.x + STATUS_TEXT_X, r.y + r.h, Face::SMALL, BL_DATUM);
-}
-
-// ---- The Menu: a dashboard of stacked bands ----
+// ---- The Menu: a dashboard of stacked bands (layout B) ----
 // Top to bottom (termlayout places them, test_termfont checks they fit): the header line; one row of
-// the clock and the date left, the trip's time right; both lights, each a block of its colour with
-// its name and level; the prompt line (a message, music mode's line, or just ">") with its block
-// cursor; the three tall items at the bottom. A MID rule under each band but the
-// prompt line. Each part clears and draws its own rows, so it is redrawn alone when what it shows
+// the clock and the date left, the trip's time right, each under a MID rule; the lights panel (the
+// LIGHTS button: both lights, each a block of its colour with its name and level); the two switches
+// (KARAOKE, MUSIC MODE); the prompt line at the bottom (a message, music mode's line, or just ">")
+// with its block cursor. Each part clears and draws its own rows, so it is redrawn alone when what it shows
 // changes: the clock each minute, the weather on a new reading, the trip when its minute or its
 // tenth of a km moves, the lights on a look or link change, the prompt line when a message comes or
 // goes or music mode's line changes, the cursor's cell on a blink.
@@ -916,16 +904,27 @@ static void drawTripTime() {
     text(TRIP_LABEL, DASH_RIGHT - termfont::width(Face::TITLE, s) - CLOCK_GAP, WORDS_Y, Face::SMALL, TR_DATUM);
 }
 
-// The lights band, cleared between its rules and drawn again: INSIDE left of a vertical MID rule,
-// OUTSIDE right of it, each a block of its colour, its label (SMALL, MID) and under it what
-// lightstatus::of says of it (LIGHT_VALUE_FACE): on, the block filled and "ROSE 40%" (TEXT); off, a
-// DIM outlined block and OFF in DIM; no link, "-- NO LINK" in ALERT and no block (never its last
-// look: the deck can't tell what a light it has lost shows).
+// The lights panel, the Menu's LIGHTS button (a tap opens the Lights screen): a MID outline, INSIDE
+// left of a vertical MID rule, OUTSIDE right of it, each a block of its colour, its label (SMALL,
+// MID) and under it what lightstatus::of says of it (LIGHT_VALUE_FACE): on, the block filled and
+// "ROSE 40%" (TEXT); off, a DIM outlined block and OFF in DIM; no link, "-- NO LINK" in ALERT and no
+// block (never its last look: the deck can't tell what a light it has lost shows). Bottom right the
+// hint "LIGHTS >" in DIM. Focused (the PS3 controller), the outline is 2 px of TEXT and the hint an
+// inverted tag: an inverted panel would hide the lights while a pad is connected. Pressed, drawBox's
+// bar with its ring and the hint on it.
 static_assert(N_CTRL == N_LIGHT_LABELS, "a label per light");
-static void drawLightsBand() {
-    const int top = CLOCK_RULE_Y + 1;
-    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, LIGHTS_RULE_Y - top);
-    tft.drawFastVLine(LIGHTS_SPLIT, top, LIGHTS_RULE_Y - top, pal(termpal::MID));
+static void drawPanel(const Rect& r, bool pressed, bool focused) {
+    if (presslook::box(pressed, false).bar) {
+        tft.setTextColor(drawBox(r, pressed, false, 1, pal(termpal::TEXT)));
+        text(PANEL_HINT, r.x + r.w / 2, r.y + r.h / 2, Face::TITLE, MC_DATUM);
+        return;
+    }
+    clearBg(r);
+    const int edge = focused ? 2 : 1;
+    for (int k = 0; k < edge; k++) {
+        tft.drawRect(r.x + k, r.y + k, r.w - 2 * k, r.h - 2 * k, pal(focused ? termpal::TEXT : termpal::MID));
+    }
+    tft.drawFastVLine(PANEL_SPLIT, LIGHT_BLOCK_Y, LIGHT_BLOCK_H, pal(termpal::MID));
     for (int i = 0; i < N_CTRL; i++) {
         const Look l = shownLook(i);  // music mode's while it drives the lights
         tft.setTextColor(pal(termpal::MID));
@@ -948,6 +947,21 @@ static void drawLightsBand() {
         tft.setTextColor(pal(termpal::TEXT));
         text(s, lightTextX(i), LIGHT_VALUE_BASE, LIGHT_VALUE_FACE, BL_DATUM);
     }
+    if (!focused) {
+        tft.setTextColor(pal(termpal::DIM));
+        text(PANEL_HINT, PANEL_HINT_RIGHT, PANEL_HINT_BASE, Face::SMALL, BR_DATUM);
+        return;
+    }
+    const int w = termfont::width(Face::SMALL, PANEL_HINT) + 2 * TAG_PAD, h = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
+    const int x = PANEL_HINT_RIGHT + TAG_PAD - w, y = PANEL_HINT_BASE + TAG_PAD - h;
+    tft.fillRect(x, y, w, h, pal(termpal::TEXT));
+    tft.setTextColor(pal(termpal::BG));
+    text(PANEL_HINT, PANEL_HINT_RIGHT, PANEL_HINT_BASE, Face::SMALL, BR_DATUM);
+}
+
+// The lights panel again, after a look or a link changed (its focus with it).
+static void drawLightsBand() {
+    if (screen == Screen::Menu) drawButton(M_ITEM0 + deckmenu::LIGHTS);
 }
 
 // The block cursor: one SMALL cell (as wide as a character, as tall as the caps) at the end of the
@@ -975,35 +989,54 @@ static void placeCursor(int x) {
     drawCursor(cursorPhase());
 }
 
-// Each loop pass on the Menu: the cursor's cell when its phase turned.
+// Each loop pass, on every screen: the cursor's cell when its phase turned.
 static void blinkCursor() {
-    if (screen == Screen::Menu && cursorPhase() != cursorOn) drawCursor(!cursorOn);
+    if (cursorPhase() != cursorOn) drawCursor(!cursorOn);
 }
 
-// The prompt line, cleared whole (under the lights' rule, rule to rule across, down to the band's
-// end: an accented capital and a descender stay inside) and drawn again, the cursor after its text:
-// while a message shows, the message (SMALL, TEXT, ALERT for a problem); in music mode, once a
-// palette came, MUSIC_PROMPT, a chip of the song's swatch and its name (">MUSIC [chip] PINK"), before
-// that MUSIC_WAITING, or MUSIC_NO_SIGNAL (TEXT too: it's no fault of the deck's); else just ">".
-// Redrawn on a message coming or going and on a change of music mode's state or swatch.
+// The prompt line's frame: its band cleared whole (an accented capital and a descender stay inside)
+// and the MID rule across its first row.
+static void drawPromptFrame() {
+    clearBg(deckmenu::PROMPT_BAND);
+    tft.drawFastHLine(RULE_X0, PROMPT_RULE_Y, RULE_X1 - RULE_X0, pal(termpal::MID));
+}
+
+// The prompt line with `s` (SMALL, in `ink`) and the cursor after it: drawPrompt's, and the touch
+// calibration's (which runs before loop() and draws its own lines).
+static void drawPromptText(const char* s, uint16_t ink) {
+    drawPromptFrame();
+    tft.setTextColor(ink);
+    placeCursor(DASH_X + text(s, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
+}
+
+// The prompt line, every screen's bottom row, drawn again with the cursor after its text: while a
+// message shows, the message (TEXT, ALERT for a problem). Else on Lights and its PRESETS tab the
+// lights' link state (">LINK 2/2" in TEXT; ">OUTSIDE: NO LINK", ">INSIDE: NO LINK" or ">NO LINK" in
+// ALERT); on the Menu in music mode, once a palette came, MUSIC_PROMPT, a chip of the song's swatch
+// and its name (">MUSIC [chip] PINK"), before that MUSIC_WAITING, or MUSIC_NO_SIGNAL (TEXT too: it's
+// no fault of the deck's); else just ">". Redrawn on a message coming or going, a link change, and a
+// change of music mode's state or swatch.
 static void drawPrompt() {
-    const int top = LIGHTS_RULE_Y + 1;
-    clearBg(RULE_X0, top, RULE_X1 - RULE_X0, deckmenu::PROMPT_BAND.y + deckmenu::PROMPT_BAND.h - top);
     if (message[0]) {
-        tft.setTextColor(msgInk(message, messageAlert));
-        placeCursor(DASH_X + text(message, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
+        drawPromptText(message, msgInk(message, messageAlert));
         return;
     }
-    tft.setTextColor(pal(termpal::TEXT));
+    if (screen != Screen::Menu) {
+        char line[24] = ">";
+        const bool down = lightstatus::link(linkUp(controllers[0]), linkUp(controllers[1]), line + 1, sizeof(line) - 1);
+        drawPromptText(line, pal(down ? termpal::ALERT : termpal::TEXT));
+        return;
+    }
     if (!musicOn) {
-        placeCursor(DASH_X + text(PROMPT_IDLE, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
+        drawPromptText(PROMPT_IDLE, pal(termpal::TEXT));
         return;
     }
     if (musicState != musiclights::State::Colour || musicSwatch < 0) {
-        const char* line = musicState == musiclights::State::NoSignal ? MUSIC_NO_SIGNAL : MUSIC_WAITING;
-        placeCursor(DASH_X + text(line, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM));
+        drawPromptText(musicState == musiclights::State::NoSignal ? MUSIC_NO_SIGNAL : MUSIC_WAITING, pal(termpal::TEXT));
         return;
     }
+    drawPromptFrame();
+    tft.setTextColor(pal(termpal::TEXT));
     text(MUSIC_PROMPT, DASH_X, PROMPT_BASE, Face::SMALL, BL_DATUM);
     tft.fillRect(songChipX(), PROMPT_BASE - MUSIC_CHIP, MUSIC_CHIP, MUSIC_CHIP, c565(SWATCHES[musicSwatch].screen));
     char name[12];
@@ -1011,15 +1044,13 @@ static void drawPrompt() {
     placeCursor(songNameX() + text(name, songNameX(), PROMPT_BASE, Face::SMALL, BL_DATUM));
 }
 
-// The whole dashboard but its three items (drawAll draws those as buttons).
+// The whole dashboard but its buttons (drawAll draws the lights panel and the switches) and the
+// prompt line (drawAll's on every screen).
 static void drawDash() {
     drawHeader();
     drawClock();
     drawTripTime();
     drawRule(CLOCK_RULE_Y);
-    drawLightsBand();
-    drawRule(LIGHTS_RULE_Y);
-    drawPrompt();
 }
 
 // The terminal's boot: on a blank screen the welcome lines (termlayout::BOOT_LINES, SMALL, the last in MID)
@@ -1059,21 +1090,17 @@ static void drawTabs() {
     for (int id = L_TAB0; id < L_TAB0 + deckmenu::N_TABS; id++) drawButton(id);
 }
 
-// What shows the lights' links on the current screen: Lights' STATUS line (the message too), the
-// Menu's lights band.
+// What shows the lights' links on the current screen: the Menu's lights panel; on Lights and its
+// PRESETS tab the prompt line (unless a message holds it).
 static void drawLightState() {
-    if (onLights()) drawStatus();
-    else if (screen == Screen::Menu) drawLightsBand();
+    if (screen == Screen::Menu) drawLightsBand();
+    else drawPrompt();
 }
 
-// What shows the message, or once it's gone the usual line: Lights' STATUS line, the Menu's prompt
-// line (then music mode's line or ">" again).
-static void drawMessage() {
-    if (onLights()) drawStatus();
-    else if (screen == Screen::Menu) drawPrompt();
-}
+// What shows the message, or once it's gone the usual line: the prompt line, on every screen.
+static void drawMessage() { drawPrompt(); }
 
-// After a look changed (a tap, voice, the watch, Y): everything that shows it (Lights' STATUS line
+// After a look changed (a tap, voice, the watch, Y): everything that shows it (Lights' prompt line
 // shows only the links, and the PRESETS tab no look). True when a new theme repainted the whole
 // screen (then nothing more is drawn: the repaint showed it all, the parts would only flicker).
 static bool drawLooks() {
@@ -1111,12 +1138,9 @@ static void drawAll() {
     for (int id = 0; id < deckmenu::count(screen); id++) {
         if (built(id)) drawButton(id);
     }
-    if (screen == Screen::Menu) {
-        drawDash();
-    } else {
-        if (screen == Screen::Lights) drawLevel();
-        drawStatus();
-    }
+    if (screen == Screen::Menu) drawDash();
+    else if (screen == Screen::Lights) drawLevel();
+    drawPrompt();
 }
 
 // ---- Touch calibration: tap five crosses with the pen, fit, keep it in NVS ("touch"/"hom") ----
@@ -1125,7 +1149,7 @@ static void drawAll() {
 static constexpr int PIN_BOOT = 0;
 static constexpr int N_TARGET = 5;
 static const int CAL_SX[N_TARGET] = {24, 296, 296, 24, 160};
-static const int CAL_SY[N_TARGET] = {24, 24, 216, 216, 120};
+static const int CAL_SY[N_TARGET] = {24, 24, 196, 196, 120};  // the bottom pair clear of the prompt line
 
 static void drawTarget(int x, int y, uint16_t c) {
     tft.drawFastHLine(x - 14, y, 29, c);
@@ -1162,17 +1186,19 @@ static void waitTap(int* rx, int* ry) {
     }
 }
 
+// In the terminal's look: the title (TITLE, TEXT) over the centre cross, the cross to tap in ALERT
+// and a tapped one in TEXT, what to do and how it went on the prompt line.
 static void calibrate() {
     for (;;) {
-        tft.fillScreen(TFT_BLACK);
-        tft.setTextColor(TFT_WHITE, TFT_BLACK);
-        text("Touch calibration", 160, 82, Face::TITLE, MC_DATUM);
-        text("Tap each cross with the pen", 160, 160, Face::BODY, MC_DATUM);
+        clearBg(0, 0, tft.width(), tft.height());
+        tft.setTextColor(pal(termpal::TEXT));
+        text("TOUCH CALIBRATION", 160, 80, Face::TITLE, MC_DATUM);
+        drawPromptText(">TAP EACH CROSS WITH THE PEN", pal(termpal::TEXT));
         int rx[N_TARGET], ry[N_TARGET];
         for (int i = 0; i < N_TARGET; i++) {
-            drawTarget(CAL_SX[i], CAL_SY[i], TFT_RED);
+            drawTarget(CAL_SX[i], CAL_SY[i], pal(termpal::ALERT));
             waitTap(&rx[i], &ry[i]);
-            drawTarget(CAL_SX[i], CAL_SY[i], TFT_GREEN);
+            drawTarget(CAL_SX[i], CAL_SY[i], pal(termpal::TEXT));
             Serial.printf("[cal] target %d,%d <- raw %d,%d\n", CAL_SX[i], CAL_SY[i], rx[i], ry[i]);
         }
         // The four corners fit the map exactly; the centre tap checks it. Pen taps on this panel
@@ -1187,15 +1213,11 @@ static void calibrate() {
             p.putBytes("hom", &k, sizeof(k));
             p.end();
             touch::setCalibration(k);
-            tft.fillScreen(TFT_BLACK);
-            tft.setTextColor(TFT_GREEN, TFT_BLACK);
-            text("Calibrated", 160, 120, Face::TITLE, MC_DATUM);
+            drawPromptText(">CALIBRATED", pal(termpal::TEXT));
             delay(800);
             return;
         }
-        tft.fillScreen(TFT_BLACK);
-        tft.setTextColor(TFT_ORANGE, TFT_BLACK);
-        text("Missed a cross - again", 160, 120, Face::TITLE, MC_DATUM);
+        drawPromptText(">MISSED A CROSS - AGAIN", pal(termpal::ALERT));
         delay(1500);
     }
 }
