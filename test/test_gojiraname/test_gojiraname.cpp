@@ -73,20 +73,17 @@ void test_rows() {
     TEST_ASSERT_EQUAL_INT(100 - 12, gojiraname::top(Face::SMALL, 100));
 }
 
-// ">ゴジラ APPLIED" on the Lights status line: its rows stay inside STATUS (whose clear is the rect),
-// and it fits across; on the Menu's prompt line, inside the band's clear, with the cursor after it.
+// ">ゴジラ APPLIED" on the prompt line (every screen's bottom row): its rows stay inside the band,
+// under its rule, and it fits across with the cursor after it.
 void test_message_fits() {
     char m[32];
     lightstatus::applied(GOJIRA, m, sizeof(m));
-    const deckmenu::Rect& r = deckmenu::STATUS;
-    const int base = r.y + r.h;  // drawStatus: BL_DATUM on the rect's bottom
+    const deckmenu::Rect& r = deckmenu::PROMPT_BAND;
     const gojiraname::Rows rows = gojiraname::rows(Face::SMALL);
-    const int top = gojiraname::top(Face::SMALL, base);
-    TEST_ASSERT_TRUE(top >= r.y);
+    const int top = gojiraname::top(Face::SMALL, PROMPT_BASE);
+    TEST_ASSERT_TRUE(top > PROMPT_RULE_Y);
     TEST_ASSERT_TRUE(top + rows.last - rows.first <= r.y + r.h - 1);
-    TEST_ASSERT_TRUE(STATUS_TEXT_X + gojiraname::width(Face::SMALL, m) <= r.w - MARGIN);
     TEST_ASSERT_TRUE(DASH_X + gojiraname::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT);
-    TEST_ASSERT_TRUE(gojiraname::top(Face::SMALL, PROMPT_BASE) > LIGHTS_RULE_Y);
 }
 
 // The PRESETS tab: the name (TITLE) centred in its 100 px button, its rows above the chips.

@@ -118,38 +118,39 @@ static void fitsRight(Face f, const char* s, int right, int left) {
     TEST_ASSERT_TRUE_MESSAGE(right - termfont::width(f, s) >= left + MARGIN, s);
 }
 
+// The Menu's two switches (154x64, layout B): the label (BODY) at the left, its caps centred top to
+// bottom (+-1), the ON / OFF tag bottom right under it. LIGHTS is the panel (its hint, below), so its
+// MENU_ITEMS entry only names it in the log.
 void test_menu_items_fit() {
     TEST_ASSERT_EQUAL_INT(deckmenu::N_ITEMS, N_MENU_ITEMS);
+    TEST_ASSERT_EQUAL_STRING("LIGHTS", MENU_ITEMS[deckmenu::LIGHTS]);
+    TEST_ASSERT_EQUAL_STRING("KARAOKE", MENU_ITEMS[deckmenu::KARAOKE]);
+    TEST_ASSERT_EQUAL_STRING("MUSIC MODE", MENU_ITEMS[deckmenu::MUSIC]);
     const int tagH = termfont::capHeight(Face::SMALL) + 2 * TAG_PAD;
     TEST_ASSERT_TRUE(TAG_PAD >= 2 && TAG_RIGHT >= MARGIN && TAG_BOTTOM >= MARGIN);
-    for (int i = 0; i < deckmenu::N_ITEMS; i++) {
+    for (int i : {deckmenu::KARAOKE, deckmenu::MUSIC}) {
         const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + i);
-        TEST_ASSERT_EQUAL_INT(100, r.w);
-        TEST_ASSERT_TRUE(r.h == 106 && r.y + r.h <= 240 - MARGIN);  // at the bottom, 4 px off the edge
-        // the label (BODY) at the left, its caps centred top to bottom (+-1), its ink inside the margins
+        TEST_ASSERT_TRUE(r.w == 154 && r.h == 64);
         const char* label = MENU_ITEMS[i];
         fitsLeft(Face::BODY, label, ROW_TEXT_X, r.w);
         const Rows ink = fromCapTop(Face::BODY, ROW_TEXT_Y);
         TEST_ASSERT_TRUE_MESSAGE(ink.top >= MARGIN, label);
         const int capsBelow = r.h - (ROW_TEXT_Y + termfont::capHeight(Face::BODY));
         TEST_ASSERT_TRUE_MESSAGE(ROW_TEXT_Y - capsBelow <= 1 && capsBelow - ROW_TEXT_Y <= 1, label);
-        // a tag (KARAOKE's and MUSIC MODE's ON / OFF: SMALL, an inverted mini-label, its caps TAG_PAD from its
-        // edges) bottom right, under the label's ink with a row to spare, inside the margins
         for (const char* tag : {ON_TAG, OFF_TAG}) {
             const int tagW = termfont::width(Face::SMALL, tag) + 2 * TAG_PAD;
-            TEST_ASSERT_TRUE_MESSAGE(r.w - TAG_RIGHT - tagW >= MARGIN, tag);
-            TEST_ASSERT_TRUE_MESSAGE(ink.bottom + 1 < r.h - TAG_BOTTOM - tagH, label);
+            // right of the label's ink with room, inside the margins, under the label's caps
+            TEST_ASSERT_TRUE_MESSAGE(r.w - TAG_RIGHT - tagW >= ROW_TEXT_X + termfont::width(Face::BODY, label) + MARGIN, tag);
+            TEST_ASSERT_TRUE_MESSAGE(r.h - TAG_BOTTOM - tagH >= MARGIN, tag);
         }
     }
-    TEST_ASSERT_EQUAL_STRING("[KARAOKE]", MENU_ITEMS[deckmenu::KARAOKE]);
-    TEST_ASSERT_EQUAL_STRING("MUSIC MODE", MENU_ITEMS[deckmenu::MUSIC]);
 }
 
 void test_preset_names_fit() {
     TEST_ASSERT_EQUAL_INT(deckmenu::P_N - deckmenu::P_PRE0, ledpresets::N);
     for (int i = 0; i < ledpresets::N; i++) {
         const deckmenu::Rect r = deckmenu::rect(deckmenu::Screen::Presets, deckmenu::P_PRE0 + i);
-        TEST_ASSERT_TRUE(r.w == 100 && r.h == 60);
+        TEST_ASSERT_TRUE(r.w == 100 && r.h == 72);
         fitsCentred(Face::TITLE, ledpresets::PRESETS[i].name, r.w);  // "PURPURA", the widest: 69 px
     }
     // the name over the two chips (16-20 px squares), the chips' 1 px edge on a bar clear of the
@@ -235,27 +236,28 @@ void test_dash_clock_and_trip_fit() {
     TEST_ASSERT_EQUAL_INT(DATE_Y, WORDS_Y);
     const int gapTop = CLOCK_Y - (HEADER_RULE_Y + 1), gapBottom = CLOCK_RULE_Y - (CLOCK_Y + termfont::capHeight(Face::TITLE));
     TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
-    // the band's rule is the first row of the lights band under it (each band starts on the rule above)
+    // the band's rule is its bottom edge; the lights panel starts below it
     TEST_ASSERT_EQUAL_INT(deckmenu::CLOCK_BAND.y + deckmenu::CLOCK_BAND.h, CLOCK_RULE_Y);
-    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, CLOCK_RULE_Y);
+    TEST_ASSERT_TRUE(deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + deckmenu::LIGHTS).y > CLOCK_RULE_Y + 1);
 }
 
-// The lights row: IN left, OUT right of the vertical rule at LIGHTS_SPLIT, each its label (BODY), a
-// chip of its colour on BODY's caps, then the colour and the level ("YELLOW 100%"), OFF or -- NO
-// LINK (BODY), all on one baseline.
+// The lights panel (the Menu's LIGHTS button): INSIDE left of the vertical rule at PANEL_SPLIT,
+// OUTSIDE right of it, each its block, its label (SMALL) over its value (TITLE: "PURPLE 100%" the
+// widest, OFF, -- NO LINK), all inside the panel; the hint "LIGHTS >" bottom right, under the values.
 void test_dash_lights_fit() {
+    const deckmenu::Rect p = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0 + deckmenu::LIGHTS);
     TEST_ASSERT_EQUAL_INT(2, N_LIGHT_LABELS);
     TEST_ASSERT_EQUAL_STRING("INSIDE", LIGHT_LABELS[0]);
     TEST_ASSERT_EQUAL_STRING("OUTSIDE", LIGHT_LABELS[1]);
     TEST_ASSERT_TRUE(LIGHT_GAP >= MARGIN);
-    // each half starts the dashboard's margin in from its left (the screen's edge, the rule)
-    TEST_ASSERT_EQUAL_INT(DASH_X, lightX(0));
-    TEST_ASSERT_EQUAL_INT(LIGHTS_SPLIT + DASH_X, lightX(1));
+    TEST_ASSERT_EQUAL_INT(160, PANEL_SPLIT);
+    TEST_ASSERT_TRUE(PANEL_SPLIT > p.x && PANEL_SPLIT < p.x + p.w);
+    TEST_ASSERT_EQUAL_INT(12, lightX(0));
+    TEST_ASSERT_EQUAL_INT(PANEL_SPLIT + 8, lightX(1));
     for (int i = 0; i < N_LIGHT_LABELS; i++) {
         TEST_ASSERT_EQUAL_INT(lightX(i) + LIGHT_BLOCK_W + LIGHT_GAP, lightTextX(i));
-        const int right = i == 0 ? LIGHTS_SPLIT : DASH_RIGHT + MARGIN;  // the rule; the rules' end
+        const int right = i == 0 ? PANEL_SPLIT : p.x + p.w;  // the rule; the panel's outline
         fitsLeft(Face::SMALL, LIGHT_LABELS[i], lightTextX(i), right);
-        // every colour at 100 % ("PURPLE 100%" the widest), OFF and the lost link, in LIGHT_VALUE_FACE
         for (int n = 0; n < ledlook::N_SWATCH; n++) {
             const ledlook::Swatch& sw = ledlook::SWATCHES[n];
             char name[16], s[24];
@@ -267,24 +269,28 @@ void test_dash_lights_fit() {
         }
         for (const char* s : {"OFF", "-- NO LINK"}) fitsLeft(LIGHT_VALUE_FACE, s, lightTextX(i), right);
     }
-    TEST_ASSERT_EQUAL_INT((int)Face::TITLE, (int)LIGHT_VALUE_FACE);   // it fits, so the big one
-    // the block, the label over the value, all between the clock band's rule and the lights' rule
-    TEST_ASSERT_TRUE(LIGHT_BLOCK_Y > CLOCK_RULE_Y + 1 && LIGHT_BLOCK_Y + LIGHT_BLOCK_H < LIGHTS_RULE_Y - 1);
+    TEST_ASSERT_EQUAL_INT((int)Face::TITLE, (int)LIGHT_VALUE_FACE);
+    TEST_ASSERT_EQUAL_INT(52, LIGHT_BLOCK_H);
+    // the block, the label over the value, inside the panel's outline (2 px: the focus ring)
+    TEST_ASSERT_TRUE(LIGHT_BLOCK_Y >= p.y + 4 && LIGHT_BLOCK_Y + LIGHT_BLOCK_H <= p.y + p.h - 4);
     const Rows label = fromCapTop(Face::SMALL, LIGHT_LABEL_Y), value = fromBase(LIGHT_VALUE_FACE, LIGHT_VALUE_BASE);
-    between(CLOCK_RULE_Y, label, LIGHTS_RULE_Y, "light's label");
-    between(CLOCK_RULE_Y, value, LIGHTS_RULE_Y, "light's value");
+    between(p.y + 1, label, p.y + p.h - 2, "light's label");
+    between(p.y + 1, value, p.y + p.h - 2, "light's value");
     above(label, value, "label over the value");
-    // the label's caps top and the value's caps bottom on the block's edges (+-1)
     TEST_ASSERT_TRUE(LIGHT_LABEL_Y - LIGHT_BLOCK_Y <= 1 && LIGHT_LABEL_Y >= LIGHT_BLOCK_Y);
     TEST_ASSERT_TRUE(LIGHT_BLOCK_Y + LIGHT_BLOCK_H - LIGHT_VALUE_BASE <= 1 && LIGHT_VALUE_BASE - (LIGHT_BLOCK_Y + LIGHT_BLOCK_H) <= 1);
-    TEST_ASSERT_EQUAL_INT(deckmenu::LIGHTS_BAND.y, CLOCK_RULE_Y);
-    TEST_ASSERT_EQUAL_INT(deckmenu::PROMPT_BAND.y, LIGHTS_RULE_Y);
+    // the hint: right-aligned, inside the panel, its caps' bottom 4 px above the panel's bottom, below the values' ink
+    TEST_ASSERT_EQUAL_STRING("LIGHTS >", PANEL_HINT);
+    fitsRight(Face::SMALL, PANEL_HINT, PANEL_HINT_RIGHT, PANEL_SPLIT);
+    TEST_ASSERT_EQUAL_INT(p.y + p.h - 4, PANEL_HINT_BASE);
+    const Rows hint = fromBase(Face::SMALL, PANEL_HINT_BASE);
+    above(value, hint, "values over the hint");
+    TEST_ASSERT_TRUE(hint.bottom < p.y + p.h - 1);
 }
 
-// The prompt line (SMALL): ">" idle, every message, the block cursor after it, inside its band
-// (accented capitals included: a message can carry a colour's name), the caps centred between the
-// lights band's rule and the items.
-void test_dash_prompt_fits() {
+// The prompt line (SMALL), every screen's bottom row: ">" idle, every message, the block cursor
+// after it, inside the band (accented capitals included: a message can carry a colour's name).
+void test_prompt_line_fits() {
     tripmeter::Trip t;
     t.seconds = 99 * 3600 + 59 * 60;
     t.meters = 999900;
@@ -295,17 +301,38 @@ void test_dash_prompt_fits() {
     for (const char* m : {static_cast<const char*>(last), PROMPT_IDLE, ">INSIDE: NO LINK", ">OUTSIDE: LINKED",
                           ">PURPURA APPLIED", ">LIGHTS: NO LINK", ">KARAOKE ON", ">KARAOKE OFF",
                           ">KARAOKE: CONNECTING...", ">BLACK DECK NOT ANSWERING",
-                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL}) {
+                          ">MUSIC ON", ">MUSIC OFF", MUSIC_WAITING, MUSIC_NO_SIGNAL,
+                          ">DECK: LINKED", ">DECK: NO LINK", ">GPS: FIX", ">GPS: NO FIX",
+                          "LINK 2/2", ">LINK 2/2", ">OUTSIDE: NO LINK", ">INSIDE: NO LINK", ">NO LINK",
+                          ">TAP EACH CROSS WITH THE PEN", ">CALIBRATED", ">MISSED A CROSS - AGAIN"}) {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
     const deckmenu::Rect& band = deckmenu::PROMPT_BAND;
-    TEST_ASSERT_TRUE(PROMPT_BASE - termfont::accentAscent(Face::SMALL) > LIGHTS_RULE_Y);
-    TEST_ASSERT_TRUE(PROMPT_BASE + termfont::descent(Face::SMALL) <= band.y + band.h);
-    const int items = deckmenu::rect(deckmenu::Screen::Menu, deckmenu::M_ITEM0).y;
-    const int gapTop = (PROMPT_BASE - termfont::capHeight(Face::SMALL)) - (LIGHTS_RULE_Y + 1);
-    const int gapBottom = items - PROMPT_BASE;
-    TEST_ASSERT_TRUE(gapTop - gapBottom <= 1 && gapBottom - gapTop <= 1);
+    TEST_ASSERT_EQUAL_INT(band.y, PROMPT_RULE_Y);
+    TEST_ASSERT_GREATER_THAN_INT(PROMPT_RULE_Y, PROMPT_BASE - termfont::accentAscent(Face::SMALL));
+    TEST_ASSERT_TRUE(PROMPT_BASE + termfont::descent(Face::SMALL) <= 240);
+    // the band (20 rows under the rule) can't centre the caps and keep the accents (17 rows over the
+    // baseline) clear of the rule: the line sits as low as its descenders allow
+    TEST_ASSERT_EQUAL_INT(240, PROMPT_BASE + termfont::descent(Face::SMALL));
 }
+
+// The header's link tags (yellow deck): "GPS" and "DECK" right-aligned on the title's row, left of
+// the PAD part while a controller is connected, clear of the title by 8 cells.
+void test_link_tags_fit() {
+    TEST_ASSERT_EQUAL_STRING("GPS", TAG_GPS);
+    TEST_ASSERT_EQUAL_STRING("DECK", TAG_DECK);
+    TEST_ASSERT_EQUAL_INT(termfont::width(Face::SMALL, TAG_GPS) + LINK_TAG_GAP + termfont::width(Face::SMALL, TAG_DECK), linkTagsW());
+    const int titleEnd = DASH_X + termfont::width(Face::SMALL, DASH_TITLE);
+    for (bool pad : {false, true}) {
+        const int x = linkTagsX(pad);
+        TEST_ASSERT_TRUE(x >= titleEnd + 8 * termfont::cell(Face::SMALL));
+        if (pad) TEST_ASSERT_TRUE(x + linkTagsW() <= DASH_RIGHT - padWidth());
+        else TEST_ASSERT_EQUAL_INT(DASH_RIGHT, x + linkTagsW());
+    }
+}
+
+// Touch calibration's title (TITLE), centred on the screen.
+void test_calibration_text_fits() { fitsCentred(Face::TITLE, "TOUCH CALIBRATION", 320 - 8); }
 
 // Music mode's line on the prompt line: MUSIC_PROMPT, the swatch's chip (as tall as SMALL's caps, on
 // the line's baseline, inside the prompt band) and its name, the longest one's cursor still by
@@ -330,27 +357,10 @@ void test_song_colours_fit() {
         TEST_ASSERT_TRUE_MESSAGE(DASH_X + termfont::advance(Face::SMALL, m) + termfont::cell(Face::SMALL) <= DASH_RIGHT, m);
     }
     TEST_ASSERT_EQUAL_INT(termfont::capHeight(Face::SMALL), MUSIC_CHIP);
-    // the chip's rows (PROMPT_BASE - MUSIC_CHIP .. PROMPT_BASE - 1) inside the band, clear of its rule
+    // the chip's rows (PROMPT_BASE - MUSIC_CHIP .. PROMPT_BASE - 1) inside the band, clear of its rule (the band's first row)
     const deckmenu::Rect& band = deckmenu::PROMPT_BAND;
     TEST_ASSERT_TRUE(PROMPT_BASE - MUSIC_CHIP > band.y);
     TEST_ASSERT_TRUE(PROMPT_BASE <= band.y + band.h);
-}
-
-void test_status_fits() {
-    // the Lights status line sits on STATUS's bottom (12 rows between the tab rule and the colours):
-    // its ink, '/' included, stays inside, and nothing goes below the baseline (the clear is the rect)
-    const termfont::Font& f = termfont::font(Face::SMALL);
-    for (const char* s : {"LINK 2/2", "OUTSIDE: NO LINK", "INSIDE: NO LINK", "NO LINK", ">PURPURA APPLIED", ">INSIDE: NO LINK",
-                          ">OUTSIDE: LINKED", ">LIGHTS: NO LINK", ">KARAOKE ON", ">KARAOKE OFF",
-                          ">KARAOKE: CONNECTING...", ">BLACK DECK NOT ANSWERING"}) {
-        for (const char* p = s; *p; p++) {
-            const termfont::Glyph& g = f.glyph[static_cast<unsigned char>(*p) - f.first];
-            if (g.height == 0) continue;
-            TEST_ASSERT_TRUE_MESSAGE(-g.yOffset <= deckmenu::STATUS.h, s);
-            TEST_ASSERT_TRUE_MESSAGE(g.yOffset + g.height <= 0, s);
-        }
-    }
-    for (const char* s : {"OUTSIDE: NO LINK", ">OUTSIDE: LINKED", ">PURPURA APPLIED"}) fitsLeft(Face::SMALL, s, STATUS_TEXT_X, deckmenu::STATUS.w);
 }
 
 // The BOTH page's level line while the two lights' levels differ (drawLevel): the longest fits the
@@ -381,9 +391,10 @@ int main() {
     RUN_TEST(test_dash_header_fits);
     RUN_TEST(test_dash_clock_and_trip_fit);
     RUN_TEST(test_dash_lights_fit);
-    RUN_TEST(test_dash_prompt_fits);
+    RUN_TEST(test_prompt_line_fits);
+    RUN_TEST(test_link_tags_fit);
+    RUN_TEST(test_calibration_text_fits);
     RUN_TEST(test_song_colours_fit);
-    RUN_TEST(test_status_fits);
     RUN_TEST(test_both_level_line_fits);
     return UNITY_END();
 }
