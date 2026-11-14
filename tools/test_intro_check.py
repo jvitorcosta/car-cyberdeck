@@ -3,7 +3,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from intro_check import HEADER, check, constants, parse  # noqa: E402
+from intro_check import HEADER, check, constants, effects_off, parse  # noqa: E402
 
 with open(HEADER, encoding="utf-8") as f:
     C = constants(f.read())
@@ -65,3 +65,18 @@ def test_a_light_left_off_is_reported():
     lines = [line for line in good_log() if "OUTSIDE" not in line] + ["[intro] OUTSIDE: skipped (off)\n"]
     keys, skipped = parse(lines)
     assert any("OUTSIDE: skipped (off)" in p for p in check(keys, skipped, C))
+
+
+def test_a_build_with_the_effects_off_passes_with_no_welcome():
+    lines = ["[intro] replay\n", "[intro] INSIDE: skipped (effects off)\n",
+             "[intro] OUTSIDE: skipped (effects off)\n"]
+    keys, skipped = parse(lines)
+    assert effects_off(skipped) and keys == {}
+    assert check(keys, skipped, C) == []
+
+
+def test_effects_off_on_one_light_only_still_fails():
+    lines = [line for line in good_log() if "INSIDE" not in line] + ["[intro] INSIDE: skipped (effects off)\n"]
+    keys, skipped = parse(lines)
+    assert not effects_off(skipped)
+    assert any("INSIDE: skipped (effects off)" in p for p in check(keys, skipped, C))

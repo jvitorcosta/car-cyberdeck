@@ -6,7 +6,9 @@ lit light and logs every key it sends ("[intro] INSIDE +300 ms key 2/4: fill spe
 no link"). This holds that log to the timeline src/util/lights/ledintro.h describes: each light's
 keys, their times (within TOLERANCE_MS), the inside light's fill, and both ending dark-to-look on
 the same colour twice. Prints the timeline and PASS or FAIL. The deck doesn't reset (DTR/RTS stay
-low). With the lights linked (in the car) the same command plays the welcome for real.
+low). With the lights linked (in the car) the same command plays the welcome for real. While the
+controllers' effects are off (LED_EFFECTS 0, src/util/yellow/elkcmd.h) the deck skips the welcome
+on both lights ("skipped (effects off)"), and that passes.
 Needs pyserial (tools/requirements.txt).
 """
 import os
@@ -62,9 +64,17 @@ def parse(lines):
     return keys, skipped
 
 
+def effects_off(skipped):
+    """True when the deck skipped the welcome on both lights because its effects are off
+    (LED_EFFECTS 0 in src/util/yellow/elkcmd.h): each light just takes its look."""
+    return all(skipped.get(light) == "effects off" for light in ("INSIDE", "OUTSIDE"))
+
+
 def check(keys, skipped, c):
     """The problems found (an empty list: the welcome is right)."""
     problems = []
+    if effects_off(skipped):
+        return problems  # a build without the controllers' effects has no welcome: nothing to hold
     for light, want in expected(c).items():
         if light in skipped:
             problems.append(f"{light}: skipped ({skipped[light]}): switch it on and music mode off, then run again")
@@ -132,6 +142,8 @@ def main():
     if not any("[intro] replay" in line for line in lines):
         sys.exit("FAIL: the deck didn't answer INTRO (an older firmware, or the wrong port)")
     keys, skipped = parse(lines)
+    if effects_off(skipped):
+        print("the welcome is off in this build (LED_EFFECTS 0): each light takes its look as it links")
     print("\n".join(timeline(keys)))
     problems = check(keys, skipped, c)
     for p in problems:
