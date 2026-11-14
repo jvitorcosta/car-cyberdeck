@@ -23,6 +23,11 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Changed:** the lights stay one plain colour for now: the deck no longer sends the
+  controllers' own effects. The welcome's curtain fill (and the outside light's rise with it) is
+  skipped, each light taking its look as it links, and the IR remote's JUMP3 / JUMP7 / FADE3 /
+  FADE7 keys only show `>EFFECTS OFF`. `LED_EFFECTS` in `src/util/yellow/elkcmd.h` (or
+  `-D LED_EFFECTS=1`) brings both back; the `ledpanel_probe` build has them on.
 - **Changed:** the prompt line (`>` and the cursor, the messages) sits at the bottom of every
   screen, like a terminal's. The main screen's three tall buttons are gone: the lights are one
   outlined panel you tap to open Lights, and KARAOKE and MUSIC MODE are two wide switches under it.

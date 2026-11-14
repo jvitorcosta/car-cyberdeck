@@ -1802,6 +1802,13 @@ static void irTick() {
             colourShown(a.value);
             break;
         case irkeys::Kind::Effect: {
+            if (!elkcmd::EFFECTS) {
+                // effects off (util/yellow/elkcmd.h, LED_EFFECTS): the lights keep their plain colour
+                Serial.printf("[ir] effect key %d ignored (effects off)\n", a.value);
+                setMessage(">EFFECTS OFF");
+                drawMessage();
+                break;
+            }
 #ifdef IR_EFFECT_PROBE
             // the car's tuning build: JUMP3 / JUMP7 step the mode, FADE3 sends it (FADE7 as usual)
             static int probe = 0;
@@ -3129,11 +3136,12 @@ static void replayIntro() {
     Serial.println("[intro] replay");
     bool any = false;
     for (int i = 0; i < N_CTRL; i++) {
-        if (shownLook(i).lit && !musicDriving) {
+        if (elkcmd::EFFECTS && shownLook(i).lit && !musicDriving) {
             startIntro(i);
             any = true;
         } else {
-            Serial.printf("[intro] %s: skipped (%s)\n", controllers[i].label, musicDriving ? "music mode" : "off");
+            Serial.printf("[intro] %s: skipped (%s)\n", controllers[i].label,
+                          !elkcmd::EFFECTS ? "effects off" : musicDriving ? "music mode" : "off");
         }
     }
     if (!any) return;
@@ -3312,7 +3320,8 @@ void loop() {
 
     // A controller that just came up gets its zone's look, so it matches what the deck remembers.
     // The first time since boot a lit light plays the welcome to it instead (startIntro), and
-    // ">WELCOME" shows after the link message (it says more).
+    // ">WELCOME" shows after the link message (it says more). Not while the effects are off
+    // (elkcmd::EFFECTS): the welcome's inside fill is one, so each light just takes its look.
     static bool welcomed[N_CTRL] = {};
     bool welcomedNow = false;
     static bool shown[N_CTRL] = {};
@@ -3323,7 +3332,7 @@ void loop() {
         const bool up = linkUp(c);
         if (up && c.fresh) {
             c.fresh = false;
-            if (!welcomed[i] && shownLook(i).lit && !musicDriving) {
+            if (elkcmd::EFFECTS && !welcomed[i] && shownLook(i).lit && !musicDriving) {
                 startIntro(i);
                 welcomedNow = true;
             } else {

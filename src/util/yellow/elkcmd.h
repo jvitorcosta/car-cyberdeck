@@ -4,7 +4,18 @@
 // Two header variants exist in the wild; the deck sends both and each controller ignores the other.
 #include <stdint.h>
 
+// The controllers' own effects, on or off. Off (LED_EFFECTS 0, the default since 2026-11-14): the
+// deck sends the lights power and colour only (the level is the colour scaled, dim below), never an
+// effect or speed frame, so the inside light stays one plain colour. The welcome is skipped (each
+// light takes its look as it links) and the IR remote's JUMP / FADE keys do nothing. Build with
+// -D LED_EFFECTS=1 (as ledpanel_probe does), or set the default to 1 here, to bring both back.
+#ifndef LED_EFFECTS
+#define LED_EFFECTS 0
+#endif
+
 namespace elkcmd {
+constexpr bool EFFECTS = LED_EFFECTS != 0;
+
 struct Frame { uint8_t b[9]; };
 
 enum Variant { V0, V1 };  // V0: 7E 00 ..., V1: 7E 07 (colour) / 7E 04 (power)

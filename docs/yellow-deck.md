@@ -123,7 +123,7 @@ codes count (NEC, address `0xEF00`); a TV remote does nothing (`[ir] not the lig
 | ☀▲ / ☀▼ | both lights 10 % up / down (as `-` / `+` on BOTH); held, about four steps a second |
 | ON / OFF | both lights on / off (`>LIGHTS ON`, `>LIGHTS OFF`) |
 | RED, GREEN, BLUE, WHITE, ORANGE, YELLOW, CYAN, PURPLE | that colour on both lights; each keeps its own level, and a light that was off comes back on at its level (`>BLUE`) |
-| JUMP3, JUMP7, FADE3, FADE7 | the controllers' own effects on the lights that are on (`>FADE7`); the next colour, level or power key ends it. The four modes are starting values until the car check (`irkeys::EFFECT_MODE`) |
+| JUMP3, JUMP7, FADE3, FADE7 | **off for now** (`>EFFECTS OFF`, nothing sent; see "Effects off for now" under Welcome). With `LED_EFFECTS` on: the controllers' own effects on the lights that are on (`>FADE7`); the next colour, level or power key ends it. The four modes are starting values until the car check (`irkeys::EFFECT_MODE`) |
 | ♪1-♪4 | a playlist on the phone's Spotify through the black deck, from a random track with shuffle on (`>STARTING DIVAS POP`, then `>PLAYING DIVAS POP`, or what went wrong: `>BLACK DECK NOT ANSWERING`, `>SPOTIFY: CHECK THE PHONE`) |
 
 Any key but ♪ ends music mode, like any other manual change (a playlist only changes the song). Every key but the brightness ones acts once
@@ -201,6 +201,14 @@ it Cyan. With cyan on the inside light the terminal takes the blue theme.
   lights and ignores the rest of the phrase ("rose 50" is just ROSE). The reply is e.g.
   `Rose: inside Pink 40 percent, outside Pink 100 percent`.
 - **Watch**: the PRESETS page (see [garmin/README.md](../garmin/README.md)).
+
+**Effects off for now (since 2026-11-14):** the deck sends the lights power and colour only (the
+level is the colour scaled), never one of the controllers' own effects, so the inside light stays
+one plain colour while only part of the car's lights come on is tracked down. The welcome below
+doesn't play (each light takes its look as it links, and `INTRO` logs `skipped (effects off)`), and
+the IR remote's JUMP / FADE keys only show `>EFFECTS OFF`. To bring both back, set `LED_EFFECTS` to
+1 in `src/util/yellow/elkcmd.h` (or add `-D LED_EFFECTS=1` to `env:ledpanel`'s `build_flags`) and
+flash again. The `ledpanel_probe` env has them on.
 
 **Welcome:** the first time each light links after the deck starts, a lit light plays a short
 intro in your last look. The inside light goes dark, then its strip fills with colour from both ends

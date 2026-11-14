@@ -291,7 +291,9 @@ OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks
   it lives in a library under `lib/`, outside `src/`'s `-Werror`. `irkeys` maps the 20 codes to
   level, power, colour, effect and playlist actions and holds the repeat rules (a held brightness
   key steps every 250 ms, any other key acts once). Colours go through `bothlook::paint`; effects
-  through `elkcmd::speed` / `effect` (the outside light's second frame 1 s after its first).
+  through `elkcmd::speed` / `effect` (the outside light's second frame 1 s after its first), only
+  when `elkcmd::EFFECTS` is on (`LED_EFFECTS`, off by default since 2026-11-14: the deck then sends
+  power and colour only, and the welcome is skipped too).
 - **Network** (`net/wifi`, `util/{roam,netup,hotspotip,deckaddr}`): the black deck at
   `BLACK_DECK_ADDR` on the hotspot, by mDNS (`cardeck`) elsewhere, kept through blips.
 - **Memory**: no PSRAM, so everything that downloads uses fixed buffers
