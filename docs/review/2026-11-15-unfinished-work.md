@@ -19,12 +19,12 @@ the head of a merged PR (true for every merged PR's branch), or when its content
 | 5 | **Car checks owed** for merged work: PS3 redesign (#57), IR remote (#58), LED welcome (#47), cartoon montage (#56), black karaoke (#55), terminal line (#62) | merged on `main` | Desk-checked only | **Finish** in the car; already listed under BACKLOG "Verification" |
 | 6 | **Yellow horn / siren plan** and its wiring diagram | `docs/siren-wiring` (3 commits, **local only, never pushed**) | Plan `docs/superpowers/plans/2026-10-28-yellow-horn.md` and a draw.io diagram; no code. Also adds a `.mcp.json` (Wokwi) | **Merge the docs** (push and PR the plan and diagram, without `.mcp.json`) or drop it if the horn is off the table. The yellow deck's scope (#52) and heap leave little room for it |
 | 7 | **IR remote plan**, never committed | main checkout `spotify-pokemon-deck`, untracked `docs/superpowers/plans/2026-11-12-ir-remote.md` | The feature merged in #58 without this plan file | **Done (2026-11-15):** committed on this PR; the untracked copy in the main checkout can go once it merges |
-| 8 | **OBD gauge cluster** (companion screen) | `feat/obd` (41 commits, 234 behind, on origin) | Parked 2026-10-23; its OBD core moved to the OBD deck in #30, which merged | **Drop**: BACKLOG's own rule was "retire the branch once car-health merges", and it has. Remove that line from BACKLOG's Code health |
-| 9 | **One poll task on the yellow deck** (lyrics, camera band, car health in one task to save heap) | `claude/yellow-heap` (1 `wip` commit, on origin) | The commit itself says it was not enough (~20 KB free, still crashing); the slim (#52) solved the heap another way and took those features off the yellow deck | **Drop** |
-| 10 | **ES8311 mic test spike** | `spike/mictest-s3` (1 commit, local only) | Parked; `feat/voice-agent` has the mic diag firmwares on main's mic driver | **Drop** (superseded by #2) |
-| 11 | **IR test stash** | stash `On feat/irtest: IR test work in progress` (2026-11-12) | Its `env:irtest` and `src/diag/irtest.cpp` are on `main` since #58 | **Drop** the stash |
-| 12 | **Split `main.cpp` into boot, deck view and status view** | `refactor/split-main`, closed PR #11 | Old layout (`src/app/`), before the #26 reorganisation | **Drop**. The live version of the idea is BACKLOG "Split `src/yellow/ledpanel.cpp`" |
-| 13 | **Hotspot boot, first try** | `feat/hotspot-boot`, closed PR #12 | Redone and merged as #49 | **Drop** |
+| 8 | **OBD gauge cluster** (companion screen) | `feat/obd` (41 commits, 234 behind, on origin) | Parked 2026-10-23; its OBD core moved to the OBD deck in #30, which merged | **Dropped 2026-11-15**: BACKLOG's own rule was "retire the branch once car-health merges", and it has. Remove that line from BACKLOG's Code health |
+| 9 | **One poll task on the yellow deck** (lyrics, camera band, car health in one task to save heap) | `claude/yellow-heap` (1 `wip` commit, on origin) | The commit itself says it was not enough (~20 KB free, still crashing); the slim (#52) solved the heap another way and took those features off the yellow deck | **Dropped 2026-11-15** |
+| 10 | **ES8311 mic test spike** | `spike/mictest-s3` (1 commit, local only) | Parked; `feat/voice-agent` has the mic diag firmwares on main's mic driver | **Dropped 2026-11-15** (superseded by #2) |
+| 11 | **IR test stash** | stash `On feat/irtest: IR test work in progress` (2026-11-12) | Its `env:irtest` and `src/diag/irtest.cpp` are on `main` since #58 | **Dropped 2026-11-15** the stash |
+| 12 | **Split `main.cpp` into boot, deck view and status view** | `refactor/split-main`, closed PR #11 | Old layout (`src/app/`), before the #26 reorganisation | **Dropped 2026-11-15**. The live version of the idea is BACKLOG "Split `src/yellow/ledpanel.cpp`" |
+| 13 | **Hotspot boot, first try** | `feat/hotspot-boot`, closed PR #12 | Redone and merged as #49 | **Dropped 2026-11-15** |
 | 14 | **Diagnostics not in CI** (`blescan`, `bletest`, `ps3test`, `irtest`) | `.github/workflows`, BACKLOG "Code health" | Open; `irtest` (#58) is a new env CI doesn't build either | **Finish** (small): add them to the matrix or a weekly job |
 | 15 | **Yellow deck features removed by the slim** (#52): OTA, lyrics on the yellow deck, car-health screens | `main` (history keeps them; `util/car/healthview` kept) | Deliberate, documented in BACKLOG ("Done", "Ideas") | Nothing to do: kept for the new display deck |
 
@@ -94,8 +94,23 @@ research, task notes, ~6 MB) were copied first to a backup folder outside the re
 
 1. ~~Commit the untracked IR remote plan (#7)~~ (done), then fast-forward local `main`.
 2. ~~Remove the 12 worktrees marked **Yes**~~ (done), then the merged and leftover branches above.
-3. Drop `feat/obd`, `claude/yellow-heap`, `spike/mictest-s3`, `refactor/split-main`,
-   `feat/hotspot-boot` and the IR test stash; update BACKLOG's `feat/obd` and "voice agent (local)"
-   lines.
+3. ~~Drop `feat/obd`, `claude/yellow-heap`, `spike/mictest-s3`, `refactor/split-main`,
+   `feat/hotspot-boot` and the IR test stash~~ (done, see below); update BACKLOG's `feat/obd` and
+   "voice agent (local)" lines.
 4. Decide on the greeting (#3) and the horn docs (#6).
 5. After the LEDs work: effects back on (#1), close or merge #63, then the car checks (#4, #5).
+
+## Dropped on 2026-11-15
+
+Deleted locally and on origin (`spike/mictest-s3` was local only). To bring one back:
+`git branch <name> <sha>` while the commit is still in the reflog, or from any clone that has it.
+
+| Branch | Head |
+|---|---|
+| `feat/obd` | `df11e4a` |
+| `claude/yellow-heap` | `6eecd57` |
+| `spike/mictest-s3` | `1edd6b3` |
+| `refactor/split-main` | `8755bad` |
+| `feat/hotspot-boot` | `e202824` |
+
+The IR test stash (`d3887ba`) was dropped too. Its content is on `main` since #58.
