@@ -14,7 +14,7 @@ the head of a merged PR (true for every merged PR's branch), or when its content
 |---|---|---|---|---|
 | 1 | **Controller effects off** (`LED_EFFECTS 0`): the #47 welcome and the #58 IR JUMP/FADE keys send nothing | `main`, `src/util/yellow/elkcmd.h`; `env:ledpanel_probe` still builds with `-D LED_EFFECTS=1` | Switched off in #64 for the bench test; open PR #63 (debug notes) lists the guessed effect numbers as a likely cause of the dark rear footwells | **Finish**: find the real mode numbers with `ledpanel_probe`, then turn the flag back on. The yellow LEDs+PS3 work in progress now belongs to another worker, so wait for it |
 | 2 | **Voice agent** (Zero Two): agent, evals, mic diag firmwares | `feat/voice-agent` (36 commits, 136 behind `main`), worktree `spotify-pokemon-deck-voice` | Parts 1–2 built and host-tested; mic too weak in the shell; live steps owed (BACKLOG "Parked: voice agent") | **Finish** when the new deck and an external I2S mic arrive. Rebase first: it predates #37–#64. BACKLOG still calls the branch "local"; it is on origin now |
-| 3 | **Varied Japanese greeting** at the Honda opening (10 greetings, never last boot's, time-of-day aware) | `claude/intro-greetings-8b8b67` (1 commit, on origin, no PR) | Built with a host test (`util/black/greetpick`); never opened as a PR; `greetpick` is not on `main` | **Finish or drop** (João's taste call): it is small and self-contained, but `bootscene.cpp` changed a lot since (#37, #44, #56), so it needs a rebase and a look on the black deck |
+| 3 | **Varied Japanese greeting** at the Honda opening (10 greetings, never last boot's, time-of-day aware) | `claude/intro-greetings-8b8b67` (1 commit, on origin, no PR) | Built with a host test (`util/black/greetpick`); never opened as a PR; `greetpick` is not on `main` | **Parked as an idea (2026-11-15):** the branch stays on GitHub, and a BACKLOG "Ideas" entry says how to finish it |
 | 4 | **Camera alerts on the bench** | merged (#38); the bench list is BACKLOG "Camera alerts, owed on the bench" | Only compiled and host-tested | **Finish**: run the bench list (NMEA replay, voice pack, `[mem]`) |
 | 5 | **Car checks owed** for merged work: PS3 redesign (#57), IR remote (#58), LED welcome (#47), cartoon montage (#56), black karaoke (#55), terminal line (#62) | merged on `main` | Desk-checked only | **Finish** in the car; already listed under BACKLOG "Verification" |
 | 6 | **Yellow horn / siren plan** and its wiring diagram | `docs/siren-wiring` (3 commits, **local only, never pushed**) | Plan `docs/superpowers/plans/2026-10-28-yellow-horn.md` and a draw.io diagram; no code. Also adds a `.mcp.json` (Wokwi) | **Kept as a parked idea (2026-11-15):** plan and diagram on this PR (no `.mcp.json`), a BACKLOG "Ideas" entry; the local branch can go once this merges |
@@ -97,7 +97,7 @@ research, task notes, ~6 MB) were copied first to a backup folder outside the re
 3. ~~Drop `feat/obd`, `claude/yellow-heap`, `spike/mictest-s3`, `refactor/split-main`,
    `feat/hotspot-boot` and the IR test stash~~ (done, see below); ~~update BACKLOG's `feat/obd` and
    "voice agent (local)" lines~~ (done).
-4. Decide on the greeting (#3). The horn (#6) is kept as a parked idea.
+4. The greeting (#3) and the horn (#6) are kept as parked ideas.
 5. After the LEDs work: effects back on (#1), close or merge #63, then the car checks (#4, #5).
 
 ## Dropped on 2026-11-15

@@ -358,6 +358,12 @@ Portuguese voice commands for the black deck through a cloud agent (spec
   built: `docs/superpowers/plans/2026-10-28-yellow-horn.md`, wiring in
   `docs/hardware/siren-wiring.drawio` (the mic cable pinout is still a guess). Written for the
   yellow deck, which no longer has the room (#52); a future deck is the likelier home.
+- **Japanese greeting on the Honda drive** (built 2026-11-03, parked 2026-11-15): the black deck's
+  boot shows one of ten greetings in the sky right of the terminal (kana/kanji, romaji, English),
+  random but never last boot's, time-of-day ones only when the clock survived a soft reset. On the
+  branch `claude/intro-greetings-8b8b67` (one commit, `c9df0cd`, no PR): `util/black/greetpick`
+  with a host test, never flashed. To finish: rebase onto main (`bootscene.cpp` and `main.cpp`
+  changed a lot since, #37, #44, #56), then check it on the black deck.
 - **Updates over WiFi for a future deck** (taken off the yellow deck 2026-11-08, its heap went to
   Bluedroid): `net/ota` still serves the black deck and the OBD deck, and a new deck with heap to
   spare can take it back (drop `NO_WIFI_UPDATES`, add an `_ota` env like `s3_ota`, and the
