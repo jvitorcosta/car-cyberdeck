@@ -18,7 +18,7 @@ the head of a merged PR (true for every merged PR's branch), or when its content
 | 4 | **Camera alerts on the bench** | merged (#38); the bench list is BACKLOG "Camera alerts, owed on the bench" | Only compiled and host-tested | **Finish**: run the bench list (NMEA replay, voice pack, `[mem]`) |
 | 5 | **Car checks owed** for merged work: PS3 redesign (#57), IR remote (#58), LED welcome (#47), cartoon montage (#56), black karaoke (#55), terminal line (#62) | merged on `main` | Desk-checked only | **Finish** in the car; already listed under BACKLOG "Verification" |
 | 6 | **Yellow horn / siren plan** and its wiring diagram | `docs/siren-wiring` (3 commits, **local only, never pushed**) | Plan `docs/superpowers/plans/2026-10-28-yellow-horn.md` and a draw.io diagram; no code. Also adds a `.mcp.json` (Wokwi) | **Merge the docs** (push and PR the plan and diagram, without `.mcp.json`) or drop it if the horn is off the table. The yellow deck's scope (#52) and heap leave little room for it |
-| 7 | **IR remote plan**, never committed | main checkout `spotify-pokemon-deck`, untracked `docs/superpowers/plans/2026-11-12-ir-remote.md` | The feature merged in #58 without this plan file | **Merge** it as a docs commit, or delete it; it is the only copy |
+| 7 | **IR remote plan**, never committed | main checkout `spotify-pokemon-deck`, untracked `docs/superpowers/plans/2026-11-12-ir-remote.md` | The feature merged in #58 without this plan file | **Done (2026-11-15):** committed on this PR; the untracked copy in the main checkout can go once it merges |
 | 8 | **OBD gauge cluster** (companion screen) | `feat/obd` (41 commits, 234 behind, on origin) | Parked 2026-10-23; its OBD core moved to the OBD deck in #30, which merged | **Drop**: BACKLOG's own rule was "retire the branch once car-health merges", and it has. Remove that line from BACKLOG's Code health |
 | 9 | **One poll task on the yellow deck** (lyrics, camera band, car health in one task to save heap) | `claude/yellow-heap` (1 `wip` commit, on origin) | The commit itself says it was not enough (~20 KB free, still crashing); the slim (#52) solved the heap another way and took those features off the yellow deck | **Drop** |
 | 10 | **ES8311 mic test spike** | `spike/mictest-s3` (1 commit, local only) | Parked; `feat/voice-agent` has the mic diag firmwares on main's mic driver | **Drop** (superseded by #2) |
@@ -67,6 +67,10 @@ None has uncommitted tracked changes or unpushed commits. Ignored files are the 
 `data/` (rebuilt by the `tools/gen_*.py` scripts), `.pio/`, caches, `.superpowers/` brainstorm
 files and, in `-voice`, `agent/node_modules/`. Each has its own git-ignored `src/config.h`.
 
+**Done (2026-11-15):** the 12 worktrees marked **Yes** were removed with `git worktree remove`
+(no `--force`; their branches stay). Their git-ignored `.superpowers/` session notes (brainstorms,
+research, task notes, ~6 MB) were copied first to a backup folder outside the repo.
+
 | Worktree | Checked out | State | Safe to clean up? |
 |---|---|---|---|
 | `spotify-pokemon-deck` (main checkout) | `main` | 2 ahead/5 behind (see above); untracked `.mcp.json` and the IR remote plan (#7) | **Keep.** Save the IR plan first, then fast-forward to `origin/main` |
@@ -88,8 +92,8 @@ files and, in `-voice`, `agent/node_modules/`. Each has its own git-ignored `src
 
 ## Suggested order
 
-1. Commit or delete the untracked IR remote plan (#7), then fast-forward local `main`.
-2. Remove the 12 worktrees marked **Yes**, then the merged and leftover branches above.
+1. ~~Commit the untracked IR remote plan (#7)~~ (done), then fast-forward local `main`.
+2. ~~Remove the 12 worktrees marked **Yes**~~ (done), then the merged and leftover branches above.
 3. Drop `feat/obd`, `claude/yellow-heap`, `spike/mictest-s3`, `refactor/split-main`,
    `feat/hotspot-boot` and the IR test stash; update BACKLOG's `feat/obd` and "voice agent (local)"
    lines.
