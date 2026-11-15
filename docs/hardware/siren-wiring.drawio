@@ -1,0 +1,144 @@
+<mxGraphModel adaptiveColors="auto" grid="1" gridSize="10" page="0">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="&lt;b&gt;Corneta MFL 20 W + deck amarelo&lt;/b&gt;&lt;br&gt;Rascunho: pinagem do cabo do microfone ainda a confirmar com multímetro" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;" vertex="1" parent="1">
+      <mxGeometry x="40" y="-40" width="620" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="bat" value="Bateria 12 V" style="verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;fillColor=strokeColor;html=1;verticalAlign=top;strokeWidth=1;shape=mxgraph.electrical.miscellaneous.monocell_battery;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="60" y="45" width="80" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="fuse" value="&lt;b&gt;Fusível 5 A&lt;/b&gt;&lt;br&gt;perto da bateria" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.miscellaneous.fuse_2;strokeColor=#cc0000;strokeWidth=2;" vertex="1" parent="1">
+      <mxGeometry x="260" y="60" width="100" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="buck" value="&lt;b&gt;Step-down&lt;/b&gt;&lt;br&gt;12 V → 5 V (2 A)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+      <mxGeometry x="240" y="200" width="140" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="siren" value="&lt;b&gt;Corneta MFL 20 W&lt;/b&gt;&lt;br&gt;amplificador + 7 tons internos&lt;br&gt;vermelho +12 V · preto GND" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+      <mxGeometry x="880" y="30" width="200" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="spk" value="" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.electro-mechanical.loudspeaker;rotation=0;" vertex="1" parent="1">
+      <mxGeometry x="1090" y="45" width="25" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="cyd" value="&lt;b&gt;Deck amarelo (ESP32 CYD)&lt;/b&gt;&lt;br&gt;GPIO27 → TX&lt;br&gt;GPIO35 ← BUSY (só entrada)&lt;br&gt;GPIO22 → PTT&lt;br&gt;5 V · GND" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=10;" vertex="1" parent="1">
+      <mxGeometry x="40" y="360" width="200" height="140" as="geometry"/>
+    </mxCell>
+    <mxCell id="dfp" value="&lt;b&gt;DFPlayer Mini&lt;/b&gt;&lt;br&gt;microSD próprio: /mp3/0001.mp3…&lt;br&gt;RX · BUSY · DAC_R&lt;br&gt;VCC 5 V · GND" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=left;spacingLeft=10;" vertex="1" parent="1">
+      <mxGeometry x="380" y="360" width="230" height="140" as="geometry"/>
+    </mxCell>
+    <mxCell id="r1" value="10 kΩ" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.resistors.resistor_2;strokeColor=#1565c0;strokeWidth=2;" vertex="1" parent="1">
+      <mxGeometry x="660" y="250" width="100" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="na" value="" style="ellipse;html=1;aspect=fixed;fillColor=#1565c0;strokeColor=#1565c0;" vertex="1" parent="1">
+      <mxGeometry x="786" y="256" width="8" height="8" as="geometry"/>
+    </mxCell>
+    <mxCell id="c1" value="1 µF" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.capacitors.capacitor_1;strokeColor=#1565c0;strokeWidth=2;" vertex="1" parent="1">
+      <mxGeometry x="810" y="242" width="60" height="36" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2" value="" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.resistors.resistor_2;rotation=90;strokeWidth=2;" vertex="1" parent="1">
+      <mxGeometry x="740" y="320" width="100" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="r2label" value="100 Ω&lt;br&gt;(ajustar de ouvido)" style="text;html=1;align=left;verticalAlign=middle;" vertex="1" parent="1">
+      <mxGeometry x="805" y="310" width="130" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="attlabel" value="&lt;i&gt;atenuador: linha → nível de microfone&lt;/i&gt;" style="text;html=1;align=center;verticalAlign=middle;fontColor=#1565c0;" vertex="1" parent="1">
+      <mxGeometry x="650" y="200" width="230" height="30" as="geometry"/>
+    </mxCell>
+    <mxCell id="r3" value="1 kΩ" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.resistors.resistor_2;strokeColor=#2e7d32;strokeWidth=2;" vertex="1" parent="1">
+      <mxGeometry x="270" y="610" width="100" height="20" as="geometry"/>
+    </mxCell>
+    <mxCell id="pc817" value="&lt;b&gt;PC817&lt;/b&gt;&lt;br&gt;LED ← GPIO22 · transistor: PTT ↔ malha" style="verticalLabelPosition=top;shadow=0;dashed=0;align=center;html=1;verticalAlign=bottom;shape=mxgraph.electrical.opto_electronics.opto-coupler;strokeWidth=2;" vertex="1" parent="1">
+      <mxGeometry x="450" y="590" width="99" height="60" as="geometry"/>
+    </mxCell>
+    <mxCell id="mic" value="&lt;b&gt;Cabo do microfone&lt;/b&gt;&lt;br&gt;SINAL&lt;br&gt;PTT (fecha com a malha)&lt;br&gt;MALHA / GND&lt;br&gt;linhas de tom (opcional)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=left;spacingLeft=10;" vertex="1" parent="1">
+      <mxGeometry x="880" y="360" width="200" height="140" as="geometry"/>
+    </mxCell>
+    <mxCell id="handmic" value="&lt;b&gt;Microfone de mão original&lt;/b&gt;&lt;br&gt;continua ligado em paralelo" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="880" y="580" width="200" height="80" as="geometry"/>
+    </mxCell>
+    <mxCell id="gnd" value="&lt;b&gt;GND comum&lt;/b&gt;: chassi / negativo da bateria (todos os terras unidos)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#333333;fontColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1">
+      <mxGeometry x="40" y="740" width="1040" height="40" as="geometry"/>
+    </mxCell>
+    <mxCell id="gndsym" value="" style="pointerEvents=1;verticalLabelPosition=bottom;shadow=0;dashed=0;align=center;html=1;verticalAlign=top;shape=mxgraph.electrical.signal_sources.signal_ground;" vertex="1" parent="1">
+      <mxGeometry x="1090" y="745" width="45" height="30" as="geometry"/>
+    </mxCell>
+    <mxCell id="legend" value="&lt;b&gt;Legenda&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#cc0000&quot;&gt;━ 12 V&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#d79b00&quot;&gt;━ 5 V&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#2e7d32&quot;&gt;━ controle / dados&lt;/font&gt;&lt;br&gt;&lt;font color=&quot;#1565c0&quot;&gt;━ áudio&lt;/font&gt;&lt;br&gt;━ GND&lt;br&gt;┅ tracejado: opcional / original" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=10;fillColor=none;" vertex="1" parent="1">
+      <mxGeometry x="1160" y="30" width="200" height="140" as="geometry"/>
+    </mxCell>
+    <mxCell id="e1" value="+12 V" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#cc0000;strokeWidth=2;endArrow=none;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="bat" target="fuse">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e2" value="+12 V (vermelho)" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#cc0000;strokeWidth=2;endArrow=none;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="fuse" target="siren">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e3" value="+12 V" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#cc0000;strokeWidth=2;endArrow=none;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.857;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="fuse" target="buck">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e4" value="5 V (USB)" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#d79b00;strokeWidth=2;endArrow=none;" edge="1" parent="1" source="buck" target="cyd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e5" value="5 V → VCC" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#d79b00;strokeWidth=2;endArrow=none;" edge="1" parent="1" source="buck" target="dfp">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e6" value="GPIO27 TX → RX (1 kΩ)" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#2e7d32;strokeWidth=2;exitX=1;exitY=0.35;exitDx=0;exitDy=0;entryX=0;entryY=0.35;entryDx=0;entryDy=0;" edge="1" parent="1" source="cyd" target="dfp">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e7" value="BUSY → GPIO35" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#2e7d32;strokeWidth=2;dashed=1;exitX=0;exitY=0.7;exitDx=0;exitDy=0;entryX=1;entryY=0.7;entryDx=0;entryDy=0;" edge="1" parent="1" source="dfp" target="cyd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e8" value="DAC_R" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#1565c0;strokeWidth=2;endArrow=none;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="dfp" target="r1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e8b" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#1565c0;strokeWidth=2;endArrow=none;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="r1" target="na">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e8c" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#1565c0;strokeWidth=2;endArrow=none;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="na" target="c1">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e9" value="SINAL" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#1565c0;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="c1" target="mic">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e9b" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="na" target="r2">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e10" value="GPIO22" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#2e7d32;strokeWidth=2;endArrow=none;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="cyd" target="r3">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e10b" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#2e7d32;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="r3" target="pc817">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e11" value="fecha PTT" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#2e7d32;strokeWidth=2;exitX=1;exitY=0.3;exitDx=0;exitDy=0;entryX=0;entryY=0.8;entryDx=0;entryDy=0;" edge="1" parent="1" source="pc817" target="mic">
+      <mxGeometry x="0.82" relative="1" as="geometry"><mxPoint as="offset"/></mxGeometry>
+    </mxCell>
+    <mxCell id="e12" value="cabo do mic" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#9673a6;strokeWidth=2;" edge="1" parent="1" source="mic" target="siren">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e13" value="original" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#666666;strokeWidth=2;dashed=1;" edge="1" parent="1" source="handmic" target="mic">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g1" value="preto" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=1;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="siren" target="gnd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g2" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.06;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="cyd" target="gnd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g3" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.442;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="pc817" target="gnd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g4" value="malha" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=1;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.25;entryDx=0;entryDy=0;" edge="1" parent="1" source="mic" target="gnd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g5" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.721;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="r2" target="gnd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g6" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="bat" target="gnd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g7" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=0.03;exitY=1;exitDx=0;exitDy=0;entryX=0.333;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="dfp" target="gnd">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="g8" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#000000;strokeWidth=2;endArrow=none;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="gnd" target="gndsym">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+  </root>
+</mxGraphModel>

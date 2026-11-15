@@ -17,7 +17,7 @@ the head of a merged PR (true for every merged PR's branch), or when its content
 | 3 | **Varied Japanese greeting** at the Honda opening (10 greetings, never last boot's, time-of-day aware) | `claude/intro-greetings-8b8b67` (1 commit, on origin, no PR) | Built with a host test (`util/black/greetpick`); never opened as a PR; `greetpick` is not on `main` | **Finish or drop** (João's taste call): it is small and self-contained, but `bootscene.cpp` changed a lot since (#37, #44, #56), so it needs a rebase and a look on the black deck |
 | 4 | **Camera alerts on the bench** | merged (#38); the bench list is BACKLOG "Camera alerts, owed on the bench" | Only compiled and host-tested | **Finish**: run the bench list (NMEA replay, voice pack, `[mem]`) |
 | 5 | **Car checks owed** for merged work: PS3 redesign (#57), IR remote (#58), LED welcome (#47), cartoon montage (#56), black karaoke (#55), terminal line (#62) | merged on `main` | Desk-checked only | **Finish** in the car; already listed under BACKLOG "Verification" |
-| 6 | **Yellow horn / siren plan** and its wiring diagram | `docs/siren-wiring` (3 commits, **local only, never pushed**) | Plan `docs/superpowers/plans/2026-10-28-yellow-horn.md` and a draw.io diagram; no code. Also adds a `.mcp.json` (Wokwi) | **Merge the docs** (push and PR the plan and diagram, without `.mcp.json`) or drop it if the horn is off the table. The yellow deck's scope (#52) and heap leave little room for it |
+| 6 | **Yellow horn / siren plan** and its wiring diagram | `docs/siren-wiring` (3 commits, **local only, never pushed**) | Plan `docs/superpowers/plans/2026-10-28-yellow-horn.md` and a draw.io diagram; no code. Also adds a `.mcp.json` (Wokwi) | **Kept as a parked idea (2026-11-15):** plan and diagram on this PR (no `.mcp.json`), a BACKLOG "Ideas" entry; the local branch can go once this merges |
 | 7 | **IR remote plan**, never committed | main checkout `spotify-pokemon-deck`, untracked `docs/superpowers/plans/2026-11-12-ir-remote.md` | The feature merged in #58 without this plan file | **Done (2026-11-15):** committed on this PR; the untracked copy in the main checkout can go once it merges |
 | 8 | **OBD gauge cluster** (companion screen) | `feat/obd` (41 commits, 234 behind, on origin) | Parked 2026-10-23; its OBD core moved to the OBD deck in #30, which merged | **Dropped 2026-11-15**: BACKLOG's own rule was "retire the branch once car-health merges", and it has. Remove that line from BACKLOG's Code health |
 | 9 | **One poll task on the yellow deck** (lyrics, camera band, car health in one task to save heap) | `claude/yellow-heap` (1 `wip` commit, on origin) | The commit itself says it was not enough (~20 KB free, still crashing); the slim (#52) solved the heap another way and took those features off the yellow deck | **Dropped 2026-11-15** |
@@ -97,7 +97,7 @@ research, task notes, ~6 MB) were copied first to a backup folder outside the re
 3. ~~Drop `feat/obd`, `claude/yellow-heap`, `spike/mictest-s3`, `refactor/split-main`,
    `feat/hotspot-boot` and the IR test stash~~ (done, see below); ~~update BACKLOG's `feat/obd` and
    "voice agent (local)" lines~~ (done).
-4. Decide on the greeting (#3) and the horn docs (#6).
+4. Decide on the greeting (#3). The horn (#6) is kept as a parked idea.
 5. After the LEDs work: effects back on (#1), close or merge #63, then the car checks (#4, #5).
 
 ## Dropped on 2026-11-15

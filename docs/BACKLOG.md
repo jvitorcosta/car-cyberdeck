@@ -353,6 +353,11 @@ Portuguese voice commands for the black deck through a cloud agent (spec
 
 ## Ideas
 
+- **Megaphone horn** (planned 2026-10-28, parked 2026-11-15, no resources for it now): clips from
+  flash through the MFL 20 W horn's mic line, its push-to-talk keyed by a PC817. Plan only, nothing
+  built: `docs/superpowers/plans/2026-10-28-yellow-horn.md`, wiring in
+  `docs/hardware/siren-wiring.drawio` (the mic cable pinout is still a guess). Written for the
+  yellow deck, which no longer has the room (#52); a future deck is the likelier home.
 - **Updates over WiFi for a future deck** (taken off the yellow deck 2026-11-08, its heap went to
   Bluedroid): `net/ota` still serves the black deck and the OBD deck, and a new deck with heap to
   spare can take it back (drop `NO_WIFI_UPDATES`, add an `_ota` env like `s3_ota`, and the
