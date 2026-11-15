@@ -100,6 +100,7 @@
 #include "touch.h"
 #include "../common/net/clock.h"
 #include "../common/net/httpget.h"
+#include "../util/yellow/heapguard.h"
 #include "../common/net/ipaddr.h"
 #include "../common/net/ota.h"
 #include "../common/net/remote_config.h"
@@ -2155,6 +2156,12 @@ static bool deckHost(char* out, size_t n) {
 // What deckGet returns when it sent nothing: the clock isn't set (or HMAC's self-test failed), so
 // nothing can be signed (the bearer key is never sent). Not a miss: the deck wasn't asked.
 static constexpr int NOT_SIGNED = -1000;
+// ... or: the heap is too low for a connection (util/yellow/heapguard). Not a miss either.
+static constexpr int LOW_HEAP = -1001;
+static heapguard::Gate heapGate;  // the deck task's
+
+// An answer, or a miss to count toward deckAddr's (not NOT_SIGNED or LOW_HEAP: nothing went out).
+static bool sentAsk(int rc) { return rc != NOT_SIGNED && rc != LOW_HEAP; }
 
 // Only the deck task asks the black deck (/music, /karaoke), under deckLock all the same: the address
 // keeping (deckHost, deckAddr) stays one asker's at a time if another comes. The longest hold is a
@@ -2164,7 +2171,8 @@ static SemaphoreHandle_t deckLock = nullptr;  // beginVoice makes it, before any
 static constexpr uint32_t DECK_LOCK_MS = 9000;
 
 // A signed GET of `path` with `params` (short fixed words, sent as they are) to the black deck, the
-// body into `body` when there is one; the HTTP status, negative without an answer, or NOT_SIGNED.
+// body into `body` when there is one; the HTTP status, negative without an answer, NOT_SIGNED, or
+// LOW_HEAP from deckGet when the heap can't take a connection.
 // peer: the address asked; nonce: the request's n (16 hex). Short timeouts: the deck is one hop
 // away, and a missing deck must not hold the polls up. timeoutMs: the wait for its answer (longer
 // for a playlist, which the black deck answers once Spotify has). Under deckLock (deckGet).
@@ -2200,6 +2208,16 @@ static int deckAsk(const char* path, const sigreq::Param* params, int count, cha
 
 static int deckGet(const char* path, const sigreq::Param* params, int count, char* body, size_t bodyLen,
                    uint32_t* peer = nullptr, char* nonce = nullptr, uint32_t timeoutMs = 1500) {
+    const bool wasLow = heapGate.low;
+    const uint32_t freeBytes = ESP.getFreeHeap(), largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    if (!heapGate.room(freeBytes, largest)) {
+        if (!wasLow) {
+            Serial.printf("[mem] heap %u (block %u): the black deck's asks wait for memory\n",
+                          static_cast<unsigned>(freeBytes), static_cast<unsigned>(largest));
+        }
+        return LOW_HEAP;
+    }
+    if (wasLow) Serial.printf("[mem] heap %u: asking the black deck again\n", static_cast<unsigned>(freeBytes));
     if (!deckLock || xSemaphoreTake(deckLock, pdMS_TO_TICKS(DECK_LOCK_MS)) != pdTRUE) return -1;
     const int rc = deckAsk(path, params, count, body, bodyLen, peer, nonce, timeoutMs);
     xSemaphoreGive(deckLock);
@@ -2213,7 +2231,7 @@ static constexpr uint32_t SEARCH_GAP_MS = 20000;
 static void deckSearch() {
     static uint32_t at = 0;
     const uint32_t now = millis();
-    if (now - at < SEARCH_GAP_MS || !net::isOnline()) return;
+    if (now - at < SEARCH_GAP_MS || !net::isOnline() || heapGate.low) return;  // mDNS needs heap too
     at = now;
     if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask())))
         return;
@@ -2275,7 +2293,7 @@ static int musicAsk(bool on) {
 static int musicGet(bool on, int) {
     const int rc = musicAsk(on);
     // the deck's own answers (200, "stopping" 409, low memory 503); 3 misses in a row: look it up again
-    if (rc != NOT_SIGNED) deckAnswered(rc == 200 || rc == 409 || rc == 503);
+    if (sentAsk(rc)) deckAnswered(rc == 200 || rc == 409 || rc == 503);
     return rc;
 }
 
@@ -2330,7 +2348,7 @@ static int karaokeGet(bool on, int light) {
     const sigreq::Param p[] = {{"on", on ? "1" : "0"}, {"light", lightText}};
     char reply[32];
     const int rc = deckGet("/karaoke", p, on ? 2 : 1, reply, sizeof(reply));
-    if (rc != NOT_SIGNED) deckAnswered(rc == 200);
+    if (sentAsk(rc)) deckAnswered(rc == 200);
     return rc;
 }
 
@@ -2353,11 +2371,12 @@ static void irPlay(int i) {
         Serial.printf("[ir] playlist %d: rc=%d in %u ms\n", i + 1, rc, static_cast<unsigned>(millis() - at));
         if (rc != -1) break;
     }
-    if (rc != NOT_SIGNED) deckAnswered(rc > 0);
+    if (sentAsk(rc)) deckAnswered(rc > 0);
     const char* why = rc == 502 ? "SPOTIFY: CHECK THE PHONE"
                       : rc == 503 ? "BLACK DECK BUSY"
                       : rc == 504 ? "SPOTIFY SLOW: RETRY"
                       : rc == 403 ? "WRONG KEY"
+                      : rc == LOW_HEAP ? "DECK LOW ON MEMORY"
                                   : "SPOTIFY ERROR";
     snprintf(irPlaylistWhy, sizeof(irPlaylistWhy), "%s", why);
     irPlaylistRc.store(static_cast<int16_t>(rc < -32000 ? -1 : rc));
@@ -2377,7 +2396,7 @@ static void linkGet() {
     char reply[16] = "";
     const int rc = deckGet("/link", nullptr, 0, reply, sizeof(reply));
     if (rc == 200) deckGps = static_cast<uint8_t>(decklink::parse(reply));
-    if (rc != NOT_SIGNED) deckAnswered(rc == 200);
+    if (sentAsk(rc)) deckAnswered(rc == 200);
 }
 
 static void deckTask(void*) {
@@ -2411,11 +2430,11 @@ static void deckTask(void*) {
     }
 }
 
-// From the voice task, once WiFi is up. 6 KB: the GETs and the mDNS query; the [mem] line shows
-// what's left.
+// From the voice task, once WiFi is up. 5 KB: the GETs and the mDNS query (6 KB left 3.4 KB unused
+// on the desk, 2026-11-15, the lookups included); the [mem] line shows what's left.
 static void beginDeck() {
     if (deckHandle) return;
-    xTaskCreatePinnedToCore(deckTask, "deck", 6144, nullptr, 0, &deckHandle, 1);
+    xTaskCreatePinnedToCore(deckTask, "deck", 5120, nullptr, 0, &deckHandle, 1);
 }
 
 // ---- Music mode: the song's colour on both lights ----
@@ -3019,6 +3038,11 @@ static void repaint() {
     if (padFlash >= 0) drawButton(padFlash, true);
 }
 
+// The loop task's stack: 6 KB, not the core's 8 KB (8 KB left 5.8 KB unused on the desk,
+// 2026-11-15); the [mem] line's "loop" shows what's left. The 2 KB go to the heap, which Bluedroid's
+// dual mode runs short of (util/yellow/heapguard).
+SET_LOOP_TASK_STACK_SIZE(6144);
+
 void setup() {
     Serial.begin(115200);
     Serial.printf("[boot] ledpanel v%s\n", FW_VERSION);
@@ -3063,9 +3087,9 @@ void setup() {
             Serial.printf("[leds] %s: no address in config.h (LED_%s_MAC)\n", c.label, c.label);
         }
     }
-    // 5 KB: the lights' connects only wait on the stack (yellow/elklink; 8 KB left 6.4 KB unused on
-    // the desk); the [mem] line shows what's left.
-    xTaskCreatePinnedToCore(linkTask, "leds-link", 5120, nullptr, 1, &linkHandle, 0);
+    // 4 KB: the lights' connects only wait on the stack (yellow/elklink; 5 KB left 3.4 KB unused on
+    // the desk, 2026-11-15, so ~1.7 KB is used); the [mem] line shows what's left.
+    xTaskCreatePinnedToCore(linkTask, "leds-link", 4096, nullptr, 1, &linkHandle, 0);
     publish();
     beginVoice();
     enableLoopWDT();  // the core feeds it before each loop(); BOOT's calibration feeds while it waits
@@ -3113,13 +3137,18 @@ static void tuneLine(const char* s) {
 }
 #endif
 
-// One panel row to the PC: "R<yyy> <hex RGB565>".
+// One panel row to the PC: "R<yyy> <hex RGB565>". Its 2.2 KB of buffers come from the heap for the
+// row and go back after it (static, they held that RAM for good for a desk tool); with no memory the
+// row isn't sent and the PC asks for it again.
 static void shotRow(int y) {
     static const char HEX_DIGITS[] = "0123456789abcdef";
-    static uint8_t rgb[320 * 3 + 1];  // this panel's read comes one byte late: rgb[0] is the dummy's
-    static char row[6 + 320 * 4 + 2];
+    constexpr size_t RGB_LEN = 320 * 3 + 1;  // this panel's read comes one byte late: rgb[0] is the dummy's
+    constexpr size_t ROW_LEN = 6 + 320 * 4 + 2;
+    auto* rgb = static_cast<uint8_t*>(malloc(RGB_LEN + ROW_LEN));
+    if (!rgb) return;
+    char* row = reinterpret_cast<char*>(rgb + RGB_LEN);
     tft.readRectRGB(0, y, 320, 1, rgb);
-    int n = snprintf(row, sizeof row, "R%03d ", y);
+    int n = snprintf(row, ROW_LEN, "R%03d ", y);
     for (int x = 0; x < 320; x++) {
         const uint8_t* p = rgb + x * 3 + 1;
         const unsigned v = ((p[0] & 0xF8U) << 8) | ((p[1] & 0xFCU) << 3) | (p[2] >> 3);
@@ -3127,6 +3156,7 @@ static void shotRow(int y) {
     }
     row[n++] = '\n';
     Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
+    free(rgb);
 }
 
 // "INTRO\n" on the serial port plays the welcome again on each lit light (music mode skips it, as at

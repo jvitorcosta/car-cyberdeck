@@ -46,6 +46,13 @@ Open items, not scheduled. Newest decisions first within each section.
   press after a quiet while still misses (`[ir] playlist N: rc=-1 in .. ms`; the deck now asks a
   second time by itself).
 
+- **Pad + both lights without restarts** (fix 2026-11-15, only desk-built): flash `ledpanel` over
+  USB, then in the car connect the PS3 controller and both lights, turn on karaoke and music mode
+  and drive 20 min. Then at home over USB, read the boot log: no new `[crash] 1: panic` and no
+  `[boot] reset reason: panic`. In the `[mem]` lines, `min` should stay above ~18 KB and `fails` at 0;
+  note how often `the black deck's asks wait for memory` shows (often means the deck still needs
+  heap). `stack left` for `link`, `deck` and `loop` should stay above 1 KB. A brownout line is the
+  car's USB power (the crash log had three): try another cable or charger.
 - **PS3 controller redesign in the car** (desk-checked 2026-11-12): at the desk set-downs and
   pick-ups fired nothing, and every press, flick, Triangle, SELECT and START acted once. Still to
   check while driving: that road motion never reads as "resting" / "picked up" (`[pad] resting`

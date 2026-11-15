@@ -23,6 +23,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Fixed:** the deck restarted with the PS3 controller and both lights connected: the heap ran out
+  under Bluedroid's dual mode and the Bluetooth stack panicked. The asks to the black deck now wait
+  while the heap is low, WiFi's buffers are capped, and smaller task stacks give ~6 KB more heap.
 - **Changed:** the lights stay one plain colour for now: the deck no longer sends the
   controllers' own effects. The welcome's curtain fill (and the outside light's rise with it) is
   skipped, each light taking its look as it links, and the IR remote's JUMP3 / JUMP7 / FADE3 /
@@ -113,6 +116,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   the rest. The scanlines lose their amber tint.
 
 ### Black deck (S3)
+- **Changed:** the media check's CRC table is built into flash: 1 KB more internal RAM, the
+  heap Spotify's TLS needs.
 - **Added:** `/playlists/play` takes `&shuffle=1`: it starts the playlist at a random track and
   turns Spotify's shuffle on (the yellow deck's music keys).
 - **Fixed:** a playlist from the watch or the yellow deck now starts when Spotify is open but

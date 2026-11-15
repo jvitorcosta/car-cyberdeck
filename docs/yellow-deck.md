@@ -461,7 +461,23 @@ other slot (`[ota] rolled back`); `[ota] this firmware is good` marks it proven.
 Taking the karaoke lyrics, the `/state` poll of the black deck, the Menu's now-playing band and the
 Japanese font off the deck moved its free heap from ~31-33 KB (low-water 25.7 KB, largest block
 11.7 KB) to ~44-52 KB (low-water 41 KB, largest block 27.6 KB). The one task left that talks to the
-black deck, `deck` (6 KB of stack), only sends the music and karaoke keep-alives.
+black deck, `deck` (5 KB of stack), sends the music and karaoke keep-alives and the link check.
+
+With the PS3 controller and both lights linked the heap runs much lower than on the desk (where
+the lights are out of range). The crash log on 2026-11-15 held three panics: `heap 15660 (min
+15300, block 124), 79 failed allocs (last 67 B), at link ask`, `heap 16292 (min 15396, block 236)
+... at music ask` and `heap 19768 (min 16384, block 4084) ... at karaoke ask`. The heap ran out
+and broke into pieces, a small allocation inside the Bluetooth stack failed (67 B is about one PS3
+report), and the stack panicked. Since then:
+
+- The asks to the black deck wait while the heap is under 18 KB free or 6 KB in one piece, and go
+  again at 22 KB (`util/yellow/heapguard`; `[mem] heap ...: the black deck's asks wait for memory`,
+  then `[mem] heap ...: asking the black deck again`). A playlist key shows `DECK LOW ON MEMORY`.
+- WiFi keeps at most 12 receive and 12 send buffers and no receive aggregation (`yellow/wifibufs`),
+  so a burst of packets can't take what Bluetooth needs.
+- About 6 KB more heap all the time: the loop task's stack is 6 KB (was 8), `leds-link` 4 KB
+  (was 5), `deck` 5 KB (was 6), and the screenshot's 2.2 KB of buffers come from the heap only
+  while `SHOT` runs.
 
 Every 10 s the serial log prints the free heap, its low-water mark, its largest free block, the
 allocations that failed and each task's unused stack (`[mem] heap 44500 (min 41000, block 27600,
