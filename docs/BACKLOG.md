@@ -80,7 +80,7 @@ Open items, not scheduled. Newest decisions first within each section.
 - **Half-dead link** (WiFi up, no mobile data): the iPhone hotspot works (2026-10-08), but this
   path has never run on the board. The hotspot needs "Maximize Compatibility" on (2.4 GHz only).
 
-- **Camera alerts, owed on the bench** (`feat/camera-alerts`, built 2026-11-03, only compiled and
+- **Camera alerts, owed on the bench** (merged in #38, built 2026-11-03, only compiled and
   host-tested):
   - With GPS 2 IP closed, both decks show `GPS --` within ~5 s of the hotspot; kill the app while
     parked, drive off: the tag appears.
@@ -122,9 +122,6 @@ Open items, not scheduled. Newest decisions first within each section.
 
 - **Split `src/yellow/ledpanel.cpp`** (~2 800 lines): the link task, the web server, the karaoke
   and music tasks are each a candidate file under `src/yellow/`.
-- **`feat/obd`** predates the 2026-10-28 reorganisation and ran on the retired companion. Its OBD
-  core moves to the OBD deck in `feat/car-health` (`src/util/car/`); retire the branch once that
-  merges. (`feat/voice-agent` is already on the new layout.)
 - **CI doesn't build the diagnostics**: the firmware matrix has `s3`, `ledpanel`, `obddeck`,
   `hwcheck` and `hwcheck_s3`, so `blescan` / `bletest` stopped linking without anyone noticing. Add
   `blescan`, `bletest` and `ps3test` (and the mic envs once the voice agent merges), or
@@ -304,10 +301,10 @@ Tests missing:
 - `healthview`: `ParkGate` wrap and NAN trip km; the small-line fit test has no margin.
 - `carwire`: `level` over 2 and `flag` over 1 refused. `carfs`: `tripSeq` and the sort.
 
-## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23)
+## Parked: OBD gauge cluster (`feat/obd`, decided 2026-10-23, branch deleted 2026-11-15)
 
-The OBD gauge cluster, kept for later on the branch `feat/obd` (pushed to GitHub as a backup on
-2026-10-23, no PR): 41 commits on an older main.
+The OBD gauge cluster was kept on the branch `feat/obd` (41 commits on an older main, no PR). The
+branch was deleted on 2026-11-15 after car health (#30) merged; its last commit was `df11e4a`.
 
 - **What it has:** the gauge cluster (RPM arc, speed, coolant, km/l, battery and the crank dip)
   read from an ELM327 over Bluetooth Classic, **seen working in the Honda City on 2026-10-19**;
@@ -317,14 +314,13 @@ The OBD gauge cluster, kept for later on the branch `feat/obd` (pushed to GitHub
   the yellow deck. Bluetooth Classic for OBD leaves ~29 KB of heap, so the lights' BLE on the same
   ESP32 is unlikely to fit. Decide on a third board (or a BLE adapter for the yellow deck) before
   returning.
-- **Returning as car health** (2026-10-28): `feat/car-health` copies the OBD core into
-  `src/util/car/` and runs a BLE adapter on the yellow deck beside the lights. The rest of this
-  branch (the companion's screens, `d079b62`, the fix copies) stays behind; retire the branch once
-  car health merges. The car checks still to do are in the branch's own BACKLOG.
+- **Returned as car health** (#30, 2026-10-28): the OBD core is in `src/util/car/` and runs on
+  the OBD deck. The rest of the old branch (the companion's screens, `d079b62`, the fix copies) was
+  left behind with it. The car checks still to do are under "Car-health" above.
 - **Trip reset**: the S3 still has `POST /trip/reset` (`net/remote`, `util/tripclock`), which only
   the retired companion used. Keep it or remove it when the OBD work returns.
 
-## Parked: voice agent (`feat/voice-agent`, local)
+## Parked: voice agent (`feat/voice-agent`, on GitHub, 136 commits behind `main` on 2026-11-15)
 
 Portuguese voice commands for the black deck through a cloud agent (spec
 `docs/superpowers/specs/2026-10-23-voice-agent-design.md` on the branch). Rebased onto the new layout on
@@ -362,7 +358,7 @@ Portuguese voice commands for the black deck through a cloud agent (spec
   spare can take it back (drop `NO_WIFI_UPDATES`, add an `_ota` env like `s3_ota`, and the
   `>UPDATING` page from git history, `util/yellow/otapage`).
 
-- **Camera alerts, next** (`feat/camera-alerts`): MARK and MUTE items on the watch's menu (the
+- **Camera alerts, next** (after #38): MARK and MUTE items on the watch's menu (the
   black deck's `/cam/mark` and `/cam/mute` are ready, signed); the alarm on OBD speed once the OBD
   deck exists (what the dash shows; GPS lags in tunnels and on bridges).
 
