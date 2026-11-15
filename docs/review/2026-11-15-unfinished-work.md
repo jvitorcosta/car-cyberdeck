@@ -95,8 +95,8 @@ research, task notes, ~6 MB) were copied first to a backup folder outside the re
 1. ~~Commit the untracked IR remote plan (#7)~~ (done), then fast-forward local `main`.
 2. ~~Remove the 12 worktrees marked **Yes**~~ (done), then the merged and leftover branches above.
 3. ~~Drop `feat/obd`, `claude/yellow-heap`, `spike/mictest-s3`, `refactor/split-main`,
-   `feat/hotspot-boot` and the IR test stash~~ (done, see below); update BACKLOG's `feat/obd` and
-   "voice agent (local)" lines.
+   `feat/hotspot-boot` and the IR test stash~~ (done, see below); ~~update BACKLOG's `feat/obd` and
+   "voice agent (local)" lines~~ (done).
 4. Decide on the greeting (#3) and the horn docs (#6).
 5. After the LEDs work: effects back on (#1), close or merge #63, then the car checks (#4, #5).
 
