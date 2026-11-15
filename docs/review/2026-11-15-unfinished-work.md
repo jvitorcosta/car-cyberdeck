@@ -114,3 +114,69 @@ Deleted locally and on origin (`spike/mictest-s3` was local only). To bring one 
 | `feat/hotspot-boot` | `e202824` |
 
 The IR test stash (`d3887ba`) was dropped too. Its content is on `main` since #58.
+
+## Merged and leftover branches deleted (2026-11-15)
+
+55 branches (48 local, 46 on origin, most both). Each one was either the head of a merged PR, already
+contained in `main`, or a leftover at the terminal-line spec commits whose files are on `main`.
+No unique work went with them. Kept: `main`, `feat/voice-agent`, `claude/intro-greetings-8b8b67`,
+`docs/siren-wiring`, `docs/yellow-leds-debug` (#63), `docs/unfinished-work-audit` (this PR), and the LEDs
+worker's `fix/yellow-pad-lights-restart` and `fix/yellow-lights-off-as-one`.
+
+| Branch | Head | Where | Why |
+|---|---|---|---|
+| `chore/pokeface-moved` | `b7d39d2` | origin | merged-pr-head |
+| `chore/wave1-safety` | `bef8f42` | both | merged-pr-head |
+| `claude/beautiful-galileo-49b55b` | `200d075` | local | merged-pr-head |
+| `claude/boot-sound-rosters` | `e3e2e2a` | both | merged-pr-head |
+| `claude/connect-chime` | `1ec3806` | both | merged-pr-head |
+| `claude/keen-jones-97f38e` | `17928ab` | local | leftover |
+| `claude/led-intro-3f5e0c` | `11d5966` | both | on-main |
+| `claude/led-welcome` | `4f3ae70` | both | merged-pr-head |
+| `claude/night-vivid-d041c8` | `41dbf45` | both | on-main |
+| `claude/night-vivid-main` | `80e125e` | both | merged-pr-head |
+| `claude/no-pad-mark` | `745b4e7` | both | merged-pr-head |
+| `claude/nostalgic-davinci-d9f427` | `17928ab` | local | leftover |
+| `claude/objective-nobel-82d3ea` | `17928ab` | local | leftover |
+| `claude/project-thread-sh4dlk` | `1842c33` | origin | merged-pr-head |
+| `claude/ps3-pad` | `aaa1a6d` | both | merged-pr-head |
+| `claude/quizzical-rosalind-baeedf` | `17928ab` | local | leftover |
+| `claude/strange-satoshi-157050` | `17928ab` | local | leftover |
+| `claude/vibrant-jemison-7febb3` | `17928ab` | local | leftover |
+| `claude/watch-spotify-214e5f` | `85e1d82` | both | merged-pr-head |
+| `claude/yellow-menu-balance` | `ae913e3` | both | merged-pr-head |
+| `claude/yellow-night-dim-69c193` | `8b95d91` | both | on-main |
+| `claude/yellow-slim` | `17955c3` | both | merged-pr-head |
+| `dependabot/github_actions/actions/cache-6.1.0` | `d032c11` | origin | merged-pr-head |
+| `dependabot/github_actions/actions/checkout-7.0.1` | `f23bc9e` | origin | merged-pr-head |
+| `docs/backlog-pending` | `f90a25b` | both | merged-pr-head |
+| `docs/repo-rename` | `c6ee398` | both | merged-pr-head |
+| `docs/wave4` | `0547b06` | both | merged-pr-head |
+| `feat/black-karaoke` | `ea5411a` | both | merged-pr-head |
+| `feat/camera-alerts` | `bed2633` | both | merged-pr-head |
+| `feat/car-health` | `200d075` | both | merged-pr-head |
+| `feat/car-leds` | `21437e2` | both | merged-pr-head |
+| `feat/emoji-tier11` | `a70fbe1` | origin | merged-pr-head |
+| `feat/emoji-zwj` | `7edf047` | origin | merged-pr-head |
+| `feat/emoji` | `9855601` | origin | merged-pr-head |
+| `feat/hotspot-boot-v2` | `422b8c6` | both | merged-pr-head |
+| `feat/ir-remote` | `539791c` | both | merged-pr-head |
+| `feat/irtest` | `4eea964` | local | on-main |
+| `feat/jp-lyrics` | `a239b51` | both | merged-pr-head |
+| `feat/music-mode` | `5b01a0a` | both | merged-pr-head |
+| `feat/pad-redesign` | `e970800` | both | merged-pr-head |
+| `feat/song-colours` | `6add552` | both | merged-pr-head |
+| `feat/terminal-line` | `fa58a52` | both | merged-pr-head |
+| `feat/yellow-menu` | `a61116a` | both | merged-pr-head |
+| `feat/yellow-ota` | `34af505` | both | merged-pr-head |
+| `fix/bletest` | `660adc6` | both | merged-pr-head |
+| `fix/cyan-theme` | `f9372e5` | both | merged-pr-head |
+| `fix/deck-address` | `55c14af` | both | merged-pr-head |
+| `fix/lyrics-matching` | `65455a8` | both | merged-pr-head |
+| `fix/plain-inside-lights` | `68c3930` | both | merged-pr-head |
+| `fix/wave3-reliability` | `fc53336` | both | merged-pr-head |
+| `fix/yellow-restarts` | `3dde021` | both | merged-pr-head |
+| `office/q-20261113071813-cw4n-make-carwire-getreal-refuse-nan` | `8bf9839` | local | merged-pr-head |
+| `perf/safe-wins` | `06e0338` | both | merged-pr-head |
+| `readme-photos` | `c7ea8d7` | both | behind-merged-pr-head |
+| `refactor/wave2-folders` | `ea13ec3` | both | merged-pr-head |
