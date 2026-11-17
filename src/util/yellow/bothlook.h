@@ -20,6 +20,11 @@ struct Change {
     int step = 0;     // +1 / -1: one 10 % step
 };
 
+// A change that only sets or steps the level (- / +, L1 / R1, the IR remote's brightness keys,
+// "50 percent"): no colour, no power. Music mode keeps running through one (it dims the song's
+// colour); any other manual change ends the mode.
+inline bool levelOnly(const Change& c) { return c.swatch < 0 && c.power < 0 && (c.level >= 0 || c.step != 0); }
+
 inline bool mixed(const ledlook::Look& in, const ledlook::Look& out) { return !(in == out); }
 
 // The BOTH page's look while the lights differ: the inside one, lit if either is, so the page never

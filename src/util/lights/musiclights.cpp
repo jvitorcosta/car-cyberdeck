@@ -41,6 +41,11 @@ int level(int ownerPct, int capPct) {
     return v < FLOOR_PCT ? FLOOR_PCT : v > ownerPct ? ownerPct : v;
 }
 
+int lightPct(bool inside, int ownerPct, int capPct, int chosenPct) {
+    if (chosenPct >= 0) return chosenPct;
+    return inside ? level(ownerPct, capPct) : OUTSIDE_PCT;
+}
+
 songpalette::Rgb blend(songpalette::Rgb from, songpalette::Rgb to, int k, int n) {
     if (n <= 0 || k >= n) return to;
     if (k <= 0) return from;

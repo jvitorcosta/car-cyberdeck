@@ -180,6 +180,25 @@ void test_paint_turns_lights_on_at_their_levels() {
     TEST_ASSERT_TRUE(both.lit);
 }
 
+void test_level_only_is_a_level_or_a_step_and_nothing_else() {
+    bothlook::Change c;
+    TEST_ASSERT_FALSE(bothlook::levelOnly(c));  // no change at all
+    c.step = -1;
+    TEST_ASSERT_TRUE(bothlook::levelOnly(c));
+    c.step = 0;
+    c.level = 50;
+    TEST_ASSERT_TRUE(bothlook::levelOnly(c));
+    bothlook::Change colour = c;
+    colour.swatch = 2;
+    TEST_ASSERT_FALSE(bothlook::levelOnly(colour));  // "pink 50": a colour, not only a level
+    bothlook::Change power = c;
+    power.power = 1;
+    TEST_ASSERT_FALSE(bothlook::levelOnly(power));
+    bothlook::Change off;
+    off.power = 0;
+    TEST_ASSERT_FALSE(bothlook::levelOnly(off));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_mixed_is_computed_from_the_two_lights);
@@ -191,6 +210,7 @@ int main(int, char**) {
     RUN_TEST(test_mixed_absolute_level_sets_each_pct_and_keeps_each_colour);
     RUN_TEST(test_not_mixed_copies_the_page_like_before);
     RUN_TEST(test_edit_one_look);
+    RUN_TEST(test_level_only_is_a_level_or_a_step_and_nothing_else);
     RUN_TEST(test_recolour_keeps_each_level);
     RUN_TEST(test_recolour_keeps_an_off_light_off);
     RUN_TEST(test_level_text_matching);

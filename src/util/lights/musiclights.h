@@ -20,6 +20,9 @@ int nearestSwatch(songpalette::Rgb c);
 // The inside light's level in music mode: ownerPct x capPct / 100 (rounded), never under FLOOR_PCT, never over
 // ownerPct (an owner's level at or under the floor is kept as it is). capPct over 100 counts as 100.
 int level(int ownerPct, int capPct);
+// Light `inside`'s level in music mode: `chosenPct` when the owner changed the level while the mode
+// was on (-1 until then: the inside light level(ownerPct, capPct), the outside one OUTSIDE_PCT).
+int lightPct(bool inside, int ownerPct, int capPct, int chosenPct);
 // Step k of an n-step fade from `from` to `to` (each channel rounded): k <= 0 is from, k >= n (or
 // n <= 0) is to.
 songpalette::Rgb blend(songpalette::Rgb from, songpalette::Rgb to, int k, int n);
