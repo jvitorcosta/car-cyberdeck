@@ -114,6 +114,17 @@ void test_state_waits_shows_the_colour_then_loses_the_signal() {
     TEST_ASSERT_EQUAL(State::Colour, state(true, 0xFFFFFF00u, 0x10u));  // across millis()' wrap
 }
 
+void test_a_level_chosen_in_music_mode_wins_over_the_cap_and_the_outside_100() {
+    // nothing chosen yet: the inside light the owner's under the cap, the outside one at 100 %
+    TEST_ASSERT_EQUAL_INT(56, lightPct(true, 80, 70, -1));
+    TEST_ASSERT_EQUAL_INT(OUTSIDE_PCT, lightPct(false, 80, 70, -1));
+    // a level chosen while the mode is on: that light shows it, whatever the cap or the song
+    TEST_ASSERT_EQUAL_INT(30, lightPct(true, 80, 70, 30));
+    TEST_ASSERT_EQUAL_INT(90, lightPct(true, 80, 45, 90));
+    TEST_ASSERT_EQUAL_INT(50, lightPct(false, 80, 70, 50));
+    TEST_ASSERT_EQUAL_INT(10, lightPct(false, 100, 100, 10));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_pure_colours_snap_to_their_swatch);
@@ -122,6 +133,7 @@ int main(int, char**) {
     RUN_TEST(test_never_cyan);
     RUN_TEST(test_each_grid_swatchs_screen_colour_snaps_to_itself);
     RUN_TEST(test_level_is_the_owners_under_the_cap_with_a_floor);
+    RUN_TEST(test_a_level_chosen_in_music_mode_wins_over_the_cap_and_the_outside_100);
     RUN_TEST(test_blend_goes_from_one_colour_to_the_other);
     RUN_TEST(test_state_waits_shows_the_colour_then_loses_the_signal);
     return UNITY_END();

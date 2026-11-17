@@ -55,9 +55,12 @@
 // the palette's time-of-day cap (never under 40 %), the outside at 100 %. An outside light left off stays off; an inside one
 // off is switched on. The theme follows the swatch. The prompt line shows ">MUSIC", a chip and the
 // swatch's name (">MUSIC: WAITING" before the first palette), or ">MUSIC: NO SIGNAL" when no palette
-// came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). Any manual
-// change (touch, the PS3 controller, voice, the watch) ends the mode, then applies; turning it off
-// brings back the looks from before. Not kept over a reboot (see
+// came for 15 s. Voice and the watch turn it on and off too ("music", "music off"). A level change
+// (- / +, L1 / R1, the IR remote's brightness keys, "50 percent") keeps the mode and dims or
+// brightens the song's colour on the lights it covers, held over the next songs until the mode
+// ends (musicLevel). Any other manual change (a colour, on / off, a preset, an effect; touch, the
+// PS3 controller, voice, the watch) ends the mode, then applies; turning it off brings back the
+// looks from before (at any level set meanwhile). Not kept over a reboot (see
 // "Music mode" below).
 // Test hooks: building with -D NIGHT_TEST (e.g. PLATFORMIO_BUILD_FLAGS="-D NIGHT_TEST") is night
 // whatever the time, to check it without waiting for 18:00, with a serial tuner to try night colours
@@ -264,6 +267,9 @@ static uint32_t screenOf(int sw) { return SWATCHES[sw].screen; }
 // mode's end (or a reboot) brings them back. Loop-owned.
 static bool musicDriving = false;
 static Look musicLook[N_CTRL];
+// A level the owner set on light i while the mode was on (- / +, L1 / R1, the IR remote, "50
+// percent"): it holds over the next songs until the mode ends; -1: none (musiclights::lightPct).
+static int musicChosen[N_CTRL] = {-1, -1};
 static Look shownLook(int i) { return musicDriving ? musicLook[i] : looks[i + 1]; }
 
 // A running fade (see "A new music look" below; presets use it too), or the welcome's intro (see
@@ -394,7 +400,12 @@ static void push(int i) {
 // One change on `page` (a tap, Y, voice): on BOTH it goes to both lights (bothlook), on INSIDE or
 // OUTSIDE to that light's look only; then the lights it covers get their looks (both, when it ended
 // music mode: the other one goes back to its page's look too).
+static void musicLevel(Target page, const bothlook::Change& c);
 static void change(Target page, const bothlook::Change& c) {
+    if (musicOn && bothlook::levelOnly(c)) {  // a level keeps music mode: it dims the song's colour
+        musicLevel(page, c);
+        return;
+    }
     const bool restore = musicYield();
     if (page == BOTH) bothlook::apply(c, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
     else bothlook::edit(&looks[page], c);
@@ -2565,7 +2576,7 @@ static bool musicTarget(int swatch, int cap) {
         Look t;
         t.swatch = swatch;
         t.lit = i == 0 || own.lit;
-        t.pct = static_cast<uint8_t>(i == 0 ? musiclights::level(own.pct, cap) : musiclights::OUTSIDE_PCT);
+        t.pct = static_cast<uint8_t>(musiclights::lightPct(i == 0, own.pct, cap, musicChosen[i]));
         if (musicDriving && t == musicLook[i]) continue;
         any = true;
         const Look was = shownLook(i);
@@ -2590,6 +2601,7 @@ static bool musicTarget(int swatch, int cap) {
 static void setMusic(bool on, bool restore) {
     musicOn = on;
     musicWant = on;
+    for (int& p : musicChosen) p = -1;  // a new run starts from the owner's level and the cap
     if (on) {
         if (!musicHandle && xTaskCreatePinnedToCore(musicTask, "music", 4096, nullptr, 0, &musicHandle, 1) != pdPASS) {
             musicHandle = nullptr;  // the next tap tries again
@@ -2653,8 +2665,8 @@ static void drawKaraokeItem() {
     drawButton(item, pressedNow(item));
 }
 
-// A manual change (a tap, the PS3 controller, voice, the watch) while music mode is on: the mode
-// ends first (the MUSIC item shows OFF), then the change applies to the pages' looks. True when the
+// A manual change other than a level (a tap, the PS3 controller, voice, the watch) while music mode
+// is on: the mode ends first (the MUSIC item shows OFF), then the change applies to the pages' looks. True when the
 // lights showed the song: the caller pushes both lights (the one it doesn't change goes back too).
 static bool musicYield() {
     if (!musicOn) return false;
@@ -2663,6 +2675,38 @@ static bool musicYield() {
     setMusic(false, false);
     drawMusicItem();
     return drove;
+}
+
+// A level change while music mode is on (change(), bothlook::levelOnly): the mode stays. The pages'
+// looks take it as any change does (the Lights page's bar moves, it is saved, and the mode's end
+// brings them back at it). Once a song drives the lights, the same change also goes onto what they
+// show (the music looks: the BOTH page steps each light from its own level, as bothlook does while
+// mixed), and those levels hold through the next songs (musicChosen) until the mode ends.
+static void musicLevel(Target page, const bothlook::Change& c) {
+    if (page == BOTH) bothlook::apply(c, &looks[BOTH], &looks[INSIDE], &looks[OUTSIDE]);
+    else bothlook::edit(&looks[page], c);
+    if (!musicDriving) {  // no song yet: the lights show the pages' looks
+        for (int i = 0; i < N_CTRL; i++) {
+            if (page == BOTH || page == static_cast<Target>(i + 1)) push(i);
+        }
+        return;
+    }
+    Look in = musicLook[0], out = musicLook[1];
+    if (page == BOTH) {
+        Look both = bothlook::seed(in, out);
+        bothlook::apply(c, &both, &in, &out);
+    } else {
+        bothlook::edit(page == INSIDE ? &in : &out, c);
+    }
+    const Look now[N_CTRL] = {in, out};
+    for (int i = 0; i < N_CTRL; i++) {
+        if (now[i].pct == musicLook[i].pct) continue;
+        musicLook[i].pct = now[i].pct;  // colour and on/off stay the song's
+        musicChosen[i] = now[i].pct;
+        if (musicLook[i].lit) push(i);
+    }
+    Serial.printf("[music] level: inside %u%%, outside %u%%\n", static_cast<unsigned>(musicLook[0].pct),
+                  static_cast<unsigned>(musicLook[1].pct));
 }
 
 // In loop(), while music mode is on, at most every MUSIC_TICK_MS: the latest palette onto the lights

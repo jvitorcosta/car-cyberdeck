@@ -23,6 +23,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Fixed:** turning the brightness down (or up) in music mode switched music mode off and brought
+  back the colour from before it. A level change now keeps music mode on and dims the song's colour:
+  - / + on the Lights page, L1 / R1, the IR remote's brightness keys and "50 percent". The level
+  holds over the next songs until music mode goes off. A colour, on / off or a preset still ends it.
 - **Fixed:** the deck restarted with the PS3 controller and both lights connected: the heap ran out
   under Bluedroid's dual mode and the Bluetooth stack panicked. The asks to the black deck now wait
   while the heap is low, WiFi's buffers are capped, and smaller task stacks give ~6 KB more heap.
