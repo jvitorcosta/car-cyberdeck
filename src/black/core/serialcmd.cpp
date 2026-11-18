@@ -1,8 +1,10 @@
 #include "serialcmd.h"
 #include <Arduino.h>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include "../car/gauges.h"
+#include "../../util/car/tripbook.h"
 
 namespace serialcmd {
 namespace {
@@ -85,6 +87,19 @@ void tick(TFT_eSPI& tft) {
             drivedash::Screen s;
             if (!drivedash::parse(line + 14, &s)) Serial.println("[obd] screens: suki, drive");
             else if (!gauges::setScreen(s)) Serial.println("[obd] screen not switched: the car is moving");
+        } else if (strcmp(line, "FILL CLEAR") == 0) {
+            gauges::forgetBook();
+        } else if (strcmp(line, "FILL") == 0) {
+            gauges::fill(NAN);
+        } else if (strncmp(line, "FILL ", 5) == 0) {   // FILL 6.49: as GET /fill?p=6.49
+            float p;
+            if (tripbook::parsePrice(line + 5, &p)) gauges::fill(p);
+            else Serial.println("[obd] fill: a price is R$ 3.00 to 15.00 a litre, like FILL 6.49");
+        } else if (strcmp(line, "TRIP") == 0) {
+            const obdwire::Live l = gauges::live();
+            Serial.printf("[obd] trip %.1f km, %.1f km/l, %lu s, range %.0f km, R$ %.2f a litre, R$ %.2f\n",
+                          (double)l.tripKm, (double)l.tripKmL, (unsigned long)l.tripS, (double)l.rangeKm,
+                          (double)l.priceL, (double)l.tripRs);
         }
     }
 }

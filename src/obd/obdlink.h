@@ -22,10 +22,12 @@ struct View {
     bool mil;
     uint32_t codesReads;
     // fueleco since power-on, stepped only with fresh values: litres burnt, how many steps had an air
-    // reading (unchanged = nothing counted, so the caller feeds NAN litres, not 0), km/L now.
+    // reading (unchanged = nothing counted, so the caller feeds NAN litres, not 0), km/L now, the km
+    // counted with them and their average km/L (NAN until some fuel was counted).
     float litresTotal;
     uint32_t airSteps;
     float kmlNow;
+    float kmTotal, kmlAvg;
 };
 // Starts NimBLE (central only) and the two tasks. Logs "[obd] ..." from then on.
 void start();

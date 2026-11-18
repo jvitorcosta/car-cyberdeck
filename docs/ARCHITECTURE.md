@@ -327,10 +327,14 @@ starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
 - `ui/driveview`: the HUD's Drive dash, the second GAUGES screen (NVS `hud`/`screen`, set by
   `/gauges?screen=` or `GAUGES SCREEN`, refused while moving). A PSRAM frame sprite over a baked
   background, each part pushed when it changes. The maths is `util/car/drivedash` (host-tested).
-- `net/remote`: `GET /obd` (the values as one JSON line, for another deck) and `GET /gauges?on=1|0`
-  (the switch; the phone page's GAUGES button), signed or `k=`.
+- `car/gauges` also keeps the trip and the fuel book: the trip time, and the litres charged to the
+  book (NVS `car`/`fuel`) every 30 s by `util/car/tripbook` (host-tested), from the UI loop.
+- `net/remote`: `GET /obd` (the values as one JSON line, for another deck), `GET /gauges?on=1|0`
+  (the switch; the phone page's GAUGES button) and `GET /fill?p=6.49` (a full tank; the page's
+  FULL TANK button), signed or `k=`.
 - `core/serialcmd`: desk commands on the USB serial: `GAUGES ON` / `OFF`, `GAUGES DEMO` (the HUD
-  with `util/car/benchdrive`'s simulated drive) and `SHOT` (`tools/deck_shot.py --black`).
+  with `util/car/benchdrive`'s simulated drive), `FILL [price]`, `TRIP` and `SHOT`
+  (`tools/deck_shot.py --black`).
 
 ## OBD deck
 

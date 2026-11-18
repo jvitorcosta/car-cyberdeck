@@ -24,8 +24,10 @@
 #include "../car/camsound.h"
 #include "../car/gauges.h"
 #include "../../util/car/camwire.h"
+#include "../../util/car/tripbook.h"
 #include "../../util/common/decklink.h"
 #include <atomic>
+#include <cmath>
 #include <WiFi.h>
 
 
@@ -54,11 +56,13 @@ background:#101820;color:#f8f8d8;font:17px system-ui,sans-serif}
 #btns{display:grid;gap:14px}button{font:700 26px system-ui,sans-serif;padding:24px;border:0;
 border-radius:18px;background:#e8a020;color:#101820}button:active{transform:scale(.97)}
 .g{background:#1c2834;color:#5ab0e0;border:2px solid #5ab0e0}.g.on{background:#5ab0e0;color:#101820}
-#sc{display:flex;gap:10px}#sc[hidden]{display:none}#sc button{flex:1;font-size:18px;padding:14px 6px}
+#sc,#fu{display:flex;gap:10px}#sc[hidden],#fu[hidden]{display:none}#sc button{flex:1;font-size:18px;padding:14px 6px}
+#fu input{flex:1;min-width:0;font:700 22px system-ui,sans-serif;padding:12px 14px;border-radius:14px;
+border:2px solid #5ab0e0;background:#101820;color:#f8f8d8}#fu button{font-size:18px;padding:14px 12px}
 #s{min-height:1.4em;text-align:center;margin:0}footer{margin-top:auto;opacity:.5;font-size:14px;text-align:center}
 </style></head><body>
 <div class="now"><small>NOW PLAYING</small><div id="t">...</div><div id="a"></div></div>
-<div class="st" id="st" hidden></div><button id="g" class="g">GAUGES</button><div id="sc" hidden><button class="g" data-s="suki">SUKI</button><button class="g" data-s="drive">DRIVE</button></div><div id="btns"></div><p id="s"></p><footer id="f"></footer>
+<div class="st" id="st" hidden></div><button id="g" class="g">GAUGES</button><div id="sc" hidden><button class="g" data-s="suki">SUKI</button><button class="g" data-s="drive">DRIVE</button></div><div id="fu" hidden><input id="pr" inputmode="decimal" maxlength="5" placeholder="R$/L" aria-label="Price per litre"><button class="g" id="fb">FULL TANK</button></div><div id="btns"></div><p id="s"></p><footer id="f"></footer>
 <script>
 const k=new URLSearchParams(location.search).get('k')||'',$=i=>document.getElementById(i);
 const NAMES={howl:'\u{1F43A} Howl'};
@@ -79,7 +83,15 @@ const b=document.createElement('button');b.textContent=NAMES[n]||n;b.onclick=()=
 async function gauges(q){try{const r=await fetch('/gauges?'+(q||'')+'k='+encodeURIComponent(k),{cache:'no-store'});
 if(r.status==409)$('s').textContent='Park first: screens switch only when stopped';
 if(r.ok||r.status==409){const d=await r.json();$('g').classList.toggle('on',!!d.on);$('g').textContent=d.on?'GAUGES ON':'GAUGES';
-$('sc').hidden=!d.on;for(const b of $('sc').children)b.classList.toggle('on',b.dataset.s==d.screen)}}catch(e){}}
+$('sc').hidden=$('fu').hidden=!d.on;for(const b of $('sc').children)b.classList.toggle('on',b.dataset.s==d.screen);
+$('pr').placeholder='R$/L '+(d.price!=null?d.price.toFixed(2):'6.49')}}catch(e){}}
+async function fill(){const p=$('pr').value.trim();if(!confirm('Full tank now'+(p?' at R$ '+p+'/L':'')+'?'))return;
+$('s').textContent='...';try{const r=await fetch('/fill?'+(p?'p='+encodeURIComponent(p)+'&':'')+'k='+encodeURIComponent(k),{cache:'no-store'});
+if(r.status==400){$('s').textContent='Price: R$ 3.00 to 15.00 a litre, like 6.49';return}
+if(!r.ok){$('s').textContent='Error '+r.status;return}
+const d=await r.json();$('pr').value='';$('pr').placeholder='R$/L '+(d.price!=null?d.price.toFixed(2):'6.49');
+$('s').textContent='Full tank noted'+(d.price!=null?', R$ '+d.price.toFixed(2)+' a litre':'')}catch(e){$('s').textContent='Deck not reachable'}}
+$('fb').onclick=fill;
 $('g').onclick=()=>gauges('on='+($('g').classList.contains('on')?0:1)+'&');
 for(const b of $('sc').children)b.onclick=()=>gauges('screen='+b.dataset.s+'&');
 gauges();poll();setInterval(poll,5000);
@@ -230,10 +242,15 @@ static void handleKaraoke() {
 // (409 while the car moves); without either it says them. Signed or the key, like /link.
 static void handleObd() {
     if (!reqauth::pass(*s_server, s_gate, "/obd", "wrong key")) return;
-    char body[obdwire::MAX_JSON];
+    static char body[obdwire::MAX_JSON];   // static: off this task's 4 KB stack (only this task serves)
     if (!obdwire::encode(gauges::live(), body, sizeof body)) { s_server->send(500, "text/plain", "too big"); return; }
     s_server->sendHeader("Cache-Control", "no-store");
     s_server->send(200, "application/json", body);
+}
+
+static void priceJson(float p, char* out, size_t n) {   // "6.49", or null without a price
+    if (std::isfinite(p)) snprintf(out, n, "%.2f", (double)p);
+    else strlcpy(out, "null", n);
 }
 
 static void handleGauges() {
@@ -249,9 +266,30 @@ static void handleGauges() {
     const bool refused = screen.length() && !gauges::setScreen(want);
     if (!refused && on.length()) gauges::set(on == "1");
     s_server->sendHeader("Cache-Control", "no-store");
-    char body[40];   // the state either way, so the page shows what the deck has
-    snprintf(body, sizeof body, "{\"on\":%d,\"screen\":\"%s\"}", gauges::on() ? 1 : 0, drivedash::name(gauges::screen()));
+    char body[64], price[12];   // the state either way, so the page shows what the deck has
+    priceJson(gauges::price(), price, sizeof price);
+    snprintf(body, sizeof body, "{\"on\":%d,\"screen\":\"%s\",\"price\":%s}", gauges::on() ? 1 : 0,
+             drivedash::name(gauges::screen()), price);
     s_server->send(refused ? 409 : 200, "application/json", body);
+}
+
+// A full tank (car/gauges' fuel book), from the phone page's FULL TANK button: GET /fill, with
+// p=6.49 (or 6,49) the price per litre; without p the last price stays. A p that isn't a price
+// (util/car/tripbook::parsePrice: R$ 3 to 15) changes nothing: 400. Signed or the key.
+static void handleFill() {
+    if (!reqauth::pass(*s_server, s_gate, "/fill", "wrong key")) return;
+    const String p = s_server->arg("p");
+    float pricePerL = NAN;
+    if (p.length() && !tripbook::parsePrice(p.c_str(), &pricePerL)) {
+        s_server->send(400, "text/plain", "p: R$ 3.00 to 15.00 a litre, like 6.49");
+        return;
+    }
+    gauges::fill(pricePerL);   // taken by the UI loop within 250 ms
+    s_server->sendHeader("Cache-Control", "no-store");
+    char body[40], price[12];
+    priceJson(std::isnan(pricePerL) ? gauges::price() : pricePerL, price, sizeof price);
+    snprintf(body, sizeof body, "{\"full\":1,\"price\":%s}", price);
+    s_server->send(200, "application/json", body);
 }
 
 // The watch's playlist picker (util/black/playlists): signed, or the key. Spotify is asked on the
@@ -390,6 +428,7 @@ void begin(bool (*hold)()) {
     s_server->on("/link", HTTP_GET, handleLink);
     s_server->on("/obd", HTTP_GET, handleObd);
     s_server->on("/gauges", HTTP_GET, handleGauges);
+    s_server->on("/fill", HTTP_GET, handleFill);
     s_server->on("/playlists", HTTP_GET, handlePlaylists);
     s_server->on("/playlists/play", HTTP_GET, handlePlaylistPlay);
     s_server->on("/trip/reset", HTTP_POST, [] {

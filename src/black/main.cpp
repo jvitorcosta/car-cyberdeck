@@ -552,6 +552,7 @@ void loop() {
     }
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen
     if (updateDayNight()) lastMode = -1;   // redraw the deck or the status screen in the new palette
+    gauges::tick();   // the trip time and the fuel book, GAUGES on or off
     const bool hud = gauges::on();   // the GAUGES switch (car/gauges): the live gauges, nothing else
     if (hud) {
         static uint32_t hudAt = 0;   // at most 10 frames a second: the values change ~3 times

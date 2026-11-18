@@ -89,6 +89,8 @@ void publish(Pid p, obd::Reply r, float v, Link l) {
             s_trip.step(now, speed, air, cut, eth >= 0.0f && eth <= 100.0f ? eth : ETHANOL_DEFAULT);
             s_view.litresTotal = s_trip.litres();
             s_view.kmlNow = s_trip.nowKmL();
+            s_view.kmTotal = s_trip.km();
+            s_view.kmlAvg = s_trip.avgKmL();
             if (!std::isnan(air)) s_view.airSteps++;   // NAN air counts nothing (fueleco::Trip::step)
         }
     }
@@ -569,6 +571,8 @@ void start() {
     s_view.stored = s_view.pending = -1;
     s_view.litresTotal = 0.0f;
     s_view.kmlNow = NAN;
+    s_view.kmTotal = 0.0f;
+    s_view.kmlAvg = NAN;
     // Central only (platformio.ini turns the peripheral and broadcaster roles off): the deck connects
     // out to the adapter and scans for it, never advertises. NimBLE's default 3 connections; the
     // adapter is the only one used.
@@ -587,6 +591,7 @@ void snapshot(View& out) {
         out.link = Link::Off;
         out.stored = out.pending = -1;
         out.kmlNow = NAN;
+        out.kmlAvg = NAN;
         out.nowMs = millis();
         return;
     }
