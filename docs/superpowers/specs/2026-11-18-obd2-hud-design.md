@@ -110,6 +110,41 @@ An original layout for the 320x240 panel, dark, built from blocks and lines (no 
 The pure parts (`util/car/gaugehud`: blocks lit, zones, peak hold, shift blink, number text,
 warnings) are host-tested; the drawing (`black/ui/gaugeview`) only follows them.
 
+### 5b. Street look (2026-11-18, after the mocks)
+
+João picked mock D from the four mocks (refined, neon tuner, mono OLED, merged): the same readings
+in an early-2000s street-racing look, with a character on the screen the way the in-dash monitors
+of that era had one. It takes from two things he saved: the Civic trip computer with an anime
+drawing beside its numbers, and a fan remake of the lap-time monitor in a 2003 street-racing film
+(name logo, waveform box, stacked chrome bars, a big angry character). Everything is drawn from
+scratch; no art or layout is copied.
+
+```
++---------------------------------------------------------------+
+| CITY DATALINK ///  [SHIFT]  10:39                        LIVE |  header, clock added
+|  ▁▁▂▂▃▃▄▄▅▅▆▆▇▇██████   cyan / pink past 5000 / red past 6500 |  RPM ramp, as before
+|  0   1   2   3   4   5   6   7                                |
+| 8 8 8  RPM 2450   | +--------------------------------------+ |
+|        KM/H       | | ||||||||||||  RPM, last 12 s         | |  street panel (sprite)
+| THR #####  LD ### | |      the navigator: twin tails,       | |
+| ( 91 C    COOLANT)| |      headset, face by the engine      | |
+|  ( 36 C   INTAKE) | |  stripes run with the speed           | |
+|   (14.1 V BATTERY)| +--------------------------------------+ |
++---------------------------------------------------------------+
+```
+
+- **Palette**: deep violet ground; cyan, pink and red for the ramp; the speed in pink segments.
+- **Pills**: coolant, intake, battery as chrome pills stepping right as they go down (the film's
+  stage bars); a warning turns the pill red.
+- **Street panel** (`util/car/streetface`, host-tested; drawn in a 140 x 144 PSRAM sprite pushed every
+  frame): red with pink 45-degree stripes that scroll at 1.2 px/s per km/h; a trace box with the RPM
+  of the last 12 s (32 bars, idle 500 to 7000) as mirrored bars; and the navigator, an original chibi
+  with pink twin tails and a racing headset. Her face follows the link and the engine: glancing
+  around while no adapter answers, asleep (Zz) at KEY ON, a small smile under 2500 rpm, focused
+  brows to 5000, then angry brows and gritted teeth. She blinks every 3.7 s; the headset light
+  flashes. With SHIFT, the panel's frame flashes pink too.
+- Throttle and load lost their percentages (10 cells each still show them) to make room.
+
 ### 6. When it shows
 
 A GAUGES switch, kept in NVS (`hud`/`on`): on, the black deck shows the HUD instead of the music
