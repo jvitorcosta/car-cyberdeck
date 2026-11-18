@@ -54,10 +54,11 @@ background:#101820;color:#f8f8d8;font:17px system-ui,sans-serif}
 #btns{display:grid;gap:14px}button{font:700 26px system-ui,sans-serif;padding:24px;border:0;
 border-radius:18px;background:#e8a020;color:#101820}button:active{transform:scale(.97)}
 .g{background:#1c2834;color:#5ab0e0;border:2px solid #5ab0e0}.g.on{background:#5ab0e0;color:#101820}
+#sc{display:flex;gap:10px}#sc[hidden]{display:none}#sc button{flex:1;font-size:18px;padding:14px 6px}
 #s{min-height:1.4em;text-align:center;margin:0}footer{margin-top:auto;opacity:.5;font-size:14px;text-align:center}
 </style></head><body>
 <div class="now"><small>NOW PLAYING</small><div id="t">...</div><div id="a"></div></div>
-<div class="st" id="st" hidden></div><button id="g" class="g">GAUGES</button><div id="btns"></div><p id="s"></p><footer id="f"></footer>
+<div class="st" id="st" hidden></div><button id="g" class="g">GAUGES</button><div id="sc" hidden><button class="g" data-s="suki">SUKI</button><button class="g" data-s="drive">DRIVE</button></div><div id="btns"></div><p id="s"></p><footer id="f"></footer>
 <script>
 const k=new URLSearchParams(location.search).get('k')||'',$=i=>document.getElementById(i);
 const NAMES={howl:'\u{1F43A} Howl'};
@@ -75,9 +76,12 @@ $('f').textContent=d.wifi+' · '+d.rssi+' dBm · on for '+dur(d.uptime);
 const c=d.clips.join();if(c!==shown){shown=c;$('btns').innerHTML='';for(const n of d.clips){
 const b=document.createElement('button');b.textContent=NAMES[n]||n;b.onclick=()=>play(n);$('btns').appendChild(b)}}
 }catch(e){$('st').hidden=false;$('st').textContent='Deck not reachable'}}
-async function gauges(on){try{const r=await fetch('/gauges?'+(on===undefined?'':'on='+(on?1:0)+'&')+'k='+encodeURIComponent(k),{cache:'no-store'});
-if(r.ok){const d=await r.json();$('g').classList.toggle('on',!!d.on);$('g').textContent=d.on?'GAUGES ON':'GAUGES'}}catch(e){}}
-$('g').onclick=()=>gauges(!$('g').classList.contains('on'));
+async function gauges(q){try{const r=await fetch('/gauges?'+(q||'')+'k='+encodeURIComponent(k),{cache:'no-store'});
+if(r.status==409)$('s').textContent='Park first: screens switch only when stopped';
+if(r.ok||r.status==409){const d=await r.json();$('g').classList.toggle('on',!!d.on);$('g').textContent=d.on?'GAUGES ON':'GAUGES';
+$('sc').hidden=!d.on;for(const b of $('sc').children)b.classList.toggle('on',b.dataset.s==d.screen)}}catch(e){}}
+$('g').onclick=()=>gauges('on='+($('g').classList.contains('on')?0:1)+'&');
+for(const b of $('sc').children)b.onclick=()=>gauges('screen='+b.dataset.s+'&');
 gauges();poll();setInterval(poll,5000);
 </script></body></html>)HTML";
 
@@ -222,8 +226,8 @@ static void handleKaraoke() {
 }
 
 // The live gauges (car/gauges): GET /obd, the values as util/car/obdwire's line, for another deck
-// (the yellow one, the 3rd); GET /gauges?on=1|0 sets the GAUGES switch, without on= it says it. Signed or
-// the key, like /link.
+// (the yellow one, the 3rd); GET /gauges?on=1|0 sets the GAUGES switch and ?screen=suki|drive its screen
+// (409 while the car moves); without either it says them. Signed or the key, like /link.
 static void handleObd() {
     if (!reqauth::pass(*s_server, s_gate, "/obd", "wrong key")) return;
     char body[obdwire::MAX_JSON];
@@ -234,11 +238,20 @@ static void handleObd() {
 
 static void handleGauges() {
     if (!reqauth::pass(*s_server, s_gate, "/gauges", "wrong key")) return;
-    const String on = s_server->arg("on");
-    if (on == "1" || on == "0") gauges::set(on == "1");
-    else if (on.length()) { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
+    const String on = s_server->arg("on"), screen = s_server->arg("screen");
+    drivedash::Screen want = drivedash::Screen::Suki;
+    if (on.length() && on != "1" && on != "0") { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
+    if (screen.length() && !drivedash::parse(screen.c_str(), &want)) {
+        s_server->send(400, "text/plain", "screen=suki or screen=drive");
+        return;
+    }
+    // the screen first: refused while moving, and then nothing changes (on= included)
+    const bool refused = screen.length() && !gauges::setScreen(want);
+    if (!refused && on.length()) gauges::set(on == "1");
     s_server->sendHeader("Cache-Control", "no-store");
-    s_server->send(200, "application/json", gauges::on() ? "{\"on\":1}" : "{\"on\":0}");
+    char body[40];   // the state either way, so the page shows what the deck has
+    snprintf(body, sizeof body, "{\"on\":%d,\"screen\":\"%s\"}", gauges::on() ? 1 : 0, drivedash::name(gauges::screen()));
+    s_server->send(refused ? 409 : 200, "application/json", body);
 }
 
 // The watch's playlist picker (util/black/playlists): signed, or the key. Spotify is asked on the

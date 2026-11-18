@@ -13,6 +13,7 @@
 #include "ui/karaokeview.h"
 #include "ui/gaugeview.h"
 #include "ui/sukiview.h"
+#include "ui/driveview.h"
 #include "car/gauges.h"
 #include "core/serialcmd.h"
 #include "core/karaoke.h"
@@ -558,8 +559,14 @@ void loop() {
         if (whole) Serial.println("[screen] gauges");
         if (whole || millis() - hudAt >= 100) {
             hudAt = millis();
-            if (ui::sukiReady()) ui::drawSuki(s_tft, gauges::live(), millis(), whole);   // the film's art is on the deck
-            else ui::drawGauges(s_tft, gauges::live(), millis(), whole);
+            // the screen picked (GAUGES SCREEN, /gauges?screen=); a switch is a whole redraw
+            static drivedash::Screen shownScreen = drivedash::Screen::Suki;
+            const drivedash::Screen sc = gauges::screen();
+            const bool all = whole || sc != shownScreen;
+            shownScreen = sc;
+            if (sc == drivedash::Screen::Drive && ui::driveReady(s_tft)) ui::drawDrive(s_tft, gauges::live(), millis(), all);
+            else if (ui::sukiReady()) ui::drawSuki(s_tft, gauges::live(), millis(), all);   // the film's art is on the deck
+            else ui::drawGauges(s_tft, gauges::live(), millis(), all);
         }
         if (whole) topDrawn = true;   // its header covers the strip
         lastMode = 3;
