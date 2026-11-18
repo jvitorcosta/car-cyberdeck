@@ -109,6 +109,17 @@ def glyph(font, ch, px, stretch, style):
     if ch == " ":
         w = max(2, round(px * 0.3))
         return Image.new("RGBA", (w, cell.height), (0, 0, 0, 0))
+    if ch == ":" and style == "film" and px < 14:
+        # small sizes: the font's colon dots and their edges run into one blob (it reads as an 8),
+        # so two 2 px dots go at the top and the bottom of the digits' ink, a clear row between them
+        d.text((s + 2, s + 1), "0", font=font, fill=fill, stroke_width=s, stroke_fill=edge)
+        top, bot = cell.getbbox()[1], cell.getbbox()[3]
+        cell = Image.new("RGBA", cell.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(cell)
+        for y in (top + 1, bot - 3):
+            d.rectangle((0, y - 1, 3, y + 2), fill=edge)
+            d.rectangle((1, y, 2, y + 1), fill=fill)
+        return cell.crop((0, 0, 4, cell.height))
     d.text((s + 2, s + 1), "\u00b0" if ch == DEGREE else ch, font=font, fill=fill, stroke_width=s, stroke_fill=edge)
     box = cell.getbbox()
     if not box:

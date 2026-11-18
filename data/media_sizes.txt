@@ -18,4 +18,4 @@ opener.snd 393756
 finale.snd 561140
 camvoice.bin 758036
 connect.snd 32204
-suki.bin 190513
+suki.bin 190447
