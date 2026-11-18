@@ -314,9 +314,11 @@ env `s3` builds `src/obd/obdlink.cpp`, the same BLE link as the OBD deck below, 
 starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
 - `car/gauges`: starts the link, keeps the GAUGES switch (NVS `hud` / `on`) and turns the link's
   readings into `util/car/obdwire::Live` (fresh values only, `seq` +1 per new reading).
-- `ui/gaugeview`: CITY DATALINK, the HUD; `main.cpp` draws it instead of the music screens while the
-  switch is on (at most 10 frames a second, only what changed), under the camera band and the update
-  screen. The maths is `util/car/gaugehud` (host-tested).
+- `ui/gaugeview`: CITY DATALINK, the HUD in its street look; `main.cpp` draws it instead of the music
+  screens while the switch is on (at most 10 frames a second, only what changed), under the camera
+  band and the update screen. The street panel (the navigator, speed stripes, a 12 s RPM trace) is a
+  140 x 144 sprite in PSRAM, pushed every frame. The maths is `util/car/gaugehud` and
+  `util/car/streetface` (host-tested).
 - `net/remote`: `GET /obd` (the values as one JSON line, for another deck) and `GET /gauges?on=1|0`
   (the switch; the phone page's GAUGES button), signed or `k=`.
 - `core/serialcmd`: desk commands on the USB serial: `GAUGES ON` / `OFF`, `GAUGES DEMO` (the HUD
