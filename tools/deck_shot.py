@@ -1,5 +1,6 @@
 """Save what the yellow deck's panel shows as a PNG, over USB:
     python tools/deck_shot.py <port> <out.png>
+    python tools/deck_shot.py --black COM12 <out.png>     (the black deck: src/black/core/serialcmd)
 
 Sends "SHOT" to the deck's shotTick (src/yellow/ledpanel.cpp) and rebuilds the picture from its rows;
 log lines are skipped, and a row one of them landed in is asked for again. Takes about 30 s, and the
@@ -77,10 +78,12 @@ def read_rows(port):
 
 
 def main():
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if a != "--black"]
+    black = len(args) != len(sys.argv) - 1
+    if len(args) != 2:
         raise SystemExit(__doc__)
-    port, path = sys.argv[1], sys.argv[2]
-    if port.upper() in NEVER_PORTS:
+    port, path = args
+    if port.upper() in NEVER_PORTS and not black:
         raise SystemExit("%s is the black deck, not this tool's" % port)
     from PIL import Image
 

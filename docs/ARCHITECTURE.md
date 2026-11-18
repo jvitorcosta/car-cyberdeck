@@ -44,7 +44,7 @@ UDP sender (`audio/musicsvc`, started on demand), the update listener (`net/ota`
 boot the boot scene and intro video (core 1) and the one-shot sound task.
 
 Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, both public;
-`GET /state`, `GET /link`, `GET /music`, `GET /karaoke`, `GET /playlists` and `GET /playlists/play`, which take
+`GET /state`, `GET /link`, `GET /music`, `GET /karaoke`, `GET /obd`, `GET /gauges`, `GET /playlists` and `GET /playlists/play`, which take
 `k=<REMOTE_TOKEN>` or a signature (see [Between the devices](#between-the-devices)); and `POST /play?clip=howl`, `POST /trip/reset` and
 `GET /music/debug`, which take `k=` only.
 
@@ -302,10 +302,28 @@ OBD deck's). Each task's stack is sized from the `[mem]` line's high-water marks
   `NO_WIFI_UPDATES`); NVS keeps the touch
   calibration (`touch`), the looks and the trip (`leds`).
 
+## Live gauges on the black deck
+
+The black deck owns the OBD link to the Vgate (spec `docs/superpowers/specs/2026-11-18-obd2-hud-design.md`):
+env `s3` builds `src/obd/obdlink.cpp`, the same BLE link as the OBD deck below, behind `-D OBD_LINK`
+(NimBLE 2.5.1, central only, 1 connection, its host memory in PSRAM: the internal heap after it
+starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
+- `car/gauges`: starts the link, keeps the GAUGES switch (NVS `hud` / `on`) and turns the link's
+  readings into `util/car/obdwire::Live` (fresh values only, `seq` +1 per new reading).
+- `ui/gaugeview`: CITY DATALINK, the HUD; `main.cpp` draws it instead of the music screens while the
+  switch is on (at most 10 frames a second, only what changed), under the camera band and the update
+  screen. The maths is `util/car/gaugehud` (host-tested).
+- `net/remote`: `GET /obd` (the values as one JSON line, for another deck) and `GET /gauges?on=1|0`
+  (the switch; the phone page's GAUGES button), signed or `k=`.
+- `core/serialcmd`: desk commands on the USB serial: `GAUGES ON` / `OFF`, `GAUGES DEMO` (the HUD
+  with `util/car/benchdrive`'s simulated drive) and `SHOT` (`tools/deck_shot.py --black`).
+
 ## OBD deck
 
 A generic ESP32 with no screen (`src/obd/`, env `obddeck`) that owns everything that reads the car:
 the yellow deck can't hold a 4th BLE connection on this framework, so the adapter got its own board.
+Never flashed so far; since 2026-11-18 the black deck runs the same link for the live gauges (above),
+so this board is only needed for the trip log and health checks.
 It answers the yellow deck over the hotspot and never writes to the car.
 
 | Task | Core | What it does |

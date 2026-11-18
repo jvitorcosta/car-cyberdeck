@@ -5,6 +5,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Black deck
+- **Added:** live car gauges, CITY DATALINK. The black deck reads the car through the Vgate OBD
+  adapter over Bluetooth and, while the phone page's GAUGES switch is on, shows the RPM as a rising
+  ramp of blocks with a peak marker and a blinking SHIFT, the speed in big segment digits, throttle
+  and load bars, and coolant, intake and battery tiles. The switch is remembered across power
+  cycles. Other decks can read the values on `GET /obd`.
+
 ### Both decks
 - **Added:** each deck shows whether it reaches the other and whether the GPS has a fix. The
   yellow deck asks the black deck every 5 s; the yellow deck's header has `GPS` and `DECK` tags
