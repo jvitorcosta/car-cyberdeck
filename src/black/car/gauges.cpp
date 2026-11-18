@@ -26,6 +26,7 @@ obdwire::Live demoLive(uint32_t ms) {
         l.throttle = std::fmin(100.0f, std::fmax(0.0f, (b.rpm - 750.0f) / 55.0f));
         l.load = std::fmin(100.0f, 18.0f + b.rpm / 90.0f);
         l.intakeC = 34.0f;
+        if (b.kmh > 3.0f) l.kml = std::fmax(4.0f, 22.0f - l.load * 0.2f);
     }
     l.seq = ms / 250;
     return l;
@@ -74,6 +75,7 @@ obdwire::Live live() {
     obdlink::View snap;   // ~240 B on the caller's stack (the UI loop, the remote task)
     obdlink::snapshot(snap);
     obdwire::Live l = obdwire::fromReadings(snap.link, snap.value, snap.have, snap.atMs, snap.nowMs);
+    l.kml = snap.kmlNow;   // fueleco's, stepped with fresh values only (NAN without air or under 3 km/h)
     portENTER_CRITICAL(&s_mux);
     l.seq = s_seq.update(snap.have, snap.atMs);
     portEXIT_CRITICAL(&s_mux);

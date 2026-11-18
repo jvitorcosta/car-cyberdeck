@@ -62,8 +62,10 @@ void test_trace_fills_from_the_right() {
     tr.update(3750.0f, 0);
     TEST_ASSERT_EQUAL_INT(5, tr.height(streetface::Trace::N - 1, 10));   // half way from 500 to 7000
     TEST_ASSERT_EQUAL_INT(-1, tr.height(streetface::Trace::N - 2, 10));
+    TEST_ASSERT_EQUAL_UINT32(1, tr.samples());
     tr.update(7000.0f, 100);   // too soon: ignored
     TEST_ASSERT_EQUAL_INT(5, tr.height(streetface::Trace::N - 1, 10));
+    TEST_ASSERT_EQUAL_UINT32(1, tr.samples());
     tr.update(7000.0f, 375);
     TEST_ASSERT_EQUAL_INT(10, tr.height(streetface::Trace::N - 1, 10));
     TEST_ASSERT_EQUAL_INT(5, tr.height(streetface::Trace::N - 2, 10));

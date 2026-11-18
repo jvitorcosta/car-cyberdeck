@@ -319,6 +319,11 @@ starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
   band and the update screen. The street panel (the navigator, speed stripes, a 12 s RPM trace) is a
   140 x 144 sprite in PSRAM, pushed every frame. The maths is `util/car/gaugehud` and
   `util/car/streetface` (host-tested).
+- `ui/sukiview`: the HUD's Suki look, drawn instead of `gaugeview` when `suki.bin` is in the media
+  partition (git-ignored film art from `tools/gen_suki_hud.py`): the film monitor as the background,
+  each value redrawn in its own region only when it changes, through one PSRAM region buffer. The
+  file format, text blending, capsules and layout are `util/car/sukihud`; the 0-100 timer is
+  `util/car/sprint` (both host-tested).
 - `net/remote`: `GET /obd` (the values as one JSON line, for another deck) and `GET /gauges?on=1|0`
   (the switch; the phone page's GAUGES button), signed or `k=`.
 - `core/serialcmd`: desk commands on the USB serial: `GAUGES ON` / `OFF`, `GAUGES DEMO` (the HUD

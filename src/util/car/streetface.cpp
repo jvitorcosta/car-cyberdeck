@@ -42,6 +42,7 @@ void Trace::update(float rpm, uint32_t nowMs) {
     rpm_[head_] = rpm;
     head_ = (head_ + 1) % N;
     if (count_ < N) ++count_;
+    ++taken_;
 }
 
 int Trace::height(int i, int hMax) const {

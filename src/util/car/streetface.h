@@ -49,9 +49,11 @@ public:
     void update(float rpm, uint32_t nowMs);
     void reset() { count_ = 0; head_ = 0; }   // the screen comes back: no stale bars
     int height(int i, int hMax) const;
+    uint32_t samples() const { return taken_; }   // +1 per sample taken: when to redraw
 private:
     float rpm_[N];
     int head_ = 0, count_ = 0;   // head_: where the next sample goes
+    uint32_t taken_ = 0;
     uint32_t atMs_ = 0;
 };
 }  // namespace streetface

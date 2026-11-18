@@ -205,6 +205,7 @@ media partition with `pio run -e s3 -t uploadmedia`. Without it the deck uses bu
 | Shadow on the update rail | `python tools/gen_shadow_rider.py` → `data/shadow.bin` (his Sonic Battle running loop, fetched into `sonic-sprites/shadow/`) | two jet glows ride the rail |
 | Sonic waiting | `python tools/gen_idle_sprite.py` → `data/idle.bin` (rebuilt from the s1disasm disassembly, fetched into `sonic-sprites/`) | Pikachu on "Waiting for a song..." |
 | Wolf howl | `python tools/gen_howl.py wolf.ogg` → `data/howl.pcm` (cut 13-19.5 s by default, `--start`/`--end`; needs ffmpeg), for example the public-domain ["Wolf howls.ogg"](https://commons.wikimedia.org/wiki/File:Wolf_howls.ogg) | a synthesised howl |
+| Gauges, Suki look | frames of the film monitor in `suki-frames/` (`master.png`, `notext.png`), then `python tools/gen_suki_hud.py` → `data/suki.bin` (`--preview out.png` shows it) | the street look |
 | Car sprite | edit and run `python tools/gen_car_sprite.py` (`--png out.png` previews it) | a silver sedan |
 | Song colours | your picks in `src/util/black/songpicks.inc`, colour `#tags` in a playlist's description ([how](docs/yellow-deck.md#which-colour)) | mood, genre and cover |
 
