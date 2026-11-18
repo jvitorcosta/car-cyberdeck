@@ -145,6 +145,43 @@ scratch; no art or layout is copied.
   flashes. With SHIFT, the panel's frame flashes pink too.
 - Throttle and load lost their percentages (10 cells each still show them) to make room.
 
+### 5c. Suki look (2026-11-18, mock V3b)
+
+João asked for the film monitor itself, with more data on it, and picked the 1:1 film screen (A2),
+then the V3b strip under it. The art is frames of that monitor (from the making-of video of a fan
+recreation), so it is never committed: it lives in git-ignored files on João's PC (`suki-frames/`)
+and the deck (`data/suki.bin`, packed into the media partition). `tools/gen_suki_hud.py` builds the file: the clean "final results" frame, its
+waveform and numbers erased (the text-free frame from earlier in the scene fills the info row and
+the bars), scaled to 320 x 185; labels baked in; and six fonts as alpha glyphs. Without the file
+the deck keeps the street look (5b).
+
+```
++---------------------------------------------------------------+
+| (the film monitor: logo, character, frame)                    |
+|  [ waveform box: RPM of the last 12 s as pink capsules ]      |
+|  BAT 14.1   THR 23%    12:40                                  |  the FD / HD lines, the clock
+|  H2O 91*    IAT 36*                                           |
+|  [ 08 : 92        0-100 ]                                     |  STAGE 3: the 0-100 timer
+|    [ 07 : 85       BEST ]                                     |  STAGE 2: best this power-on
+|      [ 14.2        KM/L ]                                     |  STAGE 1: km/l now
++---------------------------------------------------------------+
+| 087      ▁▂▃▄▅▆▇ 20 capsules, red from 6000        ( load )   |  the V3b strip
+| KM/H     2450                              RPM        62%     |
++---------------------------------------------------------------+
+```
+
+- **Fonts**: Century Gothic Bold in the film's lilac for the film's numbers, Impact red labels, the
+  speed in white-core capsule digits with a pink stroke (the lap-time look, leading zeros).
+- **0-100**: armed by a stop, starts when the speed passes 2 km/h, ends at 100 (both interpolated
+  between samples); a gap of 2 s in the readings or 30 s on the clock cancels the run, and a jump
+  past 100 in one sample is no run. Shown as
+  `ss : cc`, cut, not rounded. The best lives in RAM only (`util/car/sprint`, host-tested).
+- **km/l**: a new `kml` field on the wire (`obdwire::Live`), from the trip computer's `kmlNow`.
+- **Tach**: 20 capsules stepping up to the right, 7000 full, red from 6000; the RPM under it, or
+  OFF / SEARCH / KEY ON off the link. **Load**: one capsule filling up, red from 85 %.
+- Each region is redrawn only when its value changes, from a PSRAM buffer of the background
+  (`util/car/sukihud`, host-tested: the file's layout, text blending, capsules, the regions).
+
 ### 6. When it shows
 
 A GAUGES switch, kept in NVS (`hud`/`on`): on, the black deck shows the HUD instead of the music

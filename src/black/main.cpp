@@ -12,6 +12,7 @@
 #include "ui/screen_now.h"
 #include "ui/karaokeview.h"
 #include "ui/gaugeview.h"
+#include "ui/sukiview.h"
 #include "car/gauges.h"
 #include "core/serialcmd.h"
 #include "core/karaoke.h"
@@ -557,7 +558,8 @@ void loop() {
         if (whole) Serial.println("[screen] gauges");
         if (whole || millis() - hudAt >= 100) {
             hudAt = millis();
-            ui::drawGauges(s_tft, gauges::live(), millis(), whole);
+            if (ui::sukiReady()) ui::drawSuki(s_tft, gauges::live(), millis(), whole);   // the film's art is on the deck
+            else ui::drawGauges(s_tft, gauges::live(), millis(), whole);
         }
         if (whole) topDrawn = true;   // its header covers the strip
         lastMode = 3;

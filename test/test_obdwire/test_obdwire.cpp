@@ -19,6 +19,7 @@ static obdwire::Live sample() {
     l.throttle = 18.4f;
     l.load = 41.2f;
     l.volts = 14.1f;
+    l.kml = 12.4f;
     l.seq = 812;
     return l;
 }
@@ -28,7 +29,7 @@ void test_encode_is_the_spec_line() {
     TEST_ASSERT_TRUE(obdwire::encode(sample(), out, sizeof out) > 0);
     TEST_ASSERT_EQUAL_STRING(
         "{\"v\":1,\"link\":3,\"rpm\":2450,\"kmh\":62,\"cool\":88,\"iat\":34,\"thr\":18.4,\"load\":41.2,"
-        "\"volt\":14.1,\"seq\":812}",
+        "\"volt\":14.1,\"kml\":12.4,\"seq\":812}",
         out);
 }
 
@@ -45,6 +46,7 @@ void test_round_trip() {
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 18.4f, b.throttle);
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 41.2f, b.load);
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 14.1f, b.volts);
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, 12.4f, b.kml);
     TEST_ASSERT_EQUAL_UINT32(812, b.seq);
 }
 
@@ -62,6 +64,7 @@ void test_unknown_values_travel_as_null() {
     TEST_ASSERT_TRUE(std::isnan(b.rpm));
     TEST_ASSERT_TRUE(std::isnan(b.coolC));
     TEST_ASSERT_TRUE(std::isnan(b.load));
+    TEST_ASSERT_TRUE(std::isnan(b.kml));
     TEST_ASSERT_FLOAT_WITHIN(0.05f, 12.6f, b.volts);
 }
 
@@ -77,6 +80,7 @@ void test_too_small_a_buffer_writes_nothing() {
     w.throttle = 100.0f;
     w.load = 100.0f;
     w.volts = 29.9f;
+    w.kml = 99.9f;   // fueleco's cap
     w.seq = 4294967295u;
     char big[obdwire::MAX_JSON];
     TEST_ASSERT_TRUE(obdwire::encode(w, big, sizeof big) > 0);

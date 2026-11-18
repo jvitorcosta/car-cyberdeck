@@ -15,6 +15,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   coolant, intake and battery, and a panel with an anime navigator in a headset whose face follows
   the engine (asleep with the key on, calm at idle, focused, then angry near the redline), stripes
   that run with the speed and the last 12 seconds of RPM.
+- **Added:** the gauges' Suki look. With the art file on the deck (made on your PC from frames of
+  the film monitor, `tools/gen_suki_hud.py`, never shared), the gauges show that monitor with the
+  car's own numbers in its places: battery, throttle, coolant and intake, a clock, the last 12 s
+  of RPM in the waveform box, a 0-100 km/h timer with the best run, km/l now, and a strip under it
+  with the speed in big capsule digits, a 20-capsule tach (red from 6000) and a load capsule.
+  Without the file the street look stays.
 - **Changed:** with a PC on its USB port, every sound plays at a tenth of its volume, so testing at
   the desk at night stays quiet. On a car charger it plays as loud as before.
 

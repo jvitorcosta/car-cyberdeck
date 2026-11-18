@@ -47,7 +47,8 @@ size_t encode(const Live& l, char* out, size_t n) {
     const bool ok = put(out, n, &len, "rpm", l.rpm, 0) && put(out, n, &len, "kmh", l.kmh, 0) &&
                     put(out, n, &len, "cool", l.coolC, 0) && put(out, n, &len, "iat", l.intakeC, 0) &&
                     put(out, n, &len, "thr", l.throttle, 1) && put(out, n, &len, "load", l.load, 1) &&
-                    put(out, n, &len, "volt", l.volts, 1);
+                    put(out, n, &len, "volt", l.volts, 1) &&
+                    put(out, n, &len, "kml", l.kml, 1);
     if (ok) {
         w = snprintf(out + len, n - len, ",\"seq\":%lu}", (unsigned long)l.seq);
         if (w >= 0 && (size_t)w < n - len) return len + (size_t)w;
@@ -70,6 +71,7 @@ bool decode(const char* json, Live* l) {
     out.throttle = realOr(json, "thr");
     out.load = realOr(json, "load");
     out.volts = realOr(json, "volt");
+    out.kml = realOr(json, "kml");
     if (jsonflat::num(json, "seq", &seq) && seq >= 0) out.seq = (uint32_t)seq;
     *l = out;
     return true;
