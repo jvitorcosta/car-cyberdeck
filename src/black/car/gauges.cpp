@@ -11,6 +11,7 @@
 namespace gauges {
 namespace {
 std::atomic<bool> s_on{false}, s_demo{false};
+std::atomic<uint8_t> s_screen{(uint8_t)drivedash::Screen::Suki};
 std::atomic<uint32_t> s_demoAt{0};
 
 // The simulated drive as the HUD's values; throttle, load and intake made up from its rpm and speed.
@@ -39,6 +40,8 @@ void begin() {
     Preferences p;
     if (p.begin("hud", false)) {           // read-write: creates it, no NOT_FOUND log
         s_on.store(p.isKey("on") && p.getBool("on", false));
+        const uint8_t sc = p.isKey("screen") ? p.getUChar("screen", 0) : 0;
+        if (sc < (uint8_t)drivedash::Screen::COUNT) s_screen.store(sc);
         p.end();
     }
 #ifdef OBD_LINK
@@ -50,6 +53,20 @@ void begin() {
 }
 
 bool on() { return s_on.load(); }
+
+drivedash::Screen screen() { return (drivedash::Screen)s_screen.load(); }
+
+bool setScreen(drivedash::Screen s) {
+    if ((int)s >= (int)drivedash::Screen::COUNT || !drivedash::canSwitch(live().kmh)) return false;
+    if (s_screen.exchange((uint8_t)s) == (uint8_t)s) return true;
+    Preferences p;
+    if (p.begin("hud", false)) {
+        p.putUChar("screen", (uint8_t)s);
+        p.end();
+    }
+    Serial.printf("[obd] gauges screen %s\n", drivedash::name(s));
+    return true;
+}
 
 void demo() {
     s_demoAt.store(millis());

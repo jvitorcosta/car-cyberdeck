@@ -182,6 +182,34 @@ the deck keeps the street look (5b).
 - Each region is redrawn only when its value changes, from a PSRAM buffer of the background
   (`util/car/sukihud`, host-tested: the file's layout, text blending, capsules, the regions).
 
+### 5d. Drive dash (2026-11-18, the CarDeck mocks' screen 2)
+
+The second GAUGES screen, for driving, with V3b (5c) kept as the first. It's in the Suki colours
+but drawn in code, so everything in it can be committed.
+
+```
++---------------------------------------------------------------+
+| DRIVE                                                    LIVE |  header: the link's state
+|        ▂▃▄▅▆▇ 20-segment RPM arc, red from 5600 ▇▆▅          |
+|                     2.6   RPM x1000                           |
+|            +--------------------------------+                 |
+|            |  8 8 8   cyan 7-segment speed  | KM/H            |  the one dominant number
+|            +--------------------------------+                 |
+| COOL  51C    LOAD  47%    VOLT 14.1V                          |  ladders, 18 cells each
+| [||||||   ]  [|||||    ]  [||||||||  ]                        |
+| WARM-UP [|||||||||||||                    ]                   |  coolant 40 to 85 C
++---------------------------------------------------------------+
+```
+
+- **Speed**: three digits over ghost 888s, with blanks for leading zeros.
+- **Arc**: lights `ceil(rpm x 20 / 7000)` segments; the last four are red.
+- **Ladders**: coolant to 130 C (its last 20 % red), load to 100 %, volts 10 to 16 V.
+- **Red means a problem, inverted**: the coolant from over 105 C until under 100 C, and the volts
+  after 60 s under 12.0 V running, until 12.2 V. The value then shows white on red and the whole
+  ladder turns red.
+- **Drawing**: a 320 x 240 frame sprite and the baked background sit in PSRAM. Each part redraws only
+  when its value changes (`util/car/drivedash`, host-tested; view `ui/driveview`).
+
 ### 6. When it shows
 
 A GAUGES switch, kept in NVS (`hud`/`on`): on, the black deck shows the HUD instead of the music
@@ -189,6 +217,14 @@ screens; off, it never does. Set from the phone page's GAUGES button or `GET /ga
 (signed or `k=`). It stays on across power cycles, so João turns it on once and the deck starts on
 the gauges in the car. The camera band and update screen still draw over it. A yellow-deck menu
 item for it is phase 2 (needs the yellow heap checked).
+
+Which screen it shows is kept in NVS (`hud`/`screen`), starting on Suki:
+- the phone page's SUKI / DRIVE buttons (shown while GAUGES is on)
+- `GET /gauges?screen=suki|drive`, which answers `{"on":1,"screen":"drive"}`, or 409 while moving
+- `GAUGES SCREEN suki|drive` on the serial port
+
+A switch is refused above 3 km/h (the mocks' rule: screens switch only when parked). An unknown speed
+counts as parked. Suki falls back to the street look without its art.
 
 ## Measured on the desk (2026-11-18, black deck on COM12, no adapter)
 

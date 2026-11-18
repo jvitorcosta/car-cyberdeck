@@ -21,6 +21,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   of RPM in the waveform box, a 0-100 km/h timer with the best run, km/l now, and a strip under it
   with the speed in big capsule digits, a 20-capsule tach (red from 6000) and a load capsule.
   Without the file the street look stays.
+- **Added:** a second gauge screen, the Drive dash: the speed as one big cyan seven-segment number, a
+  20-segment RPM arc above it, coolant, load and volts ladders and a warm-up bar. A hot engine or a
+  weak battery turns its value red. Pick SUKI or DRIVE on the phone page while parked, and the deck
+  remembers it.
 - **Changed:** with a PC on its USB port, every sound plays at a tenth of its volume, so testing at
   the desk at night stays quiet. On a car charger it plays as loud as before.
 

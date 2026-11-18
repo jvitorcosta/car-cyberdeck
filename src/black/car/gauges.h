@@ -1,4 +1,5 @@
 #pragma once
+#include "../../util/car/drivedash.h"
 #include "../../util/car/obdwire.h"
 // The black deck's live gauges: the OBD link (src/obd/obdlink, the same BLE link the OBD deck runs,
 // built in with -D OBD_LINK) and the GAUGES switch that puts the HUD (ui/gaugeview) on the screen.
@@ -14,4 +15,9 @@ void set(bool on);     // any task; written to NVS only when it changes (and end
 void demo();
 // The values now (fresh readings only), seq +1 whenever a new reading came in. Any task.
 obdwire::Live live();
+// Which GAUGES screen shows (util/car/drivedash::Screen), kept in NVS ("hud" / "screen"); the Suki
+// screen until one is picked. setScreen refuses (false) while the car moves (drivedash::canSwitch on
+// live()'s speed). Any task.
+drivedash::Screen screen();
+bool setScreen(drivedash::Screen s);
 }

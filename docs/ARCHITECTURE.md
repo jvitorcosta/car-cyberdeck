@@ -324,6 +324,9 @@ starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
   each value redrawn in its own region only when it changes, through one PSRAM region buffer. The
   file format, text blending, capsules and layout are `util/car/sukihud`; the 0-100 timer is
   `util/car/sprint` (both host-tested).
+- `ui/driveview`: the HUD's Drive dash, the second GAUGES screen (NVS `hud`/`screen`, set by
+  `/gauges?screen=` or `GAUGES SCREEN`, refused while moving). A PSRAM frame sprite over a baked
+  background, each part pushed when it changes. The maths is `util/car/drivedash` (host-tested).
 - `net/remote`: `GET /obd` (the values as one JSON line, for another deck) and `GET /gauges?on=1|0`
   (the switch; the phone page's GAUGES button), signed or `k=`.
 - `core/serialcmd`: desk commands on the USB serial: `GAUGES ON` / `OFF`, `GAUGES DEMO` (the HUD
