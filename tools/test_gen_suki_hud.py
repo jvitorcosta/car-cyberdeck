@@ -5,12 +5,16 @@ import struct
 import sys
 import unittest
 
-from PIL import Image
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import gen_suki_hud as g  # noqa: E402
+try:   # the art tool needs Pillow; CI's tools job doesn't install it, so these skip there
+    from PIL import Image
+    import gen_suki_hud as g  # noqa: E402
+except ImportError:
+    Image = g = None
+NO_PIL = unittest.skipIf(g is None, "needs Pillow (pip install pillow)")
 
 
+@NO_PIL
 class Pack(unittest.TestCase):
     def test_layout_matches_sukihud_h(self):
         bg = Image.new("RGB", (g.W, g.H), (255, 0, 0))
@@ -38,6 +42,7 @@ class Pack(unittest.TestCase):
         self.assertEqual(g.rgb565_be((0, 255, 0)), b"\x07\xe0")
 
 
+@NO_PIL
 class Erase(unittest.TestCase):
     def test_ink_becomes_a_blend_of_its_ends(self):
         img = Image.new("RGB", (10, 1), (10, 10, 10))
