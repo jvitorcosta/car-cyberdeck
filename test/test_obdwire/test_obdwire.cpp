@@ -158,6 +158,28 @@ void test_from_readings_across_millis_wrap() {
     TEST_ASSERT_FLOAT_WITHIN(0.01f, 800.0f, l.rpm);
 }
 
+void test_seq_moves_only_with_a_new_reading() {
+    constexpr int N = (int)Pid::COUNT;
+    bool have[N] = {};
+    uint32_t atMs[N] = {};
+    obdwire::Seq seq;
+    TEST_ASSERT_EQUAL_UINT32(0, seq.update(have, atMs));   // nothing read yet
+    have[(int)Pid::Rpm] = true;
+    atMs[(int)Pid::Rpm] = 1000;
+    TEST_ASSERT_EQUAL_UINT32(1, seq.update(have, atMs));
+    TEST_ASSERT_EQUAL_UINT32(1, seq.update(have, atMs));   // the same readings: no bump
+    have[(int)Pid::Speed] = true;
+    atMs[(int)Pid::Speed] = 900;                           // older than the newest: no bump
+    TEST_ASSERT_EQUAL_UINT32(1, seq.update(have, atMs));
+    atMs[(int)Pid::Speed] = 1100;
+    TEST_ASSERT_EQUAL_UINT32(2, seq.update(have, atMs));
+    atMs[(int)Pid::Rpm] = 0xFFFFFFF0u;                     // before the wrap...
+    atMs[(int)Pid::Speed] = 0xFFFFFFF0u;
+    TEST_ASSERT_EQUAL_UINT32(3, seq.update(have, atMs));
+    atMs[(int)Pid::Rpm] = 20;                              // ...and after it: still newer
+    TEST_ASSERT_EQUAL_UINT32(4, seq.update(have, atMs));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_encode_is_the_spec_line);
@@ -169,5 +191,6 @@ int main() {
     RUN_TEST(test_slot_folds_the_extended_temperatures);
     RUN_TEST(test_from_readings_takes_fresh_values_only);
     RUN_TEST(test_from_readings_across_millis_wrap);
+    RUN_TEST(test_seq_moves_only_with_a_new_reading);
     return UNITY_END();
 }

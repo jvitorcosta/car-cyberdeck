@@ -33,15 +33,18 @@ void shot(TFT_eSPI& tft) {
     // is slow): a write may wait 1 s, and one that still times out ends the shot.
     Serial.setTxTimeoutMs(1000);
     Serial.println("SHOT 320 240");
-    for (int y = 0; y < 240; y++)
+    for (int y = 0; y < 240; y++) {
+        feedLoopWDT();   // a slow reader: up to 1 s a row, longer than the loop's watchdog allows
         if (!shotRow(tft, y)) {
             Serial.setTxTimeoutMs(1);
             return;
         }
+    }
     Serial.println("SHOT END");
     char ask[5];
     size_t n = 0;
     for (uint32_t until = millis() + 2000; static_cast<int32_t>(until - millis()) > 0;) {
+        feedLoopWDT();
         if (!Serial.available()) {
             delay(5);
             continue;

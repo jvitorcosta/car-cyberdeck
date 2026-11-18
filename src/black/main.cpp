@@ -297,10 +297,10 @@ void setup() {
     camsound::begin();
     camsvc::onStage(camsound::onStage);
     camsvc::begin();
+    gauges::begin();   // the GAUGES switch and the OBD link (car/gauges, -D OBD_LINK): before /obd
+    mem::log("obd link");
     remote::begin(bootscene::active);
     ota::begin(REMOTE_NAME, bootscene::active);
-    gauges::begin();   // the GAUGES switch and the OBD link (car/gauges, -D OBD_LINK)
-    mem::log("obd link");
     // The UI loop is watched from here (the core feeds it before each loop()); setup()'s waits for
     // the opening and the WiFi are not.
     enableLoopWDT();

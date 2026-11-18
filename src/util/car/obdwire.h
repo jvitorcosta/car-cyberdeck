@@ -26,6 +26,16 @@ size_t encode(const Live& l, char* out, size_t n);
 // untouched. Keys in any order, unknown ones ignored, missing values NAN.
 bool decode(const char* json, Live* l);
 
+// Live::seq for a link's readings: +1 whenever the newest reading time (atMs over the ones it has)
+// moves, so a reader can tell a new snapshot from a repeat. Not thread-safe: the caller guards it.
+class Seq {
+public:
+    uint32_t update(const bool* have, const uint32_t* atMs);
+private:
+    uint32_t seq_ = 0, newest_ = 0;
+    bool any_ = false;
+};
+
 // Where a reading is kept: the City's extended coolant / intake (67 / 68) stand in for 05 / 0F.
 obd::Pid slot(obd::Pid p);
 // The HUD's values from a link's readings (obdlink::View's arrays, indexed by obd::Pid): a reading

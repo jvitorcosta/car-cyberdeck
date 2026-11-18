@@ -11,6 +11,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   ramp of blocks with a peak marker and a blinking SHIFT, the speed in big segment digits, throttle
   and load bars, and coolant, intake and battery tiles. The switch is remembered across power
   cycles. Other decks can read the values on `GET /obd`.
+- **Changed:** with a PC on its USB port, every sound plays at a tenth of its volume, so testing at
+  the desk at night stays quiet. On a car charger it plays as loud as before.
 
 ### Both decks
 - **Added:** each deck shows whether it reaches the other and whether the GPS has a fix. The

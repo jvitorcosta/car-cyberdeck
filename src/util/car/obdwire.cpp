@@ -75,6 +75,22 @@ bool decode(const char* json, Live* l) {
     return true;
 }
 
+uint32_t Seq::update(const bool* have, const uint32_t* atMs) {
+    uint32_t newest = 0;
+    bool any = false;
+    for (int i = 0; i < (int)Pid::COUNT; ++i)   // the latest across a millis() wrap: signed difference
+        if (have[i] && (!any || (int32_t)(atMs[i] - newest) > 0)) {
+            newest = atMs[i];
+            any = true;
+        }
+    if (any && (!any_ || newest != newest_)) {
+        any_ = true;
+        newest_ = newest;
+        ++seq_;
+    }
+    return seq_;
+}
+
 Pid slot(Pid p) {
     if (p == Pid::CoolantX) return Pid::Coolant;
     if (p == Pid::IntakeX) return Pid::Intake;

@@ -31,8 +31,7 @@ obdwire::Live demoLive(uint32_t ms) {
     return l;
 }
 portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
-uint32_t s_seq = 0, s_newestMs = 0;   // under s_mux
-bool s_any = false;
+obdwire::Seq s_seq;   // under s_mux
 }
 
 void begin() {
@@ -74,21 +73,9 @@ obdwire::Live live() {
 #ifdef OBD_LINK
     obdlink::View snap;   // ~240 B on the caller's stack (the UI loop, the remote task)
     obdlink::snapshot(snap);
-    uint32_t newest = 0;
-    bool any = false;
-    for (int i = 0; i < (int)obd::Pid::COUNT; ++i)
-        if (snap.have[i] && (!any || (int32_t)(snap.atMs[i] - newest) > 0)) {
-            newest = snap.atMs[i];
-            any = true;
-        }
     obdwire::Live l = obdwire::fromReadings(snap.link, snap.value, snap.have, snap.atMs, snap.nowMs);
     portENTER_CRITICAL(&s_mux);
-    if (any && (!s_any || newest != s_newestMs)) {
-        s_any = true;
-        s_newestMs = newest;
-        ++s_seq;
-    }
-    l.seq = s_seq;
+    l.seq = s_seq.update(snap.have, snap.atMs);
     portEXIT_CRITICAL(&s_mux);
     return l;
 #else
