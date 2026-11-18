@@ -17,6 +17,7 @@
 #include "../util/car/fueleco.h"
 #include "../util/car/obdble.h"
 #include "../util/car/obdpick.h"
+#include "../util/car/obdwire.h"
 
 namespace obdlink {
 namespace {
@@ -71,8 +72,7 @@ void publish(Pid p, obd::Reply r, float v, Link l) {
     s_view.link = l;
     if (r == obd::Reply::Ok) {
         // the City has coolant / intake only as 67 / 68: they stand in for 05 / 0F everywhere
-        if (p == Pid::CoolantX) p = Pid::Coolant;
-        if (p == Pid::IntakeX) p = Pid::Intake;
+        p = obdwire::slot(p);
         const uint32_t now = millis();
         s_view.value[(int)p] = v;
         s_view.have[(int)p] = true;

@@ -22,6 +22,7 @@
 #include "../spotify/client.h"
 #include "../car/camsvc.h"
 #include "../car/camsound.h"
+#include "../car/gauges.h"
 #include "../../util/car/camwire.h"
 #include "../../util/common/decklink.h"
 #include <atomic>
@@ -52,10 +53,11 @@ background:#101820;color:#f8f8d8;font:17px system-ui,sans-serif}
 .st{background:#3a2a10;color:#f8d890;border-radius:14px;padding:12px 16px}
 #btns{display:grid;gap:14px}button{font:700 26px system-ui,sans-serif;padding:24px;border:0;
 border-radius:18px;background:#e8a020;color:#101820}button:active{transform:scale(.97)}
+.g{background:#1c2834;color:#5ab0e0;border:2px solid #5ab0e0}.g.on{background:#5ab0e0;color:#101820}
 #s{min-height:1.4em;text-align:center;margin:0}footer{margin-top:auto;opacity:.5;font-size:14px;text-align:center}
 </style></head><body>
 <div class="now"><small>NOW PLAYING</small><div id="t">...</div><div id="a"></div></div>
-<div class="st" id="st" hidden></div><div id="btns"></div><p id="s"></p><footer id="f"></footer>
+<div class="st" id="st" hidden></div><button id="g" class="g">GAUGES</button><div id="btns"></div><p id="s"></p><footer id="f"></footer>
 <script>
 const k=new URLSearchParams(location.search).get('k')||'',$=i=>document.getElementById(i);
 const NAMES={howl:'\u{1F43A} Howl'};
@@ -73,7 +75,10 @@ $('f').textContent=d.wifi+' · '+d.rssi+' dBm · on for '+dur(d.uptime);
 const c=d.clips.join();if(c!==shown){shown=c;$('btns').innerHTML='';for(const n of d.clips){
 const b=document.createElement('button');b.textContent=NAMES[n]||n;b.onclick=()=>play(n);$('btns').appendChild(b)}}
 }catch(e){$('st').hidden=false;$('st').textContent='Deck not reachable'}}
-poll();setInterval(poll,5000);
+async function gauges(on){try{const r=await fetch('/gauges?'+(on===undefined?'':'on='+(on?1:0)+'&')+'k='+encodeURIComponent(k),{cache:'no-store'});
+if(r.ok){const d=await r.json();$('g').classList.toggle('on',!!d.on);$('g').textContent=d.on?'GAUGES ON':'GAUGES'}}catch(e){}}
+$('g').onclick=()=>gauges(!$('g').classList.contains('on'));
+gauges();poll();setInterval(poll,5000);
 </script></body></html>)HTML";
 
 #include "icon.inc"   // ICON_PNG: tools/gen_icon.py
@@ -216,6 +221,26 @@ static void handleKaraoke() {
     s_server->send(200, "application/json", on == "1" ? "{\"on\":1}" : "{\"on\":0}");
 }
 
+// The live gauges (car/gauges): GET /obd, the values as util/car/obdwire's line, for another deck
+// (the yellow one, the 3rd); GET /gauges?on=1|0 sets the GAUGES switch, without on= it says it. Signed or
+// the key, like /link.
+static void handleObd() {
+    if (!reqauth::pass(*s_server, s_gate, "/obd", "wrong key")) return;
+    char body[obdwire::MAX_JSON];
+    if (!obdwire::encode(gauges::live(), body, sizeof body)) { s_server->send(500, "text/plain", "too big"); return; }
+    s_server->sendHeader("Cache-Control", "no-store");
+    s_server->send(200, "application/json", body);
+}
+
+static void handleGauges() {
+    if (!reqauth::pass(*s_server, s_gate, "/gauges", "wrong key")) return;
+    const String on = s_server->arg("on");
+    if (on == "1" || on == "0") gauges::set(on == "1");
+    else if (on.length()) { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
+    s_server->sendHeader("Cache-Control", "no-store");
+    s_server->send(200, "application/json", gauges::on() ? "{\"on\":1}" : "{\"on\":0}");
+}
+
 // The watch's playlist picker (util/black/playlists): signed, or the key. Spotify is asked on the
 // network task (spotify/client), so these wait for it: a page of the owner's playlists, or one played.
 static void handlePlaylists() {
@@ -350,6 +375,8 @@ void begin(bool (*hold)()) {
     s_server->on("/music/debug", HTTP_GET, handleMusicDebug);
     s_server->on("/karaoke", HTTP_GET, handleKaraoke);
     s_server->on("/link", HTTP_GET, handleLink);
+    s_server->on("/obd", HTTP_GET, handleObd);
+    s_server->on("/gauges", HTTP_GET, handleGauges);
     s_server->on("/playlists", HTTP_GET, handlePlaylists);
     s_server->on("/playlists/play", HTTP_GET, handlePlaylistPlay);
     s_server->on("/trip/reset", HTTP_POST, [] {

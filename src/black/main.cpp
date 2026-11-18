@@ -11,6 +11,9 @@
 #include "core/mem.h"
 #include "ui/screen_now.h"
 #include "ui/karaokeview.h"
+#include "ui/gaugeview.h"
+#include "car/gauges.h"
+#include "core/serialcmd.h"
 #include "core/karaoke.h"
 #include "../util/black/karaokepick.h"
 #include "ui/cjkdata.h"
@@ -294,6 +297,8 @@ void setup() {
     camsound::begin();
     camsvc::onStage(camsound::onStage);
     camsvc::begin();
+    gauges::begin();   // the GAUGES switch and the OBD link (car/gauges, -D OBD_LINK): before /obd
+    mem::log("obd link");
     remote::begin(bootscene::active);
     ota::begin(REMOTE_NAME, bootscene::active);
     // The UI loop is watched from here (the core feeds it before each loop()); setup()'s waits for
@@ -445,6 +450,7 @@ void loop() {
         delay(20);
         return;
     }
+    serialcmd::tick(s_tft);   // desk commands: GAUGES ON / OFF / DEMO, SHOT
     static uint32_t lastStackLog = 0;      // the loop task's stack use (8 KB default), once a minute
     if (millis() - lastStackLog >= 60000) {
         lastStackLog = millis();
@@ -544,7 +550,18 @@ void loop() {
     }
     static uint8_t shownGenre = genre::NONE;   // badge for the track on screen
     if (updateDayNight()) lastMode = -1;   // redraw the deck or the status screen in the new palette
-    if (mode != 0) {
+    const bool hud = gauges::on();   // the GAUGES switch (car/gauges): the live gauges, nothing else
+    if (hud) {
+        static uint32_t hudAt = 0;   // at most 10 frames a second: the values change ~3 times
+        const bool whole = lastMode != 3;
+        if (whole) Serial.println("[screen] gauges");
+        if (whole || millis() - hudAt >= 100) {
+            hudAt = millis();
+            ui::drawGauges(s_tft, gauges::live(), millis(), whole);
+        }
+        if (whole) topDrawn = true;   // its header covers the strip
+        lastMode = 3;
+    } else if (mode != 0) {
         static char shownText[80] = "", shownTitle[24] = "";
         static char title[24], detail[48];
         static uint32_t textAt = 0, shownAt = 0, shownKey = 0;   // shownAt: the screen appeared
@@ -692,7 +709,7 @@ void loop() {
     s_tft.resetViewport();
     if (topDrawn && camTag) camband::invalidate();
     // the strip's icons only on a screen with the strip: not over the karaoke view (its own tags)
-    const bool strip = !(mode == 0 && shownKaraoke != karaokemode::Screen::Normal);
+    const bool strip = !hud && !(mode == 0 && shownKaraoke != karaokemode::Screen::Normal);
     camband::draw(s_tft, cam, cam.index >= 0 ? &camPt : nullptr, camMute, yellowLinked, strip);
     delay(10);
 }
