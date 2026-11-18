@@ -190,7 +190,7 @@ but drawn in code, so everything in it can be committed.
 ```
 +---------------------------------------------------------------+
 | DRIVE                                                    LIVE |  header: the link's state
-|        ▂▃▄▅▆▇ 20-segment RPM arc, red from 5600 ▇▆▅          |
+|        ▂▃▄▅▆▇ 20-segment RPM arc, red over 5600 ▇▆▅          |
 |                     2.6   RPM x1000                           |
 |            +--------------------------------+                 |
 |            |  8 8 8   cyan 7-segment speed  | KM/H            |  the one dominant number

@@ -24,8 +24,8 @@ struct Box { int16_t x, y, w, h; };
 Box segment(int k, int x, int y, int w, int h, int t);
 
 // The RPM arc: N segments over the top of a circle, FULL rpm lights them all; from HOT_FROM on they are
-// red (the last 20 %: 5600 rpm, past i-VTEC's crossover).
-constexpr int ARC_N = 20, ARC_CX = 160, ARC_CY = 118, ARC_R = 88, ARC_W = 10, HOT_FROM = 17;
+// red (the last 20 %: over 5600 rpm, past i-VTEC's crossover).
+constexpr int ARC_N = 20, ARC_CX = 160, ARC_CY = 118, ARC_R = 88, ARC_W = 10, HOT_FROM = 16;
 constexpr float ARC_FULL = 7000.0f;
 int arcLit(float rpm);               // 0..ARC_N; 0 for NAN
 bool arcHot(int i);

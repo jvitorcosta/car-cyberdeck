@@ -54,8 +54,11 @@ void test_rpm_arc() {
     TEST_ASSERT_EQUAL_INT(6, drivedash::arcLit(2100.0f));  // 6.0 of 20: exactly six
     TEST_ASSERT_EQUAL_INT(7, drivedash::arcLit(2101.0f));
     TEST_ASSERT_EQUAL_INT(drivedash::ARC_N, drivedash::arcLit(9000.0f));
-    TEST_ASSERT_FALSE(drivedash::arcHot(16));
-    TEST_ASSERT_TRUE(drivedash::arcHot(17));
+    TEST_ASSERT_FALSE(drivedash::arcHot(15));
+    TEST_ASSERT_TRUE(drivedash::arcHot(16));
+    // red over 80 % of FULL: 5600 rpm lights 16, none red; past it the 17th (index 16) is red
+    TEST_ASSERT_FALSE(drivedash::arcHot(drivedash::arcLit(5600.0f) - 1));
+    TEST_ASSERT_TRUE(drivedash::arcHot(drivedash::arcLit(5601.0f) - 1));
     // the arc sits over the speed window, inside the screen, left to right
     const drivedash::Quad first = drivedash::arcQuad(0), last = drivedash::arcQuad(drivedash::ARC_N - 1);
     const drivedash::Quad ends[2] = {first, last};
