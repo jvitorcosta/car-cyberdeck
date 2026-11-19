@@ -6,6 +6,7 @@ namespace {
 portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 karaokemode::Mode s_mode;  // under s_mux
 int s_light = -1;          // under s_mux
+int s_theme = -1;          // under s_mux: the last lit light (themeLight)
 bool s_logged = false;     // the last state logged: on or off, not every keep-alive
 }  // namespace
 
@@ -13,7 +14,21 @@ void keepAlive(int light) {
     portENTER_CRITICAL(&s_mux);
     s_mode.keepAlive(millis());
     s_light = light;
+    s_theme = karaokemode::keepLit(s_theme, light);
     portEXIT_CRITICAL(&s_mux);
+}
+
+void noteLight(int light) {
+    portENTER_CRITICAL(&s_mux);
+    s_theme = karaokemode::keepLit(s_theme, light);
+    portEXIT_CRITICAL(&s_mux);
+}
+
+int themeLight() {
+    portENTER_CRITICAL(&s_mux);
+    const int l = s_theme;
+    portEXIT_CRITICAL(&s_mux);
+    return l;
 }
 
 int light() {

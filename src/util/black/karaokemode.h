@@ -58,4 +58,9 @@ inline int parseLight(const char* s) {
     const int n = s[0] - '0';
     return n <= MAX_LIGHT ? n : -1;
 }
+
+// The yellow deck's colour for screens that follow it all the time (the Ride gauges): a lit light
+// (0..MAX_LIGHT) replaces the last one; off or junk (-1) keeps it, so a dark cabin doesn't turn the
+// screen back to the default green.
+inline int keepLit(int last, int light) { return light >= 0 && light <= MAX_LIGHT ? light : last; }
 }  // namespace karaokemode

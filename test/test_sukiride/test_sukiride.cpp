@@ -95,11 +95,25 @@ void test_look_takes_termpal_roles() {
     Art a;
     TEST_ASSERT_TRUE(parse(f.data(), f.size(), &a));
     Look k;
-    makeLook(a, 5, false, &k);   // green, day
-    TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::TEXT, 5, false)), k.tx);
-    TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::ALERT, 5, false)), k.al);
+    makeLook(a, 2, false, &k);   // pink, day: the day palette
+    TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::TEXT, 2, false)), k.tx);
+    TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::ALERT, 2, false)), k.al);
     TEST_ASSERT_EQUAL_HEX16(be(0xFAD7BE), k.art[2]);   // skin stays
+
+    makeLook(a, 5, false, &k);   // green, day: Ride wears the night palette
+    TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::TEXT, 5, true)), k.tx);
+    TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::ALERT, 5, true)), k.al);
+    TEST_ASSERT_EQUAL_HEX16(be(0xC3A895), k.art[2]);   // skin at 78 %
     TEST_ASSERT_EQUAL_HEX16(be(0x0D0008), k.onAlert);  // dark text reads better on the green theme's red alert
+
+    makeLook(a, 2, true, &k);   // pink, night: pinker than termpal's
+    TEST_ASSERT_EQUAL_HEX16(be(0xFF3CA0), k.tx);
+    TEST_ASSERT_EQUAL_HEX16(be(0xC81E78), k.dm);
+
+    makeLook(a, 6, false, &k);   // white: termpal's night white, the art undimmed and lifted 35 % toward white
+    TEST_ASSERT_EQUAL_HEX16(be(0xFFFFFF), k.tx);
+    TEST_ASSERT_EQUAL_HEX16(be(0xFCE5D5), k.art[2]);
+    TEST_ASSERT_TRUE(nightLook(0, false) && nightLook(-1, false) && !nightLook(2, false) && nightLook(2, true));
 
     makeLook(a, 0, true, &k);   // red, night: the alert is white there
     TEST_ASSERT_EQUAL_HEX16(be(0xFFFFFF), k.al);
@@ -171,6 +185,29 @@ static obdwire::Live live() {
     return l;
 }
 
+void test_the_tach() {
+    TEST_ASSERT_EQUAL_INT(0, rpmPills(0));
+    TEST_ASSERT_EQUAL_INT(0, rpmPills(NAN));
+    TEST_ASSERT_EQUAL_INT(1, rpmPills(300));
+    TEST_ASSERT_EQUAL_INT(RPM_PILLS, rpmPills(7000));
+    TEST_ASSERT_EQUAL_INT(RPM_PILLS, rpmPills(9000));
+    TEST_ASSERT_EQUAL_INT((int)Zone::Norm, (int)rpmZone(4999));
+    TEST_ASSERT_EQUAL_INT((int)Zone::Warn, (int)rpmZone(5000));
+    TEST_ASSERT_EQUAL_INT((int)Zone::Alert, (int)rpmZone(6500));
+    // the peak: the trace's highest, held while it's in the trace
+    Trace t;
+    t.update(5200, 0);
+    t.update(2100, 250);
+    Scene s;
+    scene(live(), t, false, false, 500, &s);
+    TEST_ASSERT_EQUAL_INT(rpmPills(5200), s.rpmPeak);
+    TEST_ASSERT_EQUAL_STRING("2100", s.rpm);
+    obdwire::Live big = live();
+    big.rpm = 12345;
+    scene(big, t, false, false, 500, &s);
+    TEST_ASSERT_EQUAL_STRING("9999", s.rpm);   // four cells
+}
+
 void test_scene_from_the_values() {
     Trace t;
     Scene s;
@@ -186,6 +223,9 @@ void test_scene_from_the_values() {
     TEST_ASSERT_EQUAL_STRING("14.1", s.rib[2].val);
     TEST_ASSERT_EQUAL_STRING("V", s.rib[2].unit);
     TEST_ASSERT_EQUAL_INT(4, s.rib[0].lit);
+    TEST_ASSERT_EQUAL_INT(4, s.rpmLit);   // 2100 of 7000 over 12 pills: 3.6, rounded up
+    TEST_ASSERT_EQUAL_INT((int)Zone::Norm, (int)s.rpmZone);
+    TEST_ASSERT_EQUAL_INT(0, s.rpmPeak);  // no samples yet
     TEST_ASSERT_EQUAL_INT(5, s.gear);   // 2100 / 62.4 = 33.7 rpm per km/h: 5th (37.3) more than 6th (27.6)
     TEST_ASSERT_EQUAL_INT((int)Zone::Cold, (int)s.rib[1].pill[0]);   // the coolant scale's first pill is cold
     TEST_ASSERT_FALSE(s.rib[1].bad);
@@ -276,7 +316,7 @@ void test_keys_change_only_with_what_a_region_shows() {
     scene(l, t, false, false, 0, &s2);
     TEST_ASSERT_TRUE(key(s1, R_SPEED) != key(s2, R_SPEED));
     TEST_ASSERT_EQUAL_UINT32(key(s1, R_RIB1), key(s2, R_RIB1));
-    TEST_ASSERT_EQUAL_UINT32(key(s1, R_TRACE), key(s2, R_TRACE));
+    TEST_ASSERT_EQUAL_UINT32(key(s1, R_RPM), key(s2, R_RPM));
     TEST_ASSERT_EQUAL_UINT32(key(s1, R_GEAR), key(s2, R_GEAR));
     // a pulsing alert redraws with the pulse, a calm ribbon doesn't
     scene(live(), t, true, false, 0, &s1);
@@ -294,6 +334,7 @@ int main() {
     RUN_TEST(test_gear_estimate);
     RUN_TEST(test_the_girl_follows_the_speed);
     RUN_TEST(test_trace_samples_four_a_second);
+    RUN_TEST(test_the_tach);
     RUN_TEST(test_scene_from_the_values);
     RUN_TEST(test_regions_draw_what_the_whole_screen_draws);
     RUN_TEST(test_the_art_cel_and_dimming);

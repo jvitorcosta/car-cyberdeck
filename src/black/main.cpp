@@ -577,7 +577,7 @@ void loop() {
             if (sc == drivedash::Screen::Drive && ui::driveReady(s_tft)) ui::drawDrive(s_tft, gauges::live(), millis(), all);
             else if (sc == drivedash::Screen::Trip && ui::tripReady(s_tft)) ui::drawTrip(s_tft, gauges::live(), all);
             else if (sc == drivedash::Screen::Ride && ui::rideReady())   // the film's art is in the app
-                ui::drawRide(s_tft, gauges::live(), millis(), karaoke::light(), theme::isNightActive(), gauges::demoOn(), all);
+                ui::drawRide(s_tft, gauges::live(), millis(), karaoke::themeLight(), theme::isNightActive(), gauges::demoOn(), all);
             else if (ui::sukiReady()) ui::drawSuki(s_tft, gauges::live(), millis(), all);   // the film's art is on the deck
             else ui::drawGauges(s_tft, gauges::live(), millis(), all);
         }

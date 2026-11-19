@@ -2403,9 +2403,10 @@ static void irPlay(int i) {
     irPlaylistDone.store(static_cast<int8_t>(i));
 }
 
-// The link check, from the deck task: GET /link every decklink::CHECK_MS whatever else asks, its
-// body the black deck's GPS state ("gps=1" / "gps=0"). A 200 is a valid answer; anything else but
-// an unsigned ask counts as a miss.
+// The link check, from the deck task: GET /link?light=N every decklink::CHECK_MS whatever else asks,
+// its body the black deck's GPS state ("gps=1" / "gps=0"). light: the INSIDE light's swatch (-1 off),
+// the colour the black deck's Ride gauges follow. A 200 is a valid answer; anything else but an
+// unsigned ask counts as a miss.
 static void linkGet() {
     static uint32_t at = 0;
     const uint32_t now = millis();
@@ -2414,7 +2415,10 @@ static void linkGet() {
     if (ota::active() || !net::isOnline()) return;
     crashlog::at("link ask");
     char reply[16] = "";
-    const int rc = deckGet("/link", nullptr, 0, reply, sizeof(reply));
+    char lightText[8];
+    snprintf(lightText, sizeof(lightText), "%d", insideLight());
+    const sigreq::Param p[] = {{"light", lightText}};
+    const int rc = deckGet("/link", p, 1, reply, sizeof(reply));
     if (rc == 200) deckGps = static_cast<uint8_t>(decklink::parse(reply));
     if (sentAsk(rc)) deckAnswered(rc == 200);
 }
