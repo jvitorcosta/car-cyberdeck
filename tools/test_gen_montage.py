@@ -73,6 +73,51 @@ class Wink(unittest.TestCase):
         self.assertIsNone(gm.wink_frame(d, "02-front-close"))
 
 
+class Cartoon(unittest.TestCase):
+    # Same length as the clip montage it replaces: about 8 s before the end card.
+    def test_cartoon_part_runs_eight_seconds(self):
+        self.assertEqual(gm.cartoon_frames(), 81)
+
+    def test_plan_has_every_shot_frame(self):
+        plan = gm.cartoon_plan()
+        self.assertEqual([len(p) for p in plan], [s[1] for s in gm.CARTOON_SHOTS])
+
+    # One wink, only on the close-up, for its frames; the sparkle spans it, a frame either side.
+    def test_one_wink_on_the_close_up(self):
+        stem, first, n = gm.CARTOON_WINK
+        for (s, *_), shot in zip(gm.CARTOON_SHOTS, gm.cartoon_plan()):
+            winks = [k for k, f in enumerate(shot) if f[2]]
+            sparks = [k for k, f in enumerate(shot) if f[3]]
+            if s == stem:
+                self.assertEqual(winks, list(range(first, first + n)))
+                self.assertEqual(sparks, list(range(first - 1, first + n + 1)))
+            else:
+                self.assertEqual((winks, sparks), ([], []))
+
+    def test_push_in_eases_from_start_to_end(self):
+        for (_, _, _, z0, z1, _), shot in zip(gm.CARTOON_SHOTS, gm.cartoon_plan()):
+            self.assertAlmostEqual(shot[0][0], z0)
+            self.assertAlmostEqual(shot[-1][0], z1)
+
+    # The crop is always a 4:3 window inside the still, whatever the drift or centre asks.
+    def test_crop_stays_inside_the_still(self):
+        for w, h in ((483, 866), (572, 1024)):
+            for cy in (0.0, 0.5, 1.0):
+                for zoom in (1.0, 1.1):
+                    for drift in (-0.5, 0.0, 0.5):
+                        x0, y0, x1, y1 = gm.cartoon_box(w, h, cy, zoom, drift)
+                        self.assertGreaterEqual(x0, 0)
+                        self.assertGreaterEqual(y0, 0)
+                        self.assertLessEqual(x1, w + 1e-9)
+                        self.assertLessEqual(y1, h + 1e-9)
+                        self.assertAlmostEqual((x1 - x0) / (y1 - y0), 320 / 240)
+
+    def test_a_missing_still_stops_the_build(self):
+        import tempfile
+        with self.assertRaises(SystemExit):
+            gm.cartoon_still(tempfile.mkdtemp(), "02-front-close")
+
+
 class EndCard(unittest.TestCase):
     def test_caption_in_red_under_a_raised_logo(self):
         f = gm.end_filter(100, 40, 0, 0, text="POWERED BY HONDA")

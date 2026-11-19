@@ -197,6 +197,7 @@ media partition with `pio run -e s3 -t uploadmedia`. Without it the deck uses bu
 | Second boot sound | `gen_greeting.py --alt my.wav` → `data/greeting_alt.pcm`, McQueen's opening | McQueen plays the boot sound |
 | Montage sounds | `gen_greeting.py --opener` / `--finale my.wav` | silent |
 | Photo montage | photos in `montage-photos/`, then `python tools/gen_montage.py` (~5 s of photos; needs ffmpeg) | no montage |
+| 2D cartoon montage | the four shots redrawn as 2D cartoon stills (plus the close-up's wink and the logo) in a folder, then `python tools/gen_montage.py <folder> --cartoon` (needs ffmpeg and Pillow) | the photo montage |
 | Montage end card | `montage-photos/honda-logo.png` (any logo, white background works best) | none |
 | Pixel McQueen | a 200 × 66 side view facing right, then `python tools/gen_mcqueen_sprite.py montage-photos/mcqueen.png` → `data/mcqueen.bin` (new art sets `--wheels`, `--head`, `--tail`, `--beam`) | his opening is left out |
 | Intro video | `python tools/gen_intro.py my.mp4` → `data/intro.bin` + `.pcm` (20 fps, 48 kHz sound; `--seg START-END` cuts, played in order; needs ffmpeg). One of the random boot openings | the drive openings only |
