@@ -281,7 +281,8 @@ struct Rib { float ix0, ix1, iy, ih, tx0, tw, nx, trx0, trx1; };
 static Rib rib(int i) {   // ribbons start at (3,248), (28,286), (54,324) and end at x 332, 357, 382
     static const float X0[3] = {3, 28, 54}, X1[3] = {332, 357, 382}, YY[3] = {248, 286, 324};
     const float ix0 = X0[i] + 26, ix1 = X1[i] - 14, iy = YY[i] + 4;
-    return Rib{X(ix0), X(ix1), Y(iy), L(23), X(ix1 - 60), L(60), X(ix0 + 6), X(ix0 + 74), X(ix1 - 68)};
+    // the tag is 68 wide, not the mock's 60: Orbitron's PEDAL needs 30 px at device size
+    return Rib{X(ix0), X(ix1), Y(iy), L(23), X(ix1 - 68), L(68), X(ix0 + 6), X(ix0 + 74), X(ix1 - 76)};
 }
 static constexpr float WX = 11, WY = 100, WW = 357, WH = 95;   // the bezel window (art coordinates)
 static constexpr float GX = 287, GY = 210, GW = 108, GH = 38;  // the gear block

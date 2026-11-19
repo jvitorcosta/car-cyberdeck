@@ -12,8 +12,9 @@ recolours the art per theme on the device, so the art is stored ONCE: 8-bit indi
 palette (its original colours). The film's art is not ours to publish: the layers and data/sukiride.bin
 are git-ignored, and the repo only carries this tool.
 
-Fonts: alpha-only glyphs (the deck picks the colour). Orbitron is the mock's face; without --font the
-tool uses Century Gothic Bold from Windows (the old Suki look's numerals).
+Fonts: alpha-only glyphs (the deck picks the colour). The mock's face is Orbitron at weight 800
+(--font "Orbitron[wght].ttf", SIL OFL, from github.com/google/fonts ofl/orbitron); without --font the
+tool uses Century Gothic Bold from Windows.
 Format "SKR1": src/util/car/sukiride.h (keep the constants below in step with it). Needs Pillow.
 """
 import argparse
@@ -33,11 +34,12 @@ COLOURS = 256
 # (size px, tracking, chars): the order of sukiride::FontId
 CHARS_SMALL = "ABCDEHIKLMOPRSTV/%.-0123456789"
 FONTS = [
-    (8, 1, CHARS_SMALL),          # F_SMALL: labels, units, tags, KM/H, EST
-    (12, 0, "0123456789.-"),      # F_VALUE: the ribbons' and chips' values
-    (18, 0, "1234567-"),          # F_GEAR: the gear numeral
-    (9, 0, "DSM"),                # F_MODE: the mode letter
+    (7, 0, CHARS_SMALL),          # F_SMALL: labels, units, tags, KM/H, EST (PEDAL: 30 px in Orbitron)
+    (10, 0, "0123456789.-"),      # F_VALUE: the ribbons' and chips' values
+    (16, 0, "1234567-"),          # F_GEAR: the gear numeral
+    (8, 0, "DSM"),                # F_MODE: the mode letter
 ]
+WEIGHT = 800   # Orbitron 800, the mock's numerals and tags (ignored by a static font)
 DEFAULT_FONTS = ["C:/Windows/Fonts/GOTHICB.TTF"]
 
 
@@ -103,6 +105,10 @@ def glyphs(font_path, size, chars):
     in a cell `size` tall that starts at the cap top, anti-aliased by drawing 4x and box-filtering
     down; and the cap height."""
     big = ImageFont.truetype(font_path, size * 4)
+    try:   # a variable font (Orbitron[wght]): the mock's 800 weight
+        big.set_variation_by_axes([WEIGHT])
+    except (OSError, ValueError):
+        pass
     asc, desc = big.getmetrics()
     cell = size
     out = []

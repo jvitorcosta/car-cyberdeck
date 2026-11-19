@@ -73,9 +73,11 @@ python tools/suki_ride_preview.py --out suki-ride-preview.png   # every state an
 ```
 
 The layers come from the research session (cut from the making-of video's frames by its `mk12b.py`).
-Fonts: the mock's Orbitron when given with `--font`, else Century Gothic Bold from Windows. Text sizes
-are larger than half the mock's (labels 8 px, values 12, gear 18), because half-size labels are about
-4 px tall and can't be read on a 2.8" panel.
+Fonts: the mock's Orbitron at weight 800 (`Orbitron[wght].ttf`, SIL OFL, google/fonts `ofl/orbitron`,
+downloaded with João's OK; only the generated glyphs travel, inside the git-ignored art file), else
+Century Gothic Bold from Windows. Text is a little larger than half the mock's (labels 7 px, values 10,
+gear 16): half-size labels would be about 4 px tall. The ribbon tags are 34 px wide, not 30, so
+Orbitron's PEDAL fits.
 
 ## Car tests (João, read-only)
 
