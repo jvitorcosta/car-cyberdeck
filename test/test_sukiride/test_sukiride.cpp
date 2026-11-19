@@ -19,21 +19,21 @@ static uint16_t be(uint32_t rgb) {
 
 // Palette: 0 black, 1 the film's pink, 2 skin, 3 grey, 4 white; the rest black.
 static const uint32_t PAL[5] = {0x000000, 0xFF2878, 0xFAD7BE, 0x808080, 0xFFFFFF};
-// A whole file: the backdrop is pink (1) but pixel (10, 20) grey (3); cel k is all skin (2) but its
-// column 0 is white (4) in cel 7; every font has '0'..'9', '-', '.', 'C', 'V', '%' 2 px wide, cell 3,
+// A whole file: cel k is all skin (2) but in cel 7 its column 60 is white (4) and pixel (70, 20)
+// grey (3); the logo is solid; every font has '0'..'9', '-', '.', 'C', 'V', '%' 2 px wide, cell 3,
 // cap 2, solid.
 static std::vector<uint8_t> file(int cels = CELS) {
-    std::vector<uint8_t> b = {'S', 'K', 'R', '1'};
-    le16(b, ART_W); le16(b, ART_H); le16(b, CEL_X); le16(b, CEL_W); le16(b, (uint16_t)cels); le16(b, FONTS);
+    std::vector<uint8_t> b = {'S', 'K', 'R', '2'};
+    le16(b, ART_X); le16(b, ART_W); le16(b, ART_H); le16(b, (uint16_t)cels); le16(b, FONTS);
+    le16(b, LOGO_W); le16(b, LOGO_H); le16(b, 0);
     for (int i = 0; i < COLOURS; ++i) {
         const uint32_t c = i < 5 ? PAL[i] : 0;
         b.push_back(c >> 16); b.push_back((c >> 8) & 0xFF); b.push_back(c & 0xFF);
     }
-    for (int y = 0; y < ART_H; ++y)
-        for (int x = 0; x < ART_W; ++x) b.push_back(x == 10 && y == 20 ? 3 : 1);
     for (int k = 0; k < cels; ++k)
         for (int y = 0; y < ART_H; ++y)
-            for (int x = 0; x < CEL_W; ++x) b.push_back(k == 7 && x == 0 ? 4 : 2);
+            for (int x = 0; x < ART_W; ++x) b.push_back(k == 7 && x == 60 ? 4 : k == 7 && x == 70 && y == 20 ? 3 : 2);
+    for (int i = 0; i < LOGO_W * LOGO_H; ++i) b.push_back(255);
     const char chars[] = "0123456789-.CV%";
     const int n = (int)strlen(chars);
     std::vector<size_t> fix;
@@ -57,8 +57,9 @@ void test_parse_takes_a_whole_file_and_nothing_else() {
     std::vector<uint8_t> f = file();
     Art a;
     TEST_ASSERT_TRUE(parse(f.data(), f.size(), &a));
-    TEST_ASSERT_EQUAL_UINT8(3, a.bg[20 * ART_W + 10]);
-    TEST_ASSERT_EQUAL_UINT8(4, a.cels[(size_t)7 * CEL_W * ART_H]);
+    TEST_ASSERT_EQUAL_UINT8(3, a.cels[((size_t)7 * ART_H + 20) * ART_W + 70]);
+    TEST_ASSERT_EQUAL_UINT8(4, a.cels[(size_t)7 * ART_W * ART_H + 60]);
+    TEST_ASSERT_EQUAL_UINT8(255, a.logo[0]);
     TEST_ASSERT_EQUAL_INT(2 * 3 + 2, width(a, F_VALUE, "123"));   // 3 x 2 px + 2 x 1 tracking
     TEST_ASSERT_EQUAL_INT(2, width(a, F_VALUE, "x1"));            // unknown chars skipped
     TEST_ASSERT_FALSE(parse(f.data(), f.size() - 1, &a));         // the last glyph cut off
@@ -98,7 +99,8 @@ void test_look_takes_termpal_roles() {
     TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::TEXT, 5, false)), k.tx);
     TEST_ASSERT_EQUAL_HEX16(be(termpal::rgb(termpal::ALERT, 5, false)), k.al);
     TEST_ASSERT_EQUAL_HEX16(be(0xFAD7BE), k.art[2]);   // skin stays
-    TEST_ASSERT_EQUAL_HEX16(be(0x0D0008), k.onTag);    // dark text on the bright green tag
+    TEST_ASSERT_EQUAL_HEX16(be(0x0D0008), k.onAlert);  // dark text reads better on the green theme's red alert
+
     makeLook(a, 0, true, &k);   // red, night: the alert is white there
     TEST_ASSERT_EQUAL_HEX16(be(0xFFFFFF), k.al);
     TEST_ASSERT_EQUAL_HEX16(be(0xC3A895), k.art[2]);   // skin at 78 %
@@ -175,6 +177,7 @@ void test_scene_from_the_values() {
     scene(live(), t, false, false, 0, &s);
     TEST_ASSERT_TRUE(s.live);
     TEST_ASSERT_EQUAL_STRING(" 62", s.speed);
+    TEST_ASSERT_EQUAL_STRING("2100", s.rpm);
     TEST_ASSERT_EQUAL_STRING("15.8", s.chip[0].val);
     TEST_ASSERT_EQUAL_STRING("31", s.chip[1].val);
     TEST_ASSERT_EQUAL_STRING("C", s.chip[1].unit);
@@ -196,6 +199,7 @@ void test_scene_from_the_values() {
     scene(off, t, true, true, 0, &s);
     TEST_ASSERT_FALSE(s.live);
     TEST_ASSERT_EQUAL_STRING("---", s.speed);
+    TEST_ASSERT_EQUAL_STRING("--", s.rpm);
     TEST_ASSERT_EQUAL_STRING("--", s.rib[1].val);
     TEST_ASSERT_EQUAL_STRING("", s.rib[1].unit);
     TEST_ASSERT_EQUAL_INT(0, s.rib[1].lit);
@@ -226,7 +230,7 @@ void test_regions_draw_what_the_whole_screen_draws() {
             compose(a, k, s, Rect{0, (int16_t)y, W, (int16_t)h}, buf.data());
             memcpy(&whole[y * W], buf.data(), (size_t)h * W * 2);
         }
-        TEST_ASSERT_EQUAL_HEX16(0, whole[5 * W + 5]);   // the letterbox is black
+        if (pass < 2) TEST_ASSERT_EQUAL_HEX16(k.bg[2], whole[2 * W + 2]);   // the panel's own background
         for (int r = 0; r < REGIONS; ++r) {
             const Rect g = region((Region)r);
             TEST_ASSERT_TRUE(g.w * g.h <= MAX_PIXELS);
@@ -250,14 +254,16 @@ void test_the_art_cel_and_dimming() {
     l.kmh = 0;   // parked: cel 7, whose column 0 is white
     scene(l, t, false, false, 0, &s);
     uint16_t px[4];
-    compose(a, k, s, Rect{CEL_X - 1, ART_Y + 1, 2, 1}, px);
-    TEST_ASSERT_EQUAL_HEX16(k.art[1], px[0]);   // the backdrop left of the strip
-    TEST_ASSERT_EQUAL_HEX16(k.art[4], px[1]);   // the cel's first column
-    compose(a, k, s, Rect{10, ART_Y + 20, 1, 1}, px);
+    compose(a, k, s, Rect{ART_X + 59, 1, 2, 1}, px);
+    TEST_ASSERT_EQUAL_HEX16(k.art[2], px[0]);   // the cel, past the fade
+    TEST_ASSERT_EQUAL_HEX16(k.art[4], px[1]);   // its column 60
+    compose(a, k, s, Rect{ART_X + 70, 20, 1, 1}, px);
     TEST_ASSERT_EQUAL_HEX16(k.art[3], px[0]);
+    compose(a, k, s, Rect{PANEL_W + FADE_W / 2, 230, 1, 1}, px);   // the fade: neither the panel nor the art
+    TEST_ASSERT_TRUE(px[0] != k.art[2] && px[0] != k.bg[230]);
     l.link = obdplan::Link::Off;
     scene(l, t, false, false, 0, &s);
-    compose(a, k, s, Rect{CEL_X, ART_Y + 1, 1, 1}, px);
+    compose(a, k, s, Rect{ART_X + 60, 1, 1, 1}, px);
     TEST_ASSERT_TRUE(px[0] != k.art[4]);   // dimmed
 }
 
@@ -271,6 +277,7 @@ void test_keys_change_only_with_what_a_region_shows() {
     TEST_ASSERT_TRUE(key(s1, R_SPEED) != key(s2, R_SPEED));
     TEST_ASSERT_EQUAL_UINT32(key(s1, R_RIB1), key(s2, R_RIB1));
     TEST_ASSERT_EQUAL_UINT32(key(s1, R_TRACE), key(s2, R_TRACE));
+    TEST_ASSERT_EQUAL_UINT32(key(s1, R_GEAR), key(s2, R_GEAR));
     // a pulsing alert redraws with the pulse, a calm ribbon doesn't
     scene(live(), t, true, false, 0, &s1);
     scene(live(), t, true, false, 400, &s2);

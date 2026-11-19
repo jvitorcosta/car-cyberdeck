@@ -13,9 +13,9 @@ static uint32_t u32(const uint8_t* p) {
 }
 
 bool parse(const uint8_t* blob, size_t len, Art* out) {
-    if (!blob || !out || len < HEAD || memcmp(blob, "SKR1", 4) != 0) return false;
-    if (u16(blob + 4) != ART_W || u16(blob + 6) != ART_H || u16(blob + 8) != CEL_X || u16(blob + 10) != CEL_W ||
-        u16(blob + 12) != CELS || u16(blob + 14) != FONTS)
+    if (!blob || !out || len < HEAD || memcmp(blob, "SKR2", 4) != 0) return false;
+    if (u16(blob + 4) != ART_X || u16(blob + 6) != ART_W || u16(blob + 8) != ART_H || u16(blob + 10) != CELS ||
+        u16(blob + 12) != FONTS || u16(blob + 14) != LOGO_W || u16(blob + 16) != LOGO_H)
         return false;
     Art a;
     a.blob = blob;
@@ -23,10 +23,10 @@ bool parse(const uint8_t* blob, size_t len, Art* out) {
     size_t at = HEAD;
     a.pal = blob + at;
     at += COLOURS * 3;
-    a.bg = blob + at;
-    at += (size_t)ART_W * ART_H;
     a.cels = blob + at;
-    at += (size_t)CELS * CEL_W * ART_H;
+    at += (size_t)CELS * ART_W * ART_H;
+    a.logo = blob + at;
+    at += (size_t)LOGO_W * LOGO_H;
     if (at > len) return false;
     for (int f = 0; f < FONTS; ++f) {
         if (at + FONT_HEAD > len) return false;
@@ -135,7 +135,15 @@ static double contrast(uint32_t a, uint32_t b) {
     return (fmax(x, y) + 0.05) / (fmin(x, y) + 0.05);
 }
 
-static constexpr uint32_t INK = 0x0D0008, DARK = 0x14000B, WINDOW = 0x12000B, WHITE = 0xFFFFFF;
+static constexpr uint32_t INK = 0x0D0008, WHITE = 0xFFFFFF;
+
+static uint32_t scale(uint32_t c, float k, float toWhite) {   // x k toward black, then toWhite toward white
+    auto ch = [&](int sh) {
+        const float v = ((c >> sh) & 255) * k;
+        return (uint32_t)lroundf(fminf(255.0f, v + (255.0f - v) * toWhite)) << sh;
+    };
+    return ch(16) | ch(8) | ch(0);
+}
 
 void makeLook(const Art& a, int theme, bool night, Look* out) {
     const uint32_t tx = termpal::rgb(termpal::TEXT, theme, night), md = termpal::rgb(termpal::MID, theme, night),
@@ -150,7 +158,14 @@ void makeLook(const Art& a, int theme, bool night, Look* out) {
     out->md = be565(md);
     out->dm = be565(dm);
     out->al = be565(al);
-    out->onTag = be565(contrast(INK, md) >= contrast(WHITE, md) ? INK : WHITE);
+    out->onAlert = be565(contrast(INK, al) >= contrast(WHITE, al) ? INK : WHITE);
+    out->pipOff = be565(scale(dm, 0.35f, 0));
+    // the panel: the theme's dim at 10 %, 3.5 % toward white at the top, 25 % darker at the bottom
+    const uint32_t base = scale(dm, 0.10f, 0);
+    for (int y = 0; y < H; ++y) {
+        const float f = (float)y / (H - 1);
+        out->bg[y] = be565(scale(scale(base, 1.0f, 0.035f * (1 - f)), 1.0f - 0.25f * f, 0));
+    }
 }
 
 // ---- the values ----
@@ -238,6 +253,24 @@ static void ribbon(Ribbon& r, const char* label, float v, bool live, int decimal
     r.bad = have && bad;
 }
 
+static void whole(float v, int maxv, char* out, size_t n) {   // by hand: -Werror=format-truncation
+    if (!std::isfinite(v)) {
+        strncpy(out, "--", n);
+        out[n - 1] = 0;
+        return;
+    }
+    int x = (int)lroundf(fminf(fmaxf(v, 0.0f), (float)maxv));
+    char tmp[12];
+    int k = 0;
+    do {
+        tmp[k++] = (char)('0' + x % 10);
+        x /= 10;
+    } while (x && k < (int)sizeof tmp);
+    size_t i = 0;
+    while (k && i + 1 < n) out[i++] = tmp[--k];
+    out[i] = 0;
+}
+
 static void chip(Chip& c, const char* label, float v, int decimals, const char* unit) {
     strncpy(c.label, label, sizeof c.label);
     c.label[sizeof c.label - 1] = 0;
@@ -259,6 +292,7 @@ void scene(const obdwire::Live& l, const Trace& t, bool coolBad, bool battBad, u
         s.speed[3] = 0;
     }
     for (int i = 0; i < TRACE_N; ++i) s.trace[i] = t.at(i);
+    whole(s.live ? l.rpm : NAN, 99999, s.rpm, sizeof s.rpm);
     s.gear = (uint8_t)(s.live ? gearEst(l.rpm, l.kmh) : 0);
     chip(s.chip[0], "KM/L", s.live ? l.kml : NAN, 1, "");
     chip(s.chip[1], "IAT", s.live ? l.intakeC : NAN, 0, "C");
@@ -272,21 +306,18 @@ void scene(const obdwire::Live& l, const Trace& t, bool coolBad, bool battBad, u
     *out = s;
 }
 
-// ---- geometry (the mock's 640 x 365 art coordinates, halved; y below the letterbox) ----
-static float X(float v) { return v * 0.5f; }
-static float Y(float v) { return v * 0.5f + ART_Y; }
-static float L(float v) { return v * 0.5f; }   // a length
-
-struct Rib { float ix0, ix1, iy, ih, tx0, tw, nx, trx0, trx1; };
-static Rib rib(int i) {   // ribbons start at (3,248), (28,286), (54,324) and end at x 332, 357, 382
-    static const float X0[3] = {3, 28, 54}, X1[3] = {332, 357, 382}, YY[3] = {248, 286, 324};
-    const float ix0 = X0[i] + 26, ix1 = X1[i] - 14, iy = YY[i] + 4;
-    // the tag is 68 wide, not the mock's 60: Orbitron's PEDAL needs 30 px at device size
-    return Rib{X(ix0), X(ix1), Y(iy), L(23), X(ix1 - 68), L(68), X(ix0 + 6), X(ix0 + 74), X(ix1 - 76)};
-}
-static constexpr float WX = 11, WY = 100, WW = 357, WH = 95;   // the bezel window (art coordinates)
-static constexpr float GX = 287, GY = 210, GW = 108, GH = 38;  // the gear block
-static constexpr float CY = 209, CH = 37, CW = 82;             // the chips: x 24 + i * 86
+// ---- geometry (screen pixels: the v19 mock's 640 x 480, halved) ----
+static constexpr float PX = 5, PW = 174;                       // the panel's cards: x 5..179
+static constexpr float LOGO_X = 5, LOGO_Y = 5, SHADOW = 2;     // SUKI, its shadow offset
+static constexpr float TAG_Y = 11, TAG_H = 11;                 // the state tag (RIDE, DEMO, NO LINK)
+static constexpr float SY = 31, SH = 68;                       // the speed card
+static constexpr float DW = 23, DH = 43, DT = 5, DGAP = 4, DX = 11, DY = 48;   // the speed's cells
+static constexpr float RX = 102, RX1 = 173;                    // the RPM trace
+static constexpr float TY = 103, TH = 31, TW = 40.5f, TGAP = 4; // the four tiles
+static constexpr float BY = 138, BGAP = 4;                     // the bars share the rest
+static constexpr float BH = (H - 5 - BY - 2 * BGAP) / 3;
+static float tileX(int i) { return PX + i * (TW + TGAP); }
+static float barY(int i) { return BY + i * (BH + BGAP); }
 
 static Rect bounds(float x, float y, float w, float h, int pad) {
     const int x0 = (int)floorf(x) - pad, y0 = (int)floorf(y) - pad, x1 = (int)ceilf(x + w) + pad,
@@ -296,16 +327,12 @@ static Rect bounds(float x, float y, float w, float h, int pad) {
 
 Rect region(Region r) {
     switch (r) {
-        case R_CEL: return Rect{CEL_X - 1, ART_Y, W - (CEL_X - 1), ART_H};
-        case R_SPEED: return bounds(X(WX + 12), Y(WY + 10), L(3 * 34 + 2 * 7 + 4), L(WH - 12), 0);
-        case R_TRACE: return bounds(X(WX + 148), Y(WY + 1), L(WW - 156), L(WH - 2), 0);
-        case R_GEAR: return bounds(X(GX), Y(GY), L(GW), L(GH), 1);
-        case R_CHIP0: case R_CHIP1: case R_CHIP2:
-            return bounds(X(24 + (r - R_CHIP0) * 86), Y(CY), L(CW), L(CH), 1);
-        case R_RIB0: case R_RIB1: case R_RIB2: {
-            const Rib g = rib(r - R_RIB0);
-            return bounds(g.ix0, g.iy, g.ix1 - g.ix0, g.ih, 1);
-        }
+        case R_CEL: return Rect{CEL_REGION_X, 0, W - CEL_REGION_X, H};
+        case R_SPEED: return bounds(DX, DY, 3 * DW + 2 * DGAP, DH, 0);
+        case R_TRACE: return bounds(RX - 1, SY + 1, RX1 + 1 - (RX - 1), SH - 2, 0);
+        case R_GEAR: return bounds(tileX(3), TY, TW, TH, 1);
+        case R_CHIP0: case R_CHIP1: case R_CHIP2: return bounds(tileX(r - R_CHIP0), TY, TW, TH, 1);
+        case R_RIB0: case R_RIB1: case R_RIB2: return bounds(PX, barY(r - R_RIB0), PW, BH, 1);
         default: return Rect{0, 0, 0, 0};
     }
 }
@@ -321,10 +348,10 @@ static uint32_t fnv(uint32_t h, const T& v) { return fnv(h, &v, sizeof v); }
 uint32_t key(const Scene& s, Region r) {
     uint32_t h = fnv(2166136261u, s.live);
     switch (r) {
-        case R_CEL: h = fnv(h, s.cel); h = fnv(h, s.shake); h = fnv(h, s.gear); break;   // the gear block overlaps it
+        case R_CEL: h = fnv(h, s.cel); h = fnv(h, s.shake); break;
         case R_SPEED: h = fnv(h, s.speed); break;
-        case R_TRACE: h = fnv(h, s.trace); break;
-        case R_GEAR: h = fnv(h, s.gear); h = fnv(h, s.mode); h = fnv(h, s.cel); h = fnv(h, s.shake); break;
+        case R_TRACE: h = fnv(h, s.trace); h = fnv(h, s.rpm); break;
+        case R_GEAR: h = fnv(h, s.gear); break;
         case R_CHIP0: case R_CHIP1: case R_CHIP2: h = fnv(h, s.chip[r - R_CHIP0]); break;
         case R_RIB0: case R_RIB1: case R_RIB2: {
             const Ribbon& b = s.rib[r - R_RIB0];
@@ -376,29 +403,37 @@ static void rrect(Canvas& cv, float x, float y, float w, float h, float rad, uin
     }
 }
 
+// An alpha mask (w x h bytes) at (x, y) in colour c.
+static void mask(Canvas& cv, const uint8_t* m, int w, int h, int x, int y, uint16_t c) {
+    for (int my = 0; my < h; ++my) {
+        const int by = y + my - cv.r.y;
+        if (by < 0 || by >= cv.r.h) continue;
+        for (int mx = 0; mx < w; ++mx) {
+            const int bx = x + mx - cv.r.x;
+            if (bx < 0 || bx >= cv.r.w) continue;
+            const uint8_t al8 = m[my * w + mx];
+            if (!al8) continue;
+            uint16_t& d = cv.buf[by * cv.r.w + bx];
+            d = mix(d, c, al8 + (al8 >> 7));
+        }
+    }
+}
+
 enum class Align : uint8_t { Left, Right, Center };
-// s in font f, colour c, x the left / right edge / centre, base the caps' bottom.
-static void text(Canvas& cv, const Art& a, FontId f, float x, float base, const char* s, Align al, uint16_t c) {
+// s in font f, colour c, x the left / right edge / centre, base the caps' bottom; extra: more tracking.
+static void text(Canvas& cv, const Art& a, FontId f, float x, float base, const char* s, Align al, uint16_t c,
+                 int extra = 0) {
     const Font& ft = a.font[f];
-    const int tw = width(a, f, s), top = (int)lroundf(base) - ft.cap;
+    int tw = width(a, f, s), n = 0, gw = 0;
+    for (const char* q = s; q && *q; ++q) n += glyph(a, f, *q, &gw) ? 1 : 0;
+    if (n > 1) tw += (n - 1) * extra;
+    const int top = (int)lroundf(base) - ft.cap;
     int px = (int)lroundf(al == Align::Right ? x - tw : al == Align::Center ? x - tw / 2.0f : x);
-    int gw = 0;
     for (; s && *s; ++s) {
         const uint8_t* g = glyph(a, f, *s, &gw);
         if (!g) continue;
-        for (int gy = 0; gy < ft.h; ++gy) {
-            const int by = top + gy - cv.r.y;
-            if (by < 0 || by >= cv.r.h) continue;
-            for (int gx = 0; gx < gw; ++gx) {
-                const int bx = px + gx - cv.r.x;
-                if (bx < 0 || bx >= cv.r.w) continue;
-                const uint8_t al8 = g[gy * gw + gx];
-                if (!al8) continue;
-                uint16_t& d = cv.buf[by * cv.r.w + bx];
-                d = mix(d, c, al8 + (al8 >> 7));
-            }
-        }
-        px += gw + ft.track;
+        mask(cv, g, gw, ft.h, px, top, c);
+        px += gw + ft.track + extra;
     }
 }
 
@@ -406,39 +441,60 @@ static bool hits(const Rect& r, float x, float y, float w, float h) {
     return x - 2 < r.x + r.w && x + w + 2 > r.x && y - 2 < r.y + r.h && y + h + 2 > r.y;
 }
 
-static void art(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
+// The panel's background on the left, the girl on the right, the one fading into the other.
+static void ground(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
     const Rect& r = cv.r;
     for (int y = r.y; y < r.y + r.h; ++y) {
         uint16_t* row = cv.buf + (y - r.y) * r.w;
-        const int ay = y - ART_Y;
-        if (ay < 0 || ay >= ART_H) {
-            memset(row, 0, (size_t)r.w * 2);
-            continue;
-        }
-        const uint8_t* bg = a.bg + (size_t)ay * ART_W;
-        const uint8_t* cel = a.cels + ((size_t)s.cel * ART_H + ay) * CEL_W;
-        const int c0 = CEL_X + s.shake;
+        const uint8_t* cel = a.cels + ((size_t)s.cel * ART_H + y) * ART_W;
         for (int x = r.x; x < r.x + r.w; ++x) {
-            const int cx = x - c0;
-            row[x - r.x] = k.art[(cx >= 0 && cx < CEL_W) ? cel[cx] : bg[x]];
+            uint16_t& p = row[x - r.x];
+            if (x < PANEL_W) {
+                p = k.bg[y];
+                continue;
+            }
+            int cx = x - ART_X - s.shake;
+            cx = cx < 0 ? 0 : cx >= ART_W ? ART_W - 1 : cx;
+            p = k.art[cel[cx]];
+            if (x < PANEL_W + FADE_W) p = mix(p, k.bg[y], 256 - (x - PANEL_W) * 256 / FADE_W);
         }
     }
 }
 
-// The film's pill: a dark rim, the colour, a bright core (rounded all round).
-static void pill(Canvas& cv, float px, float py, float pw, float ph, const uint16_t z[3], float rim) {
-    rrect(cv, px - rim, py - rim, pw + 2 * rim, ph + 2 * rim, pw, z[0]);
-    rrect(cv, px, py, pw, ph, pw / 2, z[1]);
-    rrect(cv, px + pw * 0.3f, py + L(2), pw * 0.4f, fmaxf(L(2), ph - L(4)), pw * 0.2f, z[2]);
+// One card: dark glass over the panel, the theme's dim border and its mid tick at the top left; an
+// alert card has the alert colour's border instead (white on the pulse).
+static void card(Canvas& cv, const Look& k, float x, float y, float w, float h, bool bad = false,
+                 bool pulse = false) {
+    if (!hits(cv.r, x, y, w, h)) return;
+    rrect(cv, x, y, w, h, 4, 0, 0.55f);
+    if (bad) {
+        rrect(cv, x, y, w, h, 4, pulse ? be565(WHITE) : k.al, 1.0f, 1.5f);
+        return;
+    }
+    rrect(cv, x, y, w, h, 4, k.dm, 1.0f, 0.75f);
+    rrect(cv, x + 5, y, 14, 1.5f, 0, k.md);
 }
 
-static void zoneColours(const Look& k, Zone z, uint16_t out[3]) {
-    out[0] = out[1] = out[2] = k.md;
-    switch (z) {
-        case Zone::Cold: out[0] = k.dm; out[1] = k.dm; out[2] = k.md; break;
-        case Zone::Norm: out[0] = k.dm; out[1] = k.md; out[2] = k.tx; break;
-        case Zone::Warn: out[0] = k.md; out[1] = k.tx; out[2] = be565(WHITE); break;
-        case Zone::Alert: out[0] = be565(0x7A0A0A); out[1] = k.al; out[2] = be565(0xFFD0D0); break;
+static void head(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
+    if (hits(cv.r, LOGO_X, LOGO_Y, LOGO_W + SHADOW, LOGO_H + SHADOW)) {
+        mask(cv, a.logo, LOGO_W, LOGO_H, (int)(LOGO_X + SHADOW), (int)(LOGO_Y + SHADOW), k.dm);
+        mask(cv, a.logo, LOGO_W, LOGO_H, (int)LOGO_X, (int)LOGO_Y, k.tx);
+    }
+    const char* tag = !s.live ? "NO LINK" : s.demo ? "DEMO" : "RIDE";
+    const bool warn = !s.live || s.demo;
+    const float tw = width(a, F_SMALL, tag) + (float)strlen(tag) + 8, tx = PX + PW - tw;
+    if (!hits(cv.r, tx, TAG_Y, tw, TAG_H)) return;
+    // "NO LINK" has a space the font hasn't: two words
+    const uint16_t c = warn ? k.al : k.md;
+    rrect(cv, tx, TAG_Y, tw, TAG_H, TAG_H / 2, c, 1.0f, 0.75f);
+    const float base = TAG_Y + TAG_H / 2 + a.font[F_SMALL].cap / 2.0f;
+    if (!s.live) {
+        const float w1 = width(a, F_SMALL, "NO") + 1, w2 = width(a, F_SMALL, "LINK") + 3, gap = 3;
+        const float x0 = tx + (tw - (w1 + gap + w2)) / 2;
+        text(cv, a, F_SMALL, x0, base, "NO", Align::Left, c, 1);
+        text(cv, a, F_SMALL, x0 + w1 + gap, base, "LINK", Align::Left, c, 1);
+    } else {
+        text(cv, a, F_SMALL, tx + tw / 2 + 0.5f, base, tag, Align::Center, c, 1);
     }
 }
 
@@ -453,114 +509,120 @@ static void digit(Canvas& cv, char ch, float x, float y, float w, float h, float
         if (segs & (1 << s)) rrect(cv, B[s][0], B[s][1], B[s][2], B[s][3], 0, c, op);
 }
 
-static void window(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
-    if (!hits(cv.r, X(WX), Y(WY), L(WW), L(WH))) return;
-    rrect(cv, X(WX), Y(WY), L(WW), L(WH), L(2), be565(WINDOW));
+static void speedCard(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
+    if (!hits(cv.r, PX, SY, PW, SH)) return;
+    card(cv, k, PX, SY, PW, SH);
+    const float lb = SY + 10.5f;
+    text(cv, a, F_SMALL, DX, lb, "SPEED", Align::Left, k.md, 1);
+    text(cv, a, F_SMALL, DX + width(a, F_SMALL, "SPEED") + 4 + 6, lb, "KM/H", Align::Left, k.md, 1);
+    text(cv, a, F_SMALL, RX, lb, "RPM", Align::Left, k.md, 1);
+    text(cv, a, F_SMALL, RX1, lb, s.rpm, Align::Right, s.live ? k.tx : k.dm);
     // the speed: three seven-segment cells over a faint 888
-    const float dw = L(34), dh = L(64), t = L(7), gap = L(7), px0 = X(WX + 14), py = Y(WY + 12);
-    const uint16_t col = s.live ? k.tx : be565(0x555555);
     for (int i = 0; i < 3; ++i) {
-        const float px = px0 + i * (dw + gap);
-        digit(cv, '8', px, py, dw, dh, t, be565(WHITE), 0.07f);
-        if (s.speed[i] && s.speed[i] != ' ') digit(cv, s.speed[i], px, py, dw, dh, t, col, 1.0f);
+        const float px = DX + i * (DW + DGAP);
+        if (!hits(cv.r, px, DY, DW, DH)) continue;
+        digit(cv, '8', px, DY, DW, DH, DT, k.tx, 0.08f);
+        if (s.speed[i] && s.speed[i] != ' ') digit(cv, s.speed[i], px, DY, DW, DH, DT, s.live ? k.tx : k.dm, 1.0f);
     }
-    text(cv, a, F_SMALL, px0, Y(WY + WH - 5), "KM/H", Align::Left, k.md);
-    // the RPM trace: TRACE_N pills, red over TRACE_RED
-    const float x0 = X(WX + 150), w = L(WW - 160), gapT = w / TRACE_N, cyT = Y(WY + WH / 2);
+    // the RPM trace: TRACE_N bars standing on the cells' baseline, the alert colour over TRACE_RED
+    const float gap = (RX1 - RX) / TRACE_N, bw = fminf(4.5f, gap * 0.6f), base = DY + DH;
     for (int i = 0; i < TRACE_N; ++i) {
         const uint16_t v = s.trace[i];
-        const float fr = v ? fminf(1.0f, fmaxf(0.06f, (v - 700.0f) / 6800.0f)) : 0.06f;
-        const float h = fmaxf(L(8), fr * L(WH - 8)), bw = fminf(L(9), gapT * 0.55f);
-        const float px = x0 + i * gapT + gapT / 2 - bw / 2;
+        const float bx = RX + i * gap + (gap - bw) / 2;
         if (!v) {
-            rrect(cv, px, cyT - h / 2, bw, h, bw / 2, k.dm, 0.5f);
+            rrect(cv, bx, base - 2.5f, bw, 2.5f, bw / 2, k.dm, 0.5f);
             continue;
         }
-        uint16_t z[3];
-        zoneColours(k, v > TRACE_RED ? Zone::Alert : Zone::Norm, z);
-        pill(cv, px, cyT - h / 2, bw, h, z, L(2));
+        const float fr = fminf(1.0f, fmaxf(0.08f, (v - 700.0f) / 6800.0f)), hh = fmaxf(2.5f, fr * (DH - 3));
+        const bool red = v > TRACE_RED;
+        rrect(cv, bx, base - hh, bw, hh, bw / 2, red ? k.al : k.md);
+        rrect(cv, bx + bw * 0.35f, base - hh + 1, bw * 0.3f, fmaxf(0.5f, hh - 2), 0, red ? be565(0xFFD0D0) : k.tx, 0.6f);
     }
 }
 
-static void gearBlock(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
-    if (!hits(cv.r, X(GX), Y(GY), L(GW), L(GH))) return;
-    rrect(cv, X(GX), Y(GY), L(GW), L(GH), L(5), be565(DARK));
-    rrect(cv, X(GX), Y(GY), L(GW), L(GH), L(5), be565(0x9AA0B0), 1.0f, 1.0f);
-    const uint16_t col = s.live ? k.tx : be565(0x6A6A78);
-    rrect(cv, X(GX + 6), Y(GY + 5), L(22), L(20), L(4), col);
-    const char mode[2] = {s.mode, 0};
-    text(cv, a, F_MODE, X(GX + 17), Y(GY + 15) + a.font[F_MODE].cap / 2.0f, mode, Align::Center, be565(INK));
-    const char g[2] = {s.gear ? (char)('0' + s.gear) : '-', 0};
-    text(cv, a, F_GEAR, X(GX + GW - 8), Y(GY + 17) + a.font[F_GEAR].cap / 2.0f, g, Align::Right, col);
-    for (int p = 1; p <= 7; ++p)
-        rrect(cv, X(GX + 7 + (p - 1) * 14.4f), Y(GY + GH - 9), L(11), L(4), L(2),
-              s.live && p <= s.gear ? col : be565(0x3A2A44));
-    text(cv, a, F_SMALL, X(GX + 33), Y(GY + 15) + a.font[F_SMALL].cap / 2.0f, "EST", Align::Left, k.md);
-}
-
-static void chips(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
+static void tiles(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
     for (int i = 0; i < 3; ++i) {
-        const float px = 24 + i * 86;
-        if (!hits(cv.r, X(px), Y(CY), L(CW), L(CH))) continue;
+        const float x = tileX(i);
+        if (!hits(cv.r, x, TY, TW, TH)) continue;
         const Chip& c = s.chip[i];
-        rrect(cv, X(px), Y(CY), L(CW), L(CH), L(5), be565(DARK));
-        rrect(cv, X(px), Y(CY), L(CW), L(CH), L(5), be565(0x9AA0B0), 0.7f, 1.0f);
-        rrect(cv, X(px + 8), Y(CY), L(24), 1.0f, 0, k.md);
-        text(cv, a, F_SMALL, X(px + 8), Y(CY + 17), c.label, Align::Left, k.md);
-        const bool unit = c.unit[0] != 0;
-        const uint16_t vc = s.live ? k.tx : be565(0x8A8A99);
-        text(cv, a, F_VALUE, X(px + CW - (unit ? 27 : 7)), Y(CY + 33), c.val, Align::Right, vc);
-        if (unit) text(cv, a, F_SMALL, X(px + CW - 24), Y(CY + 33), c.unit, Align::Left, k.md);
+        card(cv, k, x, TY, TW, TH);
+        text(cv, a, F_SMALL, x + 5, TY + 10.5f, c.label, Align::Left, k.md);
+        // the unit on the label's line, so the value has the tile's whole width
+        if (c.unit[0]) text(cv, a, F_SMALL, x + TW - 4, TY + 10.5f, c.unit, Align::Right, k.dm);
+        const bool shown = s.live || i == 2;   // the trip stays
+        text(cv, a, F_VALUE, x + TW - 4, TY + TH - 5.5f, c.val, Align::Right, shown ? k.tx : k.dm);
+    }
+    const float x = tileX(3);
+    if (!hits(cv.r, x, TY, TW, TH)) return;
+    card(cv, k, x, TY, TW, TH);
+    text(cv, a, F_SMALL, x + 5, TY + 10.5f, "GEAR", Align::Left, k.md);
+    text(cv, a, F_SMALL, x + 21, TY + TH - 12, "EST", Align::Left, k.dm);
+    const uint16_t col = s.live ? k.tx : k.dm;
+    const char g[2] = {s.gear ? (char)('0' + s.gear) : '-', 0};
+    text(cv, a, F_GEAR, x + 5, TY + TH - 4, g, Align::Left, col);
+    const float px0 = x + 21, pw = (x + TW - 4 - px0) / 7;
+    for (int p = 1; p <= 7; ++p)
+        rrect(cv, px0 + (p - 1) * pw, TY + TH - 8, pw - 1, 2.5f, 1, s.live && p <= s.gear ? k.md : k.pipOff);
+}
+
+static void zoneColours(const Look& k, Zone z, uint16_t out[3]) {
+    out[0] = out[1] = out[2] = k.md;
+    switch (z) {
+        case Zone::Cold: out[0] = k.dm; out[1] = k.dm; out[2] = k.md; break;
+        case Zone::Norm: out[0] = k.dm; out[1] = k.md; out[2] = k.tx; break;
+        case Zone::Warn: out[0] = k.md; out[1] = k.tx; out[2] = be565(WHITE); break;
+        case Zone::Alert: out[0] = be565(0x7A0A0A); out[1] = k.al; out[2] = be565(0xFFD0D0); break;
     }
 }
 
-static void ribbons(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
+static void bars(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
     for (int i = 0; i < 3; ++i) {
-        const Rib g = rib(i);
-        if (!hits(cv.r, g.ix0, g.iy, g.ix1 - g.ix0, g.ih)) continue;
+        const float y = barY(i);
+        if (!hits(cv.r, PX, y, PW, BH)) continue;
         const Ribbon& b = s.rib[i];
         const bool pulse = b.bad && s.pulse;
-        rrect(cv, g.ix0, g.iy, g.ix1 - g.ix0, g.ih, L(6), be565(INK));
-        rrect(cv, g.ix0, g.iy, g.ix1 - g.ix0, g.ih, L(6),
-              b.bad ? (pulse ? be565(0xFF6A6A) : k.al) : be565(0x6A6A78), 1.0f, b.bad ? 1.5f : 1.0f);
-        const float mid = g.iy + g.ih / 2;
-        const uint16_t vc = b.bad ? k.al : s.live ? k.tx : be565(0x8A8A99);
-        const float vbase = mid + a.font[F_VALUE].cap / 2.0f;
-        text(cv, a, F_VALUE, g.nx + L(44), vbase, b.val, Align::Right, vc);
-        if (b.unit[0]) text(cv, a, F_SMALL, g.nx + L(47), vbase, b.unit, Align::Left, b.bad ? be565(0xFF9A9A) : k.md);
+        card(cv, k, PX, y, PW, BH, b.bad, pulse);
+        const float lb = y + 10.5f;
+        if (b.bad) {   // the label in a box of the alert colour (white on the pulse)
+            const uint16_t box = pulse ? be565(WHITE) : k.al;
+            rrect(cv, PX + 4, y + 3.5f, 31, 9, 2, box);
+            text(cv, a, F_SMALL, PX + 7, lb, b.label, Align::Left, pulse ? be565(INK) : k.onAlert, 1);
+        } else {
+            text(cv, a, F_SMALL, PX + 6, lb, b.label, Align::Left, k.md, 1);
+        }
+        const float vb = y + 13.5f;
+        float uw = 0;
+        if (b.unit[0]) {
+            text(cv, a, F_SMALL, PX + PW - 6, vb, b.unit, Align::Right, b.bad ? k.al : k.md);
+            uw = width(a, F_SMALL, b.unit) + 2;
+        }
+        text(cv, a, F_BIG, PX + PW - 6 - uw, vb, b.val, Align::Right, b.bad ? k.al : s.live ? k.tx : k.dm);
         // the track
-        const float w = (g.trx1 - g.trx0) / PILLS;
+        const float x0 = PX + 6, gw = (PW - 12) / PILLS, ph = 5.5f, py = y + BH - ph - 4.5f;
         uint16_t zc[3];
         zoneColours(k, b.zone, zc);
         for (int p = 0; p < PILLS; ++p) {
-            const bool on = p < b.lit;
-            const float pw = w * 0.6f, px = g.trx0 + p * w + w * 0.2f, ph = on ? g.ih - L(8) : g.ih - L(15);
-            const float py = g.iy + (g.ih - ph) / 2;
-            if (on) {
-                pill(cv, px, py, pw, ph, zc, 0.5f);
+            const float px = x0 + p * gw + 1, pw = gw - 2;
+            if (p < b.lit) {
+                rrect(cv, px, py, pw, ph, 1.5f, zc[1]);
+                rrect(cv, px + 1, py + 1, pw - 2, 1, 0, zc[2], 0.55f);
             } else {
                 uint16_t zz[3];
                 zoneColours(k, b.pill[p], zz);
-                rrect(cv, px, py, pw, ph, pw / 2, zz[0], 0.32f);
+                rrect(cv, px, py, pw, ph, 1.5f, zz[0], 0.28f);
             }
         }
-        // the tag
-        const uint16_t tag = b.bad ? (pulse ? be565(0xE0404A) : be565(0xC01020)) : k.md;
-        rrect(cv, g.tx0, g.iy + L(1), g.tw, g.ih - L(2), L(5), tag);
-        text(cv, a, F_SMALL, g.tx0 + g.tw / 2 + 0.5f, mid + a.font[F_SMALL].cap / 2.0f, b.label, Align::Center,
-             b.bad ? be565(WHITE) : k.onTag);
     }
 }
 
 void compose(const Art& a, const Look& k, const Scene& s, Rect r, uint16_t* buf) {
     if (r.w <= 0 || r.h <= 0 || r.x < 0 || r.y < 0 || r.x + r.w > W || r.y + r.h > H) return;   // the screen only
     Canvas cv{r, buf};
-    art(a, k, s, cv);
-    window(a, k, s, cv);
-    gearBlock(a, k, s, cv);
-    chips(a, k, s, cv);
-    ribbons(a, k, s, cv);
-    if (s.demo) text(cv, a, F_SMALL, 6, ART_Y - 10, "DEMO", Align::Left, k.al);
+    ground(a, k, s, cv);
+    head(a, k, s, cv);
+    speedCard(a, k, s, cv);
+    tiles(a, k, s, cv);
+    bars(a, k, s, cv);
     if (!s.live) {   // the link is lost: everything at 65 %
         const uint16_t black = 0;
         for (int i = 0; i < r.w * r.h; ++i) buf[i] = mix(buf[i], black, 90);   // 90 / 256 ~ 35 % black

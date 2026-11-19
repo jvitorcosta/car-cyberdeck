@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     fclose(f);
     Art art;
     if (!parse(blob.data(), blob.size(), &art)) {
-        fprintf(stderr, "not an SKR1 file\n");
+        fprintf(stderr, "not an SKR2 file\n");
         return 1;
     }
     struct State { const char* name; obdwire::Live l; bool coolBad, battBad; uint32_t ms; };

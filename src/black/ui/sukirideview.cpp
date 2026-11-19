@@ -47,7 +47,7 @@ void drawRide(TFT_eSPI& tft, const obdwire::Live& l, uint32_t nowMs, int theme, 
     }
     const bool live = l.link == obdplan::Link::Live;
     if (live != s_live) s_trace.reset();   // a new link: a new trace
-    if (live != s_live || demo != s_demo) whole = true;   // the whole art dims (or comes back); the DEMO band
+    if (live != s_live || demo != s_demo) whole = true;   // the whole screen dims (or comes back); the state tag
     s_live = live;
     s_demo = demo;
     s_trace.update(live ? l.rpm : NAN, nowMs);

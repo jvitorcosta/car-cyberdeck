@@ -19,4 +19,4 @@ finale.snd 561140
 camvoice.bin 758036
 connect.snd 32204
 suki.bin 190447
-sukiride.bin 502212
+sukiride.bin 738414

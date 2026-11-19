@@ -1,35 +1,40 @@
-# The Suki drive screen (R1.1) on the black deck
+# The Suki drive screen (v19, full screen) on the black deck
 
-A fourth GAUGES screen, **Ride**, next to Suki (the film monitor V3b, #71), Drive and Trip. It is the
-research session's approved mock "R1 refined" (layout C, R1 ribbon style), in every deck theme day and
-night. Picked like the others while parked: `GAUGES SCREEN ride` on the serial line, RIDE on the phone
-page, or `GET /gauges?screen=ride` (also `4`).
+A fourth GAUGES screen, **Ride**, next to Suki (the film monitor V3b, #71), Drive and Trip. It began as
+the research session's approved mock "R1 refined" (layout C, R1 ribbon style) and became João's
+full-screen mock v19: no black bands and no stretching, the film's left side (bezel window, silver
+ribbons) replaced by a panel in the theme's own colours. Every deck theme, day and night. Picked like
+the others while parked: `GAUGES SCREEN ride` on the serial line, RIDE on the phone page, or
+`GET /gauges?screen=ride` (also `4`).
 
 ## What it shows
 
-- **The art**: the film monitor's backdrop (logo, pink curve, bezel, three silver ribbons) at half size,
-  320 x 182, letterboxed 29 px above and below. The girl on the right is animated from 19 real cels.
-- **Speed**: the true OBD speed (PID 0D, no dial factor) in three seven-segment cells over a faint 888,
-  `KM/H` under it. `---` without a value.
-- **RPM trace**: the last 13 samples, one every 250 ms, as the film's pills; red over 6500 rpm.
-- **Gear (EST)**: the old clock slot: a mode square (always D: standard OBD2 has no gear or S mode), the
-  estimated gear and seven pips. The estimate is rpm / speed matched to seven bands (125 rpm per km/h in
-  1st down to ~20 in 7th, geometric steps); `-` under 10 km/h or outside every band. **The bands are
-  guesses until a drive log calibrates them.**
-- **Chips**: KM/L now (fueleco), IAT (the City's 68), TRIP km (stays shown without the link).
-- **Ribbons**: PEDAL (throttle %), COOL (60 to 130 C scale), BATT (11 to 15 V scale), each with a value, a
-  16-pill track and a tag. The lit pills take the value's zone colour; unlit pills a faint tint of their
-  own zone. Zones: COOL cold under 77, warn from 95, alert from 105; BATT alert under 12, warn over
-  14.7; PEDAL warn from 85 %.
+- **The girl** on the right, from 19 real cels, the art scaled evenly to the full 240 px (x 0.6575 of
+  the 640 x 365 frames, right edge kept). Only her strip is stored: x 160 to 320.
+- **The left panel** (x 0 to 178, then a 30 px fade into her): the theme's DIM at 10 %, a touch lighter
+  at the top and darker at the bottom. Every element is a card: dark glass, a 0.75 px border in the
+  theme's DIM, a short MID tick at its top left. No grey.
+- **SUKI**: the film logo's letters, tinted in the theme's TEXT over a DIM shadow. On the right of the
+  logo row a tag: `RIDE` (MID), `DEMO` with `GAUGES DEMO` and `NO LINK` without the link (ALERT).
+- **Speed card**: the true OBD speed (PID 0D, no dial factor) in three seven-segment cells over a faint
+  888, `---` without a value; `SPEED KM/H` above it. On the right `RPM` with the number and the trace:
+  the last 13 samples, one every 250 ms, as bars on the cells' baseline, the alert colour over 6500 rpm.
+- **Four equal tiles**: KM/L now (fueleco), IAT (the City's 68), TRIP km (stays shown without the link)
+  and GEAR: the estimated gear and seven pips, `EST` beside them. The estimate is rpm / speed matched to
+  seven bands (125 rpm per km/h in 1st down to ~20 in 7th, geometric steps); `-` under 10 km/h or
+  outside every band. **The bands are guesses until a drive log calibrates them.** Units sit on the
+  label's line so the value has the tile's width.
+- **Three identical bars**: PEDAL (throttle %), COOL (60 to 130 C scale), BATT (11 to 15 V scale), each
+  with its label, the value on the right and a 16-pill track under them. The lit pills take the
+  value's zone colour; unlit pills a faint tint of their own zone. Zones: COOL cold under 77, warn from
+  95, alert from 105; BATT alert under 12, warn over 14.7; PEDAL warn from 85 %.
 - **Alert**: only COOL and BATT, from `drivedash::Alerts` (coolant over 105 C until under 100; volts under
-  12.0 V for 60 s with the engine running, until 12.2 V). The inlay border and value turn the theme's
-  alert colour, the tag flashes at 3 Hz. The alert colour is white in the red, orange and pink themes
-  (termpal's rule), red elsewhere.
-- **Link lost**: every value `--`, the whole screen at 65 %, the girl on the calm cel.
+  12.0 V for 60 s with the engine running, until 12.2 V). The bar's border, value and unit turn the
+  theme's alert colour and its label sits in an alert box; border and box flash white at 3 Hz. The
+  alert colour is white in the red, orange and pink themes (termpal's rule), red elsewhere.
+- **Link lost**: every value `--`, the whole screen at 65 %, the girl on the calm cel, the tag `NO LINK`.
 - **Ride without its art** (a build from a fresh checkout: CI's stand-in): the screen falls back to
   Suki / the street look, but `/gauges` still reports `ride`.
-- **Demo** (`GAUGES DEMO`, the simulated drive): `DEMO` in the alert colour in the top band, so it is
-  never mistaken for the car.
 
 ## The girl
 
@@ -40,8 +45,10 @@ teeth cels shuffled 8 a second with a 1 px sideways shake.
 ## Colours
 
 The deck's theme is the inside light's swatch (`karaoke::light()`, termpal's nine themes, -1 green)
-with day or night (`theme::isNightActive()`). The interface uses termpal's TEXT, MID, DIM and ALERT
-for that theme and time of day; the tag text is dark or white, whichever reads better on MID.
+with day or night (`theme::isNightActive()`). The yellow deck sends that swatch with its karaoke
+keep-alive, so the Ride screen follows the yellow deck's colour while KARAOKE is on there; otherwise it
+keeps the last one (green after a boot). The interface uses termpal's TEXT, MID, DIM and ALERT for
+that theme and time of day; text in the alert box is dark or white, whichever reads better.
 
 The art is stored once, as 8-bit indices into one 256-colour palette (the film's own colours). On a
 theme or day/night change the deck recolours the palette, not the pixels (the mock's `recolour()`):
@@ -54,12 +61,12 @@ near the theme's TEXT hue, every other hue around the theme's MID hue with half 
 
 - `util/car/sukiride` (PURE, host-tested): the file reader, the recolour, the scene, and `compose()`,
   which draws any rectangle of the screen into big-endian RGB565. Region keys say what changed.
-- `black/ui/sukirideview`: one 23,296-pixel buffer in PSRAM (the cel strip, the biggest region). A whole
-  redraw goes in four strips; after that only regions whose key changed are composed and pushed. The
-  cel strip (128 x 182, ~46 KB) is the only big push, 4 to 8 times a second.
-- The art file `data/sukiride.bin` (~0.5 MB, format SKR1, `sukiride.h`) is **linked into the app**
+- `black/ui/sukirideview`: one 34,560-pixel buffer in PSRAM (the art's region, x 176 to 320, the
+  biggest). A whole redraw goes in strips 108 rows tall; after that only regions whose key changed
+  are composed and pushed. The art region (~69 KB) is the only big push, 4 to 8 times a second.
+- The art file `data/sukiride.bin` (~0.74 MB, format SKR2, `sukiride.h`) is **linked into the app**
   (`board_build.embed_files`), not the media pack: a firmware upload (USB or WiFi) carries it, and no
-  `uploadmedia` is needed. The app went from 1.62 MB to ~2.1 MB of the 3 MB slot.
+  `uploadmedia` is needed.
 - The art is the film's and the repo is public: the layers and `data/sukiride.bin` are git-ignored. CI
   links `media_sizes.py`'s zero-filled stand-in of the same size, which reads as no art, and the Ride
   screen then falls back to the others.
@@ -75,9 +82,9 @@ python tools/suki_ride_preview.py --out suki-ride-preview.png   # every state an
 The layers come from the research session (cut from the making-of video's frames by its `mk12b.py`).
 Fonts: the mock's Orbitron at weight 800 (`Orbitron[wght].ttf`, SIL OFL, google/fonts `ofl/orbitron`,
 downloaded with João's OK; only the generated glyphs travel, inside the git-ignored art file), else
-Century Gothic Bold from Windows. Text is a little larger than half the mock's (labels 7 px, values 10,
-gear 16): half-size labels would be about 4 px tall. The ribbon tags are 34 px wide, not 30, so
-Orbitron's PEDAL fits.
+Century Gothic Bold from Windows. Labels and units 7 px, the tiles' values 10, the bars' values 12, the
+gear 16. The interactive mocks (v18 full screen, v19 left panel) are in the research notes, not here:
+they carry the film's art.
 
 ## Car tests (João, read-only)
 
