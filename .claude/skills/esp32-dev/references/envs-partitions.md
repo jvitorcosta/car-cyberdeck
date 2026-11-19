@@ -57,7 +57,7 @@ CI (`.github/workflows/ci.yml`) builds `-e s3 -e hwcheck_s3`, `-e ledpanel -e hw
 | media | data/0x40 | 0x610000 | 0x9E0000 (~9.9 MB) | the media pack (`tools/pack_media.py`), read-only at run time |
 | coredump | data/coredump | 0xFF0000 | 0x10000 | |
 
-The app is ~1.3 MB of its 3 MB slot. The media (intro video, clips, montage, CJK font, emoji)
+The app is ~1.6 MB of its 3 MB slot (51 %, build of 2026-11-19). The media (intro video, clips, montage, CJK font, emoji)
 are not in the app: `pio run -e s3 -t uploadmedia` packs `data/` and writes it at 0x610000 with
 esptool (`tools/media_upload.py`). Only `data/greeting_default.pcm` is embedded, so a deck with an
 empty media partition still boots with sound.
@@ -66,7 +66,8 @@ empty media partition still boots with sound.
 
 nvs 0x9000 (0x5000), otadata 0xE000, two app slots of 0x1E0000 (1,966,080 B), a 128 KB data
 partition (`spiffs`, used as LittleFS by the OBD deck's trip log). The yellow firmware is
-~1.39 MB of its slot. `huge_app.csv` (diag envs) has one 3 MB app and no OTA.
+~1.71 MB of its slot (86.9 %, build of 2026-11-19; the ini comment's 1.39 MB is older): the
+yellow deck's flash is getting tight too. The OBD deck is ~1.18 MB (60 %). `huge_app.csv` (diag envs) has one 3 MB app and no OTA.
 
 **NVS stays at 0x9000 / 0x5000 in every table**, so a USB flash that switches tables keeps the
 settings (touch calibration, looks, trip). Keep it that way when you touch a table.
