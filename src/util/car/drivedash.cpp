@@ -6,7 +6,7 @@
 
 namespace drivedash {
 
-static const char* const NAMES[(int)Screen::COUNT] = {"suki", "drive"};
+static const char* const NAMES[(int)Screen::COUNT] = {"suki", "drive", "trip"};
 
 const char* name(Screen s) { return (int)s < (int)Screen::COUNT ? NAMES[(int)s] : "?"; }
 

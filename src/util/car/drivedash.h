@@ -8,9 +8,10 @@
 namespace drivedash {
 
 // The GAUGES screens. Suki: the film monitor (ui/sukiview, the street look without its art);
-// Drive: this dash. Kept in NVS ("hud" / "screen") as the number.
-enum class Screen : uint8_t { Suki = 0, Drive = 1, COUNT };
-const char* name(Screen s);                     // "suki", "drive"
+// Drive: this dash; Trip: the Trip ticker (util/car/tripticker, ui/tripview). Kept in NVS ("hud" /
+// "screen") as the number.
+enum class Screen : uint8_t { Suki = 0, Drive = 1, Trip = 2, COUNT };
+const char* name(Screen s);                     // "suki", "drive", "trip"
 bool parse(const char* text, Screen* out);      // a name or its number ("drive", "2"); false otherwise
 // Switching screens is for a parked car (the mocks' screen rules): refused over MOVING_KMH. An unknown
 // speed (no link) counts as parked.
