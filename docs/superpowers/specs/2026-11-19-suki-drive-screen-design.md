@@ -17,8 +17,12 @@ the others while parked: `GAUGES SCREEN ride` on the serial line, RIDE on the ph
 - **SUKI**: the film logo's letters, tinted in the theme's TEXT over a DIM shadow. On the right of the
   logo row a tag: `RIDE` (MID), `DEMO` with `GAUGES DEMO` and `NO LINK` without the link (ALERT).
 - **Speed card**: the true OBD speed (PID 0D, no dial factor) in three seven-segment cells over a faint
-  888, `---` without a value; `SPEED KM/H` above it. On the right `RPM` with the number and the trace:
-  the last 13 samples, one every 250 ms, as bars on the cells' baseline, the alert colour over 6500 rpm.
+  888, `---` without a value; `SPEED KM/H` above it. On the right `RPM`: the rpm in four smaller
+  seven-segment cells (14 x 26 px) over a faint 8888, and under them a tach on the speed's baseline: 12
+  segments over 0 to 7000 rpm, rising in height left to right, each in its band's colour (the theme
+  under 5000, bright from 5000, the alert colour from 6500), unlit ones faint, and a bright cap on the
+  highest of the last ~3 s (13 samples, one every 250 ms). João found the old 7 px number too small
+  (2026-11-19).
 - **Four equal tiles**: KM/L now (fueleco), IAT (the City's 68), TRIP km (stays shown without the link)
   and GEAR: the estimated gear and seven pips, `EST` beside them. The estimate is rpm / speed matched to
   seven bands (125 rpm per km/h in 1st down to ~20 in 7th, geometric steps); `-` under 10 km/h or
@@ -49,7 +53,13 @@ themes, -1 green) with day or night (`theme::isNightActive()`). The yellow deck 
 its link check every 5 s (`GET /link?light=N`) and with the karaoke keep-alive, so the Ride screen
 follows its colour within 5 s, KARAOKE on or off. With the light off the screen keeps the last colour;
 after a boot it is green until the first link check. The interface uses termpal's TEXT, MID, DIM and ALERT for
-that theme and time of day; text in the alert box is dark or white, whichever reads better.
+that theme; text in the alert box is dark or white, whichever reads better.
+
+Ride wears every theme's **night** palette day and night (the art at 78 %), except pink, whose day
+look is the vivid one by day: João's pick on the deck, 2026-11-19. Pink at night is Ride's own
+FF3CA0 / E6288C / C81E78, pinker than termpal's red-leaning FF0040. White is termpal's night white
+with the art undimmed and lifted 35 % toward white, so it doesn't read grey. termpal itself is
+unchanged: the other screens keep its day and night.
 
 The art is stored once, as 8-bit indices into one 256-colour palette (the film's own colours). On a
 theme or day/night change the deck recolours the palette, not the pixels (the mock's `recolour()`):

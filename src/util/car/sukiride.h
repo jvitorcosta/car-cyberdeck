@@ -51,13 +51,19 @@ float hueOf(uint32_t rgb);   // 0..360
 // One theme's colours (big-endian RGB565, like the buffer): the art's palette, the interface's roles
 // from termpal (TEXT, MID, DIM, ALERT), the tag's text (dark or white, the better contrast on ALERT)
 // and the panel's background per row (the theme's DIM at 10 %, a touch lighter at the top and darker
-// at the bottom). theme: termpal's swatch (0..8, -1 the default green); night: its night palette, the
-// art at 78 %.
+// at the bottom). theme: termpal's swatch (0..8, -1 the default green); night: the deck's night.
+// Ride wears every theme's night palette (the art at 78 %) day and night, but pink, whose day look is
+// the vivid one by day (João's pick, 2026-11-19, on the deck). Pink at night is PINK_NIGHT, pinker than
+// termpal's red-leaning FF0040; white is termpal's night white with the art undimmed, so it isn't grey.
 struct Look {
     uint16_t art[COLOURS];
     uint16_t tx, md, dm, al, onAlert, pipOff;
     uint16_t bg[H];
 };
+constexpr int PINK = 2, WHITE_THEME = 6;   // ledlook / termpal swatch indices
+constexpr uint32_t PINK_NIGHT[3] = {0xFF3CA0, 0xE6288C, 0xC81E78};   // TEXT, MID, DIM (6.4 / 5.0 / 3.9:1 on black)
+// True when Ride uses the night palette: always, but pink by day.
+bool nightLook(int theme, bool night);
 void makeLook(const Art& a, int theme, bool night, Look* out);
 
 // ---- the values ----
@@ -84,7 +90,8 @@ int gearEst(float rpm, float kmh);
 int celIndex(float kmh, bool live, uint32_t nowMs);
 int shake(float kmh, bool live, uint32_t nowMs);
 
-// The last TRACE_N RPM samples, one every SAMPLE_MS (0 = none yet / unknown).
+// The last TRACE_N RPM samples, one every SAMPLE_MS (0 = none yet / unknown): the tach's peak tick
+// is their highest (the last ~3 s).
 class Trace {
 public:
     static constexpr uint32_t SAMPLE_MS = 250;
@@ -97,7 +104,11 @@ private:
     uint32_t n_ = 0, at_ = 0;
     bool any_ = false;
 };
-constexpr float TRACE_RED = 6500.0f;
+// The tach: RPM_PILLS segments over 0..RPM_MAX, normal, warn from RPM_WARN, alert from RPM_RED.
+constexpr int RPM_PILLS = 12;
+constexpr float RPM_MAX = 7000.0f, RPM_WARN = 5000.0f, RPM_RED = 6500.0f;
+Zone rpmZone(float rpm);
+int rpmPills(float rpm);   // 0..RPM_PILLS lit (NAN or <= 0: 0)
 
 struct Ribbon {                  // one bar
     char val[8] = "--", unit[3] = "", label[6] = "";
@@ -111,8 +122,10 @@ struct Chip { char label[5] = "", val[9] = "--", unit[3] = ""; };   // one tile;
 struct Scene {
     bool live = false;           // the link is live: else every value "--", the screen dimmed, calm cel
     char speed[4] = "---";       // three cells, right-aligned (spaces), "---" without one
-    char rpm[6] = "--";          // the RPM card's number
-    uint16_t trace[TRACE_N] = {};
+    char rpm[6] = "--";          // the RPM's four cells, right-aligned, "--" without one
+    uint8_t rpmLit = 0;          // the tach's pills on
+    uint8_t rpmPeak = 0;         // the pill of the last ~3 s' highest (0: none)
+    Zone rpmZone = Zone::Norm;   // the rpm's band (each pill takes its own band's colour)
     uint8_t gear = 0;            // 0: "-"
     Chip chip[3];
     Ribbon rib[3];               // PEDAL, COOL, BATT top to bottom
@@ -128,7 +141,7 @@ void scene(const obdwire::Live& l, const Trace& t, bool coolBad, bool battBad, u
 // ---- drawing ----
 struct Rect { int16_t x, y, w, h; };
 // The live regions: what the view redraws when its key changes.
-enum Region : uint8_t { R_CEL, R_SPEED, R_TRACE, R_GEAR, R_CHIP0, R_CHIP1, R_CHIP2, R_RIB0, R_RIB1, R_RIB2, REGIONS };
+enum Region : uint8_t { R_CEL, R_SPEED, R_RPM, R_GEAR, R_CHIP0, R_CHIP1, R_CHIP2, R_RIB0, R_RIB1, R_RIB2, REGIONS };
 Rect region(Region r);
 uint32_t key(const Scene& s, Region r);   // changes whenever what r shows changes
 constexpr int CEL_REGION_X = PANEL_W - 2;               // the art's region: the fade and the girl

@@ -145,14 +145,24 @@ static uint32_t scale(uint32_t c, float k, float toWhite) {   // x k toward blac
     return ch(16) | ch(8) | ch(0);
 }
 
+bool nightLook(int theme, bool night) { return theme == PINK ? night : true; }
+
 void makeLook(const Art& a, int theme, bool night, Look* out) {
-    const uint32_t tx = termpal::rgb(termpal::TEXT, theme, night), md = termpal::rgb(termpal::MID, theme, night),
-                   dm = termpal::rgb(termpal::DIM, theme, night), al = termpal::rgb(termpal::ALERT, theme, night);
-    const bool white = theme == 6;   // termpal's white: the art near greyscale
-    const float h0 = hueOf(md), hAcc = hueOf(tx), sat = white ? 0.06f : 1.0f, dim = night ? 0.78f : 1.0f;
+    const bool n = nightLook(theme, night), white = theme == WHITE_THEME;   // white: the art near greyscale
+    uint32_t tx = termpal::rgb(termpal::TEXT, theme, n), md = termpal::rgb(termpal::MID, theme, n),
+             dm = termpal::rgb(termpal::DIM, theme, n);
+    const uint32_t al = termpal::rgb(termpal::ALERT, theme, n);
+    if (theme == PINK && n) {   // termpal's night pink (FF0040) reads red here: a pinker one
+        tx = PINK_NIGHT[0];
+        md = PINK_NIGHT[1];
+        dm = PINK_NIGHT[2];
+    }
+    const float h0 = hueOf(md), hAcc = hueOf(tx), sat = white ? 0.06f : 1.0f, dim = n && !white ? 0.78f : 1.0f;
     for (int i = 0; i < COLOURS; ++i) {
         const uint8_t* p = a.pal + i * 3;
-        out->art[i] = be565(recolour(((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2], h0, hAcc, sat, dim));
+        uint32_t c = recolour(((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2], h0, hAcc, sat, dim);
+        if (white && lum(c) > 0.08) c = scale(c, 1.0f, 0.35f);   // white: lifted toward white, the dark lines kept
+        out->art[i] = be565(c);
     }
     out->tx = be565(tx);
     out->md = be565(md);
@@ -177,6 +187,11 @@ float coolFrac(float c) { return clamp01((c - 60) / 70); }
 float battFrac(float v) { return clamp01((v - 11) / 4); }
 float pedalFrac(float p) { return clamp01(p / 100); }
 int pillsLit(float frac) { return std::isnan(frac) ? 0 : (int)lroundf(clamp01(frac) * PILLS); }
+Zone rpmZone(float rpm) { return rpm < RPM_WARN ? Zone::Norm : rpm < RPM_RED ? Zone::Warn : Zone::Alert; }
+int rpmPills(float rpm) {
+    if (!(rpm > 0)) return 0;   // NAN too
+    return (int)ceilf(clamp01(rpm / RPM_MAX) * RPM_PILLS);   // any rpm lights the first pill
+}
 
 int gearEst(float rpm, float kmh) {
     if (!(kmh >= GEAR_MIN_KMH) || !(rpm > 0)) return 0;   // NAN too
@@ -291,8 +306,14 @@ void scene(const obdwire::Live& l, const Trace& t, bool coolBad, bool battBad, u
         }
         s.speed[3] = 0;
     }
-    for (int i = 0; i < TRACE_N; ++i) s.trace[i] = t.at(i);
-    whole(s.live ? l.rpm : NAN, 99999, s.rpm, sizeof s.rpm);
+    whole(s.live ? l.rpm : NAN, 9999, s.rpm, sizeof s.rpm);
+    if (s.live && std::isfinite(l.rpm)) {
+        s.rpmLit = (uint8_t)rpmPills(l.rpm);
+        s.rpmZone = rpmZone(l.rpm);
+        uint16_t peak = 0;
+        for (int i = 0; i < TRACE_N; ++i) peak = t.at(i) > peak ? t.at(i) : peak;
+        s.rpmPeak = (uint8_t)rpmPills(peak);
+    }
     s.gear = (uint8_t)(s.live ? gearEst(l.rpm, l.kmh) : 0);
     chip(s.chip[0], "KM/L", s.live ? l.kml : NAN, 1, "");
     chip(s.chip[1], "IAT", s.live ? l.intakeC : NAN, 0, "C");
@@ -312,7 +333,9 @@ static constexpr float LOGO_X = 5, LOGO_Y = 5, SHADOW = 2;     // SUKI, its shad
 static constexpr float TAG_Y = 11, TAG_H = 11;                 // the state tag (RIDE, DEMO, NO LINK)
 static constexpr float SY = 31, SH = 68;                       // the speed card
 static constexpr float DW = 23, DH = 43, DT = 5, DGAP = 4, DX = 11, DY = 48;   // the speed's cells
-static constexpr float RX = 102, RX1 = 173;                    // the RPM trace
+static constexpr float RX = 102, RX1 = 173;                    // the RPM column
+static constexpr float RW = 14, RH = 26, RT = 3.5f, RGAP = 3;    // the RPM's cells, from DY
+static constexpr float TACH_Y = DY + DH;                        // the tach's baseline (the speed's)
 static constexpr float TY = 103, TH = 31, TW = 40.5f, TGAP = 4; // the four tiles
 static constexpr float BY = 138, BGAP = 4;                     // the bars share the rest
 static constexpr float BH = (H - 5 - BY - 2 * BGAP) / 3;
@@ -329,7 +352,7 @@ Rect region(Region r) {
     switch (r) {
         case R_CEL: return Rect{CEL_REGION_X, 0, W - CEL_REGION_X, H};
         case R_SPEED: return bounds(DX, DY, 3 * DW + 2 * DGAP, DH, 0);
-        case R_TRACE: return bounds(RX - 1, SY + 1, RX1 + 1 - (RX - 1), SH - 2, 0);
+        case R_RPM: return bounds(RX - 1, DY, RX1 + 1 - (RX - 1), TACH_Y - DY, 0);
         case R_GEAR: return bounds(tileX(3), TY, TW, TH, 1);
         case R_CHIP0: case R_CHIP1: case R_CHIP2: return bounds(tileX(r - R_CHIP0), TY, TW, TH, 1);
         case R_RIB0: case R_RIB1: case R_RIB2: return bounds(PX, barY(r - R_RIB0), PW, BH, 1);
@@ -350,7 +373,7 @@ uint32_t key(const Scene& s, Region r) {
     switch (r) {
         case R_CEL: h = fnv(h, s.cel); h = fnv(h, s.shake); break;
         case R_SPEED: h = fnv(h, s.speed); break;
-        case R_TRACE: h = fnv(h, s.trace); h = fnv(h, s.rpm); break;
+        case R_RPM: h = fnv(h, s.rpm); h = fnv(h, s.rpmLit); h = fnv(h, s.rpmPeak); h = fnv(h, s.rpmZone); break;
         case R_GEAR: h = fnv(h, s.gear); break;
         case R_CHIP0: case R_CHIP1: case R_CHIP2: h = fnv(h, s.chip[r - R_CHIP0]); break;
         case R_RIB0: case R_RIB1: case R_RIB2: {
@@ -509,6 +532,16 @@ static void digit(Canvas& cv, char ch, float x, float y, float w, float h, float
         if (segs & (1 << s)) rrect(cv, B[s][0], B[s][1], B[s][2], B[s][3], 0, c, op);
 }
 
+static void zoneColours(const Look& k, Zone z, uint16_t out[3]) {
+    out[0] = out[1] = out[2] = k.md;
+    switch (z) {
+        case Zone::Cold: out[0] = k.dm; out[1] = k.dm; out[2] = k.md; break;
+        case Zone::Norm: out[0] = k.dm; out[1] = k.md; out[2] = k.tx; break;
+        case Zone::Warn: out[0] = k.md; out[1] = k.tx; out[2] = be565(WHITE); break;
+        case Zone::Alert: out[0] = be565(0x7A0A0A); out[1] = k.al; out[2] = be565(0xFFD0D0); break;
+    }
+}
+
 static void speedCard(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
     if (!hits(cv.r, PX, SY, PW, SH)) return;
     card(cv, k, PX, SY, PW, SH);
@@ -516,7 +549,6 @@ static void speedCard(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
     text(cv, a, F_SMALL, DX, lb, "SPEED", Align::Left, k.md, 1);
     text(cv, a, F_SMALL, DX + width(a, F_SMALL, "SPEED") + 4 + 6, lb, "KM/H", Align::Left, k.md, 1);
     text(cv, a, F_SMALL, RX, lb, "RPM", Align::Left, k.md, 1);
-    text(cv, a, F_SMALL, RX1, lb, s.rpm, Align::Right, s.live ? k.tx : k.dm);
     // the speed: three seven-segment cells over a faint 888
     for (int i = 0; i < 3; ++i) {
         const float px = DX + i * (DW + DGAP);
@@ -524,19 +556,32 @@ static void speedCard(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
         digit(cv, '8', px, DY, DW, DH, DT, k.tx, 0.08f);
         if (s.speed[i] && s.speed[i] != ' ') digit(cv, s.speed[i], px, DY, DW, DH, DT, s.live ? k.tx : k.dm, 1.0f);
     }
-    // the RPM trace: TRACE_N bars standing on the cells' baseline, the alert colour over TRACE_RED
-    const float gap = (RX1 - RX) / TRACE_N, bw = fminf(4.5f, gap * 0.6f), base = DY + DH;
-    for (int i = 0; i < TRACE_N; ++i) {
-        const uint16_t v = s.trace[i];
-        const float bx = RX + i * gap + (gap - bw) / 2;
-        if (!v) {
-            rrect(cv, bx, base - 2.5f, bw, 2.5f, bw / 2, k.dm, 0.5f);
-            continue;
+    // the RPM: four smaller cells over a faint 8888, right-aligned
+    const size_t n = strlen(s.rpm);
+    for (int i = 0; i < 4; ++i) {
+        const float px = RX1 - 4 * RW - 3 * RGAP + i * (RW + RGAP);
+        if (!hits(cv.r, px, DY, RW, RH)) continue;
+        digit(cv, '8', px, DY, RW, RH, RT, k.tx, 0.08f);
+        const int j = i - (4 - (int)n);
+        if (j >= 0 && s.rpm[j] != ' ') digit(cv, s.rpm[j], px, DY, RW, RH, RT, s.live ? k.tx : k.dm, 1.0f);
+    }
+    // the tach: RPM_PILLS segments rising left to right on the speed's baseline, each in its own band's
+    // colour (normal, warn from RPM_WARN, alert from RPM_RED), unlit ones faint, the last ~3 s' peak a
+    // bright cap
+    const float gw = (RX1 - RX) / RPM_PILLS, h0 = 4.5f, h1 = 10.0f;
+    for (int p = 0; p < RPM_PILLS; ++p) {
+        const float px = RX + p * gw + 0.5f, pw = gw - 1.5f, ph = h0 + (h1 - h0) * p / (RPM_PILLS - 1),
+                    py = TACH_Y - ph;
+        if (!hits(cv.r, px, py, pw, ph)) continue;
+        uint16_t zz[3];
+        zoneColours(k, rpmZone((p + 0.5f) * RPM_MAX / RPM_PILLS), zz);
+        if (p < s.rpmLit) {
+            rrect(cv, px, py, pw, ph, 1.0f, zz[1]);
+            rrect(cv, px + 1, py + 1, pw - 2, 1, 0, zz[2], 0.55f);
+        } else {
+            rrect(cv, px, py, pw, ph, 1.0f, zz[0], 0.28f);
+            if (p + 1 == s.rpmPeak) rrect(cv, px, py, pw, 1.5f, 0, zz[2]);   // the peak: a bright cap
         }
-        const float fr = fminf(1.0f, fmaxf(0.08f, (v - 700.0f) / 6800.0f)), hh = fmaxf(2.5f, fr * (DH - 3));
-        const bool red = v > TRACE_RED;
-        rrect(cv, bx, base - hh, bw, hh, bw / 2, red ? k.al : k.md);
-        rrect(cv, bx + bw * 0.35f, base - hh + 1, bw * 0.3f, fmaxf(0.5f, hh - 2), 0, red ? be565(0xFFD0D0) : k.tx, 0.6f);
     }
 }
 
@@ -563,16 +608,6 @@ static void tiles(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
     const float px0 = x + 21, pw = (x + TW - 4 - px0) / 7;
     for (int p = 1; p <= 7; ++p)
         rrect(cv, px0 + (p - 1) * pw, TY + TH - 8, pw - 1, 2.5f, 1, s.live && p <= s.gear ? k.md : k.pipOff);
-}
-
-static void zoneColours(const Look& k, Zone z, uint16_t out[3]) {
-    out[0] = out[1] = out[2] = k.md;
-    switch (z) {
-        case Zone::Cold: out[0] = k.dm; out[1] = k.dm; out[2] = k.md; break;
-        case Zone::Norm: out[0] = k.dm; out[1] = k.md; out[2] = k.tx; break;
-        case Zone::Warn: out[0] = k.md; out[1] = k.tx; out[2] = be565(WHITE); break;
-        case Zone::Alert: out[0] = be565(0x7A0A0A); out[1] = k.al; out[2] = be565(0xFFD0D0); break;
-    }
 }
 
 static void bars(const Art& a, const Look& k, const Scene& s, Canvas& cv) {
