@@ -17,6 +17,13 @@ void test_night_runs_past_midnight_until_six_am() {
     TEST_ASSERT_FALSE(daynight::isNight(hm(6, 0)));
     TEST_ASSERT_FALSE(daynight::isNight(hm(12, 0)));
 }
+void test_quiet_window_is_one_to_seven_am() {
+    TEST_ASSERT_FALSE(daynight::isQuiet(hm(0, 59)));
+    TEST_ASSERT_TRUE(daynight::isQuiet(hm(1, 0)));
+    TEST_ASSERT_TRUE(daynight::isQuiet(hm(6, 59)));
+    TEST_ASSERT_FALSE(daynight::isQuiet(hm(7, 0)));
+    TEST_ASSERT_FALSE(daynight::isQuiet(hm(18, 0)));
+}
 void test_clock_counts_as_synced_only_after_2024() {
     TEST_ASSERT_FALSE(daynight::synced(0));            // boot: 1970
     TEST_ASSERT_FALSE(daynight::synced(86400 * 3));
@@ -27,6 +34,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_night_starts_at_six_pm);
     RUN_TEST(test_night_runs_past_midnight_until_six_am);
+    RUN_TEST(test_quiet_window_is_one_to_seven_am);
     RUN_TEST(test_clock_counts_as_synced_only_after_2024);
     return UNITY_END();
 }

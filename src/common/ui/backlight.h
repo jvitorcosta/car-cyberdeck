@@ -7,6 +7,7 @@ void set(bool night);
 void setLevel(int level);  // 0..255 (the yellow deck's own night level); restore() comes back to it
 // The LEDC hardware fades the backlight to off over `ms` while the CPU keeps drawing (the boot
 // scene's brake: smooth, unlike dimming every pixel each frame). false: no fade (draw it yourself).
+void setOff(bool off);     // quiet window: backlight 0 until false; the level is kept
 bool fadeOut(uint32_t ms);
 void restore();          // back to the day/night level at once (after fadeOut)
 }

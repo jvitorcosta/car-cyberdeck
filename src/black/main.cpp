@@ -440,6 +440,13 @@ static bool updateDayNight() {
         loggedSync = true;
         Serial.printf("[clock] synced, local %02d:%02d\n", m / 60, m % 60);
     }
+    static bool quiet = false;
+    const bool wantQuiet = synced && daynight::isQuiet(m);
+    if (wantQuiet != quiet) {
+        quiet = wantQuiet;
+        backlight::setOff(quiet);
+        Serial.printf("[ui] quiet %s\n", quiet ? "on" : "off");
+    }
     bool night = synced && daynight::isNight(m);
     if (night == theme::isNightActive()) return false;
     theme::setNight(night);
