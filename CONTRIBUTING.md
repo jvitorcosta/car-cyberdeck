@@ -66,6 +66,7 @@ the yellow deck (CYD) has no PSRAM. For anything that allocates or adds a reques
 ```sh
 python tools/capture_serial.py <port> 600 session.log
 python tools/analyze_session.py session.log
+python tools/serial_health.py session.log   # any deck: resets, crashes, lowest heap and stacks
 ```
 
 and mention the `[mem]` lines (free and largest block) before and after your change. Keep each
