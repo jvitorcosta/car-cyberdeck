@@ -27,6 +27,7 @@ void put(Pid p, float v, uint32_t now) {
 void start() {
     s_view.stored = s_view.pending = -1;
     s_view.kmlNow = NAN;
+    s_view.kmlAvg = NAN;
     Serial.println("[obd] BENCH BUILD: a simulated drive, no adapter (util/car/benchdrive)");
 }
 
@@ -45,6 +46,8 @@ void snapshot(View& out) {
         s_trip.step(now, s.kmh, s.mafGs, false, ETHANOL_PCT);
         s_view.litresTotal = s_trip.litres();
         s_view.kmlNow = s_trip.nowKmL();
+        s_view.kmTotal = s_trip.km();
+        s_view.kmlAvg = s_trip.avgKmL();
         s_view.airSteps++;
         if (!s_codesSeen || s.mil != s_lastMil) {   // as a good 03 / 07 read would say
             s_codesSeen = true;

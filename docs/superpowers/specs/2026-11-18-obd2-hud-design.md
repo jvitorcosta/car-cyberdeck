@@ -52,8 +52,12 @@ The black deck serves `GET /obd` (signed or `k=`, like `/link`): one flat JSON l
 `util/car/obdwire`, version 1:
 
 ```
-{"v":1,"link":3,"rpm":2450,"kmh":62,"cool":88,"iat":34,"thr":18.4,"load":41.2,"volt":14.1,"seq":812}
+{"v":1,"link":3,"rpm":2450,"kmh":62,"cool":88,"iat":34,"thr":18.4,"load":41.2,"volt":14.1,"kml":12.4,
+ "tkm":23.4,"tkml":13.1,"rng":412,"rsl":6.49,"trs":11.60,"ts":1860,"seq":812}
 ```
+
+The trip keys (section 5e) came later in the same version: a reader that doesn't know them skips
+them, and a line without them reads as unknown (NAN, `ts` 0).
 
 `link` is `obdplan::Link` (0 off, 1 connecting, 2 engine off, 3 live); a missing or stale reading
 is `null`. A reader refuses another `v`. The yellow deck doesn't read it yet (its heap); the 3rd
@@ -209,6 +213,29 @@ but drawn in code, so everything in it can be committed.
   ladder turns red.
 - **Drawing**: a 320 x 240 frame sprite and the baked background sit in PSRAM. Each part redraws only
   when its value changes (`util/car/drivedash`, host-tested; view `ui/driveview`).
+
+### 5e. Trip data (2026-11-18, for screen 3, the Trip ticker)
+
+The trip is the power-on: the deck runs on the car's 12 V, so a power cut ends it.
+- **Trip km and average km/l**: from `fueleco::Trip`, which the link already steps with every air
+  reading (`obdlink::View` `kmTotal`, `kmlAvg`). The km count only while the fuel is known too, so
+  the average can't run high.
+- **Trip time**: the seconds the link was live (the engine on), counted by `util/car/tripbook`.
+- **The fuel book** (`util/car/fuelbook`, NVS `car`/`fuel`, the OBD deck's record): there is no trip
+  end to charge it at, so `tripbook` charges the litres burnt every 30 s and saves the record when
+  it changed. A power cut loses at most 30 s of fuel. It learns km/l (for the range) only from
+  chunks of at least 1 km, so a crawl out of the garage can't set it.
+- **Range, R$/L, trip R$**: the book's range (44 L minus the litres since the full tank, times the
+  learnt km/l), the last fill-up's price, and the trip's litres at that price. All unknown until a
+  full tank with a price is noted.
+- **A full tank**: the phone page's FULL TANK button (shown while GAUGES is on) with a price field
+  (empty keeps the last price, shown as its placeholder), `GET /fill?p=6.49` (signed or `k=`;
+  `6,49` works too), or `FILL 6.49` on the serial port. A price outside R$ 3 to 15 changes nothing
+  (400). `/gauges` also answers the price, so the page can show it.
+- **Coasting**: the link never sees a fuel cut (it has no pedal learning yet: `fueleco::fuelCut` gets
+  no pedal or throttle), so there's no fuel-cut flag. Coasting shows as a very high km/l now, and
+  screen 3 formats that.
+- `TRIP` on the serial port prints these values on one line.
 
 ### 6. When it shows
 

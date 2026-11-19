@@ -1,9 +1,13 @@
 #include "gauges.h"
 #include <Arduino.h>
 #include <Preferences.h>
+#include <freertos/semphr.h>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include "../../util/car/benchdrive.h"
+#include "../../util/car/fuelbook.h"
+#include "../../util/car/tripbook.h"
 #ifdef OBD_LINK
 #include "../../obd/obdlink.h"
 #endif
@@ -29,11 +33,49 @@ obdwire::Live demoLive(uint32_t ms) {
         l.intakeC = 34.0f;
         if (b.kmh > 3.0f) l.kml = std::fmax(4.0f, 22.0f - l.load * 0.2f);
     }
+    // a made-up trip at 38 km/h and 12.8 km/l, R$ 6.49 a litre, from a 44 L tank's 520 km
+    l.tripS = ms / 1000;
+    l.tripKm = l.tripS * 38.0f / 3600.0f;
+    l.tripKmL = 12.8f;
+    l.priceL = 6.49f;
+    l.tripRs = l.tripKm / l.tripKmL * l.priceL;
+    l.rangeKm = std::fmax(0.0f, 520.0f - l.tripKm);
     l.seq = ms / 250;
     return l;
 }
 portMUX_TYPE s_mux = portMUX_INITIALIZER_UNLOCKED;
 obdwire::Seq s_seq;   // under s_mux
+
+// The fuel book, under s_bookLock (a mutex: its NVS write may block); the trip meter, UI loop only.
+SemaphoreHandle_t s_bookLock = nullptr;
+fuelbook::Book s_book;
+uint8_t s_saved[fuelbook::RECORD_BYTES];
+bool s_savedOk = false;   // s_saved holds what NVS has
+tripbook::Meter s_meter;
+std::atomic<uint32_t> s_tripS{0};
+bool s_fillWanted = false;   // a full tank asked (fill), taken by tick: under s_mux
+bool s_forgetWanted = false;   // forgetBook, taken by tick: under s_mux
+float s_fillPrice = NAN;
+
+struct BookLock {
+    BookLock() { xSemaphoreTake(s_bookLock, portMAX_DELAY); }
+    ~BookLock() { xSemaphoreGive(s_bookLock); }
+    BookLock(const BookLock&) = delete;
+    BookLock& operator=(const BookLock&) = delete;
+};
+
+void saveBookLocked() {   // only when it changed
+    uint8_t rec[fuelbook::RECORD_BYTES];
+    fuelbook::encode(s_book, rec);
+    if (s_savedOk && memcmp(rec, s_saved, sizeof rec) == 0) return;
+    Preferences p;
+    if (!p.begin("car", false)) return;
+    if (p.putBytes("fuel", rec, sizeof rec) == sizeof rec) {
+        memcpy(s_saved, rec, sizeof rec);
+        s_savedOk = true;
+    }
+    p.end();
+}
 }
 
 void begin() {
@@ -44,6 +86,17 @@ void begin() {
         if (sc < (uint8_t)drivedash::Screen::COUNT) s_screen.store(sc);
         p.end();
     }
+    s_bookLock = xSemaphoreCreateMutex();
+    if (p.begin("car", false)) {
+        uint8_t rec[fuelbook::RECORD_BYTES];
+        if (p.isKey("fuel") && p.getBytesLength("fuel") == sizeof rec && p.getBytes("fuel", rec, sizeof rec) == sizeof rec &&
+            fuelbook::decode(rec, sizeof rec, &s_book)) {
+            memcpy(s_saved, rec, sizeof rec);
+            s_savedOk = true;
+        }
+        p.end();
+    }
+    Serial.printf("[obd] fuel book %s\n", !s_savedOk ? "empty" : s_book.hasFull ? "loaded" : "loaded, no full tank yet");
 #ifdef OBD_LINK
     obdlink::start();
     Serial.printf("[obd] gauges %s, link on (BLE)\n", s_on.load() ? "on" : "off");
@@ -86,6 +139,70 @@ void set(bool on) {
     Serial.printf("[obd] gauges %s\n", on ? "on" : "off");
 }
 
+void tick() {
+    static uint32_t at = 0;
+    const uint32_t now = millis();
+    portENTER_CRITICAL(&s_mux);
+    const bool full = s_fillWanted, forget = s_forgetWanted;
+    const float fillPrice = s_fillPrice;
+    s_fillWanted = s_forgetWanted = false;
+    portEXIT_CRITICAL(&s_mux);
+    if (forget && s_bookLock) {
+        {
+            BookLock lock;
+            s_book = fuelbook::Book{};
+            saveBookLocked();
+        }
+        Serial.println("[obd] fuel book cleared");
+    }
+    if (!s_bookLock || (!full && now - at < 250)) return;
+    at = now;
+#ifdef OBD_LINK
+    obdlink::View snap;   // ~240 B on the UI loop's stack
+    obdlink::snapshot(snap);
+    const tripbook::Totals t{snap.kmTotal, snap.litresTotal, snap.airSteps};
+#endif
+    {
+        BookLock lock;
+        bool changed = false;
+#ifdef OBD_LINK
+        // a full tank: what burnt until now goes to the old tank first
+        changed = full ? s_meter.charge(snap.nowMs, t, &s_book)
+                       : s_meter.tick(snap.nowMs, snap.link == obdplan::Link::Live, t, &s_book);
+#endif
+        if (full) {
+            fuelbook::fillUp(&s_book, fillPrice);
+            changed = true;
+        }
+        if (changed) saveBookLocked();
+    }
+#ifdef OBD_LINK
+    s_tripS.store(s_meter.seconds());
+#endif
+    if (!full) return;
+    if (std::isnan(fillPrice)) Serial.println("[obd] full tank noted");
+    else Serial.printf("[obd] full tank noted, R$ %.2f a litre\n", (double)fillPrice);
+}
+
+void fill(float pricePerL) {   // the book changes on the UI loop (tick): no NVS write on the caller's stack
+    portENTER_CRITICAL(&s_mux);
+    s_fillWanted = true;
+    s_fillPrice = pricePerL;
+    portEXIT_CRITICAL(&s_mux);
+}
+
+void forgetBook() {
+    portENTER_CRITICAL(&s_mux);
+    s_forgetWanted = true;
+    portEXIT_CRITICAL(&s_mux);
+}
+
+float price() {
+    if (!s_bookLock) return NAN;
+    BookLock lock;
+    return s_book.pricePerL;
+}
+
 obdwire::Live live() {
     if (s_demo.load()) return demoLive(millis() - s_demoAt.load());
 #ifdef OBD_LINK
@@ -93,6 +210,15 @@ obdwire::Live live() {
     obdlink::snapshot(snap);
     obdwire::Live l = obdwire::fromReadings(snap.link, snap.value, snap.have, snap.atMs, snap.nowMs);
     l.kml = snap.kmlNow;   // fueleco's, stepped with fresh values only (NAN without air or under 3 km/h)
+    l.tripKm = snap.kmTotal;
+    l.tripKmL = snap.kmlAvg;
+    l.tripS = s_tripS.load();
+    if (s_bookLock) {
+        BookLock lock;
+        l.rangeKm = fuelbook::rangeKm(s_book);
+        l.priceL = s_book.pricePerL;
+        l.tripRs = fuelbook::costRs(s_book, snap.litresTotal);
+    }
     portENTER_CRITICAL(&s_mux);
     l.seq = s_seq.update(snap.have, snap.atMs);
     portEXIT_CRITICAL(&s_mux);

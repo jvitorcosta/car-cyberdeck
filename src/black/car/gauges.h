@@ -20,4 +20,14 @@ obdwire::Live live();
 // live()'s speed). Any task.
 drivedash::Screen screen();
 bool setScreen(drivedash::Screen s);
+// The trip and the fuel book (util/car/tripbook, fuelbook; NVS "car" / "fuel"): the trip time, the
+// litres charged to the book every 30 s, and its range and price in live(). From the UI loop, every
+// pass (it runs at most 4 times a second).
+void tick();
+// A full tank (GET /fill): the burn since starts again from 0. A price inside fuelbook's range replaces
+// the old one; NAN keeps it. Any task: noted here, taken by the next tick(), which charges the old tank
+// first and saves the book.
+void fill(float pricePerL);
+float price();   // the book's R$ per litre, NAN without one. Any task.
+void forgetBook();   // the desk's FILL CLEAR: the fuel book back to empty (no full tank, no price)
 }

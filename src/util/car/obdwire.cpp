@@ -48,9 +48,11 @@ size_t encode(const Live& l, char* out, size_t n) {
                     put(out, n, &len, "cool", l.coolC, 0) && put(out, n, &len, "iat", l.intakeC, 0) &&
                     put(out, n, &len, "thr", l.throttle, 1) && put(out, n, &len, "load", l.load, 1) &&
                     put(out, n, &len, "volt", l.volts, 1) &&
-                    put(out, n, &len, "kml", l.kml, 1);
+                    put(out, n, &len, "kml", l.kml, 1) && put(out, n, &len, "tkm", l.tripKm, 1) &&
+                    put(out, n, &len, "tkml", l.tripKmL, 1) && put(out, n, &len, "rng", l.rangeKm, 0) &&
+                    put(out, n, &len, "rsl", l.priceL, 2) && put(out, n, &len, "trs", l.tripRs, 2);
     if (ok) {
-        w = snprintf(out + len, n - len, ",\"seq\":%lu}", (unsigned long)l.seq);
+        w = snprintf(out + len, n - len, ",\"ts\":%lu,\"seq\":%lu}", (unsigned long)l.tripS, (unsigned long)l.seq);
         if (w >= 0 && (size_t)w < n - len) return len + (size_t)w;
     }
     out[0] = '\0';
@@ -72,6 +74,13 @@ bool decode(const char* json, Live* l) {
     out.load = realOr(json, "load");
     out.volts = realOr(json, "volt");
     out.kml = realOr(json, "kml");
+    out.tripKm = realOr(json, "tkm");
+    out.tripKmL = realOr(json, "tkml");
+    out.rangeKm = realOr(json, "rng");
+    out.priceL = realOr(json, "rsl");
+    out.tripRs = realOr(json, "trs");
+    long ts = 0;
+    if (jsonflat::num(json, "ts", &ts) && ts >= 0) out.tripS = (uint32_t)ts;
     if (jsonflat::num(json, "seq", &seq) && seq >= 0) out.seq = (uint32_t)seq;
     *l = out;
     return true;
