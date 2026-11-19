@@ -204,6 +204,7 @@ CARTOON_FADE_IN, CARTOON_FADE_OUT = 8, 6          # frames: from black at the st
 SPARKLE = [10, 22, 30, 24, 16, 10, 5]
 SPARKLE_AT, SPARKLE_SMALL_AT = (0.47, 0.66), (0.33, 0.71)
 SS = 2                                            # supersampling while animating
+CARTOON_Q = 11    # JPEG q (ffmpeg, lower = better): 8 put the S3's media pack at 95.5 %, over its 95 % limit
 
 
 def cartoon_frames():
@@ -288,7 +289,7 @@ def build_cartoon(photos):
             if i >= len(seq) - CARTOON_FADE_OUT:
                 f = Image.blend(f, white, (i - (len(seq) - CARTOON_FADE_OUT) + 1) / CARTOON_FADE_OUT)
             f.resize((320, 240), Image.LANCZOS).save(os.path.join(tmp, "p%03d.png" % i))
-        ffmpeg(["-i", os.path.join(tmp, "p%03d.png"), "-q:v", "8", "-pix_fmt", "yuvj420p", os.path.join(tmp, "f%03d.jpg")])
+        ffmpeg(["-i", os.path.join(tmp, "p%03d.png"), "-q:v", str(CARTOON_Q), "-pix_fmt", "yuvj420p", os.path.join(tmp, "f%03d.jpg")])
         frames = [open(f, "rb").read() for f in sorted(glob.glob(os.path.join(tmp, "f*.jpg")))]
         return frames + end_card(photos, tmp)
     finally:
