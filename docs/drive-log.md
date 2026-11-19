@@ -29,14 +29,16 @@ book) is separate and does not change.
   never waits for an upload. The task watchdog watches it (90 s; one request is ~40 s at worst).
 - A part goes only when the hotspot is up, SNTP has set the clock, no OTA update is running and the
   heap has a 40 KB block for TLS (50 KB free) with the part's body already built. Otherwise nothing
-  is tried (no DNS, no connect) and the rows wait: 5 minutes in RAM, then about 13 more on flash
-  (`/dlog.bin`, 16 KB at most), sent oldest first when the link is back. Past that the newest are
-  dropped (counted in the `[dlog]` line). Rows still waiting when the deck powers off are lost
+  is tried (no DNS, no connect) and the rows wait: 5 minutes in RAM, then about 7 more on flash
+  (`/dlog.bin`, 400 rows, written 10 at a time), sent oldest first when the link is back. Past that
+  the newest are dropped (counted in the `[dlog]` line). The spool shares the 128 KB partition with
+  the trip log, which keeps itself under 70 % of it: during a long outage with a full trip log, the
+  trip log may let its oldest trip file go a little sooner. Rows still waiting when the deck powers off are lost
   (their `millis()` can't be placed in time after a reboot), so the drive's last minute goes only if
   the deck stays on about a minute after the engine stops.
 - Each request: a POST to the `/exec` URL, then a GET of the page Google redirects to, which holds
-  the script's answer (`ok 60`, `ok dup` for a retry it already has, `bad key`). A wrong key or URL
-  waits 10 minutes before the next try; no answer waits 30 s.
+  the script's answer (`ok 60`, `ok dup` for a retry it already has, `bad key`). A wrong key or URL, or a
+  Google sign-in page (the deployment is not set to *Anyone*), waits 10 minutes before the next try; no answer waits 30 s.
 - Serial: `[dlog] part 3 sent: 60 rows (HTTP 200, 2900 ms, 0 dropped, stack left ...)`, or why it waits.
 
 ## Limits (from Google's pages, 2026-11)

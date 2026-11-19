@@ -12,7 +12,7 @@ constexpr int16_t NONE = INT16_MIN;     // a missing or stale value in a Row
 constexpr uint32_t BATCH = 60;          // rows per part: a minute of driving
 constexpr uint32_t CAP = 360;           // rows the RAM ring holds (6 min, ~7 KB)
 constexpr uint32_t SPOOL_AT = 300;      // the ring this full: new rows go to flash instead
-constexpr uint32_t SPOOL_MAX = 800;     // rows on flash at most (16 KB, ~13 min); past it they're dropped
+constexpr uint32_t SPOOL_MAX = 400;     // rows on flash at most (8 KB, ~7 min); past it the newest are dropped
 constexpr float NV_MIN_KMH = 5.0f;      // N/V is blank below this (a crawl, a stop)
 
 // One second's readings. NAN: missing or stale.
@@ -85,7 +85,8 @@ bool appendRaw(char* out, size_t cap, const char* request, const char* raw);
 
 // What became of a POST. The web app runs doPost and answers 302 to a page that holds its reply;
 // http and body are that page's (or the POST's own, when it didn't redirect). Done: "ok" (taken)
-// or "ok dup" (a retry of a part it already has). Refused: "bad key", or 401 / 403 / 404 (the key,
+// or "ok dup" (a retry of a part it already has). Refused: "bad key", an HTML page (a Google sign-in:
+// the deployment is not "Anyone"), or 401 / 403 / 404 (the key,
 // URL or deployment is wrong): wait long. Retry: anything else (no answer, Google busy).
 enum class Outcome : uint8_t { Done, Refused, Retry };
 Outcome outcome(int http, const char* body);

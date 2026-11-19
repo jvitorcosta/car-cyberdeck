@@ -7,7 +7,7 @@
 // never reach the log).
 // Its own task on core 1 at the lowest priority (the OBD tasks run on core 0): a part goes only when
 // the hotspot is up, the clock is set, no update is running and the heap has room for TLS; otherwise
-// nothing is tried and the rows wait: 5 min in RAM, then ~13 min more on flash (/dlog.bin, written
+// nothing is tried and the rows wait: 5 min in RAM, then ~7 min more on flash (/dlog.bin, written
 // and read by the loop task only), the newest dropped past that. Watched by the task watchdog.
 namespace dlogup {
 void begin();   // setup(), after carstate::begin() (the flash) and obdlink::start(): the task, when on

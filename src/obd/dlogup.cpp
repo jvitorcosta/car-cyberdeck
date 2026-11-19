@@ -56,6 +56,9 @@ TaskHandle_t s_task = nullptr;
 // The loop task's: the spool on flash (only the loop task touches LittleFS, carfs).
 carfs::Store s_store;
 long s_spoolAt = 0;                          // the oldest spooled row's offset
+constexpr uint32_t SPOOL_CHUNK = 10;         // rows gathered before one append (s_spoolRows counts them)
+drivelog::Row s_spoolBuf[SPOOL_CHUNK];
+uint32_t s_spoolBufN = 0;
 
 // The upload task's own (statics: off its stack).
 char s_trip[20] = "";                        // the Sheet tab, "20261119-225001", once the clock is known
@@ -86,19 +89,30 @@ bool heapOk() {
            heap_caps_get_free_size(MALLOC_CAP_8BIT) >= TLS_FREE;
 }
 
-// The web app's reply: its first line, at most out's size.
+// The web app's reply: its first line, at most out's size. Read byte by byte until the server
+// closes (HTTP/1.0) or REPLY_MS: Stream::readBytes would spin out its whole timeout on a reply
+// shorter than the buffer (WiFiClientSecure::read() says -1, not "closed").
+constexpr uint32_t REPLY_MS = 3000;
 void readReply(HTTPClient& h, char* out, size_t n) {
     WiFiClient& s = h.getStream();
-    s.setTimeout(netcfg::HTTP_TIMEOUT_MS / 1000);
-    const size_t got = s.readBytes(out, n - 1);
+    size_t got = 0;
+    const uint32_t t0 = millis();
+    while (got + 1 < n && millis() - t0 < REPLY_MS && (s.connected() || s.available())) {
+        const int c = s.available() ? s.read() : -1;
+        if (c < 0) {
+            delay(2);
+            continue;
+        }
+        if (c == '\r' || c == '\n') break;
+        out[got++] = static_cast<char>(c);
+    }
     out[got] = '\0';
-    out[strcspn(out, "\r\n")] = '\0';
 }
 
-// POSTs body to the web app, then follows its 302 to read what doPost answered. *http: that
-// answer's status (or HTTPClient's negative code). Two requests, one after the other: one TLS
-// session at a time.
-Outcome post(const char* body, size_t len, int* http) {
+// POSTs body (malloc'd; freed here, right after the POST) to the web app, then follows its 302 to
+// read what doPost answered. *http: that answer's status (or HTTPClient's negative code). Two
+// requests, one after the other: one TLS session at a time, the heap checked before each.
+Outcome post(char* body, size_t len, int* http) {
     static const char* KEEP[] = {"Location"};   // HTTPClient takes a non-const array
     char reply[64] = "";
     int rc = -1;
@@ -116,12 +130,17 @@ Outcome post(const char* body, size_t len, int* http) {
             https.addHeader("Content-Type", "text/plain");
             https.setUserAgent(netcfg::USER_AGENT);
             watchdog::feed();   // DNS 15 s + connect 8 s + handshake 8 s + the answer 8 s, at worst
-            rc = https.POST(reinterpret_cast<uint8_t*>(const_cast<char*>(body)), len);
+            rc = https.POST(reinterpret_cast<uint8_t*>(body), len);
             if (rc == 302 || rc == 303) location = https.header("Location");
             else if (rc == 200) readReply(https, reply, sizeof reply);
             https.end();
             if (rc < 0) netcfg::certRejected(client, "script.google.com");
         }
+    }
+    free(body);
+    if (location.length() && !heapOk()) {   // the GET's TLS after the POST's: retried, "ok dup" then
+        rc = -1;
+        location = String();
     }
     if (location.length()) {   // doPost has run: its answer waits there
         WiFiClientSecure client;
@@ -171,8 +190,9 @@ bool sendLinkup(uint32_t* nextAt) {
     memcpy(body + h, s_linkupText, n + 1);
     int http = -1;
     const uint32_t t0 = millis();
-    const Outcome o = heapOk() ? post(body, h + n, &http) : Outcome::Retry;
-    free(body);
+    Outcome o = Outcome::Retry;
+    if (heapOk()) o = post(body, h + n, &http);   // post() frees body
+    else free(body);
     if (o == Outcome::Done || ++s_linkupTries >= LINKUP_TRIES) {
         s_linkupSent = k;
         s_linkupTries = 0;
@@ -221,8 +241,7 @@ void sendPart(int64_t unixNow, uint32_t nowMs, uint32_t* nextAt) {
     }
     int http = -1;
     const uint32_t t0 = millis();
-    const Outcome o = post(body, len, &http);
-    free(body);
+    const Outcome o = post(body, len, &http);   // frees body
     if (o == Outcome::Done) {
         xSemaphoreTake(s_lock, portMAX_DELAY);
         s_ring->release(first + count);
@@ -280,11 +299,30 @@ void task(void*) {
     }
 }
 
+// Loop task: the spool's buffered rows to flash, in one append (an append rewrites LittleFS's tail
+// block: per row, that was a block erase a second). Rows that won't go are dropped (counted).
+void flushSpool() {
+    if (!s_spoolBufN) return;
+    const bool ok = s_store.append(SPOOL, reinterpret_cast<const char*>(s_spoolBuf), s_spoolBufN * sizeof(drivelog::Row));
+    if (!ok) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+        s_spoolRows -= s_spoolBufN;
+        xSemaphoreGive(s_lock);
+        s_spoolDropped += s_spoolBufN;
+    }
+    s_spoolBufN = 0;
+}
+
 // Loop task: rows from flash back to the ring once it drains, oldest first.
 void refill() {
     if (!s_ring) return;
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    const uint32_t k = drivelog::refill(s_ring->size(), s_spoolRows);
+    uint32_t k = drivelog::refill(s_ring->size(), s_spoolRows);
+    xSemaphoreGive(s_lock);
+    if (!k) return;
+    flushSpool();   // the buffered rows join the file first: every spooled row is then in it, in order
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    k = drivelog::refill(s_ring->size(), s_spoolRows);   // a failed flush took some away
     xSemaphoreGive(s_lock);
     if (!k) return;
     drivelog::Row rows[drivelog::BATCH];
@@ -353,11 +391,11 @@ void second() {
         if (keep && r == drivelog::Route::Ring) s_ring->push(row);
         xSemaphoreGive(s_lock);
         if (keep && r == drivelog::Route::Spool) {   // the hotspot has been away a while: to flash
-            const bool ok = s_store.append(SPOOL, reinterpret_cast<const char*>(&row), sizeof row);
+            s_spoolBuf[s_spoolBufN++] = row;
             xSemaphoreTake(s_lock, portMAX_DELAY);
-            if (ok) ++s_spoolRows;
+            ++s_spoolRows;
             xSemaphoreGive(s_lock);
-            if (!ok) ++s_spoolDropped;
+            if (s_spoolBufN == SPOOL_CHUNK) flushSpool();
         } else if (keep && r == drivelog::Route::Drop) {
             ++s_spoolDropped;
         }

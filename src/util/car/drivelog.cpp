@@ -158,7 +158,7 @@ Outcome outcome(int http, const char* body) {
     const char* b = body ? body : "";
     if (http == 200 && strncmp(b, "ok", 2) == 0 && (b[2] == '\0' || b[2] == ' ' || b[2] == '\n'))
         return Outcome::Done;
-    if ((http == 200 && strncmp(b, "bad key", 7) == 0) || http == 401 || http == 403 || http == 404)
+    if ((http == 200 && (strncmp(b, "bad key", 7) == 0 || b[0] == '<')) || http == 401 || http == 403 || http == 404)
         return Outcome::Refused;
     return Outcome::Retry;
 }

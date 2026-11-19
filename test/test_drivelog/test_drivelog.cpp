@@ -148,7 +148,7 @@ void test_spool_round_trip_keeps_every_row_once_in_order() {
     uint32_t spoolHead = 0, spoolRows = 0, sent = 0, made = 0;
     bool online = false;
     for (int t = 0; t < 2000; ++t) {
-        if (t == 900) online = true;
+        if (t == 600) online = true;   // 300 rows in RAM, 300 on flash by then
         const Row r = pack(made++, full());
         switch (route(ring.size(), spoolRows)) {
             case Route::Ring: ring.push(r); break;
@@ -208,7 +208,7 @@ void test_outcomes() {
     TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok 60"));
     TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok dup"));   // a retry it already has
     TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, "okay"));
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, "<!DOCTYPE html>"));   // a script error page
+    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(200, "<!DOCTYPE html>"));   // a sign-in page: wrong access
     TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, nullptr));
     TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(200, "bad key"));
     TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(404, ""));
