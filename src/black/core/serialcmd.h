@@ -2,7 +2,7 @@
 #include <TFT_eSPI.h>
 // Desk commands on the black deck's USB serial, one line each, read from the UI loop:
 //   GAUGES ON / GAUGES OFF   the GAUGES switch (car/gauges), as GET /gauges does
-//   GAUGES SCREEN suki|drive the GAUGES screen (refused while the car moves), as GET /gauges?screen= does
+//   GAUGES SCREEN suki|drive|trip  the GAUGES screen (refused while the car moves), as GET /gauges?screen= does
 //   GAUGES DEMO              the HUD with the OBD deck's simulated drive (util/car/benchdrive), RAM
 //                            only, until GAUGES ON / OFF or a reboot: the look without the car
 //   FILL / FILL 6.49         a full tank in the fuel book, with the price per litre, as GET /fill does

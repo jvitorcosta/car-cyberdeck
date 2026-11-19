@@ -237,6 +237,35 @@ The trip is the power-on: the deck runs on the car's 12 V, so a power cut ends i
   screen 3 formats that.
 - `TRIP` on the serial port prints these values on one line.
 
+### 5f. Trip ticker (2026-11-18, the CarDeck mocks' screen 3)
+
+The third GAUGES screen, in the yellow deck's green VT323 terminal look, economy first:
+
+```
+> TRIP · 31 MIN                                         OK
++-------------+  +-------------+  +-------------+
+| KM/L NOW    |  | TRIP KM/L   |  | TRIP KM     |
+| 14.3        |  | 13.1        |  | 23.4        |
++-------------+  +-------------+  +-------------+
+| RANGE KM    |  | TRIP TIME   |  | TRIP R$     |
+| 412         |  | 0:31        |  | 11.6        |
++-------------+  +-------------+  +-------------+
+> _ SCREENS: PHONE PAGE, PARKED
+```
+
+- **Header**: the trip's minutes, and the link's state on the right (OK while live, else SEARCH,
+  KEY ON or OFF).
+- **Cells**: VT323 17 px labels, 36 px values (24 px when wider than the cell, like COAST). KM/L NOW
+  is the bright one. Values are rounded so the digits stay still: one decimal under 100, whole from
+  there, the time as h:mm.
+- **Unknown is `--`**: km/l now without the live link or when stopped, and the range and R$ until a
+  full tank with a price is noted (section 5e).
+- **Coasting**: km/l now over 50 shows COAST (the link sees no fuel cut, so coasting reads as a
+  huge km/l).
+- **Red means a problem**: a range under 60 km turns its cell inverted red.
+- **Drawing**: one 320 x 240 frame sprite in PSRAM; a cell is pushed only when its text changed
+  (`util/car/tripticker`, host-tested; view `ui/tripview`).
+
 ### 6. When it shows
 
 A GAUGES switch, kept in NVS (`hud`/`on`): on, the black deck shows the HUD instead of the music
@@ -246,9 +275,10 @@ the gauges in the car. The camera band and update screen still draw over it. A y
 item for it is phase 2 (needs the yellow heap checked).
 
 Which screen it shows is kept in NVS (`hud`/`screen`), starting on Suki:
-- the phone page's SUKI / DRIVE buttons (shown while GAUGES is on)
-- `GET /gauges?screen=suki|drive`, which answers `{"on":1,"screen":"drive"}`, or 409 while moving
-- `GAUGES SCREEN suki|drive` on the serial port
+- the phone page's SUKI / DRIVE / TRIP buttons (shown while GAUGES is on)
+- `GET /gauges?screen=suki|drive|trip`, which answers `{"on":1,"screen":"drive","price":6.49}`, or
+  409 while moving
+- `GAUGES SCREEN suki|drive|trip` (or 1 to 3) on the serial port
 
 A switch is refused above 3 km/h (the mocks' rule: screens switch only when parked). An unknown speed
 counts as parked. Suki falls back to the street look without its art.
