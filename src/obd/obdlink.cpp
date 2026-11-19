@@ -359,7 +359,10 @@ bool setup() {
 #ifdef OBD_DECK
 // The link-up's raw record for the drive log (obd/dlogup): every supported-PID bitmap, 0100 to 01A0,
 // and 01A4, asked once more each, as the car answers them. Read-only mode 01 requests through the
-// same gate (send()); one ask each, ~2 s at worst, once per link-up.
+// same gate (send()), once per link-up: ~7 quick replies (NO DATA is quick too). The first timeout
+// ends it (the rest is marked "(not asked)"), so a silent car costs one ASK_MS plus the late reply's
+// resync, ~4 s, not 7 of them; it may run from the live loop (the late scan), where that gap blanks
+// the fast readings once.
 char s_linkup[1024] = "";                          // under s_lock
 uint32_t s_linkupN = 0;
 
@@ -368,11 +371,14 @@ void linkupProbe() {
     static char text[sizeof s_linkup];             // static: off the ask task's 6 KB stack
     text[0] = '\0';
     char raw[160];
+    bool silent = false;
     for (const char* r : REQS) {
         watchdog::feed();
-        const bool got = ask(r, raw, sizeof raw, ASK_MS);
-        logRaw(r, got ? raw : "(timeout)");
-        if (!drivelog::appendRaw(text, sizeof text, r, got ? raw : "(timeout)")) break;
+        const bool got = !silent && ask(r, raw, sizeof raw, ASK_MS);
+        const char* what = got ? raw : silent ? "(not asked)" : "(timeout)";
+        if (!silent) logRaw(r, what);
+        if (!got) silent = true;
+        if (!drivelog::appendRaw(text, sizeof text, r, what)) break;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
     strlcpy(s_linkup, text, sizeof s_linkup);

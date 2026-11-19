@@ -123,51 +123,74 @@ void test_a_part_is_due_at_a_batch_or_after_the_wait() {
     TEST_ASSERT_TRUE(partDue(10, 1000, 61000, 60000));
 }
 
-void test_base64_matches_rfc_4648() {
-    const char* cases[][2] = {{"", ""}, {"f", "Zg=="}, {"fo", "Zm8="}, {"foo", "Zm9v"},
-                              {"foob", "Zm9vYg=="}, {"fooba", "Zm9vYmE="}, {"foobar", "Zm9vYmFy"}};
-    for (auto& c : cases) {
-        char out[16];
-        const size_t n = b64(reinterpret_cast<const uint8_t*>(c[0]), strlen(c[0]), out, sizeof out);
-        TEST_ASSERT_EQUAL(strlen(c[1]), n);
-        TEST_ASSERT_EQUAL(b64Len(strlen(c[0])), n);
-        TEST_ASSERT_EQUAL_STRING(c[1], out);
+void test_rows_go_to_the_ring_then_flash_in_order() {
+    TEST_ASSERT_EQUAL((int)Route::Ring, (int)route(0, 0));
+    TEST_ASSERT_EQUAL((int)Route::Ring, (int)route(SPOOL_AT - 1, 0));
+    TEST_ASSERT_EQUAL((int)Route::Spool, (int)route(SPOOL_AT, 0));     // offline: the ring is full enough
+    TEST_ASSERT_EQUAL((int)Route::Spool, (int)route(10, 5));           // flash still holds older rows
+    TEST_ASSERT_EQUAL((int)Route::Drop, (int)route(SPOOL_AT, SPOOL_MAX));
+    TEST_ASSERT_TRUE(SPOOL_AT + BATCH <= CAP);                          // the ring never drops while spooling
+}
+
+void test_refill_moves_a_batch_back_once_the_ring_drains() {
+    TEST_ASSERT_EQUAL(0, refill(0, 0));
+    TEST_ASSERT_EQUAL(0, refill(BATCH, 500));          // still a part's worth in RAM
+    TEST_ASSERT_EQUAL(BATCH, refill(0, 500));
+    TEST_ASSERT_EQUAL(7, refill(20, 7));
+    TEST_ASSERT_TRUE(refill(BATCH - 1, 500) + BATCH - 1 <= SPOOL_AT);
+}
+
+void test_spool_round_trip_keeps_every_row_once_in_order() {
+    // offline for a while, then the hotspot comes back: a fake of dlogup's loop and task
+    static Ring ring;
+    ring = Ring();
+    Row spool[SPOOL_MAX];
+    uint32_t spoolHead = 0, spoolRows = 0, sent = 0, made = 0;
+    bool online = false;
+    for (int t = 0; t < 2000; ++t) {
+        if (t == 900) online = true;
+        const Row r = pack(made++, full());
+        switch (route(ring.size(), spoolRows)) {
+            case Route::Ring: ring.push(r); break;
+            case Route::Spool: spool[(spoolHead + spoolRows++) % SPOOL_MAX] = r; break;
+            case Route::Drop: break;
+        }
+        for (uint32_t k = refill(ring.size(), spoolRows); k; --k, --spoolRows) {
+            ring.push(spool[spoolHead]);
+            spoolHead = (spoolHead + 1) % SPOOL_MAX;
+        }
+        if (online && t % 5 == 0 && ring.size()) {        // a part every 5 s while catching up
+            const uint32_t n = ring.size() < BATCH ? ring.size() : BATCH;
+            for (uint32_t i = 0; i < n; ++i, ++sent) TEST_ASSERT_EQUAL(sent, ring.at(i).ms);
+            ring.release(ring.firstSeq() + n);
+        }
     }
-    const uint8_t bin[] = {0xFF, 0xFE, 0x00};
-    char out[8];
-    b64(bin, 3, out, sizeof out);
-    TEST_ASSERT_EQUAL_STRING("//4A", out);
-    TEST_ASSERT_EQUAL(0, b64(bin, 3, out, 4));   // no room for the terminator
+    TEST_ASSERT_EQUAL(0, ring.dropped());
+    TEST_ASSERT_TRUE(sent > SPOOL_AT);
 }
 
-void test_trip_dir_is_utc_and_needs_a_clock() {
-    char dir[32];
-    TEST_ASSERT_TRUE(tripDir(1763592601, dir, sizeof dir));   // 2025-11-19 22:50:01 UTC
-    TEST_ASSERT_EQUAL_STRING("drive/20251119-225001", dir);
-    TEST_ASSERT_TRUE(tripDir(1709251199, dir, sizeof dir));   // 2024-02-29 23:59:59, a leap day
-    TEST_ASSERT_EQUAL_STRING("drive/20240229-235959", dir);
-    TEST_ASSERT_TRUE(tripDir(1798761600, dir, sizeof dir));   // 2027-01-01 00:00:00
-    TEST_ASSERT_EQUAL_STRING("drive/20270101-000000", dir);
-    TEST_ASSERT_FALSE(tripDir(12345, dir, sizeof dir));       // 1970: SNTP hasn't answered
-    TEST_ASSERT_FALSE(tripDir(1763592601, dir, 10));
+void test_trip_name_is_utc_and_needs_a_clock() {
+    char name[32];
+    TEST_ASSERT_TRUE(tripName(1763592601, name, sizeof name));   // 2025-11-19 22:50:01 UTC
+    TEST_ASSERT_EQUAL_STRING("20251119-225001", name);
+    TEST_ASSERT_TRUE(tripName(1709251199, name, sizeof name));   // 2024-02-29 23:59:59, a leap day
+    TEST_ASSERT_EQUAL_STRING("20240229-235959", name);
+    TEST_ASSERT_TRUE(tripName(1798761600, name, sizeof name));   // 2027-01-01 00:00:00
+    TEST_ASSERT_EQUAL_STRING("20270101-000000", name);
+    TEST_ASSERT_FALSE(tripName(12345, name, sizeof name));       // 1970: SNTP hasn't answered
+    TEST_ASSERT_FALSE(tripName(1763592601, name, 10));
 }
 
-void test_part_and_linkup_paths() {
-    char p[64];
-    TEST_ASSERT_TRUE(partPath("drive/20251119-225001", 7, p, sizeof p));
-    TEST_ASSERT_EQUAL_STRING("drive/20251119-225001/p0007.csv", p);
-    TEST_ASSERT_TRUE(linkupPath("drive/20251119-225001", 2, p, sizeof p));
-    TEST_ASSERT_EQUAL_STRING("drive/20251119-225001/linkup2.txt", p);
-}
-
-void test_put_body_is_the_contents_api_json() {
-    const char* data = "t_utc,ms\n1.0,2\n";
-    const size_t need = bodyLen("drive p0001", strlen(data));
-    char out[128];
-    const size_t n = putBody("drive p0001", reinterpret_cast<const uint8_t*>(data), strlen(data), out, sizeof out);
-    TEST_ASSERT_EQUAL(need, n);
-    TEST_ASSERT_EQUAL_STRING("{\"message\":\"drive p0001\",\"content\":\"dF91dGMsbXMKMS4wLDIK\"}", out);
-    TEST_ASSERT_EQUAL(0, putBody("drive p0001", reinterpret_cast<const uint8_t*>(data), strlen(data), out, need));
+void test_post_head_is_the_two_lines_the_script_reads() {
+    char out[96];
+    TEST_ASSERT_EQUAL(27, postHead(out, sizeof out, "k3y", "rows", "20261119-225001", 7));
+    TEST_ASSERT_EQUAL_STRING("k3y\nrows\t20261119-225001\t7\n", out);
+    TEST_ASSERT_TRUE(postHead(out, sizeof out, "k3y", "linkup", "20261119-225001", 1) > 0);
+    TEST_ASSERT_EQUAL_STRING("k3y\nlinkup\t20261119-225001\t1\n", out);
+    TEST_ASSERT_EQUAL(0, postHead(out, sizeof out, "a\tb", "rows", "x", 1));   // a tab would shift the fields
+    TEST_ASSERT_EQUAL(0, postHead(out, sizeof out, "k", "rows", "x\n", 1));
+    TEST_ASSERT_EQUAL(0, postHead(out, 8, "k3y", "rows", "20261119-225001", 7));
+    TEST_ASSERT_EQUAL_STRING("", out);
 }
 
 void test_raw_replies_stay_on_their_own_line() {
@@ -181,24 +204,28 @@ void test_raw_replies_stay_on_their_own_line() {
 }
 
 void test_outcomes() {
-    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(201));
-    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(422));   // a retry of a part already there
-    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(401));
-    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(404));
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(-1));
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(429));
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(502));
+    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok"));
+    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok 60"));
+    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok dup"));   // a retry it already has
+    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, "okay"));
+    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, "<!DOCTYPE html>"));   // a script error page
+    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, nullptr));
+    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(200, "bad key"));
+    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(404, ""));
+    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(403, ""));
+    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(-1, ""));
+    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(302, ""));   // a redirect not followed
+    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(500, "ok"));
 }
 
-void test_a_full_part_fits_the_upload_buffer() {
+void test_a_full_part_fits_line_max() {
     // the worst row: every cell at its widest
     Sample s{255.0f, 16383.0f, -40.0f, -40.0f, 100.0f, 100.0f, 100.0f, 25.5f};
     char line[128];
     const size_t one = csvLine(pack(4294967295u, s), 4102444800.0, line, sizeof line);
     TEST_ASSERT_TRUE(one > 0);
-    const size_t csv = strlen(HEADER) + BATCH * one;
-    TEST_ASSERT_TRUE(csv <= 6 * 1024);                                  // dlogup's CSV buffer
-    TEST_ASSERT_TRUE(bodyLen("cardeck drive/20261119-225001/p0001.csv", csv) <= 8400);   // and body
+    TEST_ASSERT_TRUE(one + 1 <= LINE_CAP);
+    TEST_ASSERT_EQUAL(one, csvLine(pack(4294967295u, s), 4102444800.0, line, LINE_CAP));
 }
 
 int main(int, char**) {
@@ -215,12 +242,13 @@ int main(int, char**) {
     RUN_TEST(test_a_full_ring_drops_the_oldest_and_counts_them);
     RUN_TEST(test_releasing_rows_already_dropped_is_harmless);
     RUN_TEST(test_a_part_is_due_at_a_batch_or_after_the_wait);
-    RUN_TEST(test_base64_matches_rfc_4648);
-    RUN_TEST(test_trip_dir_is_utc_and_needs_a_clock);
-    RUN_TEST(test_part_and_linkup_paths);
-    RUN_TEST(test_put_body_is_the_contents_api_json);
+    RUN_TEST(test_rows_go_to_the_ring_then_flash_in_order);
+    RUN_TEST(test_refill_moves_a_batch_back_once_the_ring_drains);
+    RUN_TEST(test_spool_round_trip_keeps_every_row_once_in_order);
+    RUN_TEST(test_trip_name_is_utc_and_needs_a_clock);
+    RUN_TEST(test_post_head_is_the_two_lines_the_script_reads);
     RUN_TEST(test_raw_replies_stay_on_their_own_line);
     RUN_TEST(test_outcomes);
-    RUN_TEST(test_a_full_part_fits_the_upload_buffer);
+    RUN_TEST(test_a_full_part_fits_line_max);
     return UNITY_END();
 }

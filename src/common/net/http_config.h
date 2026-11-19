@@ -34,6 +34,9 @@ void spotify(WiFiClientSecure& c);
 // The camera marks' uploads carry a GitHub token: the same check, against the same bundle (its
 // USERTrust roots are GitHub's).
 inline void github(WiFiClientSecure& c) { spotify(c); }
+// The OBD deck's drive log posts a shared key to the owner's Apps Script web app (script.google.com, then
+// script.googleusercontent.com): the same check (its GTS Root R1 is Google's).
+inline void google(WiFiClientSecure& c) { spotify(c); }
 // True, and logged once per call, when c's last connect failed because the server's
 // certificate didn't chain to a bundled root (Spotify changed CA: regenerate the bundle).
 bool certRejected(WiFiClientSecure& c, const char* host);

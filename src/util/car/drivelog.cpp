@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <initializer_list>
 
 namespace drivelog {
 namespace {
@@ -17,8 +18,6 @@ int cell(char* out, size_t n, int16_t v, int scale, int dp) {
     if (v == NONE) return snprintf(out, n, ",");
     return snprintf(out, n, ",%.*f", dp, static_cast<double>(v) / scale);
 }
-
-const char B64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 }  // namespace
 
 const char HEADER[] = "t_utc,ms,kmh,rpm,coolant_c,iat_c,throttle_pct,pedal_pct,load_pct,volt,nv\n";
@@ -91,78 +90,49 @@ void Ring::release(uint32_t upTo) {
     }
 }
 
+Route route(uint32_t ringRows, uint32_t spoolRows) {
+    if (spoolRows == 0 && ringRows < SPOOL_AT) return Route::Ring;
+    return spoolRows < SPOOL_MAX ? Route::Spool : Route::Drop;
+}
+
+uint32_t refill(uint32_t ringRows, uint32_t spoolRows) {
+    if (spoolRows == 0 || ringRows >= BATCH) return 0;
+    uint32_t k = spoolRows < BATCH ? spoolRows : BATCH;
+    if (ringRows + k > SPOOL_AT) k = SPOOL_AT - ringRows;
+    return k;
+}
+
 bool partDue(uint32_t pending, uint32_t oldestMs, uint32_t nowMs, uint32_t maxWaitMs) {
     if (pending == 0) return false;
     return pending >= BATCH || nowMs - oldestMs >= maxWaitMs;
 }
 
-size_t b64Len(size_t n) { return (n + 2) / 3 * 4; }
-
-size_t b64(const uint8_t* in, size_t n, char* out, size_t cap) {
-    const size_t len = b64Len(n);
-    if (!out || cap <= len) return 0;
-    size_t o = 0;
-    for (size_t i = 0; i < n; i += 3) {
-        const uint32_t a = in[i], b = i + 1 < n ? in[i + 1] : 0, c = i + 2 < n ? in[i + 2] : 0;
-        const uint32_t w = (a << 16) | (b << 8) | c;
-        out[o++] = B64[(w >> 18) & 63];
-        out[o++] = B64[(w >> 12) & 63];
-        out[o++] = i + 1 < n ? B64[(w >> 6) & 63] : '=';
-        out[o++] = i + 2 < n ? B64[w & 63] : '=';
-    }
-    out[o] = '\0';
-    return o;
-}
-
-bool tripDir(int64_t unixStart, char* out, size_t n) {
+bool tripName(int64_t unixStart, char* out, size_t n) {
     if (unixStart < 1577836800) return false;   // 2020-01-01: before it, the clock isn't set
-    // days since 1970 to a civil date (H. Hinnant's days_from_civil, inverted): no gmtime, the same
-    // on the deck and on the host
+    // days since 1970 to a civil date (H. Hinnant's civil_from_days): no gmtime, the same on the
+    // deck and on the host
     const int64_t days = unixStart / 86400, secs = unixStart % 86400;
     const int64_t z = days + 719468, era = z / 146097, doe = z - era * 146097;
     const int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
     const int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100), mp = (5 * doy + 2) / 153;
     const int d = static_cast<int>(doy - (153 * mp + 2) / 5 + 1), m = static_cast<int>(mp < 10 ? mp + 3 : mp - 9);
     const int y = static_cast<int>(yoe + era * 400 + (m <= 2 ? 1 : 0));
-    const int len = snprintf(out, n, "drive/%04d%02d%02d-%02d%02d%02d", y, m, d, static_cast<int>(secs / 3600),
+    const int len = snprintf(out, n, "%04d%02d%02d-%02d%02d%02d", y, m, d, static_cast<int>(secs / 3600),
                              static_cast<int>(secs / 60 % 60), static_cast<int>(secs % 60));
     return len > 0 && static_cast<size_t>(len) < n;
 }
 
-bool partPath(const char* dir, uint32_t part, char* out, size_t n) {
-    const int len = snprintf(out, n, "%s/p%04lu.csv", dir, static_cast<unsigned long>(part));
-    return len > 0 && static_cast<size_t>(len) < n;
-}
-
-bool linkupPath(const char* dir, uint32_t k, char* out, size_t n) {
-    const int len = snprintf(out, n, "%s/linkup%lu.txt", dir, static_cast<unsigned long>(k));
-    return len > 0 && static_cast<size_t>(len) < n;
-}
-
-static const char BODY_A[] = "{\"message\":\"";
-static const char BODY_B[] = "\",\"content\":\"";
-static const char BODY_C[] = "\"}";
-
-size_t bodyLen(const char* message, size_t n) {
-    return sizeof BODY_A - 1 + strlen(message) + sizeof BODY_B - 1 + b64Len(n) + sizeof BODY_C - 1;
-}
-
-size_t putBody(const char* message, const uint8_t* data, size_t n, char* out, size_t cap) {
-    const size_t len = bodyLen(message, n);
-    if (!out || cap <= len) return 0;
-    size_t o = 0;
-    auto put = [&](const char* s) {
-        const size_t k = strlen(s);
-        memcpy(out + o, s, k);
-        o += k;
-    };
-    put(BODY_A);
-    put(message);
-    put(BODY_B);
-    o += b64(data, n, out + o, cap - o);
-    put(BODY_C);
-    out[o] = '\0';
-    return o;
+size_t postHead(char* out, size_t n, const char* key, const char* kind, const char* trip, uint32_t num) {
+    if (!out || n == 0) return 0;
+    out[0] = '\0';
+    for (const char* f : {key, kind, trip})
+        if (!f || strpbrk(f, "\t\r\n")) return 0;
+    const int len = snprintf(out, n, "%s\n%s\t%s\t%lu\n", key, kind, trip, static_cast<unsigned long>(num));
+    if (len <= 0 || static_cast<size_t>(len) >= n) {
+        out[0] = '\0';
+        return 0;
+    }
+    return static_cast<size_t>(len);
 }
 
 bool appendRaw(char* out, size_t cap, const char* request, const char* raw) {
@@ -184,9 +154,12 @@ bool appendRaw(char* out, size_t cap, const char* request, const char* raw) {
     return add('\n');
 }
 
-Outcome outcome(int http) {
-    if (http == 201 || http == 200 || http == 422) return Outcome::Done;
-    if (http == 401 || http == 403 || http == 404) return Outcome::Refused;
+Outcome outcome(int http, const char* body) {
+    const char* b = body ? body : "";
+    if (http == 200 && strncmp(b, "ok", 2) == 0 && (b[2] == '\0' || b[2] == ' ' || b[2] == '\n'))
+        return Outcome::Done;
+    if ((http == 200 && strncmp(b, "bad key", 7) == 0) || http == 401 || http == 403 || http == 404)
+        return Outcome::Refused;
     return Outcome::Retry;
 }
 }  // namespace drivelog
