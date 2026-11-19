@@ -3053,7 +3053,12 @@ static void updateClock() {
         clockDay = day;
         if (screen == Screen::Menu) drawClock();
     }
-    const bool wantQuiet = synced && daynight::isQuiet(m) && !quietWoken;
+    bool wantQuiet = synced && daynight::isQuiet(m) && !quietWoken;
+#ifdef QUIET_BOOT_MS
+    // -D QUIET_BOOT_MS=<ms>: no clock (no WiFi) -> quiet for that long after boot, a touch wakes it.
+    // For a deck with no WiFi on the night it is flashed; a synced clock rules as above.
+    if (!synced && !quietWoken && millis() < static_cast<uint32_t>(QUIET_BOOT_MS)) wantQuiet = true;
+#endif
     if (synced && !daynight::isQuiet(m)) quietWoken = false;  // the window is over: the next one starts dark
     if (wantQuiet != quiet) setQuiet(wantQuiet);
     bool want = synced && daynight::isNight(m);
