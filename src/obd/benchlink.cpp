@@ -67,6 +67,10 @@ float fresh(const View& v, Pid p, uint32_t nowMs) {
     return v.have[(int)p] && nowMs - v.atMs[(int)p] < obdplan::staleAfterMs(p) ? v.value[(int)p] : NAN;
 }
 
+uint32_t linkupRaw(char* out, size_t n) {   // no adapter, no link-up
+    if (n) out[0] = '\0';
+    return 0;
+}
 unsigned linkStackLeft() { return 0; }
 unsigned askStackLeft() { return 0; }
 }  // namespace obdlink

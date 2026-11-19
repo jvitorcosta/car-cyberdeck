@@ -52,6 +52,12 @@ static const int WIFI_NETWORK_COUNT = 2;
 // with Issues: read and write and nothing else. Empty: the marks stay on the deck (import-car).
 // #define MARKS_REPO         "owner/radar-marks"
 // #define MARKS_TOKEN        ""
+// The OBD deck's drive log (one row a second: speed, rpm, temperatures, pedal, load, volts; no
+// position) goes to this private repo over the hotspot, one folder per trip (obd/dlogup). DLOG_TOKEN
+// is a fine-grained GitHub token for that repo alone, with Contents: read and write and nothing
+// else. Empty: no drive log is kept (the trip log on the deck's flash is separate and stays on).
+// #define DLOG_REPO          "owner/car-drive-log"
+// #define DLOG_TOKEN         ""
 
 // The yellow deck's two LED controllers (ELK-BLEDDM / MELK-... over Bluetooth LE): their addresses,
 // lowercase. To find them, turn the phone's Bluetooth off (a controller takes one link at a time)

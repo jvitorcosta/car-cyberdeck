@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include "../util/car/obd.h"
 #include "../util/car/obdplan.h"
@@ -34,6 +35,10 @@ void start();
 void snapshot(View& out);     // under a mutex, from any task
 // p's value while fresh (obdplan::staleAfterMs), else NAN.
 float fresh(const View& v, obd::Pid p, uint32_t nowMs);
+// The latest link-up's raw replies (OBD deck only): the supported-PID bitmaps 0100..01A0 and 01A4,
+// one "<request> -> <reply>" line each (drivelog::appendRaw). Copies them into out and returns the
+// link-up's number, 0 before the first (and always on the black deck).
+uint32_t linkupRaw(char* out, size_t n);
 // The tasks' least stack to spare, for [mem] (0 before start).
 unsigned linkStackLeft();
 unsigned askStackLeft();
