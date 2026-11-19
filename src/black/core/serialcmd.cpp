@@ -83,9 +83,9 @@ void tick(TFT_eSPI& tft) {
         else if (strcmp(line, "GAUGES ON") == 0) gauges::set(true);
         else if (strcmp(line, "GAUGES OFF") == 0) gauges::set(false);
         else if (strcmp(line, "GAUGES DEMO") == 0) gauges::demo();
-        else if (strncmp(line, "GAUGES SCREEN ", 14) == 0) {   // GAUGES SCREEN suki | drive (or 1 | 2)
+        else if (strncmp(line, "GAUGES SCREEN ", 14) == 0) {   // GAUGES SCREEN suki | drive | trip (or 1 to 3)
             drivedash::Screen s;
-            if (!drivedash::parse(line + 14, &s)) Serial.println("[obd] screens: suki, drive");
+            if (!drivedash::parse(line + 14, &s)) Serial.println("[obd] screens: suki, drive, trip");
             else if (!gauges::setScreen(s)) Serial.println("[obd] screen not switched: the car is moving");
         } else if (strcmp(line, "FILL CLEAR") == 0) {
             gauges::forgetBook();

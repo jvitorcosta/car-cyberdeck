@@ -25,6 +25,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   20-segment RPM arc above it, coolant, load and volts ladders and a warm-up bar. A hot engine or a
   weak battery turns its value red. Pick SUKI or DRIVE on the phone page while parked, and the deck
   remembers it.
+- **Added:** a third gauge screen, the Trip ticker, in the green terminal look: km/l now (COAST when
+  you lift off), the trip's km/l, km and time, the km left and what the trip cost. A low range turns
+  red. Pick TRIP on the phone page while parked.
 - **Added:** the black deck keeps the trip and a fuel book: km, average km/l and engine-on time
   since the car started, and, once you note a full tank, the km left and what the trip cost. Note
   it with FULL TANK on the phone page (type the price per litre, or leave it empty to keep the

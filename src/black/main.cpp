@@ -14,6 +14,7 @@
 #include "ui/gaugeview.h"
 #include "ui/sukiview.h"
 #include "ui/driveview.h"
+#include "ui/tripview.h"
 #include "car/gauges.h"
 #include "core/serialcmd.h"
 #include "core/karaoke.h"
@@ -566,6 +567,7 @@ void loop() {
             const bool all = whole || sc != shownScreen;
             shownScreen = sc;
             if (sc == drivedash::Screen::Drive && ui::driveReady(s_tft)) ui::drawDrive(s_tft, gauges::live(), millis(), all);
+            else if (sc == drivedash::Screen::Trip && ui::tripReady(s_tft)) ui::drawTrip(s_tft, gauges::live(), all);
             else if (ui::sukiReady()) ui::drawSuki(s_tft, gauges::live(), millis(), all);   // the film's art is on the deck
             else ui::drawGauges(s_tft, gauges::live(), millis(), all);
         }
