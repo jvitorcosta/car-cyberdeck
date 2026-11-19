@@ -2,6 +2,7 @@
 (docs/superpowers/specs/2026-10-09-boot-scene-v3-design.md, section 4): ~5 s of photos, then the
 end card, the POWERED BY HONDA logo (spec 2026-10-19-random-intro: every boot opening ends with it).
 Run: python tools/gen_montage.py [photo dir]      (default: montage-photos/)
+     python tools/gen_montage.py montage-photos/cartoon2d --cartoon   (2D cartoon stills, see CARTOON_SHOTS)
 The photos and data/montage.bin are git-ignored (they show the number plate). Needs ffmpeg.
 
 Format (little-endian): "MTG1", u16 count, u16 fps, count x (u32 offset, u32 size), then the
@@ -187,6 +188,113 @@ def build(photos):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# --cartoon: the same four shots as hand-drawn 2D cartoon stills (each photo redrawn by an image model
+# from a "2D cartoon, ink outlines, flat cel colours" prompt), animated here instead of from clips:
+# eased push-ins, 0.3 s crossfades, the close-up swapping to its wink still, and a cartoon sparkle
+# on the headlight during the wink. Files in the photo dir: <stem>.png (or .jpg) for each shot,
+# 06-headlight-detail-wink.png, and honda-logo.png for the end card. Needs Pillow.
+# stem, frames, crop centre y (fraction of the still's height), zoom from, zoom to, drift (fraction of width)
+CARTOON_SHOTS = [("07-right-wide-turning", 22, 0.497, 1.03, 1.09, -0.021),
+                 ("02-front-close", 20, 0.583, 1.00, 1.09, 0.0),
+                 ("04-left-closer", 20, 0.577, 1.03, 1.10, 0.017),
+                 ("06-headlight-detail", 28, 0.416, 1.00, 1.06, 0.0)]
+CARTOON_WINK = ("06-headlight-detail", 12, 5)     # shot, first wink frame, wink frames (as #56)
+CARTOON_FADE_IN, CARTOON_FADE_OUT = 8, 6          # frames: from black at the start, to white at the end
+# sparkle radius (deck px) from the frame before the wink to the frame after it, and where it sits
+SPARKLE = [10, 22, 30, 24, 16, 10, 5]
+SPARKLE_AT, SPARKLE_SMALL_AT = (0.47, 0.66), (0.33, 0.71)
+SS = 2                                            # supersampling while animating
+
+
+def cartoon_frames():
+    """Frames of the cartoon part: every shot minus the crossfade overlaps."""
+    return sum(s[1] for s in CARTOON_SHOTS) - XFADE * (len(CARTOON_SHOTS) - 1)
+
+
+def ease(t):
+    return t * t * (3 - 2 * t)
+
+
+def cartoon_box(w, h, cy, zoom, drift):
+    """The crop (x0, y0, x1, y1) of a w x h still for one 4:3 frame: zoom 1 is the full width,
+    centred on height fraction cy, moved by drift (fraction of w), always inside the still."""
+    cw = w / zoom
+    ch = cw * 240 / 320
+    x0 = min(max((w - cw) / 2 + drift * w, 0), w - cw)
+    y0 = min(max(cy * h - ch / 2, 0), h - ch)
+    return (x0, y0, x0 + cw, y0 + ch)
+
+
+def cartoon_plan():
+    """Per shot, per frame: (zoom, drift, winking, sparkle radius or 0)."""
+    stem_w, first, n_wink = CARTOON_WINK
+    plan = []
+    for stem, n, _, z0, z1, drift in CARTOON_SHOTS:
+        shot = []
+        for k in range(n):
+            e = ease(k / (n - 1))
+            wink = stem == stem_w and first <= k < first + n_wink
+            s = k - (first - 1)
+            spark = SPARKLE[s] if stem == stem_w and 0 <= s < len(SPARKLE) else 0
+            shot.append((z0 + (z1 - z0) * e, drift * (e - 0.5), wink, spark))
+        plan.append(shot)
+    return plan
+
+
+def cartoon_still(photos, stem):
+    for ext in (".png", ".jpg"):
+        p = os.path.join(photos, stem + ext)
+        if os.path.isfile(p):
+            return p
+    sys.exit("gen_montage: missing cartoon still %s.png" % os.path.join(photos, stem))
+
+
+def sparkle(draw, x, y, r, fill):
+    """A four-point cartoon star with an ink outline."""
+    import math
+    pts = [(x + (r if k % 2 == 0 else r * 0.22) * math.cos(k * math.pi / 4),
+            y + (r if k % 2 == 0 else r * 0.22) * math.sin(k * math.pi / 4)) for k in range(8)]
+    draw.polygon(pts, fill=fill, outline=(20, 10, 30), width=SS)
+
+
+def build_cartoon(photos):
+    from PIL import Image, ImageDraw
+    W, H = 320 * SS, 240 * SS
+    stem_w = CARTOON_WINK[0]
+    shots = []
+    for (stem, _, cy, *_), plan in zip(CARTOON_SHOTS, cartoon_plan()):
+        img = Image.open(cartoon_still(photos, stem)).convert("RGB")
+        wink = Image.open(cartoon_still(photos, stem + "-wink")).convert("RGB") if stem == stem_w else None
+        frames = []
+        for zoom, drift, winking, spark in plan:
+            src = wink if winking else img
+            f = src.resize((W, H), Image.LANCZOS, box=cartoon_box(src.width, src.height, cy, zoom, drift))
+            if spark:
+                d = ImageDraw.Draw(f)
+                sparkle(d, SPARKLE_AT[0] * W, SPARKLE_AT[1] * H, spark * SS, (255, 255, 240))
+                if spark > 12:
+                    sparkle(d, SPARKLE_SMALL_AT[0] * W, SPARKLE_SMALL_AT[1] * H, spark * SS * 0.45, (255, 240, 200))
+            frames.append(f)
+        shots.append(frames)
+    seq = shots[0]
+    for s in shots[1:]:
+        seq = seq[:-XFADE] + [Image.blend(seq[-XFADE + j], s[j], (j + 1) / (XFADE + 1)) for j in range(XFADE)] + s[XFADE:]
+    black, white = Image.new("RGB", (W, H)), Image.new("RGB", (W, H), (255, 255, 255))
+    tmp = tempfile.mkdtemp(prefix="montage_")
+    try:
+        for i, f in enumerate(seq):
+            if i < CARTOON_FADE_IN:
+                f = Image.blend(black, f, i / CARTOON_FADE_IN)
+            if i >= len(seq) - CARTOON_FADE_OUT:
+                f = Image.blend(f, white, (i - (len(seq) - CARTOON_FADE_OUT) + 1) / CARTOON_FADE_OUT)
+            f.resize((320, 240), Image.LANCZOS).save(os.path.join(tmp, "p%03d.png" % i))
+        ffmpeg(["-i", os.path.join(tmp, "p%03d.png"), "-q:v", "8", "-pix_fmt", "yuvj420p", os.path.join(tmp, "f%03d.jpg")])
+        frames = [open(f, "rb").read() for f in sorted(glob.glob(os.path.join(tmp, "f*.jpg")))]
+        return frames + end_card(photos, tmp)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def pack(frames):
     head = b"MTG1" + struct.pack("<HH", len(frames), FPS)
     offset, index, data, seen = len(head) + 8 * len(frames), b"", [], {}
@@ -200,8 +308,9 @@ def pack(frames):
 
 
 if __name__ == "__main__":
-    photos = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "montage-photos")
-    blob = pack(build(photos))
+    args = [a for a in sys.argv[1:] if a != "--cartoon"]
+    photos = args[0] if args else os.path.join(ROOT, "montage-photos")
+    blob = pack(build_cartoon(photos) if "--cartoon" in sys.argv[1:] else build(photos))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "wb") as f:
         f.write(blob)

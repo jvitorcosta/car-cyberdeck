@@ -2,7 +2,7 @@
 greeting.pcm 203200
 opener.pcm 27100
 finale.pcm 120762
-montage.bin 479812
+montage.bin 856870
 intro.bin 1438835
 intro.pcm 1236000
 greeting_alt.pcm 54502
