@@ -20,7 +20,12 @@ void test_screens_by_name_or_number() {
     TEST_ASSERT_EQUAL_INT((int)Screen::Trip, (int)s);
     TEST_ASSERT_TRUE(drivedash::parse("Trip", &s));
     TEST_ASSERT_EQUAL_INT((int)Screen::Trip, (int)s);
-    TEST_ASSERT_FALSE(drivedash::parse("4", &s));
+    TEST_ASSERT_TRUE(drivedash::parse("ride", &s));
+    TEST_ASSERT_EQUAL_INT((int)Screen::Ride, (int)s);
+    TEST_ASSERT_TRUE(drivedash::parse("4", &s));
+    TEST_ASSERT_EQUAL_INT((int)Screen::Ride, (int)s);
+    TEST_ASSERT_EQUAL_STRING("ride", drivedash::name(Screen::Ride));
+    TEST_ASSERT_FALSE(drivedash::parse("5", &s));
     TEST_ASSERT_FALSE(drivedash::parse("", &s));
     TEST_ASSERT_FALSE(drivedash::parse("drivedrivedrive", &s));
     TEST_ASSERT_FALSE(drivedash::parse(nullptr, &s));

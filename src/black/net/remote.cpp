@@ -62,7 +62,7 @@ border:2px solid #5ab0e0;background:#101820;color:#f8f8d8}#fu button{font-size:1
 #s{min-height:1.4em;text-align:center;margin:0}footer{margin-top:auto;opacity:.5;font-size:14px;text-align:center}
 </style></head><body>
 <div class="now"><small>NOW PLAYING</small><div id="t">...</div><div id="a"></div></div>
-<div class="st" id="st" hidden></div><button id="g" class="g">GAUGES</button><div id="sc" hidden><button class="g" data-s="suki">SUKI</button><button class="g" data-s="drive">DRIVE</button><button class="g" data-s="trip">TRIP</button></div><div id="fu" hidden><input id="pr" inputmode="decimal" maxlength="5" placeholder="R$/L" aria-label="Price per litre"><button class="g" id="fb">FULL TANK</button></div><div id="btns"></div><p id="s"></p><footer id="f"></footer>
+<div class="st" id="st" hidden></div><button id="g" class="g">GAUGES</button><div id="sc" hidden><button class="g" data-s="suki">SUKI</button><button class="g" data-s="drive">DRIVE</button><button class="g" data-s="trip">TRIP</button><button class="g" data-s="ride">RIDE</button></div><div id="fu" hidden><input id="pr" inputmode="decimal" maxlength="5" placeholder="R$/L" aria-label="Price per litre"><button class="g" id="fb">FULL TANK</button></div><div id="btns"></div><p id="s"></p><footer id="f"></footer>
 <script>
 const k=new URLSearchParams(location.search).get('k')||'',$=i=>document.getElementById(i);
 const NAMES={howl:'\u{1F43A} Howl'};
@@ -238,7 +238,7 @@ static void handleKaraoke() {
 }
 
 // The live gauges (car/gauges): GET /obd, the values as util/car/obdwire's line, for another deck
-// (the yellow one, the 3rd); GET /gauges?on=1|0 sets the GAUGES switch and ?screen=suki|drive|trip its screen
+// (the yellow one, the 3rd); GET /gauges?on=1|0 sets the GAUGES switch and ?screen=suki|drive|trip|ride its screen
 // (409 while the car moves); without either it says them. Signed or the key, like /link.
 static void handleObd() {
     if (!reqauth::pass(*s_server, s_gate, "/obd", "wrong key")) return;
@@ -259,7 +259,7 @@ static void handleGauges() {
     drivedash::Screen want = drivedash::Screen::Suki;
     if (on.length() && on != "1" && on != "0") { s_server->send(400, "text/plain", "on=1 or on=0"); return; }
     if (screen.length() && !drivedash::parse(screen.c_str(), &want)) {
-        s_server->send(400, "text/plain", "screen=suki, drive or trip");
+        s_server->send(400, "text/plain", "screen=suki, drive, trip or ride");
         return;
     }
     // the screen first: refused while moving, and then nothing changes (on= included)
