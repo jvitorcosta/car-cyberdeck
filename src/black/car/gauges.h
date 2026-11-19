@@ -13,6 +13,7 @@ void set(bool on);     // any task; written to NVS only when it changes (and end
 // The desk demo (core/serialcmd's GAUGES DEMO): the switch on and live() from the OBD deck's simulated
 // drive (util/car/benchdrive), in RAM only, until set() or a reboot.
 void demo();
+bool demoOn();   // the demo is what live() returns now (the screens mark it). Any task.
 // The values now (fresh readings only), seq +1 whenever a new reading came in. Any task.
 obdwire::Live live();
 // Which GAUGES screen shows (util/car/drivedash::Screen), kept in NVS ("hud" / "screen"); the Suki

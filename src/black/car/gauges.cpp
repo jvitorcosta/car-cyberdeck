@@ -128,6 +128,8 @@ void demo() {
     Serial.println("[obd] gauges demo: the simulated drive (GAUGES ON / OFF ends it)");
 }
 
+bool demoOn() { return s_demo.load(); }
+
 void set(bool on) {
     const bool wasDemo = s_demo.exchange(false);
     if (s_on.exchange(on) == on && !wasDemo) return;

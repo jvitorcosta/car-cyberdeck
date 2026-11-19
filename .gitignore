@@ -45,6 +45,11 @@ data/max.pcm
 # The Suki gauge screen's film art (tools/gen_suki_hud.py): frames of the film monitor, never committed
 suki-frames/
 data/suki.bin
+# The Suki drive screen's art (tools/gen_suki_ride.py): layers cut from the making-of video, never committed
+suki-layers/
+suki-build-assets/
+data/sukiride.bin
+suki-ride-preview*.png
 data/howl.pcm
 data/greeting_alt.pcm
 # The S3's boot sound rosters and your picks for them (tools/gen_rosters.py)

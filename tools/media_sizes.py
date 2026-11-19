@@ -17,11 +17,14 @@ SIZES = os.path.join(DATA, "media_sizes.txt")
 # Sonic, McQueen, the boot sound rosters, the camera alerts' voice and the Suki gauge art (its media partition); a zero-filled
 # roster reads as none. A zero-filled McQueen stand-in fails carbin's checks, so the S3 reads it as no
 # McQueen; a zero-filled camvoice.bin has no "CAMV" header, so the S3 reads it as no voice (beeps only); a
-# zero-filled suki.bin has no "SUK1", so the gauges keep the street look.
+# zero-filled suki.bin has no "SUK1", so the gauges keep the street look. sukiride.bin (the Suki drive
+# screen's art, "SKR1") is linked into the S3's app, not its media pack: zero-filled, the Ride screen
+# falls back to the others.
 FILES = ["greeting.pcm", "opener.pcm", "finale.pcm", "montage.bin",
          "intro.bin", "intro.pcm", "greeting_alt.pcm", "howl.pcm", "idle.bin",
          "mcqueen.bin", "backdrop.bin", "max.bin", "max.pcm", "shadow.bin",
-         "drive.snd", "opener.snd", "finale.snd", "camvoice.bin", "connect.snd", "suki.bin"]
+         "drive.snd", "opener.snd", "finale.snd", "camvoice.bin", "connect.snd", "suki.bin",
+         "sukiride.bin"]
 MONTAGE_EMPTY = b"MTG1" + (0).to_bytes(2, "little") + (10).to_bytes(2, "little")
 # Stand-ins start with an empty header, so the firmware reads "no clip" and boots.
 HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "max.bin": MONTAGE_EMPTY,
