@@ -270,7 +270,14 @@ static Look musicLook[N_CTRL];
 // A level the owner set on light i while the mode was on (- / +, L1 / R1, the IR remote, "50
 // percent"): it holds over the next songs until the mode ends; -1: none (musiclights::lightPct).
 static int musicChosen[N_CTRL] = {-1, -1};
-static Look shownLook(int i) { return musicDriving ? musicLook[i] : looks[i + 1]; }
+// Quiet window (daynight::isQuiet): backlight 0 and both lights shown off; a touch wakes it until
+// the window ends (quietWoken). Loop-owned; updateClock() keeps it.
+static bool quiet = false;
+static bool quietWoken = false;
+static Look shownLook(int i) {
+    if (quiet) return {ledlook::YELLOW, 100, false};
+    return musicDriving ? musicLook[i] : looks[i + 1];
+}
 
 // A running fade (see "A new music look" below; presets use it too), or the welcome's intro (see
 // startIntro): its keys in place of from..to, each at its time after `start`. Loop-owned.
@@ -312,6 +319,7 @@ static void writeFrame(int i, const songpalette::Rgb& c) {
 // Light i from `from` to `to` in `steps` steps `every` ms apart. powerOn: the power-on goes now with
 // the first step, so the light never shows its old colour; else the first step waits for its gap.
 static void startFade(int i, const songpalette::Rgb& from, const songpalette::Rgb& to, bool powerOn, int steps, uint32_t every) {
+    if (quiet) return;  // dark: push() has sent the off
     LightFade& f = lightFade[i];
     pushWanted[i] = false;  // the fade writes from here on
     f.intro.n = 0;  // a fade ends the welcome
@@ -354,6 +362,7 @@ static void writeKey(int i, int n) {
 // (dark) now, the rest from fadeTick. A change, a preset or a song's look takes over from the key
 // it reached (its colour frame ends the fill); a reconnect gets its look (push).
 static void startIntro(int i) {
+    if (quiet) return;
     const Look l = shownLook(i);
     const Rgb s = ledRgb(l.swatch);
     LightFade& f = lightFade[i];
@@ -3016,6 +3025,14 @@ static void vividGamma() {
 }
 
 static void repaint();
+static void push(int i);
+
+static void setQuiet(bool on) {
+    quiet = on;
+    backlight::setOff(on);
+    for (int i = 0; i < N_CTRL; i++) push(i);  // the lights off, or back to their looks
+    Serial.printf("[ui] quiet %s\n", on ? "on" : "off");
+}
 
 // The Menu's clock and night. Polled each second (a time() call) so the clock turns over on the
 // minute; night follows it: the backlight, and a repaint.
@@ -3036,6 +3053,9 @@ static void updateClock() {
         clockDay = day;
         if (screen == Screen::Menu) drawClock();
     }
+    const bool wantQuiet = synced && daynight::isQuiet(m) && !quietWoken;
+    if (synced && !daynight::isQuiet(m)) quietWoken = false;  // the window is over: the next one starts dark
+    if (wantQuiet != quiet) setQuiet(wantQuiet);
     bool want = synced && daynight::isNight(m);
 #ifdef NIGHT_TEST
     want = tuneNight;
@@ -3326,7 +3346,11 @@ void loop() {
     static uint32_t loopStart = 0;
     if (loopStart == 0) loopStart = millis() | 1;
     const bool down = tapGuard.update(touch::read(&x, &y) && millis() - loopStart > 1000, millis());
-    if (down) {
+    if (down && quiet) {  // a touch wakes the quiet window: this tap only wakes
+        quietWoken = true;
+        setQuiet(false);
+        tap = {true, true, millis(), 0, 0, 0, -1};
+    } else if (down) {
         if (!tap.down) tap = {true, false, millis(), 0, 0, 0, -1};
         if (!tap.acted) {
             tap.sx += x;
