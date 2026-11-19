@@ -179,10 +179,13 @@ static void noteYellow() { s_yellowAt.store(millis() | 1); }
 uint32_t yellowHeardAt() { return s_yellowAt.load(); }
 
 // The yellow deck's link check (util/common/decklink): GET /link every 5 s, signed; the answer says
-// whether the GPS (the iPhone's, car/camsvc) has a fix: "gps=1" / "gps=0".
+// whether the GPS (the iPhone's, car/camsvc) has a fix: "gps=1" / "gps=0". light=N, its INSIDE
+// light's swatch, is the colour the Ride gauges follow (karaoke::themeLight); an older yellow deck
+// sends none.
 static void handleLink() {
     if (!reqauth::pass(*s_server, s_gate, "/link", "wrong key")) return;
     noteYellow();
+    if (s_server->hasArg("light")) karaoke::noteLight(karaokemode::parseLight(s_server->arg("light").c_str()));
     cameras::Status st;
     static camlist::Point pt;   // static: off this task's 4 KB stack (one request at a time)
     bool mute = false;

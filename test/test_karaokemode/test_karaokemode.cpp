@@ -111,6 +111,14 @@ void test_parse_light_rejects_junk() {
     TEST_ASSERT_EQUAL_INT(-1, karaokemode::parseLight(nullptr));
 }
 
+void test_keep_lit_keeps_the_last_colour() {
+    TEST_ASSERT_EQUAL_INT(3, karaokemode::keepLit(-1, 3));   // the first colour
+    TEST_ASSERT_EQUAL_INT(0, karaokemode::keepLit(3, 0));    // a new one, 0 included
+    TEST_ASSERT_EQUAL_INT(0, karaokemode::keepLit(0, -1));   // the light off: keep it
+    TEST_ASSERT_EQUAL_INT(-1, karaokemode::keepLit(-1, -1)); // nothing yet
+    TEST_ASSERT_EQUAL_INT(5, karaokemode::keepLit(5, 9));    // out of range: keep it
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_off_is_normal);
@@ -125,5 +133,6 @@ int main(int, char**) {
     RUN_TEST(test_stop_is_at_once);
     RUN_TEST(test_parse_light_reads_swatches);
     RUN_TEST(test_parse_light_rejects_junk);
+    RUN_TEST(test_keep_lit_keeps_the_last_colour);
     return UNITY_END();
 }

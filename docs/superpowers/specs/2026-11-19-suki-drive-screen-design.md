@@ -44,10 +44,11 @@ teeth cels shuffled 8 a second with a 1 px sideways shake.
 
 ## Colours
 
-The deck's theme is the inside light's swatch (`karaoke::light()`, termpal's nine themes, -1 green)
-with day or night (`theme::isNightActive()`). The yellow deck sends that swatch with its karaoke
-keep-alive, so the Ride screen follows the yellow deck's colour while KARAOKE is on there; otherwise it
-keeps the last one (green after a boot). The interface uses termpal's TEXT, MID, DIM and ALERT for
+The deck's theme is the yellow deck's INSIDE light swatch (`karaoke::themeLight()`, termpal's nine
+themes, -1 green) with day or night (`theme::isNightActive()`). The yellow deck sends that swatch with
+its link check every 5 s (`GET /link?light=N`) and with the karaoke keep-alive, so the Ride screen
+follows its colour within 5 s, KARAOKE on or off. With the light off the screen keeps the last colour;
+after a boot it is green until the first link check. The interface uses termpal's TEXT, MID, DIM and ALERT for
 that theme and time of day; text in the alert box is dark or white, whichever reads better.
 
 The art is stored once, as 8-bit indices into one 256-colour palette (the film's own colours). On a
