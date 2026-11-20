@@ -2,7 +2,6 @@
 #include <Arduino.h>
 #include <driver/i2s.h>
 #include <esp_timer.h>
-#include <HWCDC.h>
 #include "audioport.h"
 #include "es8311.h"
 #include "pins.h"
@@ -21,19 +20,6 @@ constexpr int CHUNK = 128;                 // mono samples per i2s_write
 // Codec DAC gain (0xBF = 0 dB, 0.5 dB steps). The clips peak near full scale, so each dB above
 // 0 shaves the loudest peaks; +6 dB was the owner's pick by ear after 100 % volume.
 constexpr uint8_t CODEC_GAIN = 0xCB;
-// On the desk: while a PC is on the USB port (it sends the USB frames; a car charger doesn't), every
-// sound plays at a tenth of its level (-20 dB, 40 half-dB steps), so testing at night stays quiet.
-// Checked at each clip, so plugging in or out counts from the next sound.
-constexpr uint8_t DESK_CUT = 40;
-uint8_t gainNow() {
-    static int8_t logged = -1;
-    const bool desk = HWCDC::isPlugged();
-    if (logged != (int8_t)desk) {
-        logged = (int8_t)desk;
-        Serial.println(desk ? "[audio] PC on USB: sounds at 1/10 (desk volume)" : "[audio] full volume");
-    }
-    return desk ? (uint8_t)(CODEC_GAIN - DESK_CUT) : CODEC_GAIN;
-}
 // From cold (codec just reset, amp just enabled) the speaker stays near silent for ~0.3 s and then
 // fades in: the deck's own mic heard a steady chime start ~300 ms late with a 60 ms wait, and on
 // time with 400 ms (2026-11-05, AUDIO_PROBE below). Clips cut their first syllable with 60.
@@ -125,7 +111,6 @@ bool open(int clipRate) {
     if (s_warm && clipRate == s_rate) {    // still on from the last clip: no wake needed
         s_warm = false;
         s_held = true;
-        es8311::setVolume(gainNow());      // the PC may have come or gone since
 #ifdef AUDIO_PROBE
         probeStart();
 #endif
@@ -140,7 +125,7 @@ bool open(int clipRate) {
     bool ok = audioport::acquire(clipRate);
     if (ok) {
         s_rate = clipRate;
-        ok = es8311::setVolume(gainNow());
+        ok = es8311::setVolume(CODEC_GAIN);
         if (!ok) {
             Serial.println("[audio] ES8311 not answering");
             audioport::release();

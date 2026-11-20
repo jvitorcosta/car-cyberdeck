@@ -83,10 +83,6 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   speaker gets 400 ms to wake before the first sample (with 60 ms the deck's own mic heard a clip's
   first ~0.3 s missing; `-D AUDIO_PROBE` logs that test); after a 16 kHz clip the output stays on,
   sending silence, for 20 s, so the next clip starts at once; `tools/greeting_clip.py` falls back to the default chime at build time.
-  **Desk volume**: while a PC is on the USB port (it sends USB frames, `HWCDC::isPlugged`; a car
-  charger doesn't), every sound plays at a tenth (codec gain -20 dB, checked at each clip;
-  `[audio] PC on USB: sounds at 1/10`). If the car's own USB port is a data port, the deck would be
-  quiet there too: power it from a plain charger.
   The boot opening picks the clip: the Honda's drive
   plays `data/greeting.pcm`, McQueen's `data/greeting_alt.pcm` (`tools/gen_greeting.py --alt`),
   the kiss none (`greeting::choose`, `util/intropick::greetingFor`).
