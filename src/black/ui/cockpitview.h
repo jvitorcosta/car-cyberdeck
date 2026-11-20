@@ -9,8 +9,8 @@
 // Spec: docs/superpowers/specs/2026-11-20-cockpit-screen-design.md
 namespace ui {
 bool cockpitReady(TFT_eSPI& tft);   // the PSRAM frame is there (made once): else the caller draws another screen
-// theme: the yellow deck's INSIDE light swatch (karaoke::themeLight()), night: theme::isNightActive().
+// theme: the yellow deck's INSIDE light swatch (karaoke::themeLight()); the colours and the black are the yellow deck's.
 // storedCodes / mil: gauges::lamp(). whole: a new screen, redrawn all over.
 void drawCockpit(TFT_eSPI& tft, const obdwire::Live& l, int storedCodes, bool mil, uint32_t nowMs, int theme,
-                 bool night, bool whole);
+                 bool whole);
 }

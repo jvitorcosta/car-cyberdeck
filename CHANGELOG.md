@@ -6,6 +6,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Changed:** the Cockpit screen uses the yellow deck's exact colours and its pure black background (it had a tinted,
+  fading panel and, in pink, a different pink), so the two decks match in background and in the tone of each colour.
 - **Fixed:** the trip's km, litres and cost, and the range from the fuel book, were too low whenever the engine's air
   flow was read less often than every 2 s, which at 4 requests a second it was (the range then read too high). The
   trip now counts a gap of up to 5 s whole and the air is asked about every 2 s instead of 2.8 s (km/l itself was not

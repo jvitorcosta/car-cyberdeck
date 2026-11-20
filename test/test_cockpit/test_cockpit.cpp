@@ -3,6 +3,8 @@
 #include <cstring>
 #include "../../src/util/black/lyricface.h"
 #include "../../src/util/car/cockpit.h"
+#include "../../src/util/common/rgb565.h"
+#include "../../src/util/common/termpal.h"
 
 using namespace cockpit;
 
@@ -210,24 +212,24 @@ void test_the_cards_keep_the_eight_pixel_margin() {
     TEST_ASSERT_TRUE(sp.x + sp.w < ROW_X);   // the speed clears the cards
 }
 
-void test_the_palette_is_legible_and_themed() {
+void test_the_palette_is_the_yellow_decks() {
     static Palette p;
-    makePalette(2, false, &p);   // pink by day: the vivid look
-    TEST_ASSERT_NOT_EQUAL(p.tx, p.dm);
-    TEST_ASSERT_NOT_EQUAL(p.tx, p.ghost);
-    TEST_ASSERT_NOT_EQUAL(p.al, p.tx);
-    TEST_ASSERT_NOT_EQUAL(p.card, p.bg[100]);
-    TEST_ASSERT_TRUE(p.bg[0] != p.bg[H - 1]);   // the panel fades
-    static Palette g;
-    makePalette(-1, true, &g);   // the default green
-    TEST_ASSERT_NOT_EQUAL(p.tx, g.tx);
-    static Palette g2;
-    makePalette(-1, false, &g2);   // every theme but pink wears its night palette by day too
-    TEST_ASSERT_EQUAL_UINT16(g.tx, g2.tx);
-    static Palette p2;
-    makePalette(2, true, &p2);     // pink by night differs from pink by day
-    TEST_ASSERT_NOT_EQUAL(p.tx, p2.tx);
-    makePalette(2, false, nullptr);   // no crash
+    // the yellow deck: termpal::rgb(role, theme, true) on termpal's BG, in every theme and at any hour
+    for (int theme = -1; theme < 9; ++theme) {
+        makePalette(theme, &p);
+        TEST_ASSERT_EQUAL_UINT16(0, p.bg);   // pure black
+        TEST_ASSERT_EQUAL_UINT16(rgb565::hex(termpal::rgb(termpal::TEXT, theme, true)), p.tx);
+        TEST_ASSERT_EQUAL_UINT16(rgb565::hex(termpal::rgb(termpal::MID, theme, true)), p.md);
+        TEST_ASSERT_EQUAL_UINT16(rgb565::hex(termpal::rgb(termpal::DIM, theme, true)), p.dm);
+        TEST_ASSERT_EQUAL_UINT16(rgb565::hex(termpal::rgb(termpal::ALERT, theme, true)), p.al);
+        TEST_ASSERT_NOT_EQUAL(p.tx, p.ghost);   // unlit parts are visible but quiet
+        TEST_ASSERT_NOT_EQUAL(p.bg, p.ghost);
+        TEST_ASSERT_NOT_EQUAL(p.bg, p.card);    // a card shows against the black
+        TEST_ASSERT_NOT_EQUAL(p.al, p.tx);
+    }
+    makePalette(2, &p);   // pink: the yellow deck's pink, not Ride's pinker one
+    TEST_ASSERT_EQUAL_UINT16(rgb565::hex(0xFF0040), p.tx);
+    makePalette(2, nullptr);   // no crash
 }
 
 static int wid(lyricface::Face f, const char* t) {
@@ -272,7 +274,7 @@ int main() {
     RUN_TEST(test_a_key_changes_only_with_what_its_region_draws);
     RUN_TEST(test_the_regions_fit_the_screen_and_do_not_overlap);
     RUN_TEST(test_the_cards_keep_the_eight_pixel_margin);
-    RUN_TEST(test_the_palette_is_legible_and_themed);
+    RUN_TEST(test_the_palette_is_the_yellow_decks);
     RUN_TEST(test_the_text_fits_its_slots);
     return UNITY_END();
 }
