@@ -52,13 +52,6 @@ static const int WIFI_NETWORK_COUNT = 2;
 // with Issues: read and write and nothing else. Empty: the marks stay on the deck (import-car).
 // #define MARKS_REPO         "owner/radar-marks"
 // #define MARKS_TOKEN        ""
-// The OBD deck's drive log (one row a second: speed, rpm, temperatures, pedal, load, volts; no
-// position) goes over the hotspot to your Google Sheet's Apps Script web app (tools/drivelog_sheet.gs,
-// docs/drive-log.md), one tab per trip (obd/dlogup). DLOG_URL is the deployment's /exec URL, DLOG_KEY
-// a random string that is also the script's KEY property; both are secrets. Empty: no drive log is
-// kept (the trip log on the deck's flash is separate and stays on).
-// #define DLOG_URL           "https://script.google.com/macros/s/.../exec"
-// #define DLOG_KEY           ""
 
 // The yellow deck's two LED controllers (ELK-BLEDDM / MELK-... over Bluetooth LE): their addresses,
 // lowercase. To find them, turn the phone's Bluetooth off (a controller takes one link at a time)
