@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <initializer_list>
 
 namespace drivelog {
 namespace {
@@ -122,19 +121,6 @@ bool tripName(int64_t unixStart, char* out, size_t n) {
     return len > 0 && static_cast<size_t>(len) < n;
 }
 
-size_t postHead(char* out, size_t n, const char* key, const char* kind, const char* trip, uint32_t num) {
-    if (!out || n == 0) return 0;
-    out[0] = '\0';
-    for (const char* f : {key, kind, trip})
-        if (!f || strpbrk(f, "\t\r\n")) return 0;
-    const int len = snprintf(out, n, "%s\n%s\t%s\t%lu\n", key, kind, trip, static_cast<unsigned long>(num));
-    if (len <= 0 || static_cast<size_t>(len) >= n) {
-        out[0] = '\0';
-        return 0;
-    }
-    return static_cast<size_t>(len);
-}
-
 bool appendRaw(char* out, size_t cap, const char* request, const char* raw) {
     size_t o = strlen(out);
     auto add = [&](char c) {
@@ -154,12 +140,4 @@ bool appendRaw(char* out, size_t cap, const char* request, const char* raw) {
     return add('\n');
 }
 
-Outcome outcome(int http, const char* body) {
-    const char* b = body ? body : "";
-    if (http == 200 && strncmp(b, "ok", 2) == 0 && (b[2] == '\0' || b[2] == ' ' || b[2] == '\n'))
-        return Outcome::Done;
-    if ((http == 200 && (strncmp(b, "bad key", 7) == 0 || b[0] == '<')) || http == 401 || http == 403 || http == 404)
-        return Outcome::Refused;
-    return Outcome::Retry;
-}
 }  // namespace drivelog

@@ -357,7 +357,7 @@ bool setup() {
 }
 
 #ifdef OBD_DECK
-// The link-up's raw record for the drive log (obd/dlogup): every supported-PID bitmap, 0100 to 01A0,
+// The link-up's raw record (util/car/drivelog, for the drive log): every supported-PID bitmap, 0100 to 01A0,
 // and 01A4, asked once more each, as the car answers them. Read-only mode 01 requests through the
 // same gate (send()), once per link-up: ~7 quick replies (NO DATA is quick too). The first timeout
 // ends it (the rest is marked "(not asked)"), so a silent car costs one ASK_MS plus the late reply's

@@ -181,18 +181,6 @@ void test_trip_name_is_utc_and_needs_a_clock() {
     TEST_ASSERT_FALSE(tripName(1763592601, name, 10));
 }
 
-void test_post_head_is_the_two_lines_the_script_reads() {
-    char out[96];
-    TEST_ASSERT_EQUAL(27, postHead(out, sizeof out, "k3y", "rows", "20261119-225001", 7));
-    TEST_ASSERT_EQUAL_STRING("k3y\nrows\t20261119-225001\t7\n", out);
-    TEST_ASSERT_TRUE(postHead(out, sizeof out, "k3y", "linkup", "20261119-225001", 1) > 0);
-    TEST_ASSERT_EQUAL_STRING("k3y\nlinkup\t20261119-225001\t1\n", out);
-    TEST_ASSERT_EQUAL(0, postHead(out, sizeof out, "a\tb", "rows", "x", 1));   // a tab would shift the fields
-    TEST_ASSERT_EQUAL(0, postHead(out, sizeof out, "k", "rows", "x\n", 1));
-    TEST_ASSERT_EQUAL(0, postHead(out, 8, "k3y", "rows", "20261119-225001", 7));
-    TEST_ASSERT_EQUAL_STRING("", out);
-}
-
 void test_raw_replies_stay_on_their_own_line() {
     char out[96] = "";
     TEST_ASSERT_TRUE(appendRaw(out, sizeof out, "01A4\r", "7E8 41 A4 01 02\r7E9 NO DATA\x01"));
@@ -201,21 +189,6 @@ void test_raw_replies_stay_on_their_own_line() {
     char small[8] = "";
     TEST_ASSERT_FALSE(appendRaw(small, sizeof small, "01A4\r", "41 A4 00"));
     TEST_ASSERT_TRUE(strlen(small) < sizeof small);
-}
-
-void test_outcomes() {
-    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok"));
-    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok 60"));
-    TEST_ASSERT_EQUAL((int)Outcome::Done, (int)outcome(200, "ok dup"));   // a retry it already has
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, "okay"));
-    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(200, "<!DOCTYPE html>"));   // a sign-in page: wrong access
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(200, nullptr));
-    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(200, "bad key"));
-    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(404, ""));
-    TEST_ASSERT_EQUAL((int)Outcome::Refused, (int)outcome(403, ""));
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(-1, ""));
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(302, ""));   // a redirect not followed
-    TEST_ASSERT_EQUAL((int)Outcome::Retry, (int)outcome(500, "ok"));
 }
 
 void test_a_full_part_fits_line_max() {
@@ -246,9 +219,7 @@ int main(int, char**) {
     RUN_TEST(test_refill_moves_a_batch_back_once_the_ring_drains);
     RUN_TEST(test_spool_round_trip_keeps_every_row_once_in_order);
     RUN_TEST(test_trip_name_is_utc_and_needs_a_clock);
-    RUN_TEST(test_post_head_is_the_two_lines_the_script_reads);
     RUN_TEST(test_raw_replies_stay_on_their_own_line);
-    RUN_TEST(test_outcomes);
     RUN_TEST(test_a_full_part_fits_line_max);
     return UNITY_END();
 }

@@ -3,10 +3,10 @@
 #include <cstdint>
 // The OBD deck's per-second drive log, for checking the car's readings offline (OBD speed against
 // the phone's GPS at 60 / 80 / 100 km/h, what PID 01 A4 says, the N/V ratio): one row a second while
-// the car answers, kept in RAM (and on flash while the hotspot has no internet) and POSTed in parts
-// to the owner's Google Apps Script web app, which appends them to his Google Sheet (tools/drivelog_sheet.gs):
-// one tab per power-on, named by its first record's UTC time ("20261119-225001"), and the link-up's
-// raw replies on the "linkup" tab. No position: nothing here knows where the car is. PURE, host-tested.
+// the car answers, its CSV form, the RAM ring and the RAM/flash routing that keep rows in order,
+// and the link-up's raw replies. Nothing sends it yet: the Google Sheet sink (#83) was taken out
+// for its TLS heap; the next sink is an iPhone app that pulls the log over the hotspot. No
+// position: nothing here knows where the car is. PURE, host-tested.
 namespace drivelog {
 constexpr int16_t NONE = INT16_MIN;     // a missing or stale value in a Row
 constexpr uint32_t BATCH = 60;          // rows per part: a minute of driving
@@ -42,7 +42,7 @@ double rowUnix(int64_t nowUnix, uint32_t nowMs, uint32_t rowMs);
 
 // The rows not yet sent, oldest first, numbered from 0 for the whole power-on. Full: the oldest is
 // dropped (counted). A part is read with at(); release(upTo) drops every row numbered below upTo
-// once the Sheet has its part (rows dropped meanwhile are simply gone already). Not thread-safe:
+// once they have been sent (rows dropped meanwhile are simply gone already). Not thread-safe:
 // the caller locks.
 class Ring {
 public:
@@ -70,24 +70,11 @@ uint32_t refill(uint32_t ringRows, uint32_t spoolRows);
 // A part is due: BATCH rows waiting, or any row waiting since maxWaitMs (a short last minute).
 bool partDue(uint32_t pending, uint32_t oldestMs, uint32_t nowMs, uint32_t maxWaitMs);
 
-// The trip's tab: "20261119-225001" from its first unix second (UTC). False before 2020 (no clock).
+// The trip's name: "20261119-225001" from its first unix second (UTC). False before 2020 (no clock).
 bool tripName(int64_t unixStart, char* out, size_t n);
-
-// The POST body's first two lines, before the payload: "<key>\n<kind>\t<trip>\t<num>\n". kind:
-// "rows" (the payload is HEADER and the part's lines; num is the part, from 1) or "linkup" (the
-// payload is appendRaw's lines; num is the link-up). Returns the length, 0 when it doesn't fit or a
-// field holds a tab or a line break.
-size_t postHead(char* out, size_t n, const char* key, const char* kind, const char* trip, uint32_t num);
 
 // The link-up's raw replies, one "<request> -> <reply>" line each ('\r' / '\n' inside a reply as
 // '|', anything outside printable ASCII as '?'). Appends to out (terminated); false when it's full.
 bool appendRaw(char* out, size_t cap, const char* request, const char* raw);
 
-// What became of a POST. The web app runs doPost and answers 302 to a page that holds its reply;
-// http and body are that page's (or the POST's own, when it didn't redirect). Done: "ok" (taken)
-// or "ok dup" (a retry of a part it already has). Refused: "bad key", an HTML page (a Google sign-in:
-// the deployment is not "Anyone"), or 401 / 403 / 404 (the key,
-// URL or deployment is wrong): wait long. Retry: anything else (no answer, Google busy).
-enum class Outcome : uint8_t { Done, Refused, Retry };
-Outcome outcome(int http, const char* body);
 }
