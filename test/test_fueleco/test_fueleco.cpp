@@ -75,7 +75,20 @@ void test_gap_is_capped_across_the_wrap() {
     fueleco::Trip t;
     t.step(0xFFFFF000u, 100, 15, false, 30);
     t.step(0x00002000u, 100, 15, false, 30);                 // ~12 s later, across the wrap
-    TEST_ASSERT_FLOAT_WITHIN(0.001f, 100.0f * 2 / 3600, t.km());   // counted as 2 s
+    TEST_ASSERT_FLOAT_WITHIN(0.001f, 100.0f * 5 / 3600, t.km());   // counted as 5 s
+}
+
+// The air flow is read every 1-3 s: a normal gap between two readings is counted whole, not cut to 2 s.
+void test_a_normal_gap_between_air_readings_is_counted_whole() {
+    fueleco::Trip t;
+    t.step(0, 80, 12.3f, false, 30);
+    t.step(2750, 80, 12.3f, false, 30);                      // 2.75 s: the plan's gap at 4 requests a second
+    TEST_ASSERT_FLOAT_WITHIN(0.0005f, 80.0f * 2.75f / 3600, t.km());
+    const float perSecond = t.litres() / 2.75f;
+    fueleco::Trip u;
+    for (uint32_t ms = 0; ms <= 2750; ms += 250) u.step(ms, 80, 12.3f, false, 30);   // the same drive, read often
+    TEST_ASSERT_FLOAT_WITHIN(0.0005f, u.km(), t.km());       // slow and fast reading agree on distance and fuel
+    TEST_ASSERT_FLOAT_WITHIN(perSecond * 0.02f, u.litres() / 2.75f, perSecond);
 }
 
 // Final review: PID 03 value 4 means "open loop: load OR decel fuel cut", and it's read only every
@@ -111,6 +124,7 @@ int main(int, char**) {
     RUN_TEST(test_fuel_cut_is_free);
     RUN_TEST(test_idle_counts_fuel_not_distance);
     RUN_TEST(test_gap_is_capped_across_the_wrap);
+    RUN_TEST(test_a_normal_gap_between_air_readings_is_counted_whole);
     RUN_TEST(test_fuel_cut_needs_the_pedal_released);
     RUN_TEST(test_litres_read_back_matches_km_over_kml);
     return UNITY_END();

@@ -6,6 +6,13 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Fixed:** the trip's km, litres and cost, and the range from the fuel book, were too low whenever the engine's air
+  flow was read less often than every 2 s, which at 4 requests a second it was (the range then read too high). The
+  trip now counts a gap of up to 5 s whole and the air is asked about every 2 s instead of 2.8 s (km/l itself was not
+  affected).
+- **Fixed:** the coolant is read every 6 s instead of every ~20 s and goes stale after 20 s, so it does not blank
+  between readings or after one missed answer, and an overheating engine shows within seconds. The other slow
+  readings go stale after 45 s instead of 30 s.
 - **Added:** a fifth gauge screen, Cockpit, built for reading at a glance: no header row, the speed 112 px tall,
   the RPM and a tach with a 0-7 scale, trip and range, and five cards (coolant, battery, km/l, pedal, load) in a
   larger terminal type, each with a bar whose danger part turns red. A hot engine or a weak battery turns its
