@@ -37,12 +37,13 @@ Plan for **4-8 requests per second** on the Vgate over BLE until measured. A clo
   covered (gaps up to `MAX_STEP_MS` = 5 s count whole). So at N req/s, RPM and speed each refresh at ~N/3 Hz
   (≈ 2 Hz at 6 req/s) and the air about every 6 requests (2 s at 250 ms a request; host model, 2026-11-20).
 - **Coolant** (67 on the City) has its own turn every `COOLANT_MS` = 6 s, drawn stale after 20 s.
-- **Slow set**: one slow value every `SLOW_MS` = 2 s (battery, fuel, intake 68, ethanol, load, fuel system,
-  trims, module voltage, status). 10 slots → each ≈ every 20 s.
+- **Load** (04) has its own turn every `LOAD_MS` = 3 s, drawn stale after 9 s: it moves with the pedal and is on the Cockpit.
+- **Slow set**: one slow value every `SLOW_MS` = 2 s (battery, fuel, intake 68, ethanol, fuel system,
+  trims, module voltage, status). 9 slots → each ≈ every 18 s.
 - Battery (`ATRV`) also every 4 s with the engine running; 9 in 10 requests while cranking.
 - Codes (03 + 07): once after the first live reply, then every 5 min.
 - Unsupported PIDs (from the 0100.. scan) are never asked; a `NO DATA` backs off 30 s.
-- Staleness: fast values are drawn stale after 3 s, the coolant after 20 s, the other slow ones after 45 s (`staleAfterMs`).
+- Staleness: fast values are drawn stale after 3 s, the coolant after 20 s, the load after 9 s, the other slow ones after 45 s (`staleAfterMs`).
 
 ## Ways to go faster (each one is a gate change with tests, and a car test)
 

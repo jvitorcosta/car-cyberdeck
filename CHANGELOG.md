@@ -6,6 +6,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Changed:** the engine load is read every 3 s instead of every ~18 s (and shows `--` after 9 s without a reading), so the
+  LOAD bar follows the pedal on the Suki, Ride and Cockpit screens. It costs RPM and speed about 8-12 % of their refresh
+  (a reading every 0.64 s instead of every 0.60 s at 6 requests a second; 1.08 s instead of 0.96 s at 4).
 - **Changed:** the Cockpit screen uses the yellow deck's exact colours and its pure black background (it had a tinted,
   fading panel and, in pink, a different pink), so the two decks match in background and in the tone of each colour.
 - **Fixed:** the trip's km, litres and cost, and the range from the fuel book, were too low whenever the engine's air

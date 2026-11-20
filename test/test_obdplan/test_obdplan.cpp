@@ -23,18 +23,20 @@ static void allBut(uint32_t bits[4], std::initializer_list<uint8_t> off) {
 void test_fast_pair_every_cycle_slow_ones_in_turn() {
     obdplan::Plan plan;
     uint32_t t = 1000;
-    int slow = 0, fast = 0, coolant = 0;
+    int slow = 0, fast = 0, coolant = 0, load = 0;
     bool seen[(int)Pid::COUNT] = {};
     for (int i = 0; i < 600; ++i, t += 100) {            // 60 s of 100 ms requests (10 slow values)
         const Pid p = plan.next(t);
         seen[(int)p] = true;
         if (p == Pid::Coolant) ++coolant;
+        else if (p == Pid::Load) ++load;
         else (isFast(p) ? fast : slow)++;
         plan.done(p, Reply::Ok, t);
     }
     TEST_ASSERT_INT_WITHIN(2, 30, slow);                 // one slow request per SLOW_MS
     TEST_ASSERT_INT_WITHIN(1, 10, coolant);              // and the coolant on its own turn, every COOLANT_MS
-    TEST_ASSERT_EQUAL_INT(600 - slow - coolant, fast);
+    TEST_ASSERT_INT_WITHIN(1, 20, load);                 // and the load, every LOAD_MS
+    TEST_ASSERT_EQUAL_INT(600 - slow - coolant - load, fast);
     for (int i = 0; i < (int)Pid::COUNT; ++i)              // all of them, in turn; the fallbacks
         if ((Pid)i != Pid::PedalE && (Pid)i != Pid::Map && (Pid)i != Pid::CoolantX && (Pid)i != Pid::IntakeX)  // fallbacks
             TEST_ASSERT_TRUE(seen[i]);
@@ -70,6 +72,40 @@ void test_coolant_falls_back_to_the_extended_one_at_once() {
     TEST_ASSERT_EQUAL_INT((int)Pid::CoolantX, (int)plan.next(1100));   // not 6 s later
 }
 
+// The load moves with the pedal and is on the Cockpit screen: it must be read often and not go stale between reads.
+void test_the_load_is_asked_every_few_seconds_and_never_goes_stale_between_reads() {
+    for (uint32_t gapMs : {80u, 170u, 250u, 300u}) {
+        obdplan::Plan plan;
+        uint32_t last = 0, worst = 0;
+        bool any = false;
+        for (uint32_t t = 0; t < 120000; t += gapMs) {
+            const Pid p = plan.next(t);
+            if (p == Pid::Load) {
+                if (any && t - last > worst) worst = t - last;
+                last = t;
+                any = true;
+            }
+            plan.done(p, Reply::Ok, t);
+        }
+        TEST_ASSERT_TRUE(any);
+        TEST_ASSERT_LESS_OR_EQUAL_UINT32(obdplan::LOAD_MS + 2 * gapMs, worst);   // a couple of requests late at most
+        TEST_ASSERT_LESS_THAN_UINT32(obdplan::STALE_LOAD_MS / 2, worst);          // one lost read still leaves it fresh
+    }
+}
+
+// A car that lacks PID 04 is never asked for the load.
+void test_an_unsupported_load_is_never_asked() {
+    uint32_t bits[4];
+    allBut(bits, {0x04});
+    obdplan::Plan plan;
+    plan.setSupported(bits);
+    for (uint32_t t = 0; t < 40000; t += 100) {
+        const Pid p = plan.next(t);
+        TEST_ASSERT_FALSE(p == Pid::Load);
+        plan.done(p, Reply::Ok, t);
+    }
+}
+
 // The trip's fuel counts the time between two air readings: they must stay close.
 void test_the_air_is_asked_twice_a_round_and_never_far_apart() {
     for (uint32_t gapMs : {120u, 170u, 250u, 300u}) {
@@ -88,7 +124,7 @@ void test_the_air_is_asked_twice_a_round_and_never_far_apart() {
             plan.done(p, Reply::Ok, t);
         }
         TEST_ASSERT_TRUE(n > 50);
-        TEST_ASSERT_LESS_THAN_UINT32(3500, worst);   // fueleco::Trip counts a gap up to 5 s, and the plan keeps well under
+        TEST_ASSERT_LESS_THAN_UINT32(4500, worst);   // fueleco::Trip counts a gap up to 5 s whole: stay under it, with the coolant and load turns in the way
     }
 }
 
@@ -235,6 +271,7 @@ void test_stale_and_warnings() {
     TEST_ASSERT_EQUAL_UINT32(20000, obdplan::staleAfterMs(Pid::Coolant));
     TEST_ASSERT_EQUAL_UINT32(20000, obdplan::staleAfterMs(Pid::CoolantX));
     TEST_ASSERT_EQUAL_UINT32(45000, obdplan::staleAfterMs(Pid::Battery));
+    TEST_ASSERT_EQUAL_UINT32(9000, obdplan::staleAfterMs(Pid::Load));
     TEST_ASSERT_FALSE(obdplan::batteryWarn(12.4f, true));   // Honda smart charging idles here
     TEST_ASSERT_TRUE(obdplan::batteryWarn(11.9f, true));
     TEST_ASSERT_FALSE(obdplan::batteryWarn(12.9f, false));
@@ -371,6 +408,8 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_fast_pair_every_cycle_slow_ones_in_turn);
     RUN_TEST(test_the_coolant_is_asked_often_and_never_goes_stale_between_reads);
+    RUN_TEST(test_the_load_is_asked_every_few_seconds_and_never_goes_stale_between_reads);
+    RUN_TEST(test_an_unsupported_load_is_never_asked);
     RUN_TEST(test_the_air_is_asked_twice_a_round_and_never_far_apart);
     RUN_TEST(test_coolant_falls_back_to_the_extended_one_at_once);
     RUN_TEST(test_rpm_and_speed_at_least_three_a_second);
