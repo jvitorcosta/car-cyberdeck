@@ -14,7 +14,6 @@ TFT_eSprite* s_frame = nullptr;   // the screen as drawn (PSRAM)
 int s_state = 0;                  // 0 not made yet, 1 ready, -1 no memory
 Palette s_pal;
 int s_theme = -2;
-bool s_night = false;
 drivedash::Alerts s_alerts;
 uint32_t s_key[REGIONS];
 bool s_batch = false;             // a whole redraw: regions are drawn, the frame pushed once at the end
@@ -38,16 +37,14 @@ int text(Face f, const char* s, int x, int base, uint16_t col, Align al = LEFT) 
     return w;
 }
 
-void clear(Rect r) {   // the panel's gradient back under r
-    for (int y = r.y; y < r.y + r.h && y < H; ++y) s_frame->fillRect(r.x, y, r.w, 1, s_pal.bg[y]);
-}
+void clear(Rect r) { s_frame->fillRect(r.x, r.y, r.w, r.h, s_pal.bg); }   // the panel's black back under r
 void push(Rect r) {
     if (!s_batch) s_frame->pushSprite(r.x, r.y, r.x, r.y, r.w, r.h);
 }
 
 // ---- the parts ----
 void drawFrame() {   // what never changes: the panel and the two labels
-    for (int y = 0; y < H; ++y) s_frame->fillRect(0, y, W, 1, s_pal.bg[y]);
+    s_frame->fillSprite(s_pal.bg);
     text(Face::LINE, "KM/H", KMH_X, LINE_BASE, s_pal.md);
     text(Face::LINE, "RPM", RPM_LABEL_X, LINE_BASE, s_pal.dm);
 }
@@ -75,7 +72,7 @@ void drawSpeed(const Scene& s) {
         s_frame->fillRoundRect(PILL_X, PILL_Y, w, PILL_H, 4, s_pal.al);
         text(Face::LINE, t, PILL_X + w / 2, PILL_Y + 17, s_pal.onAlert, CENTER);
     } else {
-        s_frame->fillRoundRect(PILL_X, PILL_Y, w, PILL_H, 4, s_pal.bg[PILL_Y + PILL_H / 2]);
+        s_frame->fillRoundRect(PILL_X, PILL_Y, w, PILL_H, 4, s_pal.bg);
         s_frame->drawRoundRect(PILL_X, PILL_Y, w, PILL_H, 4, s_pal.al);
         text(Face::LINE, t, PILL_X + w / 2, PILL_Y + 17, s_pal.al, CENTER);
     }
@@ -174,12 +171,11 @@ bool cockpitReady(TFT_eSPI& tft) {
 }
 
 void drawCockpit(TFT_eSPI& tft, const obdwire::Live& l, int storedCodes, bool mil, uint32_t nowMs, int theme,
-                 bool night, bool whole) {
+                 bool whole) {
     if (!cockpitReady(tft)) return;
-    if (theme != s_theme || night != s_night) {   // a new colour: the palette again, and all of it
-        makePalette(theme, night, &s_pal);
+    if (theme != s_theme) {   // a new colour: the palette again, and all of it
+        makePalette(theme, &s_pal);
         s_theme = theme;
-        s_night = night;
         whole = true;
     }
     const bool live = l.link == obdplan::Link::Live;

@@ -7,8 +7,8 @@
 // KM/H and the RPM number, a 16-capsule tach with a 0-7 scale, trip and range. Right: five cards, COOL,
 // BATT, KM/L, PEDAL, LOAD, each with a 14-pill bar whose danger part turns red; a card is solid red on
 // an alert. A red CHK pill (check-engine lamp) or a NO LINK / KEY ON outline sits over the speed's
-// first cells (CHK is small enough to stay clear of a lit digit). No clock, no LIVE tag, no wordmark. It takes the deck's colours like the Ride
-// screen (the yellow deck's INSIDE light swatch, day or night).
+// first cells (CHK is small enough to stay clear of a lit digit). No clock, no LIVE tag, no wordmark. Its colours and its black are the yellow
+// deck's (the INSIDE light swatch's termpal night palette).
 // This is the screen's layout, its text, the palette and the regions the view repaints. PURE,
 // host-tested; black/ui/cockpitview draws it.
 // Spec: docs/superpowers/specs/2026-11-20-cockpit-screen-design.md
@@ -69,16 +69,16 @@ int pillsLit(float frac);
 uint32_t key(const Scene& s, Region r);
 
 // ---- colours ----
-// One theme's colours, RGB565 in the panel's native order (what a sprite's draw calls take). theme: the
-// yellow deck's INSIDE light swatch (termpal's 0..8, -1 the default green); night: the deck's night.
-// Like Ride, every theme wears its night palette, pink excepted by day (sukiride::nightLook).
+// The yellow deck's colours, so the two decks match: its `pal()` is termpal::rgb(role, theme, true), the theme's night
+// palette at any hour, on termpal's BG (pure black). theme: the yellow deck's INSIDE light swatch (termpal's 0..8,
+// -1 the default green), as karaoke::themeLight() reports it. RGB565 in the panel's native order (a sprite's draw calls).
 struct Palette {
+    uint16_t bg;               // termpal's BG: black
     uint16_t tx, md, dm;       // termpal's TEXT, MID, DIM
     uint16_t al, onAlert;      // the alert, and the text on it (dark or white: the better contrast)
-    uint16_t ghost;            // unlit segments, capsules and pills
-    uint16_t warn, core;       // the tach's bright band, and a capsule's core line
-    uint16_t card, border;     // a card's fill and edge
-    uint16_t bg[H];            // the panel, row by row
+    uint16_t ghost;            // unlit segments, capsules and pills (DIM at 25 %)
+    uint16_t warn, core;       // the tach's bright band, and a capsule's core line (TEXT lifted toward white)
+    uint16_t card, border;     // a card's fill and edge (DIM at 14 % and 65 %)
 };
-void makePalette(int theme, bool night, Palette* out);
+void makePalette(int theme, Palette* out);
 }  // namespace cockpit

@@ -149,18 +149,14 @@ double contrast(uint32_t a, uint32_t b) {
 }
 }  // namespace
 
-void makePalette(int theme, bool night, Palette* out) {
+void makePalette(int theme, Palette* out) {
     if (!out) return;
-    const bool n = sukiride::nightLook(theme, night);
-    uint32_t tx = termpal::rgb(termpal::TEXT, theme, n), md = termpal::rgb(termpal::MID, theme, n),
-             dm = termpal::rgb(termpal::DIM, theme, n);
-    const uint32_t al = termpal::rgb(termpal::ALERT, theme, n);
-    if (theme == sukiride::PINK && n) {   // termpal's night pink reads red: Ride's pinker one
-        tx = sukiride::PINK_NIGHT[0];
-        md = sukiride::PINK_NIGHT[1];
-        dm = sukiride::PINK_NIGHT[2];
-    }
+    // exactly the yellow deck's pal(): termpal's night palette for the theme, always, on termpal's BG
+    const uint32_t bg = termpal::rgb(termpal::BG, theme, true), tx = termpal::rgb(termpal::TEXT, theme, true),
+                   md = termpal::rgb(termpal::MID, theme, true), dm = termpal::rgb(termpal::DIM, theme, true),
+                   al = termpal::rgb(termpal::ALERT, theme, true);
     using rgb565::hex;
+    out->bg = hex(bg);
     out->tx = hex(tx);
     out->md = hex(md);
     out->dm = hex(dm);
@@ -171,10 +167,5 @@ void makePalette(int theme, bool night, Palette* out) {
     out->core = hex(scale(tx, 1.0f, 0.85f));
     out->card = hex(scale(dm, 0.14f, 0));
     out->border = hex(scale(dm, 0.65f, 0));
-    const uint32_t base = scale(dm, 0.10f, 0);   // the panel: the theme's dim at 10 %, a touch lighter on top, darker below
-    for (int y = 0; y < H; ++y) {
-        const float f = (float)y / (H - 1);
-        out->bg[y] = hex(scale(scale(base, 1.0f, 0.035f * (1 - f)), 1.0f - 0.25f * f, 0));
-    }
 }
 }  // namespace cockpit

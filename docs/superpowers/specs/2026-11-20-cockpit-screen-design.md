@@ -49,10 +49,12 @@ Drive), and the trip and range, which stay. Alerts never show without the link.
 
 ## Colours
 
-Like Ride: the deck's theme is the yellow deck's INSIDE light swatch (`karaoke::themeLight()`) with day or night
-(`theme::isNightActive()`); every theme wears its night palette, pink excepted by day (`sukiride::nightLook`). The panel is
-the theme's DIM at 10 % fading to 25 % darker at the bottom; cards a little lighter than the panel with a 65 % DIM edge;
-unlit segments, capsules and pills 25 % DIM. A new colour repaints the whole screen.
+The yellow deck's, exactly (2026-11-20; at first Cockpit had Ride's tinted panel): `termpal::rgb(role, theme, true)`, the
+theme's night palette at any hour, which is what the yellow deck's `pal()` draws, on `termpal`'s BG, pure black. The theme is
+the yellow deck's INSIDE light swatch (`karaoke::themeLight()`), so the two decks show the same colour in the same tone: pink
+is termpal's `FF0040` family here, not Ride's pinker `FF3CA0`, and day or night makes no difference. Unlit segments,
+capsules and pills are DIM at 25 %, a card's fill is DIM at 14 % and its edge DIM at 65 %, the tach's bright band and a
+capsule's core line are TEXT lifted toward white. A new colour repaints the whole screen.
 
 ## Code
 

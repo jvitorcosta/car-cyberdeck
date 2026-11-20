@@ -571,7 +571,7 @@ void loop() {
             if (sc == drivedash::Screen::Cockpit && ui::cockpitReady(s_tft)) {   // no film art: any build has it
                 int codes = -1;
                 const bool lamp = gauges::lamp(&codes);
-                ui::drawCockpit(s_tft, gauges::live(), codes, lamp, millis(), karaoke::themeLight(), theme::isNightActive(), all);
+                ui::drawCockpit(s_tft, gauges::live(), codes, lamp, millis(), karaoke::themeLight(), all);
             } else if (sc == drivedash::Screen::Drive && ui::driveReady(s_tft)) ui::drawDrive(s_tft, gauges::live(), millis(), all);
             else if (sc == drivedash::Screen::Trip && ui::tripReady(s_tft)) ui::drawTrip(s_tft, gauges::live(), all);
             else if (sc == drivedash::Screen::Ride && ui::rideReady())   // the film's art is in the app
