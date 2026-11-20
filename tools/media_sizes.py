@@ -31,6 +31,23 @@ HEADS = {"montage.bin": MONTAGE_EMPTY, "intro.bin": MONTAGE_EMPTY, "max.bin": MO
          "idle.bin": b"IDL1", "backdrop.bin": b"BKD1", "shadow.bin": b"SHR1"}
 
 
+RIDE_MAGIC = b"SKR"   # sukiride.bin's header, "SKR<version>" (tools/gen_suki_ride.py)
+
+
+def ride_art_problem(path):
+    """Why the Ride art at `path` would not show on the deck ("" when it is real art). A zero-filled
+    stand-in (placeholders(), or a worktree's copy) links fine and boots, but the Ride screen then
+    falls back to the Suki film monitor: tools/media_upload.py refuses a firmware upload with it."""
+    if not os.path.isfile(path):
+        return "%s is missing" % path
+    with open(path, "rb") as f:
+        head = f.read(4)
+    if not head.startswith(RIDE_MAGIC):
+        return "%s is a stand-in (no %r header): the Ride screen would show the Suki monitor" % (
+            path, RIDE_MAGIC.decode())
+    return ""
+
+
 def record():
     with open(SIZES, "w", encoding="utf-8", newline="\n") as f:
         f.write("# Real sizes of the git-ignored media (tools/media_sizes.py record)\n")
