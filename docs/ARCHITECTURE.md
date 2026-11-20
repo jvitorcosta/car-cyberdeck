@@ -326,6 +326,11 @@ starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
 - `ui/tripview`: the HUD's Trip ticker, the third GAUGES screen, in the green VT323 terminal look:
   six cells from the trip and the fuel book. A PSRAM frame sprite, a cell pushed when its text
   changes. The text is `util/car/tripticker` (host-tested).
+- `ui/cockpitview`: the fifth GAUGES screen, Cockpit (the full-height Split Cockpit): the speed in 112 px
+  seven-segment cells, KM/H and RPM, a 16-capsule tach with a 0-7 scale, trip and range, and five cards (COOL,
+  BATT, KM/L, PEDAL, LOAD) with pill bars, in VT323 and the Ride screen's colours. No film art, so any build has it.
+  A 320 x 240 PSRAM frame sprite, a region pushed when its key changed. The layout, text, palette and keys are
+  `util/car/cockpit` (host-tested); the check-engine pill reads `gauges::lamp()`.
 - `car/gauges` also keeps the trip and the fuel book: the trip time, and the litres charged to the
   book (NVS `car`/`fuel`) every 30 s by `util/car/tripbook` (host-tested), from the UI loop.
 - `net/remote`: `GET /obd` (the values as one JSON line, for another deck), `GET /gauges?on=1|0`

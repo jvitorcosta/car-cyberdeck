@@ -205,6 +205,19 @@ float price() {
     return s_book.pricePerL;
 }
 
+bool lamp(int* storedCodes) {
+    if (storedCodes) *storedCodes = -1;
+#ifdef OBD_LINK
+    if (s_demo.load()) return false;
+    obdlink::View snap;
+    obdlink::snapshot(snap);
+    if (storedCodes) *storedCodes = snap.stored;
+    return snap.link == obdplan::Link::Live && snap.mil;
+#else
+    return false;
+#endif
+}
+
 obdwire::Live live() {
     if (s_demo.load()) return demoLive(millis() - s_demoAt.load());
 #ifdef OBD_LINK

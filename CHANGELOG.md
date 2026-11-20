@@ -6,6 +6,12 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Added:** a fifth gauge screen, Cockpit, built for reading at a glance: no header row, the speed 112 px tall,
+  the RPM and a tach with a 0-7 scale, trip and range, and five cards (coolant, battery, km/l, pedal, load) in a
+  larger terminal type, each with a bar whose danger part turns red. A hot engine or a weak battery turns its
+  card solid red; a red CHK pill shows the check-engine lamp (the deck already read it, nothing showed it);
+  NO LINK / KEY ON show when the adapter is lost or the engine is off. It takes the deck's colours and needs no
+  art file. Pick COCKPIT on the phone page while parked.
 - **Added:** live car gauges, CITY DATALINK. The black deck reads the car through the Vgate OBD
   adapter over Bluetooth and, while the phone page's GAUGES switch is on, shows the RPM as a rising
   ramp of blocks with a peak marker and a blinking SHIFT, the speed in big segment digits, throttle

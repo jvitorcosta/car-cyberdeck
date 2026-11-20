@@ -11,8 +11,8 @@ namespace drivedash {
 // Drive: this dash; Trip: the Trip ticker (util/car/tripticker, ui/tripview); Ride: the Suki drive
 // screen R1.1 (util/car/sukiride, ui/sukirideview: the film art recoloured, the girl animated). Kept in
 // NVS ("hud" / "screen") as the number.
-enum class Screen : uint8_t { Suki = 0, Drive = 1, Trip = 2, Ride = 3, COUNT };
-const char* name(Screen s);                     // "suki", "drive", "trip", "ride"
+enum class Screen : uint8_t { Suki = 0, Drive = 1, Trip = 2, Ride = 3, Cockpit = 4, COUNT };
+const char* name(Screen s);                     // "suki", "drive", "trip", "ride", "cockpit"
 bool parse(const char* text, Screen* out);      // a name or its number ("drive", "2"); false otherwise
 // Switching screens is for a parked car (the mocks' screen rules): refused over MOVING_KMH. An unknown
 // speed (no link) counts as parked.

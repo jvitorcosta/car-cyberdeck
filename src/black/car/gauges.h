@@ -29,6 +29,9 @@ void tick();
 // the old one; NAN keeps it. Any task: noted here, taken by the next tick(), which charges the old tank
 // first and saves the book.
 void fill(float pricePerL);
+// The check-engine lamp and the stored-code count of the last good 03 read (-1 before one; the lamp
+// counts only with the link). false / -1 in the demo and in a build without the link. Any task.
+bool lamp(int* storedCodes);
 float price();   // the book's R$ per litre, NAN without one. Any task.
 void forgetBook();   // the desk's FILL CLEAR: the fuel book back to empty (no full tank, no price)
 }
