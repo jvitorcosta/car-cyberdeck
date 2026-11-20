@@ -7,6 +7,7 @@
 namespace obdplan {
 constexpr uint32_t SLOW_MS = 2000;     // one slow value per this long; RPM and speed otherwise
 constexpr uint32_t COOLANT_MS = 6000;  // the coolant on its own turn, this often (else it would wait a whole slow round)
+constexpr uint32_t LOAD_MS = 3000;     // the engine load on its own turn: it moves with the pedal and is on screen
 constexpr uint32_t RETRY_MS = 30000;   // a PID the car doesn't support is asked again after this
                                        // (never RPM: its NO DATA means the engine is off)
 constexpr uint32_t HOLD_MS = 5000;     // the gauges stay this long after the link leaves Live
@@ -17,7 +18,7 @@ enum class Link : uint8_t { Off, Connecting, NoEngine, Live };
 
 // The request order. Fast, repeating: RPM, speed, then one of pedal (D, else E), throttle, air
 // (MAF, else MAP) in turn, the air twice a round (pedal, air, throttle, air: the trip's fuel needs it); the coolant every
-// COOLANT_MS; one slow value (battery, fuel, intake, ethanol, load, fuel
+// COOLANT_MS, the load every LOAD_MS; one slow value (battery, fuel, intake, ethanol, fuel
 // system, short and long fuel trim, module voltage, code count / lamp status) every SLOW_MS. What the car's scan says it lacks is never asked (the adapter's battery
 // always is); before setSupported() everything counts as supported.
 class Plan {
@@ -42,17 +43,17 @@ private:
     bool started_ = false, crank_ = false, batteryNext_ = false, codesFirst_ = false, codesRead_ = false;
     uint32_t codesAt_ = 0;
     uint8_t slowNext_ = 0, fastStep_ = 0, fastExtra_ = 0, crankN_ = 0;
-    bool coolantAsked_ = false;
-    uint32_t coolantAt_ = 0;
+    bool coolantAsked_ = false, loadAsked_ = false;
+    uint32_t coolantAt_ = 0, loadAt_ = 0;
     uint32_t lastSlowMs_ = 0;
     uint32_t supported_[4] = {0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
     bool noData_[(int)obd::Pid::COUNT] = {};
     uint32_t noDataAt_[(int)obd::Pid::COUNT] = {};
 };
 
-constexpr uint32_t STALE_FAST_MS = 3000, STALE_SLOW_MS = 45000, STALE_COOLANT_MS = 20000;
+constexpr uint32_t STALE_FAST_MS = 3000, STALE_SLOW_MS = 45000, STALE_COOLANT_MS = 20000, STALE_LOAD_MS = 9000;
 // How old a reading may be before it's drawn as stale: STALE_FAST_MS for the fast set (RPM, speed,
-// pedal, throttle, MAF/MAP), STALE_COOLANT_MS for the coolant (read every COOLANT_MS: three reads may fail before it
+// pedal, throttle, MAF/MAP), STALE_LOAD_MS for the load (read every LOAD_MS: two reads may fail before it blanks), STALE_COOLANT_MS for the coolant (read every COOLANT_MS: three reads may fail before it
 // blanks), STALE_SLOW_MS for the slow ones (read only every ~20 s: a stalled ask or a trouble-code read fits in the slack).
 uint32_t staleAfterMs(obd::Pid p);
 // Warnings, drawn inverted: battery under 12.0 V with the engine running (Honda smart charging idles

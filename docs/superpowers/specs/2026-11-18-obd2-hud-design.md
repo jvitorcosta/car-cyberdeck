@@ -323,5 +323,5 @@ the simulated drive: SEARCH, KEY ON with dashes, then LIVE with values (`tools/d
 ## Later
 
 - Phase 2: GAUGES on the yellow deck's Menu and pad, after a heap check there.
-- Load as a fast value, if 22 s feels slow on the screen.
+- Load as a fast value, if 22 s feels slow on the screen. (Done 2026-11-20 as its own 3 s turn.)
 - The 3rd deck (JC4827W543, 480x272): the same `gaugehud`, a wider layout.

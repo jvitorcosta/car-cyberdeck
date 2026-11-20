@@ -3,8 +3,9 @@
 namespace obdplan {
 namespace {
 using obd::Pid;
-// Coolant is not here: it has its own, quicker turn (COOLANT_MS), being the one slow reading that can matter in a hurry.
-constexpr Pid SLOW[] = {Pid::Battery, Pid::Fuel, Pid::Intake, Pid::Ethanol, Pid::Load,
+// Coolant and load are not here: each has its own, quicker turn (COOLANT_MS, LOAD_MS). The coolant is the slow reading
+// that can matter in a hurry; the load moves with every press of the pedal and sits on the Cockpit screen.
+constexpr Pid SLOW[] = {Pid::Battery, Pid::Fuel, Pid::Intake, Pid::Ethanol,
                         Pid::FuelSys, Pid::TrimS, Pid::TrimL, Pid::ModuleV, Pid::Status};
 constexpr int SLOW_N = (int)(sizeof SLOW / sizeof SLOW[0]);
 // The mode 01 PID byte per Pid (0: the adapter's own reading, ATRV). Order matches obd::Pid.
@@ -68,6 +69,12 @@ Pid Plan::next(uint32_t nowMs) {
             return c;
         }
     }
+    // the load's turn, every LOAD_MS (after the coolant's, when both are due: the next request takes it)
+    if (!blocked(Pid::Load, nowMs) && (!loadAsked_ || nowMs - loadAt_ >= LOAD_MS)) {
+        loadAsked_ = true;
+        loadAt_ = nowMs;
+        return Pid::Load;
+    }
     if (!started_ || nowMs - lastSlowMs_ >= SLOW_MS) {   // a slow value's turn
         started_ = true;
         lastSlowMs_ = nowMs;
@@ -126,7 +133,8 @@ bool Hold::update(bool live, uint32_t nowMs) {
 
 uint32_t staleAfterMs(Pid p) {
     if (isFast(p)) return STALE_FAST_MS;
-    return p == Pid::Coolant || p == Pid::CoolantX ? STALE_COOLANT_MS : STALE_SLOW_MS;
+    if (p == Pid::Coolant || p == Pid::CoolantX) return STALE_COOLANT_MS;
+    return p == Pid::Load ? STALE_LOAD_MS : STALE_SLOW_MS;
 }
 
 bool batteryWarn(float volts, bool engineRunning) { return volts < (engineRunning ? 12.0f : 12.2f); }
