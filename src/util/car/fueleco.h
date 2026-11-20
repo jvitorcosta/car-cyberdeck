@@ -21,14 +21,16 @@ bool fuelCut(float pedalPct, float throttlePct, float rpm, float speedKmh, float
 class Trip {
 public:
     // One step at nowMs: speed km/h, air g/s (NAN = unknown), fuelCut (no fuel burnt), the
-    // blend's ethanol %. Steps longer than MAX_STEP_MS count as MAX_STEP_MS (a Bluetooth stall).
+    // blend's ethanol %. Steps longer than MAX_STEP_MS count as MAX_STEP_MS (a Bluetooth stall); the air flow
+    // is read every 1-3 s, and every second of the gap between two readings burns fuel and covers road, so a normal gap
+    // must never be cut.
     void step(uint32_t nowMs, float speedKmh, float airGs, bool fuelCut, float ethanolPct);
     float nowKmL() const { return now_; }   // smoothed; NAN below MIN_KMH or without air; 99.9 cap
     float avgKmL() const;                   // NAN until some fuel has been counted
     float kmLeft(float fuelPct, const Car& c) const;   // NAN under MIN_KM or without a fuel level
     float km() const { return km_; }
     float litres() const { return litres_; }   // burnt so far: what the fuel book is charged at trip end
-    static constexpr uint32_t MAX_STEP_MS = 2000;
+    static constexpr uint32_t MAX_STEP_MS = 5000;
     static constexpr float MIN_KMH = 3.0f, MIN_KM = 2.0f, CAP = 99.9f, SMOOTH_S = 1.5f;
 private:
     bool started_ = false;

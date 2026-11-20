@@ -73,7 +73,7 @@ The ones on the screen, all mode 01 plus the adapter's own voltage:
 | RPM | 010C | | fast (every ~3rd request) |
 | Speed | 010D | | fast |
 | Throttle | 0111 | | fast extra (1 in 3 with pedal, air) |
-| Coolant | 0105, else 0167 | the City has only 67 | slow (~every 22 s) |
+| Coolant | 0105, else 0167 | the City has only 67 | its own turn, every 6 s (it was slow, ~every 22 s, until 2026-11-20) |
 | Intake air | 010F, else 0168 | only 68 | slow |
 | Engine load | 0104 | | slow |
 | Battery | ATRV | Honda smart charging idles 12.3-12.8 V | every 4 s with the engine on |

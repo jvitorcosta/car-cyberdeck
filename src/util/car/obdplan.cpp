@@ -3,7 +3,8 @@
 namespace obdplan {
 namespace {
 using obd::Pid;
-constexpr Pid SLOW[] = {Pid::Coolant, Pid::Battery, Pid::Fuel, Pid::Intake, Pid::Ethanol, Pid::Load,
+// Coolant is not here: it has its own, quicker turn (COOLANT_MS), being the one slow reading that can matter in a hurry.
+constexpr Pid SLOW[] = {Pid::Battery, Pid::Fuel, Pid::Intake, Pid::Ethanol, Pid::Load,
                         Pid::FuelSys, Pid::TrimS, Pid::TrimL, Pid::ModuleV, Pid::Status};
 constexpr int SLOW_N = (int)(sizeof SLOW / sizeof SLOW[0]);
 // The mode 01 PID byte per Pid (0: the adapter's own reading, ATRV). Order matches obd::Pid.
@@ -35,14 +36,16 @@ void Plan::codesDone(uint32_t nowMs) {
     codesAt_ = nowMs;
 }
 
+// Pedal, air, throttle, air: the air flow feeds the trip's fuel (fueleco::Trip counts a step as long as the gap
+// between two air readings), so it is asked twice per round, the pedal and the throttle once.
 Pid Plan::fastExtra(uint32_t nowMs) {
-    for (int j = 0; j < 3; ++j) {
-        const int which = (fastExtra_ + j) % 3;
+    for (int j = 0; j < 4; ++j) {
+        const int which = (fastExtra_ + j) % 4;
         Pid p = Pid::Throttle;
         if (which == 0) p = blocked(Pid::PedalD, nowMs) ? Pid::PedalE : Pid::PedalD;
-        else if (which == 2) p = blocked(Pid::Maf, nowMs) ? Pid::Map : Pid::Maf;
+        else if (which != 2) p = blocked(Pid::Maf, nowMs) ? Pid::Map : Pid::Maf;
         if (!blocked(p, nowMs)) {
-            fastExtra_ = (uint8_t)((which + 1) % 3);
+            fastExtra_ = (uint8_t)((which + 1) % 4);
             return p;
         }
     }
@@ -55,13 +58,22 @@ Pid Plan::next(uint32_t nowMs) {
         batteryNext_ = false;
         return Pid::Battery;
     }
+    // the coolant's turn, every COOLANT_MS (the City has it only as the extended 67): an overheating engine must not
+    // wait a whole slow round, and its reading is allowed to go stale sooner (STALE_COOLANT_MS)
+    {
+        const Pid c = blocked(Pid::Coolant, nowMs) ? Pid::CoolantX : Pid::Coolant;
+        if (!blocked(c, nowMs) && (!coolantAsked_ || nowMs - coolantAt_ >= COOLANT_MS)) {
+            coolantAsked_ = true;
+            coolantAt_ = nowMs;
+            return c;
+        }
+    }
     if (!started_ || nowMs - lastSlowMs_ >= SLOW_MS) {   // a slow value's turn
         started_ = true;
         lastSlowMs_ = nowMs;
         for (int k = 0; k < SLOW_N; ++k) {
             obd::Pid p = SLOW[(slowNext_ + k) % SLOW_N];
-            // no standard coolant / intake (the City): their extended readings (67 / 68) instead
-            if (p == Pid::Coolant && blocked(p, nowMs)) p = Pid::CoolantX;
+            // no standard intake (the City): its extended reading (68) instead
             if (p == Pid::Intake && blocked(p, nowMs)) p = Pid::IntakeX;
             if (!blocked(p, nowMs)) {
                 slowNext_ = (uint8_t)((slowNext_ + k + 1) % SLOW_N);
@@ -79,6 +91,7 @@ Pid Plan::next(uint32_t nowMs) {
 }
 
 void Plan::done(obd::Pid p, obd::Reply r, uint32_t nowMs) {
+    if (r == obd::Reply::NoData && p == obd::Pid::Coolant) coolantAsked_ = false;   // no 05 (the City): the 67 goes next, not in 6 s
     if (r == obd::Reply::NoData && p != obd::Pid::Rpm) {   // RPM's NO DATA: engine off, ask again
         noData_[(int)p] = true;
         noDataAt_[(int)p] = nowMs;
@@ -111,7 +124,10 @@ bool Hold::update(bool live, uint32_t nowMs) {
 }
 
 
-uint32_t staleAfterMs(Pid p) { return isFast(p) ? STALE_FAST_MS : STALE_SLOW_MS; }
+uint32_t staleAfterMs(Pid p) {
+    if (isFast(p)) return STALE_FAST_MS;
+    return p == Pid::Coolant || p == Pid::CoolantX ? STALE_COOLANT_MS : STALE_SLOW_MS;
+}
 
 bool batteryWarn(float volts, bool engineRunning) { return volts < (engineRunning ? 12.0f : 12.2f); }
 bool coolantWarn(float c) { return c > 105.0f; }

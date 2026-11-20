@@ -32,14 +32,17 @@ Plan for **4-8 requests per second** on the Vgate over BLE until measured. A clo
 
 - Requests are strictly sequential: one in flight, read to `>`, then the next (ELM rule: a byte
   sent mid-reply aborts it with `STOPPED`).
-- **Fast set**, round-robin: RPM, speed, then one extra in turn (pedal D/E, throttle, MAF/MAP).
-  So at N req/s, RPM and speed each refresh at ~N/3 Hz (≈ 2 Hz at 6 req/s).
-- **Slow set**: one slow value every `SLOW_MS` = 2 s (coolant 67, battery, fuel, intake 68,
-  ethanol, load, fuel system, trims, module voltage, status). 11 slots → each ≈ every 22 s.
+- **Fast set**, round-robin: RPM, speed, then one extra in turn: pedal D/E, MAF/MAP, throttle, MAF/MAP. The air is
+  asked twice a round because `fueleco::Trip` counts the time between two air readings as burnt fuel and road
+  covered (gaps up to `MAX_STEP_MS` = 5 s count whole). So at N req/s, RPM and speed each refresh at ~N/3 Hz
+  (≈ 2 Hz at 6 req/s) and the air about every 6 requests (2 s at 250 ms a request; host model, 2026-11-20).
+- **Coolant** (67 on the City) has its own turn every `COOLANT_MS` = 6 s, drawn stale after 20 s.
+- **Slow set**: one slow value every `SLOW_MS` = 2 s (battery, fuel, intake 68, ethanol, load, fuel system,
+  trims, module voltage, status). 10 slots → each ≈ every 20 s.
 - Battery (`ATRV`) also every 4 s with the engine running; 9 in 10 requests while cranking.
 - Codes (03 + 07): once after the first live reply, then every 5 min.
 - Unsupported PIDs (from the 0100.. scan) are never asked; a `NO DATA` backs off 30 s.
-- Staleness: fast values are drawn stale after 3 s, slow ones after 30 s (`staleAfterMs`).
+- Staleness: fast values are drawn stale after 3 s, the coolant after 20 s, the other slow ones after 45 s (`staleAfterMs`).
 
 ## Ways to go faster (each one is a gate change with tests, and a car test)
 

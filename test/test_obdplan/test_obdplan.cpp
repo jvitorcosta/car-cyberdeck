@@ -23,19 +23,73 @@ static void allBut(uint32_t bits[4], std::initializer_list<uint8_t> off) {
 void test_fast_pair_every_cycle_slow_ones_in_turn() {
     obdplan::Plan plan;
     uint32_t t = 1000;
-    int slow = 0, fast = 0;
+    int slow = 0, fast = 0, coolant = 0;
     bool seen[(int)Pid::COUNT] = {};
-    for (int i = 0; i < 600; ++i, t += 100) {            // 60 s of 100 ms requests (11 slow values)
+    for (int i = 0; i < 600; ++i, t += 100) {            // 60 s of 100 ms requests (10 slow values)
         const Pid p = plan.next(t);
         seen[(int)p] = true;
-        (isFast(p) ? fast : slow)++;
+        if (p == Pid::Coolant) ++coolant;
+        else (isFast(p) ? fast : slow)++;
         plan.done(p, Reply::Ok, t);
     }
     TEST_ASSERT_INT_WITHIN(2, 30, slow);                 // one slow request per SLOW_MS
-    TEST_ASSERT_EQUAL_INT(600 - slow, fast);
+    TEST_ASSERT_INT_WITHIN(1, 10, coolant);              // and the coolant on its own turn, every COOLANT_MS
+    TEST_ASSERT_EQUAL_INT(600 - slow - coolant, fast);
     for (int i = 0; i < (int)Pid::COUNT; ++i)              // all of them, in turn; the fallbacks
         if ((Pid)i != Pid::PedalE && (Pid)i != Pid::Map && (Pid)i != Pid::CoolantX && (Pid)i != Pid::IntakeX)  // fallbacks
             TEST_ASSERT_TRUE(seen[i]);
+}
+
+// The coolant is the slow reading that can matter in a hurry: it must not wait a slow round.
+void test_the_coolant_is_asked_often_and_never_goes_stale_between_reads() {
+    for (uint32_t gapMs : {80u, 170u, 250u}) {           // 12, 6 and 4 requests a second
+        obdplan::Plan plan;
+        uint32_t last = 0, worst = 0;
+        bool any = false;
+        for (uint32_t t = 0; t < 120000; t += gapMs) {
+            const Pid p = plan.next(t);
+            if (p == Pid::Coolant) {
+                if (any && t - last > worst) worst = t - last;
+                last = t;
+                any = true;
+            }
+            plan.done(p, Reply::Ok, t);
+        }
+        TEST_ASSERT_TRUE(any);
+        TEST_ASSERT_LESS_OR_EQUAL_UINT32(obdplan::COOLANT_MS + gapMs, worst);   // one round of requests at most late
+        TEST_ASSERT_LESS_THAN_UINT32(obdplan::STALE_COOLANT_MS / 3, worst);      // two lost reads still leave it fresh
+    }
+}
+
+// Before the scan, a car without PID 05 answers NO DATA: the extended coolant (67) must follow at once.
+void test_coolant_falls_back_to_the_extended_one_at_once() {
+    obdplan::Plan plan;
+    const Pid first = plan.next(1000);
+    TEST_ASSERT_EQUAL_INT((int)Pid::Coolant, (int)first);
+    plan.done(first, Reply::NoData, 1000);
+    TEST_ASSERT_EQUAL_INT((int)Pid::CoolantX, (int)plan.next(1100));   // not 6 s later
+}
+
+// The trip's fuel counts the time between two air readings: they must stay close.
+void test_the_air_is_asked_twice_a_round_and_never_far_apart() {
+    for (uint32_t gapMs : {120u, 170u, 250u, 300u}) {
+        obdplan::Plan plan;
+        uint32_t last = 0, worst = 0;
+        int n = 0;
+        uint32_t batteryAt = 0;
+        for (uint32_t t = 0; t < 300000; t += gapMs) {
+            Pid p = t - batteryAt >= 4000 ? Pid::Battery : plan.next(t);   // obdlink's own battery turn
+            if (p == Pid::Battery) batteryAt = t;
+            if (p == Pid::Maf) {
+                if (n && t - last > worst) worst = t - last;
+                last = t;
+                ++n;
+            }
+            plan.done(p, Reply::Ok, t);
+        }
+        TEST_ASSERT_TRUE(n > 50);
+        TEST_ASSERT_LESS_THAN_UINT32(3500, worst);   // fueleco::Trip counts a gap up to 5 s, and the plan keeps well under
+    }
 }
 
 void test_rpm_and_speed_at_least_three_a_second() {
@@ -178,8 +232,9 @@ void test_extended_coolant_and_intake_when_the_standard_ones_are_missing() {
 void test_stale_and_warnings() {
     TEST_ASSERT_EQUAL_UINT32(3000, obdplan::staleAfterMs(Pid::Rpm));
     TEST_ASSERT_EQUAL_UINT32(3000, obdplan::staleAfterMs(Pid::PedalE));
-    TEST_ASSERT_EQUAL_UINT32(30000, obdplan::staleAfterMs(Pid::Coolant));
-    TEST_ASSERT_EQUAL_UINT32(30000, obdplan::staleAfterMs(Pid::Battery));
+    TEST_ASSERT_EQUAL_UINT32(20000, obdplan::staleAfterMs(Pid::Coolant));
+    TEST_ASSERT_EQUAL_UINT32(20000, obdplan::staleAfterMs(Pid::CoolantX));
+    TEST_ASSERT_EQUAL_UINT32(45000, obdplan::staleAfterMs(Pid::Battery));
     TEST_ASSERT_FALSE(obdplan::batteryWarn(12.4f, true));   // Honda smart charging idles here
     TEST_ASSERT_TRUE(obdplan::batteryWarn(11.9f, true));
     TEST_ASSERT_FALSE(obdplan::batteryWarn(12.9f, false));
@@ -315,6 +370,9 @@ void test_slow_set_includes_trims_and_status() {
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_fast_pair_every_cycle_slow_ones_in_turn);
+    RUN_TEST(test_the_coolant_is_asked_often_and_never_goes_stale_between_reads);
+    RUN_TEST(test_the_air_is_asked_twice_a_round_and_never_far_apart);
+    RUN_TEST(test_coolant_falls_back_to_the_extended_one_at_once);
     RUN_TEST(test_rpm_and_speed_at_least_three_a_second);
     RUN_TEST(test_pedal_falls_back_to_e_then_nothing);
     RUN_TEST(test_maf_preferred_map_otherwise);

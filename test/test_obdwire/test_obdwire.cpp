@@ -158,8 +158,8 @@ void test_from_readings_takes_fresh_values_only() {
     };
     put(Pid::Rpm, 2000.0f, 500);
     put(Pid::Speed, 50.0f, 4000);      // fast and 4 s old: stale
-    put(Pid::Coolant, 90.0f, 20000);   // slow and 20 s old: fine
-    put(Pid::Intake, 30.0f, 40000);    // slow and 40 s old: stale
+    put(Pid::Coolant, 90.0f, 15000);   // read every 6 s, stale from 20 s: 15 s old is fine
+    put(Pid::Intake, 30.0f, 50000);    // slow (stale from 45 s) and 50 s old: stale
     put(Pid::Throttle, 12.5f, 100);
     put(Pid::Battery, 14.2f, 1000);
     // Load never read
