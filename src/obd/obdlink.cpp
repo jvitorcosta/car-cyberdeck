@@ -15,6 +15,7 @@
 #include "../common/core/watchdog.h"
 #include "../common/net/ota.h"
 #include "../util/car/fueleco.h"
+#include "../util/car/drivelog.h"
 #include "../util/car/obdble.h"
 #include "../util/car/obdpick.h"
 #include "../util/car/obdwire.h"
@@ -355,6 +356,37 @@ bool setup() {
     return true;
 }
 
+#ifdef OBD_DECK
+// The link-up's raw record for the drive log (obd/dlogup): every supported-PID bitmap, 0100 to 01A0,
+// and 01A4, asked once more each, as the car answers them. Read-only mode 01 requests through the
+// same gate (send()), once per link-up: ~7 quick replies (NO DATA is quick too). The first timeout
+// ends it (the rest is marked "(not asked)"), so a silent car costs one ASK_MS plus the late reply's
+// resync, ~4 s, not 7 of them; it may run from the live loop (the late scan), where that gap blanks
+// the fast readings once.
+char s_linkup[1024] = "";                          // under s_lock
+uint32_t s_linkupN = 0;
+
+void linkupProbe() {
+    static const char* const REQS[] = {"0100\r", "0120\r", "0140\r", "0160\r", "0180\r", "01A0\r", "01A4\r"};
+    static char text[sizeof s_linkup];             // static: off the ask task's 6 KB stack
+    text[0] = '\0';
+    char raw[160];
+    bool silent = false;
+    for (const char* r : REQS) {
+        watchdog::feed();
+        const bool got = !silent && ask(r, raw, sizeof raw, ASK_MS);
+        const char* what = got ? raw : silent ? "(not asked)" : "(timeout)";
+        if (!silent) logRaw(r, what);
+        if (!got) silent = true;
+        if (!drivelog::appendRaw(text, sizeof text, r, what)) break;
+    }
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    strlcpy(s_linkup, text, sizeof s_linkup);
+    ++s_linkupN;
+    xSemaphoreGive(s_lock);
+}
+#endif
+
 // The car's supported mode 01 PIDs (0100, 0120, ... while each block says the next exists), logged
 // as one line. False: the car didn't answer the first block.
 bool supportScan(uint32_t bits[4]) {
@@ -371,6 +403,9 @@ bool supportScan(uint32_t bits[4]) {
         }
         if (!(bits[b] & 1u)) break;                // PID b*20h+20h: is there a next block?
     }
+#ifdef OBD_DECK
+    linkupProbe();
+#endif
     static char line[400];                         // static: off the ask task's 6 KB stack
     size_t len = 0;
     for (int pid = 1; pid <= 0x80 && len + 4 < sizeof line; ++pid)
@@ -603,6 +638,20 @@ void snapshot(View& out) {
 
 float fresh(const View& v, Pid p, uint32_t nowMs) {
     return v.have[(int)p] && nowMs - v.atMs[(int)p] < obdplan::staleAfterMs(p) ? v.value[(int)p] : NAN;
+}
+
+uint32_t linkupRaw(char* out, size_t n) {
+    if (n) out[0] = '\0';
+#ifdef OBD_DECK
+    if (!s_lock) return 0;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    const uint32_t k = s_linkupN;
+    if (n) strlcpy(out, s_linkup, n);
+    xSemaphoreGive(s_lock);
+    return k;
+#else
+    return 0;
+#endif
 }
 
 static unsigned left(TaskHandle_t t) { return t ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(t)) : 0u; }

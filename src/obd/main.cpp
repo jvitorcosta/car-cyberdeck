@@ -8,7 +8,10 @@
 // On the hotspot it pins 172.20.10.12 and answers to cardeck-obd.local (common/net/wifi, mDNS).
 // Updates over WiFi (obddeck_ota) with the decks' boot guard and rollback (common/net/ota); the task
 // watchdog watches the loop and every task (common/core/watchdog).
-// Serial: [obd] the link, [car] the trip and a snapshot line every 10 s, [mem] every minute.
+// The drive log (obd/dlogup): a row a second while the car answers, sent in parts to the owner's Google
+// Sheet (an Apps Script web app) over the hotspot, when DLOG_URL / DLOG_KEY are set.
+// Serial: [obd] the link, [car] the trip and a snapshot line every 10 s, [dlog] the drive log's parts,
+// [mem] every minute.
 // Spec: docs/superpowers/specs/2026-10-28-car-health-check-design.md ("Architecture update")
 #include <Arduino.h>
 #include <ESPmDNS.h>
@@ -16,6 +19,7 @@
 #include <cmath>
 #include <cstdlib>
 #include "carstate.h"
+#include "dlogup.h"
 #include "obdlink.h"
 #include "../common/core/watchdog.h"
 #include "../common/net/clock.h"
@@ -111,6 +115,7 @@ void setup() {
     watchdog::begin();  // 90 s, before any task subscribes
     carstate::begin();  // NVS and the trip log, before the link has anything to say
     obdlink::start();
+    dlogup::begin();  // the drive log to the Google Sheet, when DLOG_URL / DLOG_KEY are set
     beginNet();
     enableLoopWDT();  // the core feeds it before each loop()
 }
@@ -125,6 +130,7 @@ void loop() {
         secondAt = now;
         if (net::isOnline()) ota::onGoodPoll();
         carstate::second();
+        dlogup::second();
     }
     // An update writes flash and reboots when done: what the log holds goes out once as it starts,
     // and nothing more until the reboot (or a failed one resumes it).
