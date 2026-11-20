@@ -46,11 +46,6 @@ the moment a monitor opens**
   this, and reopens the port when it re-enumerates. The CYD resets on open by design (fine for a
   boot log).
 
-**Sounds are quiet on the desk**: not a bug. While `HWCDC::isPlugged()` (a PC host on USB) the S3
-plays at a tenth (-20 dB) (#69). A car charger sends no USB frames: full volume. In the car, a USB
-port that is a data host (the head unit) also makes the deck think a PC is there: use a plain
-charger.
-
 **Brownout resets (`Brownout detector was triggered`, reset reason `brownout`)**
 - WiFi TX + backlight + audio peaks on a weak supply: the car's USB port or a thin cable. Use the
   5 V 2 A charger. Not a firmware bug (memory `yellow-heap-guard`).

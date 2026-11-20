@@ -14,23 +14,22 @@ constexpr int NIGHT_LEVEL = 90;     // ~35 %; tune on the panel
 constexpr ledc_mode_t MODE = (ledc_mode_t)(CHANNEL / 8);
 constexpr ledc_channel_t IDF_CHANNEL = (ledc_channel_t)(CHANNEL % 8);
 static int s_level = DAY_LEVEL;
-static bool s_off = false;                // quiet window: dark whatever the level
 static bool s_fades = false;              // ledc_fade_func_install done
 
 void begin() {
     ledcSetup(CHANNEL, FREQ_HZ, BITS);
     ledcAttachPin(PIN_BL, CHANNEL);
-    ledcWrite(CHANNEL, s_off ? 0 : DAY_LEVEL);
+    ledcWrite(CHANNEL, DAY_LEVEL);
 }
 
 void set(bool night) {
     s_level = night ? NIGHT_LEVEL : DAY_LEVEL;
-    ledcWrite(CHANNEL, s_off ? 0 : s_level);
+    ledcWrite(CHANNEL, s_level);
 }
 
 void setLevel(int level) {
     s_level = level < 0 ? 0 : level > DAY_LEVEL ? DAY_LEVEL : level;
-    ledcWrite(CHANNEL, s_off ? 0 : s_level);
+    ledcWrite(CHANNEL, s_level);
 }
 
 bool fadeOut(uint32_t ms) {
@@ -38,11 +37,6 @@ bool fadeOut(uint32_t ms) {
     return s_fades && ledc_set_fade_time_and_start(MODE, IDF_CHANNEL, 0, ms, LEDC_FADE_NO_WAIT) == ESP_OK;
 }
 
-void setOff(bool off) {
-    s_off = off;
-    ledcWrite(CHANNEL, s_off ? 0 : s_level);
-}
-
-void restore() { ledcWrite(CHANNEL, s_off ? 0 : s_level); }
+void restore() { ledcWrite(CHANNEL, s_level); }
 
 }

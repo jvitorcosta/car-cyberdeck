@@ -58,7 +58,6 @@ memory note (João's Claude memory for this project; the name is the note's slug
 | 5 GHz PC vs 2.4 GHz deck | OTA/ping failed on one router's band isolation | flash over USB | memory `home-wifi-band-isolation` |
 | GATT notify/write from two services | wrong pairing on some adapters | pair within one service | 874f2cc |
 | OBD replies from another PID | taken as ours | anchor reply markers | 29273a4 |
-| Car USB port = data host | deck quiet in the car (thinks a PC is there) | plain charger | memory `black-obd-gauges` |
 
 ## Tasks, watchdog, updates
 
