@@ -127,6 +127,7 @@
 #include "../util/wire/musicwire.h"
 #include "../util/yellow/lightstatus.h"
 #include "../util/yellow/padbattery.h"
+#include "../util/yellow/padedges.h"
 #include "../util/yellow/padfeel.h"
 #include "../util/yellow/padflick.h"
 #include "../util/yellow/padguard.h"
@@ -1864,6 +1865,11 @@ static void irTick() {
 // (ps3_parser.c's masks).
 static std::atomic<uint32_t> padHeld{0}, padSeen{0};
 static std::atomic<uint32_t> padReports{0};  // reports since boot: the [pad] rate line
+// Where a press loses time, for the [pad] lines (desk or car, to tune on the hand): the longest wait
+// between two reports since the last rate line (the radio's share), when the newest counted press
+// arrived (its age when the loop acts), and the longest loop pass.
+static std::atomic<uint32_t> padGapMax{0}, padPressAt{0};
+static uint32_t padLoopMax = 0;  // the loop's own
 
 // The guard (util/padguard) decides which presses count: light touches, a set-down's many light
 // presses, the moments the pad is picked up or put down, and a button stuck on all do nothing.
@@ -1920,6 +1926,12 @@ static void onPadReport() {
     r.az = Ps3.data.sensor.accelerometer.z;
     r.now = millis();
     padReports.fetch_add(1);
+    static uint32_t lastReportAt = 0;
+    if (lastReportAt && padArmed.load()) {
+        const uint32_t gap = r.now - lastReportAt;
+        if (gap > padGapMax.load()) padGapMax.store(gap);
+    }
+    lastReportAt = r.now;
     // the guard's last verdicts, to log each change once
     static bool chord = false, resting = false;
     static uint32_t stuck = 0;
@@ -1946,9 +1958,14 @@ static void onPadReport() {
     }
     if (padGuard.stuck() & ~stuck) padStuck.fetch_or(padGuard.stuck() & ~stuck);
     stuck = padGuard.stuck();
+    static uint32_t lastHeld = 0;
+    if (held & ~lastHeld) padPressAt.store(r.now | 1);
+    lastHeld = held;
     padHeld.store(held);
     padSeen.fetch_or(held);
 }
+
+static padedges::Latch padEdges;  // presses waiting for the loop (util/padedges); the loop's alone
 
 static void handlePad() {
     const bool is = Ps3.isConnected();
@@ -1957,6 +1974,7 @@ static void handlePad() {
         Serial.printf("[pad] %s\n", is ? "connected" : "gone");
         setFocus(is ? homeFocus() : -1);
         padArmed.store(false);  // each connection's buttons count from its first clear report
+        padEdges.reset();
         if (!is) {
             padBattery = padbattery::Look{};  // the next controller starts unknown
             padHeld.store(0);  // nothing held while it's gone
@@ -1980,7 +1998,12 @@ static void handlePad() {
     static uint32_t rateAt = 0, rateFrom = 0;
     if (millis() - rateAt >= 10000) {
         const uint32_t now = padReports.load();
-        if (rateAt) Serial.printf("[pad] %u reports/s\n", static_cast<unsigned>((now - rateFrom) * 1000 / (millis() - rateAt)));
+        if (rateAt) {
+            Serial.printf("[pad] %u reports/s, longest wait between two %u ms, longest loop pass %u ms\n",
+                          static_cast<unsigned>((now - rateFrom) * 1000 / (millis() - rateAt)),
+                          static_cast<unsigned>(padGapMax.exchange(0)), static_cast<unsigned>(padLoopMax));
+            padLoopMax = 0;
+        }
         rateAt = millis();
         rateFrom = now;
     }
@@ -2022,67 +2045,89 @@ static void handlePad() {
     lastDx = dx;
     lastDy = dy;
 
-    // buttons act on the press, once; every edge is taken on both screens, so a button held across
-    // a screen change doesn't fire on the next one
-    static bool pA = false, pB = false, pX = false, pY = false, pLB = false, pRB = false;
-    static bool pSt = false, pSe = false, pL2 = false, pR2 = false, pPs = false;
-    auto edge = [](bool now, bool& prev) {
-        const bool down = now && !prev;
-        prev = now;
-        return down;
-    };
-    const bool a = edge(n.cross, pA), b = edge(n.circle, pB), x = edge(n.square, pX), y = edge(n.triangle, pY);
-    const bool lb = edge(n.l1, pLB), rb = edge(n.r1, pRB);
-    const bool start = edge(n.start, pSt), select = edge(n.select, pSe), l2 = edge(n.l2, pL2), r2 = edge(n.r2, pR2);
-    const bool home = edge(n.ps, pPs);
-    // every press in the log, to tell a real press from the deck acting by itself
-    if (a || b || x || y || lb || rb || start || select || l2 || r2 || home) {
+    // Buttons act on the press, once. A press waits in padEdges until the loop has acted on it: one
+    // shortcut goes per pass, and the others used to be thrown away with it (START and X together
+    // lost the X). A screen change drops what still waits, so a button pressed before the change
+    // doesn't act on the next screen.
+    using padguard::Bit;
+    const uint32_t fresh = padEdges.feed(m);
+    const uint32_t wait = padEdges.waiting();
+    auto has = [wait](Bit k) { return (wait & (1u << k)) != 0; };
+    const bool a = has(padguard::CROSS), b = has(padguard::CIRCLE), x = has(padguard::SQUARE), y = has(padguard::TRIANGLE);
+    const bool lb = has(padguard::L1), rb = has(padguard::R1);
+    const bool start = has(padguard::START), select = has(padguard::SELECT), l2 = has(padguard::L2), r2 = has(padguard::R2);
+    const bool home = has(padguard::HOME);
+    // every press in the log, to tell a real press from the deck acting by itself; how long it
+    // waited since its report came in (the radio's and the loop's share together)
+    if (fresh) {
+        auto f = [fresh](Bit k) { return (fresh & (1u << k)) != 0; };
         crashlog::at("pad press");
-        Serial.printf("[pad] press%s%s%s%s%s%s%s%s%s%s%s\n", a ? " cross" : "", b ? " circle" : "", x ? " square" : "",
-                      y ? " triangle" : "", lb ? " L1" : "", rb ? " R1" : "", start ? " START" : "",
-                      select ? " SELECT" : "", l2 ? " L2" : "", r2 ? " R2" : "", home ? " PS" : "");
-        if (l2 || r2) Serial.printf("[pad] trigger pressure L2 %u, R2 %u\n", padL2At.load(), padR2At.load());
+        Serial.printf("[pad] press%s%s%s%s%s%s%s%s%s%s%s\n", f(padguard::CROSS) ? " cross" : "", f(padguard::CIRCLE) ? " circle" : "",
+                      f(padguard::SQUARE) ? " square" : "", f(padguard::TRIANGLE) ? " triangle" : "", f(padguard::L1) ? " L1" : "",
+                      f(padguard::R1) ? " R1" : "", f(padguard::START) ? " START" : "", f(padguard::SELECT) ? " SELECT" : "",
+                      f(padguard::L2) ? " L2" : "", f(padguard::R2) ? " R2" : "", f(padguard::HOME) ? " PS" : "");
+        if (f(padguard::L2) || f(padguard::R2)) Serial.printf("[pad] trigger pressure L2 %u, R2 %u\n", padL2At.load(), padR2At.load());
+        const uint32_t at = padPressAt.load();
+        if (at) Serial.printf("[pad] press age %u ms\n", static_cast<unsigned>(millis() - at));
     }
 
     // the shortcuts, on any screen; one per tick, before the screen's own buttons (a flick doesn't
     // take the tick: a press in the same pass still acts)
     if (const int8_t d = padFlickDir.exchange(0)) padColour(d);
     if (home) {
+        padEdges.drop();
         if (screen != Screen::Menu) show(Screen::Menu);
         return;
     }
     if (start) {
+        padEdges.take(1u << padguard::START);
         padLightsPower();
         return;
     }
     if (l2 || r2) {
+        padEdges.take(1u << padguard::L2 | 1u << padguard::R2);  // two at once: one step, as before
         padPreset(r2 ? 1 : -1);
         return;
     }
     if (select) {
+        padEdges.take(1u << padguard::SELECT);
         setMusic(!musicOn);
         drawMusicItem();
         padFelt(padfeel::Feel::Double, musicOn, false, false);
         return;
     }
     if (y) {
+        padEdges.take(1u << padguard::TRIANGLE);
         padKaraoke();
         return;
     }
     if (lb || rb) {
+        padEdges.take(1u << padguard::L1 | 1u << padguard::R1);
         padLevel(rb ? 1 : -1);
         return;
     }
 
     const Screen was = screen;
     if (a) padPress(focus);
-    if (screen != was) return;  // A changed the screen: the other buttons wait for their next press
+    if (screen != was) {  // A changed the screen: the other buttons wait for their next press
+        padEdges.drop();
+        return;
+    }
+    padEdges.take(1u << padguard::CROSS);
     if (b && screen != Screen::Menu) {
+        padEdges.drop();
         show(Screen::Menu);
         return;
     }
-    if (!onLights()) return;  // the rest is the Lights screen's
-    if (x) padPress(L_TAB0 + (currentTab() + 1) % deckmenu::N_TABS);
+    padEdges.take(1u << padguard::CIRCLE);  // O on the Menu does nothing
+    if (!onLights()) {
+        padEdges.take(1u << padguard::SQUARE);
+        return;  // the rest is the Lights screen's
+    }
+    if (x) {
+        padEdges.take(1u << padguard::SQUARE);
+        padPress(L_TAB0 + (currentTab() + 1) % deckmenu::N_TABS);
+    }
 }
 
 // ---- The black deck: its address, signed asks and the keep-alives ----
@@ -3314,6 +3359,7 @@ static void linkTick() {
 }
 
 void loop() {
+    const uint32_t passAt = millis();
     shotTick();
     // Up bootguard::HEALTHY_MS and online at that moment (ota::onGoodPoll checks the time; with
     // NO_WIFI_UPDATES there's no listener to wait for): this firmware has proven itself, and the
@@ -3442,5 +3488,6 @@ void loop() {
     linkTick();
     updateTheme();  // a backstop: every path above has already called it
     publish();  // for /state and /status
+    if (millis() - passAt > padLoopMax) padLoopMax = millis() - passAt;
     delay(10);
 }

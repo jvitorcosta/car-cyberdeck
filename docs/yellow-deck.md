@@ -496,6 +496,12 @@ The radio prefers Bluetooth over WiFi (`esp_coex_preference_set`): on the defaul
 controller's reports came through ~20 times a second and quick taps went missing; `[pad] 45
 reports/s` every 10 s tells how it's doing.
 
+Every 10 s the line also says the longest wait between two reports and the longest pass of the main loop,
+and each press logs `[pad] press age N ms` (its report to the loop acting on it): a long wait between reports is
+the radio, a long loop pass is the screen or the lights, and a press age near either one says which. A press the loop
+could not act on in its pass (two shortcuts at once) now waits for the next pass instead of being dropped
+(`util/yellow/padedges`).
+
 ## Notes
 
 - At home the deck may join home WiFi instead of the hotspot (the iPhone only shows its hotspot
