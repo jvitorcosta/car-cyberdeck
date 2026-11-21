@@ -6,6 +6,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Changed:** the Cockpit screen has the yellow deck's look: pure black, no filled boxes, hairline rules and thin tick bars in
+  the LED colour, and an alert is a red outline with red type. Its KM/L row is now the trip's average, not the instant
+  reading (the car's own dash shows that one).
 - **Changed:** the engine load is read every 3 s instead of every ~18 s (and shows `--` after 9 s without a reading), so the
   LOAD bar follows the pedal on the Suki, Ride and Cockpit screens. It costs RPM and speed about 8-12 % of their refresh
   (a reading every 0.64 s instead of every 0.60 s at 6 requests a second; 1.08 s instead of 0.96 s at 4).

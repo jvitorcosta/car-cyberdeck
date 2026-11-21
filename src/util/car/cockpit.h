@@ -4,11 +4,13 @@
 #include "obdwire.h"
 // The Cockpit gauge screen (the "Split Cockpit, full height" of the 2026-11 mock rounds): no header row,
 // an 8 px margin, VT323 terminal type. Left: the speed in three big seven-segment cells (112 px tall),
-// KM/H and the RPM number, a 16-capsule tach with a 0-7 scale, trip and range. Right: five cards, COOL,
-// BATT, KM/L, PEDAL, LOAD, each with a 14-pill bar whose danger part turns red; a card is solid red on
-// an alert. A red CHK pill (check-engine lamp) or a NO LINK / KEY ON outline sits over the speed's
-// first cells (CHK is small enough to stay clear of a lit digit). No clock, no LIVE tag, no wordmark. Its colours and its black are the yellow
-// deck's (the INSIDE light swatch's termpal night palette).
+// KM/H and the RPM number, a 16-capsule tach with a 0-7 scale, trip and range. Right, past a hairline
+// divider: five rows, COOL, BATT, KM/L (the trip's average), PEDAL, LOAD, each a label, a value and a thin
+// 14-tick bar whose danger part turns red; on an alert the row gets a red outline and red type, never a
+// fill. A CHK (check-engine lamp) or NO LINK / KEY ON outline sits over the speed's first cells (CHK is
+// small enough to stay clear of a lit digit). No filled boxes anywhere, like the yellow deck: pure black,
+// lines and type in the LED colour. No clock, no LIVE tag, no wordmark. Its colours and its black are the
+// yellow deck's (the INSIDE light swatch's termpal night palette).
 // This is the screen's layout, its text, the palette and the regions the view repaints. PURE,
 // host-tested; black/ui/cockpitview draws it.
 // Spec: docs/superpowers/specs/2026-11-20-cockpit-screen-design.md
@@ -17,6 +19,7 @@ constexpr int W = 320, H = 240, MARGIN = 8;
 
 // ---- geometry (screen pixels) ----
 constexpr int SPD_X = 8, SPD_Y = 8, SPD_CW = 54, SPD_CH = 112, SPD_T = 13, SPD_GAP = 5, SPD_CELLS = 3;
+constexpr int DIVIDER_X = 184;                                              // the hairline between the two sides
 constexpr int PILL_X = 12, PILL_Y = 12, PILL_H = 22;                        // the status pill over the first digit
 constexpr int LINE_BASE = 148;                                              // KM/H, RPM and the number's baseline
 constexpr int KMH_X = 8, RPM_LABEL_X = 86, RPM_RIGHT = 182, RPM_BASE = 150;
@@ -42,7 +45,7 @@ struct Card {
     char val[8] = "--";     // the value with its unit ("88\xB0", "13.9V", "41%", "11.2"); "--" when unknown
     uint8_t lit = 0;        // pills on, 0..PILLS
     uint8_t hot = PILLS;    // the first pill of the danger part (PILLS: none)
-    bool bad = false;       // the alert: the card is solid red
+    bool bad = false;       // the alert: the row is outlined and set in red
 };
 struct Scene {
     bool live = false;
@@ -75,10 +78,10 @@ uint32_t key(const Scene& s, Region r);
 struct Palette {
     uint16_t bg;               // termpal's BG: black
     uint16_t tx, md, dm;       // termpal's TEXT, MID, DIM
-    uint16_t al, onAlert;      // the alert, and the text on it (dark or white: the better contrast)
+    uint16_t al;               // the alert (outline, type, bar)
     uint16_t ghost;            // unlit segments, capsules and pills (DIM at 25 %)
     uint16_t warn, core;       // the tach's bright band, and a capsule's core line (TEXT lifted toward white)
-    uint16_t card, border;     // a card's fill and edge (DIM at 14 % and 65 %)
+    uint16_t border;           // the divider line (DIM at 65 %)
 };
 void makePalette(int theme, Palette* out);
 }  // namespace cockpit
