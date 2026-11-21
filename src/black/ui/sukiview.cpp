@@ -8,6 +8,7 @@
 #include "../../util/car/streetface.h"
 #include "../../util/car/sukihud.h"
 #include "../../util/common/rgb565.h"
+#include "../../util/lights/ledlook.h"
 #include "../core/media.h"
 #include "../core/mem.h"
 MEDIA_DECL(data_suki_bin);
@@ -20,7 +21,8 @@ using rgb565::be;
 using rgb565::rgb;
 
 // big-endian, like the buffer
-constexpr uint16_t PINK = be(rgb(255, 40, 112)), PINK_DIM = be(rgb(70, 10, 34)), RED = be(rgb(236, 16, 24));
+// PINK is the yellow deck's pink (ledlook's pink tile), the same on both decks
+constexpr uint16_t PINK = be(rgb565::hex(ledlook::SWATCHES[ledlook::PINK].screen)), PINK_DIM = be(rgb(70, 10, 34)), RED = be(rgb(236, 16, 24));
 constexpr uint16_t CORE = be(rgb(255, 235, 245)), WAVE_DOT = be(rgb(120, 20, 60));
 constexpr uint16_t TAG = rgb(236, 16, 24), TAG_BG = rgb(14, 0, 6);   // native: drawString
 
