@@ -20,7 +20,8 @@ static obdwire::Live city() {
     l.volts = 13.9f;
     l.throttle = 18;
     l.load = 41;
-    l.kml = 11.2f;
+    l.kml = 11.2f;       // the instant one: not on the screen
+    l.tripKmL = 12.8f;   // the trip average: the KM/L row
     l.tripKm = 14.6f;
     l.rangeKm = 318;
     return l;
@@ -35,7 +36,7 @@ void test_the_values_read_as_text() {
     TEST_ASSERT_EQUAL_STRING("COOL", s.card[COOL].label);
     TEST_ASSERT_EQUAL_STRING("88\xB0", s.card[COOL].val);
     TEST_ASSERT_EQUAL_STRING("13.9V", s.card[BATT].val);
-    TEST_ASSERT_EQUAL_STRING("11.2", s.card[KMPL].val);
+    TEST_ASSERT_EQUAL_STRING("12.8", s.card[KMPL].val);   // the trip average, not the instant 11.2
     TEST_ASSERT_EQUAL_STRING("18%", s.card[PEDAL].val);
     TEST_ASSERT_EQUAL_STRING("41%", s.card[LOAD].val);
     TEST_ASSERT_EQUAL_STRING("14.6", s.trip);
@@ -54,7 +55,7 @@ void test_the_bars_light_and_turn_red_in_their_danger_part() {
     TEST_ASSERT_EQUAL_INT(PILLS, s.card[KMPL].hot);
     TEST_ASSERT_EQUAL_INT(6, s.card[LOAD].lit);   // 41 % of 14
     TEST_ASSERT_EQUAL_INT(10, s.card[BATT].lit);  // (13.9 - 11) / 4 = 0.725 of 14
-    TEST_ASSERT_EQUAL_INT(6, s.card[KMPL].lit);   // 11.2 / 25
+    TEST_ASSERT_EQUAL_INT(7, s.card[KMPL].lit);   // 12.8 / 25 of 14 pills, 7.2
 }
 
 void test_a_card_is_red_on_an_alert_only_with_the_link() {
@@ -101,9 +102,21 @@ void test_a_long_trip_is_capped_and_a_dash_gets_no_unit() {
     TEST_ASSERT_EQUAL_STRING("--", s.card[COOL].val);
 }
 
+void test_the_km_per_l_row_is_the_trip_average_and_stays_without_the_link() {
+    obdwire::Live l = city();
+    l.link = obdplan::Link::Off;
+    Scene s;
+    scene(l, false, false, 0, false, &s);
+    TEST_ASSERT_EQUAL_STRING("12.8", s.card[KMPL].val);   // like the trip, it does not need the link
+    l.tripKmL = NAN;
+    l.kml = 15.0f;   // an instant reading must not stand in for it
+    scene(l, false, false, 0, false, &s);
+    TEST_ASSERT_EQUAL_STRING("--", s.card[KMPL].val);
+}
+
 void test_unknown_numbers_are_dashes() {
     obdwire::Live l = city();
-    l.kml = NAN;
+    l.tripKmL = NAN;
     l.rangeKm = NAN;
     l.tripKm = NAN;
     l.coolC = NAN;
@@ -224,7 +237,7 @@ void test_the_palette_is_the_yellow_decks() {
         TEST_ASSERT_EQUAL_UINT16(rgb565::hex(termpal::rgb(termpal::ALERT, theme, true)), p.al);
         TEST_ASSERT_NOT_EQUAL(p.tx, p.ghost);   // unlit parts are visible but quiet
         TEST_ASSERT_NOT_EQUAL(p.bg, p.ghost);
-        TEST_ASSERT_NOT_EQUAL(p.bg, p.card);    // a card shows against the black
+        TEST_ASSERT_NOT_EQUAL(p.bg, p.border);  // the divider shows against the black
         TEST_ASSERT_NOT_EQUAL(p.al, p.tx);
     }
     makePalette(2, &p);   // pink: the yellow deck's pink, not Ride's pinker one
@@ -267,6 +280,7 @@ int main() {
     RUN_TEST(test_a_card_is_red_on_an_alert_only_with_the_link);
     RUN_TEST(test_without_the_link_the_values_are_dashes_but_the_battery_and_trip_stay);
     RUN_TEST(test_a_long_trip_is_capped_and_a_dash_gets_no_unit);
+    RUN_TEST(test_the_km_per_l_row_is_the_trip_average_and_stays_without_the_link);
     RUN_TEST(test_unknown_numbers_are_dashes);
     RUN_TEST(test_the_check_engine_pill);
     RUN_TEST(test_the_tach_and_its_zones);

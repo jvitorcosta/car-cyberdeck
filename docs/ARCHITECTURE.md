@@ -328,7 +328,8 @@ starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
   changes. The text is `util/car/tripticker` (host-tested).
 - `ui/cockpitview`: the fifth GAUGES screen, Cockpit (the full-height Split Cockpit): the speed in 112 px
   seven-segment cells, KM/H and RPM, a 16-capsule tach with a 0-7 scale, trip and range, and five cards (COOL,
-  BATT, KM/L, PEDAL, LOAD) with pill bars, in VT323 and the Ride screen's colours. No film art, so any build has it.
+  BATT, KM/L as the trip's average, PEDAL, LOAD) as hairline-ruled rows with tick bars (no filled boxes), in VT323 and
+  the yellow deck's colours on its pure black. No film art, so any build has it.
   A 320 x 240 PSRAM frame sprite, a region pushed when its key changed. The layout, text, palette and keys are
   `util/car/cockpit` (host-tested); the check-engine pill reads `gauges::lamp()`.
 - `car/gauges` also keeps the trip and the fuel book: the trip time, and the litres charged to the

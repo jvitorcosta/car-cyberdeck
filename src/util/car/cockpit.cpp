@@ -77,7 +77,8 @@ void scene(const obdwire::Live& l, bool coolBad, bool battBad, int storedCodes, 
     // COOL, BATT, KM/L, PEDAL, LOAD. The battery is the adapter's own reading: shown with or without the link.
     fill(&s.card[COOL], "COOL", live ? l.coolC : nan, 0, "\xB0", sukiride::coolFrac(live ? l.coolC : nan), 0.64f, live && coolBad);
     fill(&s.card[BATT], "BATT", l.volts, 1, "V", sukiride::battFrac(l.volts), -1.0f, live && battBad);
-    fill(&s.card[KMPL], "KM/L", live ? l.kml : nan, 1, "", clamp01((live ? l.kml : nan) / 25.0f), -1.0f, false);
+    // KM/L is the trip's average, not the instant one (the car's own dash shows that); like the trip, it stays without the link
+    fill(&s.card[KMPL], "KM/L", l.tripKmL, 1, "", clamp01(l.tripKmL / 25.0f), -1.0f, false);
     fill(&s.card[PEDAL], "PEDAL", live ? l.throttle : nan, 0, "%", sukiride::pedalFrac(live ? l.throttle : nan), 0.85f, false);
     fill(&s.card[LOAD], "LOAD", live ? l.load : nan, 0, "%", clamp01((live ? l.load : nan) / 100.0f), 0.85f, false);
     gaugehud::text(std::isfinite(l.tripKm) ? std::fmin(l.tripKm, 999.9f) : l.tripKm, 1, s.trip, sizeof s.trip);   // stays shown without the link; 999.9 at most
@@ -139,14 +140,6 @@ uint32_t scale(uint32_t c, float k, float toWhite) {   // x k toward black, then
     };
     return ch(16) | ch(8) | ch(0);
 }
-double lum(uint32_t c) {
-    auto ch = [](double v) { v /= 255.0; return v <= 0.03928 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); };
-    return 0.2126 * ch((c >> 16) & 255) + 0.7152 * ch((c >> 8) & 255) + 0.0722 * ch(c & 255);
-}
-double contrast(uint32_t a, uint32_t b) {
-    const double x = lum(a), y = lum(b);
-    return (std::fmax(x, y) + 0.05) / (std::fmin(x, y) + 0.05);
-}
 }  // namespace
 
 void makePalette(int theme, Palette* out) {
@@ -161,11 +154,9 @@ void makePalette(int theme, Palette* out) {
     out->md = hex(md);
     out->dm = hex(dm);
     out->al = hex(al);
-    out->onAlert = hex(contrast(0x0D0008, al) >= contrast(0xFFFFFF, al) ? 0x0D0008 : 0xFFFFFF);
     out->ghost = hex(scale(dm, 0.25f, 0));
     out->warn = hex(scale(tx, 1.0f, 0.55f));
     out->core = hex(scale(tx, 1.0f, 0.85f));
-    out->card = hex(scale(dm, 0.14f, 0));
     out->border = hex(scale(dm, 0.65f, 0));
 }
 }  // namespace cockpit

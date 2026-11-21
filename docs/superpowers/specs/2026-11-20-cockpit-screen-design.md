@@ -21,9 +21,9 @@ is not read at a glance (clock, LIVE tag, wordmark, gear estimate, intake air).
 
 Left column, x 8..182:
 - **Speed**: three seven-segment cells 54 x 112, stroke 13, gap 5, at y 8, over faint ghost 8s; `---` without a value.
-- **Status pill** at the top left of the speed: solid red `CHK` (check-engine lamp on, or a stored code), small enough to
-  stay clear of a lit digit (the first cell's right-hand segments light from 100 km/h); a red outline `NO LINK` (adapter off
-  or searching) or `KEY ON` (ignition on, engine off), which come with `---` on the speed. Nothing otherwise. The
+- **Status pill** at the top left of the speed, always an alert-coloured outline on black, no fill: `CHK` (check-engine lamp
+  on, or a stored code), small enough to stay clear of a lit digit (the first cell's right-hand segments light from
+  100 km/h); `NO LINK` (adapter off or searching) or `KEY ON` (ignition on, engine off), which come with `---` on the speed. Nothing otherwise. The
   stored-code count is in the scene but not drawn.
 - **KM/H and RPM** labels and the RPM number (VT323 36 px, right-aligned at x 182, baseline 150): normal below 5000, bright
   from 5000, red from 6500.
@@ -31,13 +31,18 @@ Left column, x 8..182:
   capsule, and a 0-7 scale under it (thousands of rpm).
 - **Trip and range**: `TRIP` and `RANGE` labels (dim), values at 36 px, `km` after each. The trip stays shown without the link.
 
-Right column, x 190..312, five cards 122 x 42 at y 8, 54, 99, 145, 190 (pitch 45.5, the last ends on the margin), top to
-bottom **COOL, BATT, KM/L, PEDAL, LOAD**. Each: the label top-left (19 px), the value with its unit top-right (36 px:
-`88\xB0`, `13.9V`, `11.2`, `18%`, `41%`) and a 14-pill bar along the bottom. The bar's scales: COOL 60..130 C, BATT 11..15 V,
-KM/L 0..25, PEDAL and LOAD 0..100 %. The pills from 64 % of the COOL track (105 C) and from 85 % of PEDAL and LOAD are red.
-An alert makes the whole card solid red with dark or white text (whichever reads better): coolant over 105 C (until under
+Right column, x 190..312, past a one-pixel divider at x 184 (the border colour), five rows 122 x 42 at y 8, 54, 99, 145, 190
+(pitch 45.5, the last ends on the margin), top to bottom **COOL, BATT, KM/L, PEDAL, LOAD**. No fill, like the yellow deck:
+the label top-left (19 px), the value with its unit top-right (36 px: `88\xB0`, `13.9V`, `12.8`, `18%`, `41%`), a 14-tick bar
+3 px high along the bottom and a hairline under the row (not the last). The bar's scales: COOL 60..130 C, BATT 11..15 V,
+KM/L 0..25, PEDAL and LOAD 0..100 %. The ticks from 64 % of the COOL track (105 C) and from 85 % of PEDAL and LOAD are red.
+**KM/L is the trip's average** (`tripKmL`), not the instant reading: the car's own dash already shows that. Like the trip
+it stays without the link, and is `--` until there is one.
+An alert outlines the row in red and sets its label, value and lit ticks red (no fill): coolant over 105 C (until under
 100 C) and battery under 12 V for 60 s with the engine running (until 12.2 V), from `drivedash::Alerts` as on Drive and
 Ride. KM/L has no danger part.
+
+RANGE needs a full tank noted in the fuel book and a learnt km/l; without them it reads `--`.
 
 LOAD is the engine load the car reports (OBD PID 04): the share of the engine's maximum airflow in use, about 20-25 %
 idling, 35-55 % cruising, over 85 % under hard acceleration. PEDAL is the throttle / accelerator position.
@@ -49,11 +54,11 @@ Drive), and the trip and range, which stay. Alerts never show without the link.
 
 ## Colours
 
-The yellow deck's, exactly (2026-11-20; at first Cockpit had Ride's tinted panel): `termpal::rgb(role, theme, true)`, the
+The yellow deck's, exactly (2026-11-20; at first Cockpit had Ride's tinted panel, and cards with a fill until the "yellow-deck look" change the same day): `termpal::rgb(role, theme, true)`, the
 theme's night palette at any hour, which is what the yellow deck's `pal()` draws, on `termpal`'s BG, pure black. The theme is
 the yellow deck's INSIDE light swatch (`karaoke::themeLight()`), so the two decks show the same colour in the same tone: pink
 is termpal's `FF0040` family here, not Ride's pinker `FF3CA0`, and day or night makes no difference. Unlit segments,
-capsules and pills are DIM at 25 %, a card's fill is DIM at 14 % and its edge DIM at 65 %, the tach's bright band and a
+capsules and ticks are DIM at 25 %, the divider is DIM at 65 %, the tach's bright band and a
 capsule's core line are TEXT lifted toward white. A new colour repaints the whole screen.
 
 ## Code
