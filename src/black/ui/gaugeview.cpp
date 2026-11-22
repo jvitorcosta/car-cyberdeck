@@ -5,7 +5,7 @@
 #include "../../util/car/gaugehud.h"
 #include "../../util/car/streetface.h"
 #include "../../util/common/rgb565.h"
-#include "../../util/lights/ledlook.h"
+#include "pink.h"
 
 // CITY DATALINK, street look: the RPM ramp in neon, pink 7-segment speed, three chrome pills for the
 // slow values, and the street panel on the right: the navigator (her mood follows the engine), the
@@ -19,8 +19,7 @@ constexpr uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
 constexpr uint16_t BG = rgb(10, 4, 22);
 constexpr uint16_t PANEL = rgb(26, 8, 44);        // the header strip
 constexpr uint16_t LINE = rgb(110, 60, 255);      // frames and dividers (violet)
-// the yellow deck's pink (its Lights page pink tile): one value on both decks
-constexpr uint16_t PINK = rgb565::hex(ledlook::SWATCHES[ledlook::PINK].screen), GHOST_PINK = rgb(52, 8, 36);
+constexpr uint16_t PINK = rgb565::hex(PINK_RGB), GHOST_PINK = rgb(52, 8, 36);
 constexpr uint16_t CYAN = rgb(47, 243, 255), GHOST_CYAN = rgb(8, 40, 48);
 constexpr uint16_t RED = rgb(255, 40, 40), GHOST_RED = rgb(52, 8, 8);
 constexpr uint16_t TEXT = rgb(245, 245, 255);
