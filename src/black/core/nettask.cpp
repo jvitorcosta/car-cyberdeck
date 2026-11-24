@@ -20,6 +20,7 @@
 #include "../../util/black/genrebadge.h"
 #include "../genre/apple.h"
 #include "../car/markpush.h"
+#include "../car/gauges.h"
 #include "../../util/lights/ledlook.h"
 #include "../../util/black/songmood.h"
 #include "../../util/wire/songpalette.h"
@@ -278,7 +279,8 @@ static void run(void*) {
                 net::diagnose(s_st.lastPollCode, s_st.lastPollOkMs ? millis() - s_st.lastPollOkMs : 0);
             }
             const bool wifiUp = net::isOnline();   // one reading for the decision and the log
-            if (s_health.onPoll(ok, wifiUp, starved, now) == netplan::Health::Action::Restart) {
+            if (s_health.onPoll(ok, wifiUp, starved, now,
+                                netplan::holdWifiRestart(gauges::on(), gauges::live().link == obdplan::Link::Live)) == netplan::Health::Action::Restart) {
                 mem::log("restart");
                 Serial.printf("[net] self-heal restart (%s), quietly\n",
                               wifiUp ? "heap starved, no good poll for 180 s" : "WiFi down for 15 min");
