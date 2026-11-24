@@ -37,7 +37,8 @@ Another session executes it after João's OK. Everything was read from `main` = 
 6. [Parallel work vs shared files](#6-parallel-work-vs-shared-files)
 7. [Risks](#7-risks)
 8. [Deliverables](#8-deliverables)
-9. [Open questions for João](#9-open-questions-for-joão)
+9. [Decisions (João, 2026-11-24, defaults)](#9-decisions)
+10. [How the executing session is started](#10-how-the-executing-session-is-started)
 
 ---
 
@@ -134,7 +135,7 @@ and `python tools/media_sizes.py placeholders` done (as CI does).
 
 ### 3.5 Other languages and config
 
-- **Monkey C (`garmin/carlights`):** read `source/`, `manifest.xml`, `monkey.jungle`: secrets handling (`Secrets.mc` git-ignored), HTTP failure paths, memory on the FR255, manifest permissions. Build only if the Connect IQ SDK exists (Q8).
+- **Monkey C (`garmin/carlights`):** read `source/`, `manifest.xml`, `monkey.jungle`: secrets handling (`Secrets.mc` git-ignored), HTTP failure paths, memory on the FR255, manifest permissions. Build only if the Connect IQ SDK exists (section 9, decision 8).
 - **`platformio.ini`** (353 lines): inheritance chain (`common` -> `cyd` -> `ledpanel` -> `ledpanel_probe`; `s3` -> `s3_ota`, `hwcheck_s3`), flags duplicated between envs, comment accuracy, pins (`espressif32@6.9.0`, `TFT_eSPI@2.5.43`, git-pinned `XPT2046_Touchscreen#f956c5d`). `pio project config` per env and diff the resolved flags of `s3` vs `ledpanel`.
 - **Partition CSVs:** script an overlap/alignment check of `partitions_s3.csv` (4 KB alignment, ends <= 16 MB). Verify the `ledpanel` comment's claim (same NVS 0x9000/0x5000 and otadata 0xe000 in `min_spiffs.csv` and `huge_app.csv`) against the files in the pinned platform package.
 - **Markdown/YAML:** link and file-reference check on docs, `actionlint` on `ci.yml`, `.editorconfig` coverage.
@@ -193,7 +194,7 @@ The users are one driver and passengers, day and night, with glances of 1 to 2 s
 - **Network surface.** Table of every listener (`/say`, `/link`, `/status`, `/car`, `/fill` signed, `/obd`, OTA port 3232): auth (`common/net/reqauth`, `util/wire/hmac256`, `sigreq`), replay window, state-changing open endpoints, plain http on the hotspot (documented), which TLS clients still `setInsecure()` and why (a CA bundle exists: `common/net/ca_bundle.inc`).
 - **OTA.** `ota_auth.py`, password handling, SHA-256 check, rollback; what someone on the hotspot can do.
 - **Input handling.** Parsers of outside data (Spotify JSON, LRC, Apple responses, NMEA, ELM327, HTTP heads): length checks, bounded buffers, no `sscanf("%s")`; verify the repo's own rule (cut-off, absurd number, 32-bit wrap test) per parser.
-- **Repo settings.** `SECURITY.md`, `CODEOWNERS`; branch protection and secret scanning are not visible from the repo (Q7).
+- **Repo settings.** `SECURITY.md`, `CODEOWNERS`; branch protection and secret scanning are not visible from the repo (section 9, decision 7).
 - **Evidence:** gitleaks result, listener table, parser table with test status.
 
 ### 3.12 Process, docs and the agent kit
@@ -293,15 +294,24 @@ Later fix PRs split by file ownership: `ledpanel.cpp`, `src/black/ui`, `tools/`,
 3. A metrics baseline table (§4) inside the findings file for the next review to diff against.
 4. A ranked, grouped list of follow-up PRs (not opened).
 
-## 9. Open questions for João
+## 9. Decisions
 
-1. **Phase 5 (on-device):** do you want it, and which decks may be captured passively (S3 on `COM12`, yellow CH340, OBD)? Which firmware runs on each now?
-2. **Depth:** is "read-only plus scratch tools" right, or should the review also propose permanent additions (`.clang-format`, cppcheck/ruff/gitleaks in CI, a RAM-% gate, `.elf`/`.map` CI artefacts)? The plan only proposes them.
-3. **Versioning:** ship `v2.1.0` or later (`[Unreleased]` is large), or is "one release per season" intentional? Should the decks detect version skew with each other?
-4. **Parked work:** skip `feat/voice-agent`, `claude/intro-greetings-8b8b67` and the yellow horn plan (default), or include them in the cleanup classification?
-5. **Docs cleanup:** may the review recommend archiving or deleting obsolete `docs/superpowers/{plans,specs}` (avatar, companion, voice), or are they history to keep?
-6. **Yellow budget:** treat the ~37 KB heap as a hard constraint on every recommendation, including the `ledpanel.cpp` split (default yes)?
-7. **GitHub settings:** can you confirm branch protection, required checks and secret scanning (not visible from the repo)?
-8. **Tools on your PC:** Connect IQ SDK, `gitleaks`, `cppcheck`, `clang-tidy`, the PlatformIO `xtensa-esp32-elf` binutils: install in scratch on demand, or skip the checks that need them?
-9. **UX focus:** driver-safety (what is on screen while moving), visual consistency (black vs yellow convergence), or both equally?
-10. **Cost ceiling:** Phases 2 and 3 are the expensive ones (opus, high effort). Fine, or cap at medium and accept less depth on architecture and UX?
+**Decided by João on 2026-11-24 (defaults).** He answered "OK, usar os padrões" to the ten open questions, so each default below stands.
+This approves the defaults only; it does not start the review.
+
+| # | Question | Decision (default) |
+|---|---|---|
+| 1 | Phase 5, on-device captures? | **Not scheduled.** Phases 0 to 4 and 6 run first. Phase 5 starts only when João asks, naming the decks and ports; until then the findings file marks every runtime metric "not measured" |
+| 2 | Depth: permanent additions? | Read-only plus scratch tools. Permanent additions (`.clang-format`, cppcheck/ruff/gitleaks in CI, RAM-% gate, `.elf`/`.map` artefacts) are **proposals only** |
+| 3 | Versioning | The review reports the drift and evaluates a release workflow and version-skew detection as proposals. **No tag or release is cut** by the review |
+| 4 | Parked work (voice agent, intro-greetings, yellow horn) | **Skipped** (out of scope, section 1) |
+| 5 | Obsolete `docs/superpowers/{plans,specs}` | The review **classifies** them live / historical / obsolete and may recommend archiving. It deletes nothing |
+| 6 | Yellow deck ~37 KB heap | **Hard constraint** on every recommendation, including the `ledpanel.cpp` split |
+| 7 | GitHub settings (branch protection, required checks, secret scanning) | Not visible from the repo: the findings file lists them as **not verified**. João can add them later |
+| 8 | Tools on the PC | Install on demand **in scratch only** with pip/pipx/PlatformIO (ruff, mypy, bandit, vulture, lizard, cppcheck via `pio check`, gcovr). Checks needing a manual install (Connect IQ SDK, gitleaks, clang-tidy, PSScriptAnalyzer) are done if already present, otherwise marked skipped |
+| 9 | UX focus | **Both equally**: driver safety and black-vs-yellow visual consistency |
+| 10 | Cost ceiling | **Keep as planned**: opus, high effort for Phases 2 and 3 |
+
+## 10. How the executing session is started
+
+In a new session on this repo (worktree from `origin/main`), tell it: "Execute `docs/plans/2026-11-24-car-deck-review-plan.md`, Phases 0 to 4 and 6, with the decisions in section 9. Do not run Phase 5." It needs no other context. The chief of staff can start it on João's word.
