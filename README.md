@@ -3,7 +3,7 @@
 # CarDeck
 
 **A wild track appeared!** Two ESP32 screens and a Garmin watch app for the car: Spotify as a
-Gen-3 Pokémon battle, and the car's LED lights by touch, voice, gamepad or watch.
+Gen-3 Pokémon battle, live OBD-II gauges, and the car's LED lights by touch, voice, gamepad or watch.
 
 [![CI](https://github.com/jvitorcosta/car-cyberdeck/actions/workflows/ci.yml/badge.svg)](https://github.com/jvitorcosta/car-cyberdeck/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/tag/jvitorcosta/car-cyberdeck?label=release&sort=semver)](CHANGELOG.md)
@@ -75,6 +75,15 @@ The Pokéface watch face that used to live here moved to
   each song's colour (your picks, colour words, playlist tags, mood and cover) and sends it
   signed over UDP.
 
+- **Live gauges:** the black deck can read the car itself over a Vgate OBD-II adapter (Bluetooth LE).
+  With the phone page's GAUGES switch on (remembered across power cycles) it draws one of five
+  screens in place of the music screens: **Suki**, **Drive**, **Trip**, **Ride** and **Cockpit**
+  (CITY DATALINK, a street-look HUD, is what Suki falls back to without its art file). Pick the screen
+  on the phone page while parked. RPM, speed, pedal, load, coolant, intake and battery, a 0-100 km/h
+  timer, the trip and its fuel cost, and the range, all from live readings. The deck never writes to
+  the car. Details: [Architecture](docs/ARCHITECTURE.md#live-gauges-on-the-black-deck);
+  [CHANGELOG](CHANGELOG.md).
+
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>
 -->
@@ -86,6 +95,7 @@ The Pokéface watch face that used to live here moved to
 | Freenove FNK0104B, ESP32-S3 2.8" | `s3` | The black deck. 8 MB PSRAM, 16 MB flash, ES8311 codec and speaker. |
 | ESP32-2432S028R "Cheap Yellow Display" (CYD) | `ledpanel` | The yellow deck, optional. ESP32, no PSRAM, resistive touch. |
 | Two ELK-family BLE LED controllers (ELK-BLEDDM, MELK-…) | — | The car's inside and outside lights, driven by the yellow deck. |
+| Vgate OBD-II adapter (BLE) | — | Optional: the black deck's live gauges read the car through it. |
 | Garmin Forerunner 255 (also 255M, 255S, 255S Music) | — | The watch app, optional. |
 
 Both decks are 320×240 ILI9341 boards. You also need a USB car charger (5 V, 2 A recommended)
@@ -238,7 +248,7 @@ python -m unittest discover -s tools -p "test_*.py"            # media tool test
 pio run -e s3 -e ledpanel                                       # both decks
 ```
 
-CI builds both decks (`s3`, `ledpanel`) and their hardware checks (`hwcheck_s3`, `hwcheck`),
+CI builds the decks and their hardware checks,
 checks each app's flash budget and the S3's media pack, runs the host tests with ASan/UBSan and
 again as 32-bit, and runs the media tool tests. It doesn't build the watch app. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for setup, test rules and commit style.
