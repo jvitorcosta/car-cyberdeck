@@ -104,6 +104,58 @@ void test_health_two_failures_pause_optional_until_success() {
     h.onPoll(true, true, false, 13000);
     TEST_ASSERT_FALSE(h.optionalPaused());
 }
+void test_health_wifi_down_restarts_after_15_min() {
+    netplan::Health h;
+    h.onPoll(true, true, false, 1000);
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, 2000));
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, 2000 + netplan::Health::WIFI_DOWN_RESTART_MS - 1));
+    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, 2000 + netplan::Health::WIFI_DOWN_RESTART_MS));
+}
+void test_health_hold_skips_the_wifi_down_restart() {
+    netplan::Health h;   // gauges on and the OBD link live: WiFi down for an hour, no restart
+    h.onPoll(true, true, false, 1000);
+    for (uint32_t t = 2000; t <= 2000 + 4 * netplan::Health::WIFI_DOWN_RESTART_MS; t += 60000)
+        TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, t, true));
+}
+void test_health_hold_released_counts_15_min_from_the_release() {
+    netplan::Health h;
+    h.onPoll(true, true, false, 1000);
+    h.onPoll(false, false, false, 2000, true);
+    const uint32_t rel = 2000 + 3 * netplan::Health::WIFI_DOWN_RESTART_MS;   // the last held poll
+    h.onPoll(false, false, false, rel, true);
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, rel + 4000));   // link lost: counts from the last held poll
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, rel + netplan::Health::WIFI_DOWN_RESTART_MS - 1));
+    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, rel + netplan::Health::WIFI_DOWN_RESTART_MS));
+}
+void test_health_hold_keeps_the_heap_starved_restart() {
+    netplan::Health h;
+    h.onPoll(true, true, false, 1000);
+    TEST_ASSERT_NOT_EQUAL((int)Act::Restart, (int)h.onPoll(false, true, true, 1000 + 179000, true));
+    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, true, true, 1000 + 180000, true));
+}
+void test_health_wifi_down_restart_survives_millis_wrap() {
+    netplan::Health h;
+    const uint32_t t0 = 0xFFFFFFFFu - 400000u;   // the outage starts 400 s before the wrap
+    h.onPoll(true, true, false, t0 - 1000);
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, t0));
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, t0 + netplan::Health::WIFI_DOWN_RESTART_MS - 1));   // past the wrap
+    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, t0 + netplan::Health::WIFI_DOWN_RESTART_MS));
+}
+void test_health_hold_survives_millis_wrap() {
+    netplan::Health h;
+    const uint32_t t0 = 0xFFFFFFFFu - 400000u;
+    h.onPoll(true, true, false, t0 - 1000);
+    h.onPoll(false, false, false, t0, true);
+    h.onPoll(false, false, false, t0 + 600000u, true);   // wrapped, still held
+    TEST_ASSERT_EQUAL_INT((int)Act::None, (int)h.onPoll(false, false, false, t0 + 600000u + netplan::Health::WIFI_DOWN_RESTART_MS - 1));
+    TEST_ASSERT_EQUAL_INT((int)Act::Restart, (int)h.onPoll(false, false, false, t0 + 600000u + netplan::Health::WIFI_DOWN_RESTART_MS));
+}
+void test_hold_wifi_restart_only_with_gauges_on_and_link_live() {
+    TEST_ASSERT_TRUE(netplan::holdWifiRestart(true, true));
+    TEST_ASSERT_FALSE(netplan::holdWifiRestart(true, false));
+    TEST_ASSERT_FALSE(netplan::holdWifiRestart(false, true));
+    TEST_ASSERT_FALSE(netplan::holdWifiRestart(false, false));
+}
 void test_health_restart_after_180s_when_memory_starved() {
     netplan::Health h;
     h.onPoll(true, true, false, 1000);
@@ -488,6 +540,13 @@ int main(int, char**) {
     RUN_TEST(test_link_down_at_once_on_a_definite_failure);
     RUN_TEST(test_can_run_gates_on_largest_block);
     RUN_TEST(test_health_two_failures_pause_optional_until_success);
+    RUN_TEST(test_health_wifi_down_restarts_after_15_min);
+    RUN_TEST(test_health_hold_skips_the_wifi_down_restart);
+    RUN_TEST(test_health_hold_released_counts_15_min_from_the_release);
+    RUN_TEST(test_health_hold_keeps_the_heap_starved_restart);
+    RUN_TEST(test_health_wifi_down_restart_survives_millis_wrap);
+    RUN_TEST(test_health_hold_survives_millis_wrap);
+    RUN_TEST(test_hold_wifi_restart_only_with_gauges_on_and_link_live);
     RUN_TEST(test_health_restart_after_180s_when_memory_starved);
     RUN_TEST(test_health_restart_clock_survives_millis_wrap);
     RUN_TEST(test_health_dead_zone_without_memory_evidence_never_restarts);
