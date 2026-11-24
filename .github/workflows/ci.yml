@@ -65,7 +65,7 @@ jobs:
       - name: Media pack size check (the S3's media partition)
         if: matrix.board == 's3'
         run: |
-          python tools/pack_media.py .pio/media.bin
+          python tools/pack_media.py .pio/media.bin --allow-stand-ins
           python tools/check_flash.py .pio/media.bin 0x9E0000 95
 
   host-tests:

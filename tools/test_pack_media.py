@@ -40,5 +40,42 @@ class PackTest(unittest.TestCase):
         self.assertEqual(pm.partition(), (0x610000, 0x9E0000))
 
 
+class StandInTest(unittest.TestCase):
+    def test_zero_filled_file_is_a_stand_in(self):
+        self.assertIn("zero", pm.stand_in_problem("howl.pcm", bytes(100000)))
+
+    def test_stand_in_with_an_empty_header_is_still_caught(self):
+        # tools/media_sizes.py placeholders(): an 8-byte header, then zeros to the real size
+        blob = b"MTG1\x00\x00\x0a\x00" + bytes(100000)
+        self.assertIn("zero", pm.stand_in_problem("montage.bin", blob))
+
+    def test_real_data_passes(self):
+        self.assertEqual(pm.stand_in_problem("howl.pcm", bytes(3000) +b"\x01" * 100), "")
+        self.assertEqual(pm.stand_in_problem("montage.bin", b"MTG1" + bytes(4) + b"\x07" * 9000), "")
+
+    def test_wrong_magic_is_refused(self):
+        self.assertIn("SNDR", pm.stand_in_problem("drive.snd", b"\x01" * 9000))
+        self.assertEqual(pm.stand_in_problem("drive.snd", b"SNDR" + b"\x01" * 9000), "")
+
+    def test_main_refuses_stand_ins_unless_allowed(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "data"))
+            with open(os.path.join(d, "data", "howl.pcm"), "wb") as f:
+                f.write(bytes(50000))
+            out = os.path.join(d, "media.bin")
+            old = pm.DATA
+            pm.DATA = os.path.join(d, "data")
+            try:
+                with self.assertRaises(SystemExit) as cm:
+                    pm.main([out])
+                self.assertIn("howl.pcm", str(cm.exception))
+                self.assertFalse(os.path.exists(out))
+                pm.main([out, "--allow-stand-ins"])
+                self.assertTrue(os.path.exists(out))
+            finally:
+                pm.DATA = old
+
+
 if __name__ == "__main__":
     unittest.main()
