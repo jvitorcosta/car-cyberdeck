@@ -9,3 +9,4 @@
 - [ ] Conventional commit messages
 - [ ] No credentials, personal photos or audio in the diff
 - [ ] CHANGELOG.md `[Unreleased]` updated for user-visible changes
+- [ ] A check that needs the car or a deck is added to "Car checks owed" in docs/BACKLOG.md

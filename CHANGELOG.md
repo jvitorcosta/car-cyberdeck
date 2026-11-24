@@ -6,6 +6,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Changed:** the black deck's pink is the yellow deck's pink (#93, `ledlook` pink tile 0xFF0090) and then
+  0xFF00B4, tuned by eye on the black deck's panel (#94, `src/black/ui/pink.h`), in the gauge screens.
 - **Changed:** the Cockpit screen has the yellow deck's look: pure black, no filled boxes, hairline rules and thin tick bars in
   the LED colour, and an alert is a red outline with red type. Its KM/L row is now the trip's average, not the instant
   reading (the car's own dash shows that one).
@@ -72,6 +74,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Fixed:** PS3 presses wait for the loop instead of being dropped (#92): two shortcuts pressed in one pass
+  (START with X, L1 with O, Y with A) acted on the first and lost the other. The deck also logs
+  `[pad] N reports/s, longest wait ..., longest loop pass ...` every 10 s and `[pad] press age N ms` per press,
+  to tell radio lag from loop lag. Not measured on a deck yet.
 - **Fixed:** turning the brightness down (or up) in music mode switched music mode off and brought
   back the colour from before it. A level change now keeps music mode on and dims the song's colour:
   - / + on the Lights page, L1 / R1, the IR remote's brightness keys and "50 percent". The level
