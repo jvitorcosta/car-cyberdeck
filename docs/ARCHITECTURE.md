@@ -3,7 +3,8 @@
 CarDeck is three programs that meet on the phone's hotspot: the **black deck** (ESP32-S3, env
 `s3`, `src/black/`), the **yellow deck** (ESP32 CYD, env `ledpanel`, `src/yellow/`) and the
 **Honda City** watch app (`garmin/carlights/`). A fourth, the **OBD deck** (a plain ESP32, env
-`obddeck`, `src/obd/`), reads the car for the health check (being built on `feat/car-health`).
+`obddeck`, `src/obd/`), reads the car for the health check and the trip log; the black deck also reads
+the car itself for the live gauges ([Live gauges](#live-gauges-on-the-black-deck)).
 Code the decks share lives in `src/common/` and `src/util/`. See [HISTORY.md](HISTORY.md) for why it is built this way.
 
 ```
@@ -320,7 +321,13 @@ starts is ~107 KB free, ~98 KB in one piece, against ~172 KB before).
   each value redrawn in its own region only when it changes, through one PSRAM region buffer. The
   file format, text blending, capsules and layout are `util/car/sukihud`; the 0-100 timer is
   `util/car/sprint` (both host-tested).
-- `ui/driveview`: the HUD's Drive dash, the second GAUGES screen (NVS `hud`/`screen`, set by
+- `ui/sukirideview`: the HUD's Ride screen, the fourth GAUGES screen: the film art recoloured to the deck's
+  theme, with the girl animated by the true speed, the speed card with a 13-sample RPM trace, the estimated
+  gear, km/l, intake air, trip km and the PEDAL, COOL and BATT bars. The art (`sukiride.bin`, from
+  `tools/gen_suki_ride.py`, git-ignored) is linked into the app; a build without it falls back to the other
+  screens (`ui::rideReady()`). Region buffer in PSRAM, a region pushed when its key changed. The scene and
+  drawing are `util/car/sukiride` (host-tested).
+- `ui/driveview`: the HUD's Drive dash, the second GAUGES screen (screens: Suki 0, Drive 1, Trip 2, Ride 3, Cockpit 4; NVS `hud`/`screen`, set by
   `/gauges?screen=` or `GAUGES SCREEN`, refused while moving). A PSRAM frame sprite over a baked
   background, each part pushed when it changes. The maths is `util/car/drivedash` (host-tested).
 - `ui/tripview`: the HUD's Trip ticker, the third GAUGES screen, in the green VT323 terminal look:
@@ -446,18 +453,27 @@ It answers the yellow deck over the hotspot and never writes to the car.
   them:
   - `wire/` (the contracts between the decks): hmac256, lyricstatus, musicwire, sigreq,
     songpalette, statejson
-  - `lights/` (the LED domain, both decks): hue, ledlook, musiclights, tripclock
-  - `car/` (the car health check: the OBD deck):
-    carhealth, carwire, fuelbook, fueleco, healthview, obd, obdble, obdpick, obdplan, triplog, tripsum
-  - `common/` (both decks): bootguard, daynight, decklink, hotspotip, jsonflat, jsonpath, netdiag, netup,
-    otaview, readguard, remotegate, rgb565, roam, text, version
+  - `lights/` (the LED domain, both decks): hue, ledintro, ledlook, musiclights, tripclock
+  - `car/` (the car: OBD link, health, trip and fuel books, the gauge screens' logic, speed cameras;
+    the OBD deck and the black deck):
+    - OBD link and plan: obd, obdble, obdpick, obdplan, obdwire
+    - health, trips, fuel: carhealth, carwire, fuelbook, fueleco, healthview, tripbook, triplog, tripsum,
+      drivelog
+    - gauge screens: gaugehud, streetface (CITY DATALINK), sukihud, sprint (Suki), sukiride (Ride),
+      drivedash (Drive), tripticker (Trip), cockpit (Cockpit), benchdrive (the simulated drive)
+    - speed cameras: cameras, camclip, camlist, camseq, camsign, camtone, camwire, markissue, nmea
+  - `common/` (both decks): bootguard, crashrecord, daynight, decklink, hotspotip, jsonflat, jsonpath,
+    netdiag, netup, otaview, readguard, remotegate, rgb565, roam, termpal, text, version
   - `black/`: animdata, artmap, backdrop, bios, bootanim, carbin, ctxcache, dexset, genre (+
     genre_data.inc), genrebadge, glyphrun, howl, idlesprite, idlewait, interp, introclock,
-    intropick, karaokemode, karaokepick, linkstatus, sndroster, soundpick, loudness, lrcmatch, lrcstream, lyricbuf, mediapack, netplan, playerjson, qrfit,
-    quietboot, ridersprite, songmood (+ songpicks.inc), termblend, walkanim, walkrect
-  - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, httphead,
-    ledpresets, ledvoice, lightstatus, tapguard, termpal, touchcal, touchguard,
-    touchmap, tripmeter
+    intropick, karaokemode, karaokepal, karaokepick, linkstatus, loudness, lrcmatch, lrcstream,
+    lyricbuf, lyricface, mediapack, netplan, playerjson, playlists, qrfit, quietboot, ridersprite,
+    sndroster, songmood (+ songpicks.inc), soundpick, termblend, walkanim, walkrect
+  - `yellow/`: bothlook, dashtext, deckaddr, deckmenu, elkcmd, heapguard, httphead, irkeys, keepalive,
+    ledpresets, ledvoice, lightstatus, padbattery, padedges, padfeel, padflick, padguard, tapguard,
+    touchcal, touchguard, touchmap, tripmeter
+  - `python tools/check_architecture.py` fails if a `src/util/*/*.h` is not named in this file
+    (`--list` prints the groups).
 - **Host tests** (`test/`, one Unity suite per module, `tools/run_tests.ps1`): every module in
   `src/util/` (`lyricstatus` is tested in `netplan`'s suite, `version` in `bios`'s), plus the pure
   drawing and data modules `black/ui/{accents,car_sprite,carlook,cjkfont,emojifont,icon_map,
