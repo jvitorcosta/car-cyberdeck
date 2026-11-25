@@ -1,0 +1,85 @@
+name: Release
+
+# Builds the three decks' firmware when a release tag is pushed and attaches the .bin files and a
+# SHA256SUMS to a GitHub release. Nothing runs until a tag like v3.0.0 (or v3.0.0-rc1) is pushed:
+# cutting the tag is the owner's call (README "Versioning").
+#
+# The binaries are built WITHOUT the private media (the clips, the boot montage and the film art are
+# git-ignored): the black deck falls back to its built-in chime and to the other gauge screens, and the
+# media partition is never part of a release. For a deck with its media, flash from your own checkout.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ( ${{ matrix.board }} )
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - board: s3
+            part: "0x300000"   # partitions_s3.csv (one OTA slot)
+          - board: ledpanel
+            part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
+          - board: obddeck
+            part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0   # the tag, for the firmware version (tools/version.py)
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install PlatformIO
+        run: pip install platformio==6.2.0
+      - name: Stub config (the real src/config.h is git-ignored)
+        run: cp include/config.example.h src/config.h
+      - name: Media stand-ins (the media are git-ignored; see the note at the top)
+        run: python tools/media_sizes.py placeholders
+      - name: Build
+        run: pio run -e ${{ matrix.board }}
+      - name: Flash size check
+        run: python tools/check_flash.py .pio/build/${{ matrix.board }}/firmware.bin ${{ matrix.part }} 97
+      - name: Name the binary after the tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          mkdir dist
+          cp .pio/build/${{ matrix.board }}/firmware.bin "dist/cardeck-${TAG}-${{ matrix.board }}.bin"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist-${{ matrix.board }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # the only job that can create the release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum cardeck-*.bin > SHA256SUMS && cat SHA256SUMS
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          pre=""
+          case "$TAG" in *-*) pre="--prerelease" ;; esac
+          gh release create "$TAG" dist/* --repo "$REPO" --verify-tag $pre             --title "$TAG"             --notes "Firmware for the three decks (black s3, yellow ledpanel, OBD deck), built without the private media. See CHANGELOG.md for what changed; SHA256SUMS lists the checksums. Flash over USB: pio run -e <env> -t upload, or the .bin at the app offset with esptool."
