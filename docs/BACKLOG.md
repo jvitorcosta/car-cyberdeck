@@ -4,6 +4,16 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Done (moved out of the lists below)
 
+- **Gauge screens on the black deck** (#69 to #75, #81 to #91, merged 2026-11-18 to 2026-11-21): live
+  OBD gauges from the Vgate over BLE (CITY DATALINK, #69, #70), the Suki film monitor (#71), Drive
+  (#72), trip data with a fuel book and FULL TANK (#73), the Trip ticker (#74, #75), Ride (#81, #82)
+  and Cockpit with its look and its read rates (#87 to #91). Car test owed, see "Car checks owed".
+- **Drive log** (#83, merged 2026-11-20): the per-second capture stays; its Google Sheet sink was taken
+  out in #84 the same day (TLS heap). Next: an iPhone app pulling it over the hotspot, Safari test first.
+- **Welcome when the lights link** (#47, merged 2026-11-08): desk-checked, car owed.
+- **Quiet window removed** (#85, 2026-11-20): the 01:00-07:00 window and the desk volume cut from #77 are gone.
+- **Ride art guard** (#86, 2026-11-20): an upload with the zero-filled stand-in is refused.
+
 - **Karaoke on the black deck** (2026-11-09): the lyrics moved off the yellow deck, which keeps
   only the KARAOKE switch (the free heap went from ~31-33 KB to ~44-52 KB); the black deck shows
   them full screen with a sweep and the walking Pokémon (`GET /karaoke`). Not yet driven in the car.
@@ -29,6 +39,34 @@ Open items, not scheduled. Newest decisions first within each section.
   retired.
 - **Dropped WiFi receive buffers** (closed 2026-10-23): a 30-min S3 capture had no failed
   allocation; the drops were the retired CYD deck build's.
+
+## Car checks owed
+
+One list of what to look at on the road. A PR that merges something it could not check in the car adds a
+row here (PR template); the check's owner flips `checked` to `yes` and dates it. Dates are merge dates
+from GitHub (checked 2026-11-24); a check nobody has recorded stays `no`. Details of the older checks
+are under "Verification" below.
+
+| PR | What to look at | Merged | Checked |
+|---|---|---|---|
+| #38 | Camera alerts: about 21 bench items under "Camera alerts, owed on the bench" | 2026-11-07 | no |
+| #47 | LED welcome intro: desk-checked; in the car, the intro on link (sends nothing while `LED_EFFECTS` is 0) | 2026-11-08 | no (desk only) |
+| #55 | Black deck karaoke: not driven | 2026-11-09 | no |
+| #57 | PS3 pad redesign: road motion never reads as resting, firm set-down caught, feel with both lights | 2026-11-12 | no (desk only) |
+| #58 | IR remote: JUMP / FADE modes, range and angle, sunlight, effects | 2026-11-12 | no (desk only) |
+| #62 | Bottom prompt line, layout B, deck-link tags: yellow desk-checked | 2026-11-13 | no (desk only) |
+| #66 | Pad + both lights, no restarts: 20 min drive, then the boot log and `[mem]` lines | 2026-11-15 | no (both decks flashed) |
+| #69 to #72 | OBD gauges (CITY DATALINK, street look, Suki, Drive) read the car correctly | 2026-11-18 | no |
+| #73 to #75 | Trip data, fuel book, FULL TANK, Trip ticker: km and litres against the car's own trip | 2026-11-19 | no |
+| #81, #82 | Ride screen and its colour following the yellow deck | 2026-11-19 | no (both decks flashed) |
+| #83 | Drive log capture: no consumer yet (sink reverted in #84) | 2026-11-20 | no |
+| #87 to #91 | Cockpit and its look, load every 3 s, coolant every 6 s: host-tested only | 2026-11-20 to 2026-11-21 | no |
+| #92 | PS3 presses wait for the loop: read `[pad] press age` and the reports/s lines on a desk or car run | 2026-11-21 | no |
+| #93 | Black deck pink copied from the yellow deck (superseded by #94's value) | 2026-11-21 | no |
+| #94 | Black deck pink 0xFF00B4, tuned by eye | 2026-11-22 | yes (by eye, owner, black deck) |
+
+Not owed, for the record: the cartoon montage (#76, flashed and approved) and music mode keeping on when
+dimming (#68, confirmed).
 
 ## Verification (on device)
 
@@ -127,7 +165,7 @@ Open items, not scheduled. Newest decisions first within each section.
 
 ## Code health
 
-- **Split `src/yellow/ledpanel.cpp`** (~2 800 lines): the link task, the web server, the karaoke
+- **Split `src/yellow/ledpanel.cpp`** (3 493 lines on 2026-11-24): the link task, the web server, the karaoke
   and music tasks are each a candidate file under `src/yellow/`.
 - **CI doesn't build the diagnostics**: the firmware matrix has `s3`, `ledpanel`, `obddeck`,
   `hwcheck` and `hwcheck_s3`, so `blescan` / `bletest` stopped linking without anyone noticing. Add
@@ -158,10 +196,11 @@ Open items, not scheduled. Newest decisions first within each section.
 - Test gaps vs the spec: real Apple answers for Pop 14 / Brasileira 1122, every badge's colour,
   and "network errors are not cached" (device code in nettask).
 
-## OBD deck: first flash
+## OBD deck: first flash (historical)
 
-The OBD deck (`src/obd`, env `obddeck`) is built and host-tested but has never run on a board
-(none was plugged in on 2026-10-29). On its first board, over USB, never the yellow deck's or the
+Written on 2026-10-29, before the gauges moved to the black deck (#69). Kept as a checklist for a
+standalone OBD deck, not as the current state. At the time the OBD deck (`src/obd`, env `obddeck`) was
+built and host-tested but had never run on a board (none was plugged in on 2026-10-29). On its first board, over USB, never the yellow deck's or the
 black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the monitor.
 
 - **Boot log**: `[boot] obddeck v...`, `[car] LittleFS ... bytes used, mounted in N ms`,
@@ -202,7 +241,7 @@ black deck's port: `pio run -e obddeck -t upload --upload-port COMx`, then the m
   `/t<seq>.jsonl` are gone; U stays at or under 70 % of T, and rows keep being written.
 - **Update over WiFi**: `pio run -e obddeck_ota -t upload` from a PC on the hotspot.
 
-## OBD deck bench build (`obddeck_bench`, never in the car)
+## OBD deck bench build (`obddeck_bench`, never in the car; historical)
 
 A simulated 10 min drive (`util/car/benchdrive`) in place of the adapter, on a real board: start-up,
 stops for screen D, an overheat at 4:00, a low battery from 7:20, a stored code and the MIL from
@@ -225,10 +264,11 @@ Before the car: the yellow deck and the OBD deck on the hotspot together for 30 
 - The trip band on the Menu: `0.0 KM`, dashes for km/L and the range, and the small line
   `0:16  R$ --  --V  --C` style (the time, dashes for the rest).
 
-## Car-health: waiting on the adapter
+## Car-health: waiting on the adapter (historical)
 
-The OBD link (now on the OBD deck) has never met an adapter: the Vgate hasn't arrived and
-`tools/obd_sim.py` can't run its BLE side on the Windows PC. From the yellow-deck attempt (Task 8,
+Written on 2026-10-28, when the OBD link had not met an adapter (the Vgate hadn't arrived and
+`tools/obd_sim.py` can't run its BLE side on the Windows PC). Since then the Vgate has been read on
+the black deck (#69); what is still owed from that work is under "Car checks owed". From the yellow-deck attempt (Task 8,
 2026-10-28, parked): a 4th BLE connection on the yellow deck is not safe (the precompiled framework
 reserves the controller's DRAM for 3; a build with 4 crash-looped), which is why the OBD link moved
 to its own board. That attempt measured ~7-8 KB of heap for obdlink.
@@ -256,7 +296,10 @@ To check on the OBD deck when the Vgate arrives (or against a sim on a spare ESP
 - A trip: `/t<seq>.jsonl` gets a row a minute (30 s flushes); a power cut mid-row is trimmed at the
   next boot (`[car] log: cut a partial row`), and screen A's last trip / range follow.
 
-## Car test (car-health, the owner)
+## Car test (car-health, the owner; historical)
+
+Planned for the OBD deck. The black deck's gauges (#69 onwards) replaced that route, so read these as
+ideas for the car checks above, not as open tasks.
 
 With both decks in the car, the Vgate in the port, the hotspot on:
 1. The OBD deck connects to the Vgate within 30 s of the start.
