@@ -67,6 +67,11 @@ Several replies are long (multi-frame; OBDb marks some "force flow control": `fc
 | Oil temp | DA10 `22 2666` | byte 11 − 40 | LOW (unsupported on the 2023 City) |
 | CVT temp "Torque" PID | 7E1 `22 1017` | (A×9/5)−58 °F | LOW (forum guess, 11-bit header: wrong bus format for this car) |
 
+The fuel-level row has a PC probe: `python tools/obd_probe.py <adapter> --fuel` (off by default, never in
+the decks' gate). It sends `ATCP 18`, `ATSH DA60F1`, `227029`, `ATZ` only when `ATDPN` says 29-bit, prints the
+raw reply and both readings of OBDb's bit offset (bytes 12-13 after, or counting, the `62 70 29` header).
+Record the result here as VERIFIED or "no answer" before any firmware change.
+
 Before any of these goes into firmware: try it from the PC with `tools/obd_probe.py`-style
 read-only code (with the exact request added to its list), log the raw reply, compare with the
 car's own display (fuel gauge bars, odometer), and record the result here as VERIFIED.
