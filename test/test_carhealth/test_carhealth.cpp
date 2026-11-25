@@ -335,6 +335,22 @@ void test_last_trim_is_the_judged_trips_mean() {
     TEST_ASSERT_EQUAL_FLOAT(3.0f, w.lastTrimPct());
 }
 
+void test_battery_hold_wraps_with_millis() {
+    carhealth::Watch w;
+    const uint32_t t0 = 0xFFFFFFFFu - 10000u;
+    carhealth::Reading r;
+    r.engineRunning = true;
+    r.volts = 11.5f;
+    r.nowMs = t0;
+    w.feed(r);
+    r.nowMs = t0 + carhealth::BATT_HOLD_MS - 1u;   // past the wrap, one ms short of the hold
+    w.feed(r);
+    TEST_ASSERT_FALSE(w.memo().battLowSeen);
+    r.nowMs = t0 + carhealth::BATT_HOLD_MS;
+    w.feed(r);
+    TEST_ASSERT_TRUE(w.memo().battLowSeen);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_last_trim_is_the_judged_trips_mean);
@@ -361,5 +377,6 @@ int main(int, char**) {
     RUN_TEST(test_restored_low_battery_is_a_note);
     RUN_TEST(test_known_needs_a_reading_or_a_codes_read);
     RUN_TEST(test_memo_worth_saving);
+    RUN_TEST(test_battery_hold_wraps_with_millis);
     return UNITY_END();
 }

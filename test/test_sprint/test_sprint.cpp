@@ -117,6 +117,32 @@ void test_text_like_a_lap_time() {
     TEST_ASSERT_EQUAL_STRING("", out);   // doesn't fit
 }
 
+// millis() wraps every 49.7 days: a pull that crosses the wrap times the same as one that doesn't.
+void test_a_pull_across_the_millis_wrap_times_the_same() {
+    sprint::Timer s;
+    const uint32_t base = 0xFFFFFFFFu - 4000u;
+    s.update(0.0f, base);
+    s.update(0.0f, base + 300u);
+    for (uint32_t i = 0; i <= 40; i++) {   // 10 km/h a second from base + 300, a sample every 300 ms
+        const uint32_t t = base + 300u + i * 300u;
+        s.update(10.0f * (float)(i * 300u) / 1000.0f, t);
+    }
+    TEST_ASSERT_FALSE(s.running());
+    TEST_ASSERT_UINT32_WITHIN(5, 9800, s.last());
+    TEST_ASSERT_EQUAL_UINT32(s.last(), s.best());
+}
+
+void test_a_gap_and_the_run_limit_hold_across_the_wrap() {
+    sprint::Timer s;
+    const uint32_t base = 0xFFFFFFFFu - 1000u;
+    s.update(0.0f, base);
+    s.update(10.0f, base + 500u);
+    TEST_ASSERT_TRUE(s.running());
+    TEST_ASSERT_UINT32_WITHIN(400, 3000, s.elapsed(base + 3500u));   // elapsed() itself is wrap-safe
+    s.update(10.0f, base + 500u + sprint::Timer::GAP_MS + 1u);       // a gap past GAP_MS, over the wrap
+    TEST_ASSERT_FALSE(s.running());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_nothing_before_a_run);
@@ -128,5 +154,7 @@ int main() {
     RUN_TEST(test_a_jump_to_100_in_one_sample_is_no_run);
     RUN_TEST(test_unknown_speed_mid_run_cancels);
     RUN_TEST(test_text_like_a_lap_time);
+    RUN_TEST(test_a_pull_across_the_millis_wrap_times_the_same);
+    RUN_TEST(test_a_gap_and_the_run_limit_hold_across_the_wrap);
     return UNITY_END();
 }

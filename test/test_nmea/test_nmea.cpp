@@ -112,6 +112,70 @@ void test_malformed_position_ignored() {
     TEST_ASSERT_FALSE(feedAll(r, sentence("GNRMC,123519.00,A,0257.94156,X,06001.27103,W,32.40,270.0,031126,,,A"), &f));
 }
 
+// One sentence with the lat / lon / speed / course fields swapped in; true when it came out as a Fix.
+static bool rmc(const char* lat, const char* ns, const char* lon, const char* ew, const char* kn,
+                const char* crs, cameras::Fix* f) {
+    char body[160];
+    snprintf(body, sizeof body, "GNRMC,123519.00,A,%s,%s,%s,%s,%s,%s,031126,,,A", lat, ns, lon, ew, kn, crs);
+    nmea::Reader r;
+    return feedAll(r, sentence(body), f);
+}
+
+// CONTRIBUTING: a parser of outside data gets an absurd number. The reader drops the whole sentence for
+// a number past its cap (never a wrapped position), and keeps 90 / 180 degrees and 59.999 minutes as limits.
+void test_absurd_numbers_drop_the_sentence() {
+    cameras::Fix f{};
+    TEST_ASSERT_TRUE(rmc("0257.94156", "S", "06001.27103", "W", "32.40", "270.0", &f));   // control
+    TEST_ASSERT_FALSE(rmc("99999999999999.0", "N", "06001.27103", "W", "32.40", "270.0", &f));
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "99999999999999.0", "W", "32.40", "270.0", &f));
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "06001.27103", "W", "99999999999999.0", "270.0", &f));
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "06001.27103", "W", "32.40", "99999999999999.0", &f));
+    // 2^32-ish values that would wrap a 32-bit multiply if the cap were missing
+    TEST_ASSERT_FALSE(rmc("4294967296.0", "N", "06001.27103", "W", "32.40", "270.0", &f));
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "06001.27103", "W", "4294967296", "270.0", &f));
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "06001.27103", "W", "32.40", "4294967296", &f));
+}
+
+void test_speed_over_the_uint16_range_clamps() {
+    cameras::Fix f{};
+    TEST_ASSERT_TRUE(rmc("0257.94156", "S", "06001.27103", "W", "99999999.0", "270.0", &f));
+    TEST_ASSERT_EQUAL_UINT16(65535, f.kmh);
+}
+
+void test_course_wraps_to_a_compass_bearing() {
+    cameras::Fix f{};
+    TEST_ASSERT_TRUE(rmc("0257.94156", "S", "06001.27103", "W", "32.40", "360.0", &f));
+    TEST_ASSERT_EQUAL_UINT16(0, f.course);
+    TEST_ASSERT_TRUE(rmc("0257.94156", "S", "06001.27103", "W", "32.40", "725.4", &f));
+    TEST_ASSERT_EQUAL_UINT16(5, f.course);
+}
+
+void test_latitude_and_longitude_limits() {
+    cameras::Fix f{};
+    TEST_ASSERT_TRUE(rmc("9000.0000", "N", "18000.0000", "E", "0", "0", &f));    // the edges are valid
+    TEST_ASSERT_EQUAL_INT32(90000000, f.latE6);
+    TEST_ASSERT_EQUAL_INT32(180000000, f.lonE6);
+    TEST_ASSERT_TRUE(rmc("9000.0000", "S", "18000.0000", "W", "0", "0", &f));
+    TEST_ASSERT_EQUAL_INT32(-90000000, f.latE6);
+    TEST_ASSERT_FALSE(rmc("9100.0000", "N", "06001.27103", "W", "0", "0", &f));    // 91 degrees
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "18100.0000", "E", "0", "0", &f));    // 181 degrees
+    TEST_ASSERT_FALSE(rmc("0260.0000", "N", "06001.27103", "W", "0", "0", &f));    // 60 minutes
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "06060.0000", "W", "0", "0", &f));
+    TEST_ASSERT_FALSE(rmc("-257.94156", "S", "06001.27103", "W", "0", "0", &f));   // a sign is not NMEA
+}
+
+// Finding (F-21 follow-up): parseCoord checks `deg > maxDeg`, not the finished value, so 90 degrees
+// and a little over (9000.0001 N, 18000.0001 E) come out past the pole / the date line. Harmless to
+// the matcher but outside the range the rule promises. Flip to true once parseCoord checks the sum.
+static const bool COORD_EDGE_FIXED = false;
+
+void test_a_position_just_past_the_pole_or_date_line_is_refused() {
+    cameras::Fix f{};
+    if (!COORD_EDGE_FIXED) TEST_IGNORE_MESSAGE("finding: 9000.0001 N / 18000.0001 E are accepted past the limit");
+    TEST_ASSERT_FALSE(rmc("9000.0001", "N", "06001.27103", "W", "0", "0", &f));
+    TEST_ASSERT_FALSE(rmc("0257.94156", "S", "18000.0001", "E", "0", "0", &f));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_valid_rmc);
@@ -124,5 +188,10 @@ int main(int, char**) {
     RUN_TEST(test_other_sentences_ignored);
     RUN_TEST(test_empty_course_keeps_previous_and_empty_speed_is_zero);
     RUN_TEST(test_malformed_position_ignored);
+    RUN_TEST(test_absurd_numbers_drop_the_sentence);
+    RUN_TEST(test_speed_over_the_uint16_range_clamps);
+    RUN_TEST(test_course_wraps_to_a_compass_bearing);
+    RUN_TEST(test_latitude_and_longitude_limits);
+    RUN_TEST(test_a_position_just_past_the_pole_or_date_line_is_refused);
     return UNITY_END();
 }

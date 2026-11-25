@@ -103,6 +103,14 @@ void test_a_nameless_fallback_is_skipped_after_either_failure() {
     TEST_ASSERT_TRUE(obdpick::skipAfter(nullptr, obdpick::Failure::Connect));
 }
 
+void test_skip_window_wraps_with_millis() {
+    obdpick::Recent r;
+    const uint32_t t0 = 0xFFFFFFFFu - 1000u;
+    r.failed(0xAABBCCu, t0);
+    TEST_ASSERT_TRUE(r.skip(0xAABBCCu, t0 + obdpick::SKIP_MS - 1u));   // past the wrap, still skipped
+    TEST_ASSERT_FALSE(r.skip(0xAABBCCu, t0 + obdpick::SKIP_MS));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_an_adapter_name_is_skipped_only_after_a_failed_setup);
@@ -114,5 +122,6 @@ int main(int, char**) {
     RUN_TEST(test_the_ring_forgets_the_oldest_failure);
     RUN_TEST(test_lights_and_elk_names_are_never_picked);
     RUN_TEST(test_nothing_to_pick);
+    RUN_TEST(test_skip_window_wraps_with_millis);
     return UNITY_END();
 }
