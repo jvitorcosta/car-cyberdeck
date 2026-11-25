@@ -28,6 +28,9 @@ constexpr float LEARN_KM = 50.0f;
 void learn(Book* b, float km, float litres);
 // Km left: (TANK_L - litresSinceFull) * recentKmL, never below 0. NAN unless hasFull and recentKmL is > 0.
 float rangeKm(const Book& b);
+// Km left from a measured level (util/car/fuel22): litres * the book's recentKmL, else the trip's average km/L.
+// NAN unless the litres are finite and >= 0 and one of the two economies is > 0. Never below 0.
+float rangeFromLevel(float litres, float recentKmL, float tripKmL);
 // What `litres` cost at the book's price. NAN without a price or with NAN litres.
 float costRs(const Book& b, float litres);
 

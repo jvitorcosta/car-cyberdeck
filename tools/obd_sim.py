@@ -106,6 +106,14 @@ def answer(cmd, state):
             return _mode01(int(c[2:], 16), s)
         except ValueError:
             return "?"
+    if c == "227029":   # the meter ECU's fuel level (Honda Mode 22, util/car/fuel22): litres x 100 at body bytes 12-13
+        if s["silent"]:
+            return None
+        raw = int(float(s.get("fuel", 21.0)) * 100)
+        data = [0x62, 0x70, 0x29] + [0x11] * 12 + [raw >> 8, raw & 0xFF, 0x11, 0x11]
+        hexed = ["%02X" % b for b in data]
+        return "\r".join(["%03X" % len(data), "0: " + " ".join(hexed[:6]), "1: " + " ".join(hexed[6:13]),
+                          "2: " + " ".join(hexed[13:])])
     return "?"
 
 

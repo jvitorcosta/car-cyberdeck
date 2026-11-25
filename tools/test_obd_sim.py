@@ -110,3 +110,19 @@ def test_chunks_split_long_reply():
 
 def test_chunks_short_reply_is_one_slice():
     assert chunks("OK\r>") == [b"OK\r>"]
+
+
+def test_fuel_level_reply_decodes_in_the_deck_format():
+    got = answer("227029", {"fuel": 21.43})
+    lines = got.split(chr(13))
+    assert lines[0] == "013"
+    assert lines[1].startswith("0: 62 70 29")
+    data = [int(x, 16) for line in lines[1:] for x in line.split(": ", 1)[1].split()]
+    assert data[:3] == [0x62, 0x70, 0x29]
+    assert (data[3 + 12] * 256 + data[3 + 13]) / 100.0 == 21.43
+    assert answer("227029", {"silent": True}) is None
+
+
+def test_the_meter_header_commands_are_just_ok():
+    assert answer("ATSH DA60F1", {}) == "OK"
+    assert answer("ATSH DB33F1", {}) == "OK"

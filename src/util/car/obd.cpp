@@ -1,8 +1,10 @@
 #include "obd.h"
+#include "fuel22.h"
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <initializer_list>
 
 namespace obd {
 namespace {
@@ -282,6 +284,9 @@ bool allowed(const char* cmd) {
     static const char* const SETUP[] = {"ATZ", "ATE0", "ATL0", "ATS0", "ATH0", "ATSP0", "ATRV", "ATI", "ATDPN"};
     for (const char* s : SETUP)
         if (strlen(s) == n && strncmp(cmd, s, n) == 0) return true;
+    // The fuel level (util/car/fuel22, hard rule 4 of the obd2 skill): exactly these three, nothing near them.
+    for (const char* s : {fuel22::SET_METER, fuel22::ASK, fuel22::SET_DEFAULT})
+        if (strlen(s) == n + 1 && strncmp(cmd, s, n) == 0) return true;
     return false;
 }
 

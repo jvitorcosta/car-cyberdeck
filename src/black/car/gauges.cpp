@@ -7,6 +7,7 @@
 #include <cstring>
 #include "../../util/car/benchdrive.h"
 #include "../../util/car/fuelbook.h"
+#include "../../util/car/fuel22.h"
 #include "../../util/car/tripbook.h"
 #ifdef OBD_LINK
 #include "../../obd/obdlink.h"
@@ -228,12 +229,17 @@ obdwire::Live live() {
     l.tripKm = snap.kmTotal;
     l.tripKmL = snap.kmlAvg;
     l.tripS = s_tripS.load();
+    float bookKmL = NAN;
     if (s_bookLock) {
         BookLock lock;
         l.rangeKm = fuelbook::rangeKm(s_book);
         l.priceL = s_book.pricePerL;
         l.tripRs = fuelbook::costRs(s_book, snap.litresTotal);
+        bookKmL = s_book.recentKmL;
     }
+    // The meter ECU's measured level (fuel22) wins over the FULL TANK book while it is fresh: no click needed.
+    const float byLevel = fuelbook::rangeFromLevel(fuel22::freshLitres(snap.fuelL, snap.fuelAtMs, snap.nowMs), bookKmL, snap.kmlAvg);
+    if (std::isfinite(byLevel)) l.rangeKm = byLevel;
     portENTER_CRITICAL(&s_mux);
     l.seq = s_seq.update(snap.have, snap.atMs);
     portEXIT_CRITICAL(&s_mux);
