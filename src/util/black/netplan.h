@@ -128,13 +128,18 @@ int parseRetryAfter(const char* v);
 //    restart is quiet (util/quietboot: no opening). Health only runs once the task has been
 //    online, so it is one restart per outage: after it, a boot with no WiFi stays in the task's
 //    connect loop (retrying, no reboot) until WiFi is up again.
+//  - ...unless holdWifiRestart: the live gauges need no WiFi (the OBD link is BLE), and a reboot would
+//    blank the cluster while driving. The 15 minutes then count from the moment the hold ends.
+//    The heap-starved restart is never held.
+// True while GAUGES is on and the OBD link is Live.
+inline bool holdWifiRestart(bool gaugesOn, bool obdLive) { return gaugesOn && obdLive; }
 class Health {
 public:
     enum class Action { None, PauseOptional, Restart };
     static constexpr int FAILS_TO_PAUSE = 2;
     static constexpr uint32_t RESTART_AFTER_MS = 180000;
     static constexpr uint32_t WIFI_DOWN_RESTART_MS = 900000;
-    Action onPoll(bool ok, bool wifiUp, bool memStarved, uint32_t nowMs) {
+    Action onPoll(bool ok, bool wifiUp, bool memStarved, uint32_t nowMs, bool holdWifiRestart = false) {
         if (!started_) { started_ = true; lastOk_ = nowMs; }
         if (ok) {
             fails_ = 0; lastOk_ = nowMs; paused_ = false; wifiDown_ = false;
@@ -142,7 +147,7 @@ public:
         }
         if (!wifiUp) {
             lastOk_ = nowMs;   // the memory clock only runs while WiFi is up
-            if (!wifiDown_) { wifiDown_ = true; downSince_ = nowMs; }
+            if (!wifiDown_ || holdWifiRestart) { wifiDown_ = true; downSince_ = nowMs; }   // held: the clock restarts
             return nowMs - downSince_ >= WIFI_DOWN_RESTART_MS ? Action::Restart : Action::None;
         }
         if (wifiDown_) { wifiDown_ = false; lastOk_ = nowMs; }   // WiFi back: memory clock restarts
