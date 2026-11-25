@@ -17,7 +17,9 @@ constexpr uint32_t SOUND_WAIT_MS = 800;
 // sound that hasn't started SOUND_WAIT_MS after t0, or a silent video, runs from t0 instead.
 inline uint32_t elapsed(uint32_t now, uint32_t t0, uint32_t soundAt, bool hasSound) {
     if (!hasSound) return now - t0;
-    if (soundAt != 0 && soundAt >= t0) return now > soundAt ? now - soundAt : 0;
+    // Signed differences, so a wrap of millis() between t0, soundAt and now reads as it should.
+    if (soundAt != 0 && static_cast<int32_t>(soundAt - t0) >= 0)
+        return static_cast<int32_t>(now - soundAt) > 0 ? now - soundAt : 0;
     return now - t0 > SOUND_WAIT_MS ? now - t0 - SOUND_WAIT_MS : 0;
 }
 }
