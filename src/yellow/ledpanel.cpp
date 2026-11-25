@@ -2287,7 +2287,9 @@ static constexpr uint32_t SEARCH_GAP_MS = 20000;
 static void deckSearch() {
     static uint32_t at = 0;
     const uint32_t now = millis();
-    if (now - at < SEARCH_GAP_MS || !net::isOnline() || heapGate.low) return;  // mDNS needs heap too
+    if (now - at < SEARCH_GAP_MS || !net::isOnline()) return;
+    // mDNS needs heap too: a fresh reading through the same gate as the asks, not the flag from the last ask
+    if (!heapGate.room(ESP.getFreeHeap(), heap_caps_get_largest_free_block(MALLOC_CAP_8BIT))) return;
     at = now;
     if (hotspotip::onHotspot(hostOrder(WiFi.localIP()), hostOrder(WiFi.gatewayIP()), hostOrder(WiFi.subnetMask())))
         return;
@@ -2647,7 +2649,24 @@ static bool musicTarget(int swatch, int cap) {
 // started the first time), and ">MUSIC ON" / ">MUSIC OFF" shows like any message; the prompt line's
 // music state (or the idle ">") comes back after it. Off, the lights go back to their pages' looks
 // (restore false: the caller pushes them itself). The caller redraws the item.
+static constexpr uint32_t MUSIC_TASK_BYTES = 4500;  // 4096 stack + the task block
 static void setMusic(bool on, bool restore) {
+    if (on && !musicHandle) {
+        // The first tap makes the 4 KB task (stack + TCB ~4.4 KB, never freed): ask the same gate as the
+        // asks first, as it would leave the heap, with a throwaway Gate (setMusic is not the deck task).
+        const uint32_t freeBytes = ESP.getFreeHeap(), largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+        heapguard::Gate fresh;
+        if (!fresh.room(freeBytes > MUSIC_TASK_BYTES ? freeBytes - MUSIC_TASK_BYTES : 0,
+                       largest > MUSIC_TASK_BYTES ? largest - MUSIC_TASK_BYTES : 0)) {
+            musicOn = false;
+            musicWant = false;
+            Serial.printf("[music] heap %u (block %u): no room for its task\n", static_cast<unsigned>(freeBytes),
+                          static_cast<unsigned>(largest));
+            setMessage(">MUSIC LOW MEMORY", MESSAGE_MS, true);
+            drawMessage();
+            return;
+        }
+    }
     musicOn = on;
     musicWant = on;
     for (int& p : musicChosen) p = -1;  // a new run starts from the owner's level and the cap
@@ -3041,7 +3060,7 @@ static void beginVoice() {
     voiceQueue = xQueueCreate(1, sizeof(VoiceJob));
     voiceDone = xSemaphoreCreateBinary();
     server = new WebServer(80);
-    server->on("/say", HTTP_ANY, handleSay);
+    server->on("/say", HTTP_GET, handleSay);  // GET only: a POST now gets a 404 (the library still buffers its body first; F-08 stays a hotspot-only risk)
     server->on("/state", HTTP_GET, handleState);
     server->on("/presets", HTTP_GET, handlePresets);
     server->on("/status", HTTP_GET, handleStatus);
