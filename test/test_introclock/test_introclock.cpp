@@ -38,7 +38,7 @@ void test_clock_follows_the_sound() {
 
 // F-21 / N-14: introclock::elapsed() is not wrap-safe in two places (`soundAt >= t0` and
 // `now > soundAt`). Flip this to true in the commit that fixes them and the two checks below run.
-static const bool ELAPSED_WRAP_FIXED = false;
+static const bool ELAPSED_WRAP_FIXED = true;
 
 void test_clock_wraps_with_millis() {
     // No sound, or a sound that never started: pure subtraction, wrap-safe today.

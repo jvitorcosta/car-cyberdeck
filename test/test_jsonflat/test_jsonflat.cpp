@@ -80,7 +80,7 @@ void test_lone_surrogate_dropped() {
 // F-21: numAt ignores strtol's ERANGE, so a 20-digit number saturates at LONG_MAX and is accepted
 // (long is 64-bit on the host, 32-bit on the deck: the same text lands on a different value). Flip
 // to true with the errno check in src/util/common/jsonflat.cpp and the out-of-range checks run.
-static const bool NUM_ERANGE_FIXED = false;
+static const bool NUM_ERANGE_FIXED = true;
 
 void test_num_range_and_shape() {
     long v = 7;

@@ -1,4 +1,5 @@
 #include "jsonflat.h"
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 
@@ -139,7 +140,9 @@ bool str(const char* body, const char* key, char* out, size_t n) {
 bool numAt(const char* p, long* out) {
     if (!p || !((*p >= '0' && *p <= '9') || *p == '-')) return false;
     char* end = nullptr;
+    errno = 0;
     long v = strtol(p, &end, 10);
+    if (errno == ERANGE) return false;   // a number past long's range saturated: not a value
     if (end == p || *end == '.' || *end == 'e' || *end == 'E') return false;
     *out = v;
     return true;

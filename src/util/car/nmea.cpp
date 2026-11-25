@@ -35,7 +35,7 @@ bool parseCoord(const char* v, const char* hemi, int maxDeg, char pos, char neg,
     if (!parseE6(v, &e6)) return false;
     int64_t deg = e6 / 100000000;  // "ddmm" -> dd
     int64_t minE6 = e6 - deg * 100000000;
-    if (deg > maxDeg || minE6 >= 60000000) return false;
+    if (deg > maxDeg || (deg == maxDeg && minE6 > 0) || minE6 >= 60000000) return false;   // 90 / 180 exactly, no more
     int64_t d = deg * 1000000 + (minE6 + 30) / 60;
     if (hemi[0] == neg && !hemi[1]) d = -d;
     else if (hemi[0] != pos || hemi[1]) return false;
