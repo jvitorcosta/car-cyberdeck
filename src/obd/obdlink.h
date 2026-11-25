@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include "../util/car/obd.h"
@@ -29,6 +30,10 @@ struct View {
     uint32_t airSteps;
     float kmlNow;
     float kmTotal, kmlAvg;
+    // The tank in litres from the meter ECU (util/car/fuel22, Honda Mode 22), NAN until one was read; read
+    // about once a minute, so the caller uses fuel22::freshLitres (fuelAtMs is its millis()).
+    float fuelL = NAN;
+    uint32_t fuelAtMs = 0;
 };
 // Starts NimBLE (central only) and the two tasks. Logs "[obd] ..." from then on.
 void start();

@@ -67,6 +67,15 @@ Several replies are long (multi-frame; OBDb marks some "force flow control": `fc
 | Oil temp | DA10 `22 2666` | byte 11 − 40 | LOW (unsupported on the 2023 City) |
 | CVT temp "Torque" PID | 7E1 `22 1017` | (A×9/5)−58 °F | LOW (forum guess, 11-bit header: wrong bus format for this car) |
 
+**Firmware (UNVERIFIED on the car):** the black deck now reads the fuel-level row itself (`util/car/fuel22`,
+`obdlink::readFuelLevel`): `ATSH DA60F1`, `227029`, `ATSH DB33F1`, only after ATDPN says protocol 7, first 15 s
+after the link is live, then once a minute, given up after 3 misses in a row. It reads the 16 bits at bytes 12-13
+after `62 70 29` / 100 and, while fresh (5 min), the range becomes litres x km/L (`fuelbook::rangeFromLevel`),
+winning over the FULL TANK book. The byte offset is a reading of OBDb's `bix 96` and may be wrong: the whole raw
+reply is in the log as `[obd] 227029 -> "..."` (200 characters) and the value as `[obd] fuel level N L`. First
+car check: compare that number with the cluster's fuel bars; if the offset is off, only `fuel22::parse` changes.
+The ELM's default priority (ATCP 18) is relied on, not sent.
+
 The fuel-level row has a PC probe: `python tools/obd_probe.py <adapter> --fuel` (off by default, never in
 the decks' gate). It sends `ATCP 18`, `ATSH DA60F1`, `227029`, `ATZ` only when `ATDPN` says 29-bit, prints the
 raw reply and both readings of OBDb's bit offset (bytes 12-13 after, or counting, the `62 70 29` header).

@@ -35,6 +35,13 @@ float rangeKm(const Book& b) {
     return km > 0 ? km : 0;
 }
 
+float rangeFromLevel(float litres, float recentKmL, float tripKmL) {
+    if (!std::isfinite(litres) || litres < 0.0f) return NAN;
+    const float kmL = std::isfinite(recentKmL) && recentKmL > 0.0f ? recentKmL
+                      : std::isfinite(tripKmL) && tripKmL > 0.0f ? tripKmL : NAN;
+    return std::isnan(kmL) ? NAN : litres * kmL;
+}
+
 float costRs(const Book& b, float litres) {
     if (std::isnan(b.pricePerL) || std::isnan(litres)) return NAN;
     return litres * b.pricePerL;

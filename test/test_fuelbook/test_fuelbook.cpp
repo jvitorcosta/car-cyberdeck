@@ -245,6 +245,17 @@ void test_price_param() {
     TEST_ASSERT_FALSE(fuelbook::priceParam(NAN, true, p, sizeof p));      // none said: no p
 }
 
+void test_range_from_a_measured_level() {
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 240.0f, fuelbook::rangeFromLevel(20.0f, 12.0f, 9.0f));   // the book's economy first
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 180.0f, fuelbook::rangeFromLevel(20.0f, NAN, 9.0f));     // else this trip's
+    TEST_ASSERT_FLOAT_WITHIN(0.01f, 180.0f, fuelbook::rangeFromLevel(20.0f, 0.0f, 9.0f));
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, fuelbook::rangeFromLevel(0.0f, 12.0f, NAN));               // an empty tank: 0 km
+    TEST_ASSERT_TRUE(std::isnan(fuelbook::rangeFromLevel(20.0f, NAN, NAN)));                 // no economy yet
+    TEST_ASSERT_TRUE(std::isnan(fuelbook::rangeFromLevel(20.0f, -3.0f, 0.0f)));
+    TEST_ASSERT_TRUE(std::isnan(fuelbook::rangeFromLevel(NAN, 12.0f, 12.0f)));               // no level
+    TEST_ASSERT_TRUE(std::isnan(fuelbook::rangeFromLevel(-1.0f, 12.0f, 12.0f)));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_no_fill_up_means_no_range);
@@ -267,5 +278,6 @@ int main(int, char**) {
     RUN_TEST(test_learn_ignores_bad_input);
     RUN_TEST(test_fill_reply_wording);
     RUN_TEST(test_price_param);
+    RUN_TEST(test_range_from_a_measured_level);
     return UNITY_END();
 }

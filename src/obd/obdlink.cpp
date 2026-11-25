@@ -15,6 +15,7 @@
 #include "../common/core/watchdog.h"
 #include "../common/net/ota.h"
 #include "../util/car/fueleco.h"
+#include "../util/car/fuel22.h"
 #include "../util/car/drivelog.h"
 #include "../util/car/obdble.h"
 #include "../util/car/obdpick.h"
@@ -131,11 +132,12 @@ bool send(const char* cmd) {
     return s_tx->writeValue(reinterpret_cast<const uint8_t*>(cmd), strlen(cmd), s_txResponse);
 }
 
-// raw on one line for the log ('\n' as '|'), at most 80 characters.
-void logRaw(const char* what, const char* raw) {
-    char line[81];
+// raw on one line for the log ('\n' as '|'), at most 80 characters (200 for the fuel level's long reply).
+void logRaw(const char* what, const char* raw, size_t max = 80) {
+    char line[201];
+    if (max > sizeof line - 1) max = sizeof line - 1;
     size_t i = 0;
-    for (; raw[i] && i < sizeof line - 1; ++i) line[i] = raw[i] == '\n' ? '|' : raw[i];
+    for (; raw[i] && i < max; ++i) line[i] = raw[i] == '\n' ? '|' : raw[i];
     line[i] = '\0';
     Serial.printf("[obd] %.*s -> \"%s\"\n", (int)strcspn(what, "\r"), what, line);
 }
@@ -456,10 +458,51 @@ bool readCodes() {
     return true;
 }
 
+// The tank (util/car/fuel22): the header to the meter ECU, one read, the functional header back. Always puts
+// the header back (retried once); false when it could not, so the caller drops the session (a reconnect
+// runs ATZ) rather than polling the engine with the meter's address. A miss costs nothing but the log.
+bool readFuelLevel(fuel22::Plan& plan) {
+    static char raw[256];                          // static: off the ask task's 6 KB stack
+    char ack[32];
+    watchdog::feed();
+    float litres = NAN;
+    bool ok = false;
+    if (ask(fuel22::SET_METER, ack, sizeof ack, ASK_MS) && strstr(ack, "OK")) {
+        const bool got = ask(fuel22::ASK, raw, sizeof raw, 3000);   // ISO-TP: several frames
+        logRaw(fuel22::ASK, got ? raw : "(timeout)", 200);   // the whole reply: the byte offset is unverified
+        ok = got && fuel22::parse(raw, &litres);
+    } else {
+        logRaw(fuel22::SET_METER, ack[0] ? ack : "(no answer)");
+    }
+    watchdog::feed();
+    bool back = ask(fuel22::SET_DEFAULT, ack, sizeof ack, ASK_MS) && strstr(ack, "OK");
+    if (!back) watchdog::feed();
+    if (!back) back = ask(fuel22::SET_DEFAULT, ack, sizeof ack, ASK_MS) && strstr(ack, "OK");
+    if (!back) {
+        Serial.println("[obd] fuel level: could not put the header back");
+        return false;
+    }
+    plan.done(millis(), ok);
+    if (ok) {
+        xSemaphoreTake(s_lock, portMAX_DELAY);
+        s_view.fuelL = litres;
+        s_view.fuelAtMs = millis();
+        xSemaphoreGive(s_lock);
+        Serial.printf("[obd] fuel level %.2f L\n", static_cast<double>(litres));
+    } else if (plan.off()) {
+        Serial.println("[obd] fuel level: no usable answer 3 times, not asked again this link");
+    }
+    return true;
+}
+
 // One connected adapter, from its setup until it stops answering or the link drops.
 void session() {
     s_late = false;
     rxClear();
+    xSemaphoreTake(s_lock, portMAX_DELAY);         // a new link starts without the last one's tank level
+    s_view.fuelL = NAN;                            // (a refuel in between would show the old litres)
+    s_view.fuelAtMs = 0;
+    xSemaphoreGive(s_lock);
     if (!setup()) {
         Serial.printf("[obd] %s: no answer to the setup\n", s_name);
         return;
@@ -479,6 +522,8 @@ void session() {
     }
     plan.setSupported(bits);
     bool first = true;                             // the first PID may say SEARCHING... for seconds
+    fuel22::Plan fuelPlan;
+    bool fuelStarted = false;                      // ATDPN asked once the car answers
     uint32_t batteryAt = millis(), codesRetryAt = millis();
     while (linkUp()) {
         watchdog::feed();
@@ -492,6 +537,20 @@ void session() {
             if (readCodes()) plan.codesDone(now);
             else codesRetryAt = now + CODES_RETRY_MS;
             continue;
+        }
+        if (health.state() == Link::Live) {          // the tank: only from a car that answers, and rarely
+            if (!fuelStarted) {
+                fuelStarted = true;
+                char dp[32];
+                const bool got = ask("ATDPN\r", dp, sizeof dp, ASK_MS);
+                logRaw("ATDPN\r", got ? dp : "(timeout)");
+                fuelPlan.start(millis(), got && fuel22::protocol29(dp));
+                continue;
+            }
+            if (fuelPlan.due(now)) {
+                if (!readFuelLevel(fuelPlan)) break;
+                continue;
+            }
         }
         const float rpm = s_view.have[(int)Pid::Rpm] ? s_view.value[(int)Pid::Rpm] : NAN;
         const bool waiting = health.state() == Link::NoEngine || !(rpm > 0.0f);
