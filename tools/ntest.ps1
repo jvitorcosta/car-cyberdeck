@@ -24,7 +24,7 @@ if (-not (Get-Command g++ -ErrorAction SilentlyContinue)) {
     exit 2
 }
 if ($args.Count -lt 1) { Write-Host "Usage: ntest.ps1 <test.cpp> [module.cpp ...]"; exit 2 }
-$out = Join-Path ([IO.Path]::GetTempPath()) ("ntest_" + [IO.Path]::GetFileNameWithoutExtension($args[0]) + ".exe")
+$out = Join-Path ([IO.Path]::GetTempPath()) ("ntest_" + $PID + "_" + [IO.Path]::GetFileNameWithoutExtension($args[0]) + ".exe")   # $PID: two runs at once never share an exe
 $ccargs = @("-std=gnu++17", "-Wall", "-Wextra", "-Wshadow", "-Werror", "-I", $unity) + $args + @((Join-Path $unity "unity.c"), "-o", $out)
 # On Linux (CI) the sanitizers come free: undefined behaviour and memory errors fail the suite.
 # NTEST_SAN=0 turns them off; NTEST_FLAGS adds flags (CI's 32-bit run uses -m32: the ESP32's
