@@ -1,6 +1,6 @@
 # Companion screen: the CYD beside the S3 — design
 
-Date: 2026-10-13. Status: agreed in chat (sections 1-3), awaiting spec review.
+Date: 2026-10-13. Status: archived; v1 built as lyrics only, the companion screen was retired on 2026-10-28.
 
 ## Goal
 

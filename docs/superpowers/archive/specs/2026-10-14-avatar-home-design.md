@@ -1,9 +1,9 @@
 # The avatar as the old deck's home screen
 
 **Date:** 2026-10-14
-**Status:** draft for review
+**Status:** archived; implemented (2303503), retired with the companion screen on 2026-10-28.
 **Build:** `cyd_companion` (the old deck). The new deck's firmware doesn't change.
-**Builds on:** `docs/superpowers/specs/2026-10-14-avatar-design.md`. That spec's converter, file format, moods, canned lines, typing timeline and singing still apply. Its "beside the lyrics" layout is **replaced** by this spec.
+**Builds on:** `docs/superpowers/archive/specs/2026-10-14-avatar-design.md`. That spec's converter, file format, moods, canned lines, typing timeline and singing still apply. Its "beside the lyrics" layout is **replaced** by this spec.
 
 ## Revision (2026-10-14): the phone drives her menu
 

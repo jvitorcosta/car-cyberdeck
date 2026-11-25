@@ -1,7 +1,7 @@
 # Terminal prompt line, smaller main-screen buttons, GPS and deck-link icons
 
-Date: 2026-11-12. Status: approved in brainstorming (layout B, bottom prompt line, text tags on
-the yellow deck, pixel icon on the black deck).
+Date: 2026-11-12. Status: implemented, merged as #62 (approved in brainstorming (layout B, bottom prompt line, text tags on
+the yellow deck, pixel icon on the black deck)).
 
 ## Why
 

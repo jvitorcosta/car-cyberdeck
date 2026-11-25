@@ -8,7 +8,7 @@
 
 **Tech Stack:** PlatformIO espressif32@6.9.0, arduino-esp32 2.0.17, C++17, TFT_eSPI 2.5.43, Arduino `HTTPClient`/`WebServer`, PaulStoffregen XPT2046_Touchscreen (f956c5d, already used by `hwcheck`), Unity host tests via `tools/ntest.ps1` / `tools/run_tests.ps1`.
 
-**Spec:** `docs/superpowers/specs/2026-10-13-companion-screen-design.md` (core companion only; the "Optional extra: retro map" section gets its own plan later).
+**Spec:** `docs/superpowers/archive/specs/2026-10-13-companion-screen-design.md` (core companion only; the "Optional extra: retro map" section gets its own plan later).
 
 ## Global Constraints
 
@@ -1454,7 +1454,7 @@ static const int TOUCH_RAW_Y0 = 200, TOUCH_RAW_Y1 = 3900;
 
 `platformio.ini`, after `[env:hwcheck]`:
 ```ini
-; The CYD as a companion screen for the S3 (docs/superpowers/specs/2026-10-13-companion-screen-design.md):
+; The CYD as a companion screen for the S3 (docs/superpowers/archive/specs/2026-10-13-companion-screen-design.md):
 ; no Spotify, no Pokemon; reads the S3's /state over the hotspot.
 ;   pio run -e cyd_companion -t upload --upload-port COM14
 [env:cyd_companion]
@@ -1884,7 +1884,7 @@ and `#include "../config.h"` before it.
 - [ ] **Step 3: `app.cpp`**
 ```cpp
 // Companion screen (env cyd_companion): the CYD beside the S3, fed by its /state.
-// Spec: docs/superpowers/specs/2026-10-13-companion-screen-design.md
+// Spec: docs/superpowers/archive/specs/2026-10-13-companion-screen-design.md
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include "../board.h"

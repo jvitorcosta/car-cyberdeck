@@ -13,8 +13,7 @@ flex fuel (pump gasoline is E30; ethanol up to E100). Tank 44 L.
 
 - **Three ECUs** answer a functional mode 01 request (three lines). VERIFIED
 - **Supported mode 01:** 01 03 04 06 07 0B 0C 0D 0E 10 11 13 15 1C 1F 21 23 2E 30 31 33 34
-  41 42 43 44 45 46 47 49 4A 4C 52 56 67 68 6C. VERIFIED (`docs/superpowers/specs/
-  2026-10-28-car-health-check-design.md`; the raw 0100..0160 hex was not kept)
+  41 42 43 44 45 46 47 49 4A 4C 52 56 67 68 6C. VERIFIED (`docs/superpowers/archive/specs/P26-10-28-car-health-check-design.md`; the raw 0100..0160 hex was not kept)
 - **Not supported:** 05 coolant and 0F intake temp (use **67 / 68**), **2F fuel level**, **5E
   fuel rate**, 5C oil temp. VERIFIED
 - **Ethanol % (52)** is there: the fuel-economy maths uses it (else E30). VERIFIED in the list;

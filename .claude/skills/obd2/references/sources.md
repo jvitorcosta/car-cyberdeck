@@ -3,7 +3,7 @@
 ## Verified on João's City 2022 (the repo is the source)
 
 - Supported mode 01 list, three ECUs, no 05/0F/2F/5E, 67/68 present, smart-charging idle
-  voltage, clone replies > 1 s late: `docs/superpowers/specs/2026-10-28-car-health-check-design.md`
+  voltage, clone replies > 1 s late: `docs/superpowers/archive/specs/2026-10-28-car-health-check-design.md`
   (car run 2026-10-19, old dual-mode clone). The raw hex was not kept.
 - The deck's init (ATZ ATE0 ATL0 ATS0 ATH0 ATSP0) ran on that clone: `src/obd/obdlink.cpp`.
 - **Not yet on the car:** the Vgate iCar Pro 2S (arrived 2026-11-17), `ATDPN`, the GATT layout,

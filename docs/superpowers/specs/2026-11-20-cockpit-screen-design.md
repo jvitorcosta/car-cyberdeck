@@ -1,6 +1,6 @@
 # The Cockpit gauge screen (full-height Split Cockpit) on the black deck
 
-Date: 2026-11-20. Status: built and host-tested, build checked (`pio run -e s3`); not looked at on a deck yet.
+Date: 2026-11-20. Status: implemented, merged as #87, #89 and #91; car test owed.
 
 A fifth GAUGES screen, **Cockpit**, next to Suki, Drive, Trip and Ride. It came out of a design review of the
 black deck (OBD, screens, bugs) and three rounds of mocks; João picked "Split Cockpit" on round 2's VT323

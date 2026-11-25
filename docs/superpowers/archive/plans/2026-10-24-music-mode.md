@@ -16,7 +16,7 @@ pure light-behaviour engine and drives the inside/outside controllers with exact
 **Tech Stack:** ESP32-S3 + ESP32 (CYD), PlatformIO (`s3`, `ledpanel`, `ledpanel_ota`), Arduino core (legacy `driver/i2s.h`, WiFiUDP,
 WebServer, HTTPClient), NimBLE 2, TFT_eSPI + VT323 faces, Unity host tests (`tools\run_tests.ps1`), Connect IQ 9.3 (watch).
 
-**Spec:** `docs/superpowers/specs/2026-10-24-music-mode-design.md` (incl. "Settled after the builder check").
+**Spec:** `docs/superpowers/archive/specs/2026-10-24-music-mode-design.md` (incl. "Settled after the builder check").
 
 ## Global Constraints
 

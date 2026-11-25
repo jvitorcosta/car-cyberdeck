@@ -1,7 +1,7 @@
 # Deck avatar (step 1: portrait and canned lines)
 
 **Date:** 2026-10-14
-**Status:** draft for review
+**Status:** archived; retired with the companion screen on 2026-10-28.
 **Builds:** `s3` only
 
 ## Revision (2026-10-14): she lives on the old deck

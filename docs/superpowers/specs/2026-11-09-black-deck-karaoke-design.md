@@ -1,6 +1,6 @@
 # Karaoke on the black deck
 
-Date: 2026-11-09. Status: design, approved by João; not built.
+Date: 2026-11-09. Status: implemented, merged as #55.
 
 ## Why
 

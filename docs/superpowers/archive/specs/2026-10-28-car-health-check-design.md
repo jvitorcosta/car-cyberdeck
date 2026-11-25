@@ -1,6 +1,6 @@
 # Car health check and trip summary (yellow deck)
 
-Date: 2026-10-28 · Status: draft, waiting on the owner's approval · Deck: yellow (CYD, env `ledpanel`)
+Date: 2026-10-28 · Status: archived; the architecture moved to the black deck (#69, #70); still the source of the Honda City PID facts · Deck: yellow (CYD, env `ledpanel`)
 
 ## Intent
 

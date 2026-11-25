@@ -1,6 +1,6 @@
 # OBD2 live gauges on the black deck (Vgate iCar Pro 2S)
 
-Date: 2026-11-18. Status: decided, phase 1 built and desk-checked; car test owed.
+Date: 2026-11-18. Status: implemented, merged as #69 and #70 (later screens #71, #81, #87); car test owed.
 
 João has a Vgate iCar Pro 2S and wants the car's live data on a CarDeck screen: one screen, start
 simple, an original digital gauge display in the spirit of early-2000s tuner dashboards. Out of
