@@ -1,7 +1,7 @@
 # A shorter boot with a random opening
 
 **Date:** 2026-10-19
-**Status:** draft for review
+**Status:** implemented (49926e0); the second video came later (#17)
 **Build:** `s3` (the new deck). The old deck (`cyd`) keeps today's boot: its flash is 96.6 % full.
 **Builds on:** `2026-10-09-boot-scene-design.md` (the night drive), `2026-10-09-boot-scene-v3-design.md` (brake and montage), the intro video (`ui/intro`, `tools/gen_intro.py`) and the BIOS log (`util/bios`).
 

@@ -1,7 +1,8 @@
 # Design records
 
 Specs (what and why) and plans (step-by-step tasks) from the structured design workflow, in
-date order. Later specs extend earlier ones; the README "Design & performance history"
+date order. Superseded companion-screen, avatar, music-mode and car-health records live in
+[`archive/`](archive/) (moved with `git mv`, history kept). Later specs extend earlier ones; the README "Design & performance history"
 summarised the outcome of each; that
 summary is now [`../HISTORY.md`](../HISTORY.md).
 
@@ -17,17 +18,30 @@ summary is now [`../HISTORY.md`](../HISTORY.md).
 | 2026-10-08 | `specs/2026-10-08-night-mode-design.md` | `plans/2026-10-08-night-mode.md` | implemented (8973b0e, 7590a4e, ecc2177) |
 | 2026-10-09 | `specs/2026-10-09-boot-scene-design.md`, `-v2-`, `-v3-design.md` | `plans/2026-10-09-boot-scene*.md` | implemented as v3 (19b19a1); v1 and v2 superseded |
 | 2026-10-09 | `specs/2026-10-09-s3-port-design.md` | `plans/2026-10-09-s3-port.md` | implemented (8ddb104, 25b64a1) |
-| 2026-10-13 | `specs/2026-10-13-companion-screen-design.md` | `plans/2026-10-13-companion-screen.md` | v1 cut to lyrics only (2eaf363); later extended by the avatar home (trip time on its Trip screen, buttons on the phone page); the clock and weather strip and the retro map not built |
-| 2026-10-14 | `specs/2026-10-14-avatar-design.md` | `plans/2026-10-14-avatar.md` | step 1 superseded: moved from the S3 to the companion during implementation (spec revision, ac13e2c); converter, file format, lines and singing kept |
-| 2026-10-14 | `specs/2026-10-14-avatar-home-design.md` | `plans/2026-10-14-avatar-home.md` | implemented (2303503); revised to phone-driven (touch layer faulty, e089b4d) and Home shows her alone, centred (1473f97); retired with the companion screen on 2026-10-28 |
+| 2026-10-13 | `archive/specs/2026-10-13-companion-screen-design.md` | `archive/plans/2026-10-13-companion-screen.md` | v1 cut to lyrics only (2eaf363); later extended by the avatar home (trip time on its Trip screen, buttons on the phone page); the clock and weather strip and the retro map not built |
+| 2026-10-14 | `archive/specs/2026-10-14-avatar-design.md` | `archive/plans/2026-10-14-avatar.md` | step 1 superseded: moved from the S3 to the companion during implementation (spec revision, ac13e2c); converter, file format, lines and singing kept |
+| 2026-10-14 | `archive/specs/2026-10-14-avatar-home-design.md` | `archive/plans/2026-10-14-avatar-home.md` | implemented (2303503); revised to phone-driven (touch layer faulty, e089b4d) and Home shows her alone, centred (1473f97); retired with the companion screen on 2026-10-28 |
 | 2026-10-19 | `specs/2026-10-19-random-intro-design.md` | `plans/2026-10-19-random-intro.md` | implemented (49926e0); a fourth opening, the second video, came later (#17) |
 | 2026-10-22 | `specs/2026-10-22-emoji-design.md` | `plans/2026-10-22-emoji.md` | implemented (#14); joined emoji (#15) and frequency tier 11 (#16) on top |
 | 2026-10-22 | — | `plans/2026-10-22-main-review-bugs.md` | implemented: the 2026-10-21 review's findings still real on main (bb4774c, aba78ba, 101666e and others) |
 | 2026-10-22 | `specs/2026-10-22-shadow-update-screen-design.md` | `plans/2026-10-22-shadow-update-stage1.md` | implemented, with Green Hill Zone in place of Star Light Zone (a29bc0d, the spec's own revision) and Shadow on the rail (b7cb60c) |
 | 2026-10-23 | `specs/2026-10-23-yellow-deck-menu-design.md` | `plans/2026-10-23-yellow-deck-menu.md` | menu and night mode implemented (#18); the four saved favourites superseded by six fixed presets (#18, #20); the Car, Heart and Music pages not built (music mode came as song colours) |
 | 2026-10-23 | — | `plans/2026-10-23-presets-restyle.md` | implemented (#18, then six presets and the PRESETS tab in #20) |
-| 2026-10-24 | `specs/2026-10-24-music-mode-design.md` | `plans/2026-10-24-music-mode.md` | superseded by song colours (#20, #23): no microphone, no beat pulse; the voice word, the watch item and `/status music=` came in wave 4 (2026-10-28) |
-| 2026-10-31 | — | `plans/2026-10-31-voice-agent-next.md` | backlog: roadmap for when the new deck arrives; the voice agent's spec and first plans are on `feat/voice-agent` |
+| 2026-10-24 | `archive/specs/2026-10-24-music-mode-design.md` | `archive/plans/2026-10-24-music-mode.md` | superseded by song colours (#20, #23): no microphone, no beat pulse; the voice word, the watch item and `/status music=` came in wave 4 (2026-10-28) |
+| 2026-10-28 | `archive/specs/2026-10-28-car-health-check-design.md` | `archive/plans/2026-10-28-car-health-deck.md` | superseded: the OBD work went to the black deck (#69, #70); the spec stays the source of the Honda City PID facts |
+| 2026-10-28 | — | `plans/2026-10-28-yellow-horn.md` | parked |
+| 2026-10-31 | — | `plans/2026-10-31-voice-agent-next.md` | parked: roadmap for when the new deck arrives; the voice agent's spec and first plans are on `feat/voice-agent` |
+| 2026-11-03 | `specs/2026-11-03-boot-sound-rosters-design.md` | `plans/2026-11-03-boot-sound-rosters.md` | implemented (#37) |
+| 2026-11-03 | `specs/2026-11-03-camera-alerts-design.md` | `plans/2026-11-03-camera-alerts.md` | implemented (#38) |
+| 2026-11-04 | `specs/2026-11-04-open-radars-manaus-design.md` (pointer to the data repo) | `plans/2026-11-04-open-radars-manaus.md` | implemented in `jvitorcosta/open-radars-manaus` |
+| 2026-11-09 | `specs/2026-11-09-black-deck-karaoke-design.md` | `plans/2026-11-09-black-deck-karaoke.md` | implemented (#55) |
+| 2026-11-09 | `specs/2026-11-09-karaoke-look-and-menu-design.md` | `plans/2026-11-09-karaoke-look-and-menu.md` | implemented (#55) |
+| 2026-11-12 | `specs/2026-11-12-ir-remote-design.md` | `plans/2026-11-12-ir-remote.md`, `plans/2026-11-12-ir-remote-build.md` | implemented (#58); effects and range owed in the car |
+| 2026-11-12 | `specs/2026-11-12-ps3-pad-redesign-design.md` | `plans/2026-11-12-ps3-pad-redesign.md` | implemented (#57) |
+| 2026-11-12 | `specs/2026-11-12-terminal-line-and-link-icons-design.md` | `plans/2026-11-12-terminal-line-and-link-icons.md` | implemented (#62) |
+| 2026-11-18 | `specs/2026-11-18-obd2-hud-design.md` | — | implemented (#69, #70); car test owed |
+| 2026-11-19 | `specs/2026-11-19-suki-drive-screen-design.md` | — | implemented (#71, #81, #82); car test owed |
+| 2026-11-20 | `specs/2026-11-20-cockpit-screen-design.md` | — | implemented (#87, #89, #91); car test owed |
 
 Plans keep the machine-specific commands they were executed with (`.devtools\…`, `COM11`);
 see the main README and

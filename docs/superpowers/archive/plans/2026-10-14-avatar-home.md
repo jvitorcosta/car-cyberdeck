@@ -23,7 +23,7 @@
 - PaulStoffregen XPT2046_Touchscreen `f956c5d`, already used by `hwcheck`.
 - Unity host tests via `tools/run_tests.ps1`.
 
-**Spec:** `docs/superpowers/specs/2026-10-14-avatar-home-design.md`. It builds on `docs/superpowers/specs/2026-10-14-avatar-design.md`.
+**Spec:** `docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md`. It builds on `docs/superpowers/archive/specs/2026-10-14-avatar-design.md`.
 
 ## Global Constraints
 
@@ -205,7 +205,7 @@ Expected: `FAIL test_press` (no header); the other 49 suites pass.
 // The button is chosen where the finger goes down. A normal button fires on release if the
 // finger is still on it; a hold button fires once, HOLD_MS after the finger is (back) on it.
 // Sliding onto another button never fires that one.
-// Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md ("Touch and navigation").
+// Spec: docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md ("Touch and navigation").
 namespace press {
 constexpr uint32_t HOLD_MS = 1000;
 class Press {
@@ -421,7 +421,7 @@ Expected: `FAIL test_menunav`; 50 others pass.
 #include <cstdint>
 // The companion's screens with the avatar as home: each screen's buttons, the hit test, where a
 // button leads and the message bar's idle text. PURE, host-tested.
-// Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md ("Screens").
+// Spec: docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md ("Screens").
 namespace menunav {
 enum class Screen : uint8_t { Home, Lyrics, Sounds, Trip };
 enum Button : int { None = 0, Lyrics, Sounds, Trip, Back, Howl, Vroom, Reset };
@@ -928,7 +928,7 @@ This is device-only code. Its checks are the build here and the on-screen check 
 #include "../util/avatarlines.h"
 // The deck avatar on the companion (data/avatar.bin, embedded in this build only): her portrait
 // at the spot and size the current screen gives her, singing along with synced lyrics, and her
-// lines for the message bar. Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md
+// lines for the message bar. Spec: docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md
 namespace avatarview {
 // Parses the embedded file; false (no avatar: the companion's lyrics-only screen) when there is
 // none. Logs "[avatar] ...".
@@ -1132,7 +1132,7 @@ This is device-only code. Its checks are the build here and Task 8 on the old de
 #include <TFT_eSPI.h>
 #include "../util/menunav.h"
 // Drawing for the companion's avatar-home screens: background, buttons, the message bar and the
-// trip time. Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md ("Screens").
+// trip time. Spec: docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md ("Screens").
 namespace screens {
 // Repaints screen s: background, its buttons (cursor marks the last menu choice on Home), and
 // an empty message bar. Her portrait and the lyric column are drawn by their own modules.
@@ -1253,8 +1253,8 @@ Replace `src/companion/app.cpp`:
 // Companion screen (env cyd_companion): the CYD beside the S3. With an avatar (data/avatar.bin)
 // she is the home screen and the menu (LYRICS / SOUNDS / TRIP, touch); without one it shows the
 // lyrics big, as before. It reads the S3's GET /state over the hotspot.
-// Specs: docs/superpowers/specs/2026-10-13-companion-screen-design.md,
-//        docs/superpowers/specs/2026-10-14-avatar-home-design.md
+// Specs: docs/superpowers/archive/specs/2026-10-13-companion-screen-design.md,
+//        docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include "../board/board.h"
@@ -1648,7 +1648,7 @@ Expected: `FAIL test_phonepress` and `FAIL test_touchguard`; 52 others pass.
 #pragma once
 #include "menunav.h"
 // The companion's phone remote: a button name from POST /press?b=<name> -> the menu button it
-// presses. PURE, host-tested. Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md
+// presses. PURE, host-tested. Spec: docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md
 // (Revision: the phone drives her menu).
 namespace phonepress {
 // "lyrics" "sounds" "trip" "back" "howl" "vroom" "reset" (exact, lower case); anything else: None.
@@ -1764,7 +1764,7 @@ git commit -m "feat(companion): phone button names; ignore a stuck touch panel"
 #include "../util/menunav.h"
 // The old deck's own remote page for her menu (its touch layer is faulty): GET / serves the
 // page, POST /press?b=<name>&k=<REMOTE_TOKEN> queues a button press. Off without REMOTE_TOKEN.
-// Spec: docs/superpowers/specs/2026-10-14-avatar-home-design.md (Revision: the phone).
+// Spec: docs/superpowers/archive/specs/2026-10-14-avatar-home-design.md (Revision: the phone).
 namespace phone {
 void begin();                  // web server on its own task, once WiFi is up
 menunav::Button take();        // the latest queued press, once; None when there is none

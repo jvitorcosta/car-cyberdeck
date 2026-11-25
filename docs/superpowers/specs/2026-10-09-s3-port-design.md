@@ -1,6 +1,6 @@
 # Second board: Freenove ESP32-S3 2.8" (FNK0104B) — design
 
-Date: 2026-10-09. Status: approved in chat, awaiting spec review.
+Date: 2026-10-09. Status: implemented (8ddb104, 25b64a1); the S3 is the black deck.
 
 ## Goal
 

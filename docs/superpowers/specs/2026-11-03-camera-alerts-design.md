@@ -1,6 +1,6 @@
 # Camera alerts: speed cameras, electronic speed bumps, red-light cameras
 
-Status: draft for the owner's review (2026-11-03). Runs on the black deck (the ESP32-S3), because the
+Status: implemented and merged (#38); alerts, voice and sign panel are on the black deck. Runs on the black deck (the ESP32-S3), because the
 OBD deck from `feat/car-health` doesn't exist as hardware yet.
 
 ## Intent

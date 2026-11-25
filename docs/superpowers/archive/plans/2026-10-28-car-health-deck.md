@@ -15,7 +15,7 @@
 - Unity host tests via `tools/ntest.ps1` / `tools/run_tests.ps1`.
 - Python 3 + `bless` for the bench adapter.
 
-**Spec:** `docs/superpowers/specs/2026-10-28-car-health-check-design.md`
+**Spec:** `docs/superpowers/archive/specs/2026-10-28-car-health-check-design.md`
 
 ## Global Constraints
 
