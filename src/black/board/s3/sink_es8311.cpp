@@ -28,7 +28,7 @@ constexpr uint8_t CODEC_GAIN = 0xCB;
 #endif
 // So the path stays on (amp enabled, I2S sending silence) for this long after a clip at WARM_RATE:
 // the next one, the boot's chime, montage start and logo sound, starts at once and whole.
-constexpr int WARM_RATE = 16000;           // the clips' rate; the mic's too, so it can still join
+constexpr int WARM_RATE = 16000;           // the clips' rate
 constexpr uint32_t LINGER_MS = 20000;
 int s_rate = 16000;
 int16_t s_buf[2 * CHUNK];
@@ -39,7 +39,7 @@ esp_timer_handle_t s_cool = nullptr;
 
 void powerDown() {                         // under s_lock
     digitalWrite(PIN_AMP_EN, !AMP_ON);
-    audioport::release();                  // uninstalls unless the mic still listens
+    audioport::release();                  // uninstalls the port
 }
 
 void coolDown(void*) {
@@ -121,7 +121,7 @@ bool open(int clipRate) {
         s_warm = false;
         powerDown();
     }
-    // Shares the port with the mic at 16 kHz; a 48 kHz clip while the mic listens is refused.
+    // The port is ours alone: a clip at another rate waits for the warm one to power down (above).
     bool ok = audioport::acquire(clipRate);
     if (ok) {
         s_rate = clipRate;

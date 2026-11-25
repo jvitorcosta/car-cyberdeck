@@ -25,9 +25,14 @@ SemaphoreHandle_t lock() {
 bool install(int rate) {
     if (!s_wire) s_wire = Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
     i2s_config_t cfg = {};
-    // RX always, even for a clip alone: the mic can then join a port that's already playing.
-    // TX is unchanged by it (same rate, DMA, silence on underflow); unread RX buffers just recycle.
-    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_RX);
+    // TX only: nothing reads the mic (the module that did is gone), and an RX channel costs its DMA
+    // (4 x 256 frames x 2 ch x 2 B = ~4.1 KB of internal heap, contiguous space TLS needs) for every
+    // clip and the 20 s linger. -D AUDIO_PROBE (sink_es8311.cpp) is the one reader, so it gets RX.
+    cfg.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX
+#ifdef AUDIO_PROBE
+                            | I2S_MODE_RX
+#endif
+    );
     cfg.sample_rate = rate;
     cfg.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
     cfg.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
