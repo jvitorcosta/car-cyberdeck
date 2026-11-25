@@ -205,8 +205,7 @@ Its web server (port 80) answers `GET /` (the phone page) and `GET /icon.png`, b
   counter and an 8-byte HMAC tag with `REMOTE_TOKEN`; the yellow deck drops a bad tag or a counter
   that doesn't rise). The yellow deck snaps its main colour to one
   of the lights' 8 swatches (`util/musiclights`), which gives back exactly the chosen one. `on=0` or 30 s without a keep-alive stops it and closes
-  the socket. No mic: the howl plays as usual (`board/s3/mic_es8311` stays in the tree, unused,
-  for the voice agent). It starts only with
+  the socket. No mic: the howl plays as usual. It starts only with
   TLS_NEED + 6 KB in the largest block. `GET /music/debug?k=<token>` (`&on=1` also keeps it alive)
   is the readout (on, the palette last sent, its cap, the socket, the largest free block), and a
   `[music]` serial line tells each palette sent for a new song or a change.

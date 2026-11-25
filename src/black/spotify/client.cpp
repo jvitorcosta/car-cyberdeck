@@ -91,11 +91,19 @@ static int refreshToken() {
     https.setReuse(false);
     if (!https.begin(c, "https://accounts.spotify.com/api/token")) return -1;
     https.addHeader("Content-Type", "application/x-www-form-urlencoded");
-    String body = "grant_type=refresh_token&refresh_token=" + String(SPOTIFY_REFRESH_TOKEN) +
-                  "&client_id=" + SPOTIFY_CLIENT_ID +
-                  "&client_secret=" + SPOTIFY_CLIENT_SECRET;
+    // A stack buffer, not a String: its chained temporaries sat on the heap across the TLS handshake
+    // (see s_auth above). POST(const String&) wants a String, so the (uint8_t*, size) overload.
+    char body[320];
+    const int bn = snprintf(body, sizeof body,
+                            "grant_type=refresh_token&refresh_token=%s&client_id=%s&client_secret=%s",
+                            SPOTIFY_REFRESH_TOKEN, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET);
+    if (bn < 0 || bn >= (int)sizeof body) {
+        Serial.println("[spotify] refresh body too long for its buffer");
+        https.end();
+        return -1;
+    }
     watchdog::feed();   // each request is bounded by its own timeouts (common/core/watchdog)
-    int rc = https.POST(body);
+    int rc = https.POST((uint8_t*)body, (size_t)bn);
     if (rc < 0) netcfg::certRejected(c, "accounts.spotify.com");
     if (rc == 200) {
         char token[400];
@@ -136,6 +144,7 @@ static netplan::LoginBackoff s_login;
 static bool s_loginFail = false;
 static int login() {
     if (!s_login.due(millis())) { s_loginFail = true; return s_login.lastCode(); }
+    s_api.stop();   // the kept session (~20 KB internal) goes before the refresh opens its own
     const int rc = refreshToken();
     const uint32_t was = s_login.waitMs();
     s_login.onResult(rc, millis());
