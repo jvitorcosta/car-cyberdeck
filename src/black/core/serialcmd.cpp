@@ -60,7 +60,10 @@ void shot(TFT_eSPI& tft) {
         }
         ask[n] = 0;
         n = 0;
-        if (ask[0] == 'R' && atoi(ask + 1) < 240) shotRow(tft, atoi(ask + 1));
+        if (ask[0] == 'R') {
+            const int row = atoi(ask + 1);
+            if (row >= 0 && row < 240) shotRow(tft, row);   // R-5 is not a row (N-09)
+        }
         until = millis() + 2000;
     }
     Serial.setTxTimeoutMs(1);
