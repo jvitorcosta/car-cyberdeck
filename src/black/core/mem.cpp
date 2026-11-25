@@ -46,7 +46,13 @@ void installFailHook() { heap_caps_register_failed_alloc_callback(onAllocFail); 
 
 void* bigAlloc(size_t n) {
     void* p = heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    return p ? p : malloc(n);
+    if (p) return p;
+    static bool said = false;   // once: the first fallback to internal RAM is the one worth a line (N-02)
+    if (!said) {
+        said = true;
+        Serial.printf("[mem] PSRAM full: %u B from internal RAM\n", static_cast<unsigned>(n));
+    }
+    return malloc(n);
 }
 
 }
