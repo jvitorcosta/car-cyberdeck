@@ -21,7 +21,8 @@ except NameError:
     ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
     UNDER_PIO = False
 OUT = os.path.join(ROOT, "include", "fw_version.h")
-TAG = re.compile(r"^v(\d+\.\d+\.\d+)(?:-(\d+)-(g[0-9a-f]+))?(-dirty)?$")
+# v1.2.0, v1.2.0-rc1 (a pre-release starts with a letter and is not "dirty"), then -N-gSHA and -dirty.
+TAG = re.compile(r"^v(\d+\.\d+\.\d+(?:-(?!dirty$)[A-Za-z][0-9A-Za-z.]*)?)(?:-(\d+)-(g[0-9a-f]+))?(-dirty)?$")
 
 
 def from_describe(desc, sha):

@@ -31,11 +31,20 @@ class FromDescribe(unittest.TestCase):
             with self.subTest(desc=desc):
                 self.assertEqual(version.from_describe(desc, None)[1], "0.0.0-dev")
 
-    @unittest.expectedFailure   # F-22: a pre-release tag reads as 0.0.0-dev, below the release it leads to.
-    def test_prerelease_tag_keeps_its_number(self):   # Drop the decorator once version.py handles it
+    def test_prerelease_tag_keeps_its_number(self):
         full, short = version.from_describe("v2.1.0-rc1-3-gabc1234", "gabc1234")
         self.assertTrue(full.startswith("2.1.0"), full)
         self.assertTrue(short.startswith("2.1.0"), short)
+
+    def test_prerelease_shapes(self):
+        rows = [("v2.1.0-rc1", ("2.1.0-rc1", "2.1.0-rc1")),
+                ("v2.1.0-rc1-dirty", ("2.1.0-rc1+dirty", "2.1.0-rc1+")),
+                ("v2.1.0-rc1-3-gabc1234", ("2.1.0-rc1+3.gabc1234", "2.1.0-rc1+")),
+                ("v2.1.0-3-gabc1234", ("2.1.0+3.gabc1234", "2.1.0+")),
+                ("v2.1.0-dirty", ("2.1.0+dirty", "2.1.0+"))]
+        for desc, want in rows:
+            with self.subTest(desc=desc):
+                self.assertEqual(version.from_describe(desc, None), want)
 
 
 if __name__ == "__main__":
