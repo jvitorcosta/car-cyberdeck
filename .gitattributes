@@ -1,0 +1,2 @@
+# Text files are normalised to LF in the repo whatever the checkout's autocrlf says (Windows and CI agree).
+* text=auto
