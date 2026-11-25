@@ -167,7 +167,7 @@ void test_latitude_and_longitude_limits() {
 // Finding (F-21 follow-up): parseCoord checks `deg > maxDeg`, not the finished value, so 90 degrees
 // and a little over (9000.0001 N, 18000.0001 E) come out past the pole / the date line. Harmless to
 // the matcher but outside the range the rule promises. Flip to true once parseCoord checks the sum.
-static const bool COORD_EDGE_FIXED = false;
+static const bool COORD_EDGE_FIXED = true;
 
 void test_a_position_just_past_the_pole_or_date_line_is_refused() {
     cameras::Fix f{};
