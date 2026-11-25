@@ -1,6 +1,5 @@
 import hashlib
 import os
-import re
 import unittest
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")

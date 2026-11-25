@@ -68,10 +68,25 @@ jobs:
       - name: Media stand-ins at the real sizes (the media are git-ignored)
         run: python tools/media_sizes.py placeholders
       - name: Build
-        run: pio run ${{ matrix.envs }}
+        shell: bash   # pipefail: a failed build still fails the step through the tee
+        run: pio run ${{ matrix.envs }} 2>&1 | tee build.log
       - name: Flash size check
         if: matrix.part != ''
         run: python tools/check_flash.py .pio/build/${{ matrix.board }}/firmware.bin ${{ matrix.part }} 97
+      - name: "Static RAM check (PlatformIO RAM line of every env built; today 20 to 24 %)"
+        run: |
+          grep -E '^RAM:' build.log
+          awk '/^RAM:/ { for (i = 1; i <= NF; i++) if ($i ~ /%$/) { sub("%", "", $i); if ($i + 0 > 35) { print "static RAM over 35 %: " $0; bad = 1 } } } END { exit bad }' build.log
+      - name: ELF and map of the build (to bisect a size or heap change)
+        if: matrix.part != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: firmware-${{ matrix.board }}-${{ github.sha }}
+          path: |
+            .pio/build/${{ matrix.board }}/firmware.elf
+            .pio/build/${{ matrix.board }}/firmware.map
+          retention-days: 14
+          if-no-files-found: warn
       - name: Media pack size check (the S3's media partition)
         if: matrix.board == 's3'
         run: |
@@ -106,13 +121,31 @@ jobs:
       - name: Run all suites (64-bit, ASan + UBSan)
         shell: pwsh
         run: ./tools/run_tests.ps1
-      - name: Media tool tests (tools/test_*.py; Pillow so the generator suites run, not skip)
+      - name: Tool tests (tools/test_*.py; Pillow so the generator suites run, not skip)
+        # pytest, not unittest discover: 58 of the 204 tests are plain pytest functions that unittest never sees
         run: |
-          pip install pillow
-          python -m unittest discover -s tools -p "test_*.py"
+          pip install pillow pytest
+          python -m pytest -q tools
       - name: Run all suites (32-bit like the ESP32's size_t, sanitizers off)
         shell: pwsh
         env:
           NTEST_FLAGS: -m32
           NTEST_SAN: "0"
         run: ./tools/run_tests.ps1
+
+  lint:
+    name: Lint (actionlint, ruff F)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: "Workflow syntax (actionlint) and Python errors (ruff F: unused and undefined names)"
+        run: |
+          pip install actionlint-py ruff
+          actionlint
+          ruff check --select F tools
