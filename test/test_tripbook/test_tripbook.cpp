@@ -133,6 +133,23 @@ void test_parse_price() {
     TEST_ASSERT_FALSE(tripbook::parsePrice(nullptr, &p));
 }
 
+// /fill on the black deck takes its price through parsePrice (remote.cpp handleFill); the OBD deck's own
+// copy of the handler (src/obd/main.cpp) uses strtof and is not host-testable (F-09). What parsePrice
+// refuses is exactly what strtof lets through, so the contract is pinned here: a comma works, and
+// nothing strtof reads that is not "R$ 3.00 to 15.00, at most two decimals" is a price.
+void test_parse_price_refuses_what_strtof_accepts() {
+    float p = 1.0f;
+    TEST_ASSERT_TRUE(tripbook::parsePrice("6,49", &p));
+    TEST_ASSERT_FLOAT_WITHIN(1e-4f, 6.49f, p);
+    const char* strtofOnly[] = {"inf", "-inf", "nan", "NAN", "infinity", "6.5e0", "0x7", "0x1.cp2", "+6.5",
+                                "6.49abc", "6.490", "6.49 7"};
+    for (const char* s : strtofOnly) {
+        float q = 1.0f;
+        TEST_ASSERT_FALSE_MESSAGE(tripbook::parsePrice(s, &q), s);
+        TEST_ASSERT_EQUAL_FLOAT_MESSAGE(1.0f, q, s);
+    }
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_seconds_count_only_while_live);
@@ -145,5 +162,6 @@ int main() {
     RUN_TEST(test_bad_totals_charge_nothing);
     RUN_TEST(test_idle_fuel_counts_in_the_learnt_km_l);
     RUN_TEST(test_parse_price);
+    RUN_TEST(test_parse_price_refuses_what_strtof_accepts);
     return UNITY_END();
 }

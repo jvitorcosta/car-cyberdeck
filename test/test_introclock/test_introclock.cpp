@@ -36,11 +36,30 @@ void test_clock_follows_the_sound() {
     TEST_ASSERT_EQUAL_UINT32(50, elapsed(1050, 1000, 0, false));      // a silent video: its own clock
 }
 
+// F-21 / N-14: introclock::elapsed() is not wrap-safe in two places (`soundAt >= t0` and
+// `now > soundAt`). Flip this to true in the commit that fixes them and the two checks below run.
+static const bool ELAPSED_WRAP_FIXED = false;
+
+void test_clock_wraps_with_millis() {
+    // No sound, or a sound that never started: pure subtraction, wrap-safe today.
+    const uint32_t t0 = 0xFFFFFFFFu - 100u;
+    TEST_ASSERT_EQUAL_UINT32(500, introclock::elapsed(t0 + 500u, t0, 0, false));
+    TEST_ASSERT_EQUAL_UINT32(0, introclock::elapsed(t0 + introclock::SOUND_WAIT_MS, t0, 0, true));
+    TEST_ASSERT_EQUAL_UINT32(200, introclock::elapsed(t0 + introclock::SOUND_WAIT_MS + 200u, t0, 0, true));
+    if (!ELAPSED_WRAP_FIXED) TEST_IGNORE_MESSAGE("F-21/N-14: sound-synced clock is not wrap-safe yet");
+    // The sound's first sample came just before the wrap, `now` is just after it: 100 ms in.
+    const uint32_t soundAt = 0xFFFFFFF0u;
+    TEST_ASSERT_EQUAL_UINT32(100, introclock::elapsed(soundAt + 100u, 0xFFFFFF00u, soundAt, true));
+    // The sound started after the wrap while t0 was before it: soundAt is smaller but not older.
+    TEST_ASSERT_EQUAL_UINT32(50, introclock::elapsed(0xFFFFFFF0u + 80u, 0xFFFFFFF0u, 0xFFFFFFF0u + 30u, true));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_frames_follow_the_clock);
     RUN_TEST(test_done_after_the_last_frame);
     RUN_TEST(test_no_clip_is_done_at_once);
     RUN_TEST(test_clock_follows_the_sound);
+    RUN_TEST(test_clock_wraps_with_millis);
     return UNITY_END();
 }

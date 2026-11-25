@@ -77,6 +77,30 @@ void test_lone_surrogate_dropped() {
     TEST_ASSERT_EQUAL_STRING("aA", s);
 }
 
+// F-21: numAt ignores strtol's ERANGE, so a 20-digit number saturates at LONG_MAX and is accepted
+// (long is 64-bit on the host, 32-bit on the deck: the same text lands on a different value). Flip
+// to true with the errno check in src/util/common/jsonflat.cpp and the out-of-range checks run.
+static const bool NUM_ERANGE_FIXED = false;
+
+void test_num_range_and_shape() {
+    long v = 7;
+    TEST_ASSERT_TRUE(jsonflat::numAt("2147483647", &v));    // the deck's LONG_MAX
+    TEST_ASSERT_EQUAL_INT32(2147483647, (int32_t)v);
+    TEST_ASSERT_TRUE(jsonflat::numAt("-2147483648", &v));
+    TEST_ASSERT_EQUAL_INT32((int32_t)-2147483647 - 1, (int32_t)v);
+    v = 7;
+    TEST_ASSERT_FALSE(jsonflat::numAt("-", &v));
+    TEST_ASSERT_FALSE(jsonflat::numAt("--5", &v));
+    TEST_ASSERT_FALSE(jsonflat::numAt("1.5", &v));
+    TEST_ASSERT_FALSE(jsonflat::numAt("1e3", &v));
+    TEST_ASSERT_FALSE(jsonflat::numAt(nullptr, &v));
+    TEST_ASSERT_EQUAL_INT(7, (int)v);                        // none of those touched it
+    if (!NUM_ERANGE_FIXED) TEST_IGNORE_MESSAGE("F-21: numAt accepts an ERANGE number (saturates)");
+    TEST_ASSERT_FALSE(jsonflat::numAt("99999999999999999999", &v));
+    TEST_ASSERT_FALSE(jsonflat::numAt("-99999999999999999999", &v));
+    TEST_ASSERT_EQUAL_INT(7, (int)v);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_reads_strings_numbers_and_bools);
@@ -86,5 +110,6 @@ int main(int, char**) {
     RUN_TEST(test_wrong_types_and_small_buffers);
     RUN_TEST(test_surrogate_pair_to_utf8);
     RUN_TEST(test_lone_surrogate_dropped);
+    RUN_TEST(test_num_range_and_shape);
     return UNITY_END();
 }

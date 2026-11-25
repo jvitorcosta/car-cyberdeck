@@ -119,6 +119,22 @@ void test_keep_lit_keeps_the_last_colour() {
     TEST_ASSERT_EQUAL_INT(5, karaokemode::keepLit(5, 9));    // out of range: keep it
 }
 
+// millis() wrap: the keep-alive window and the no-lyrics message are measured by subtraction.
+void test_keepalive_and_no_lyrics_timers_wrap_safe() {
+    karaokemode::Mode m;
+    const uint32_t t0 = 0xFFFFFFFFu - 5000u;
+    m.keepAlive(t0);
+    TEST_ASSERT_TRUE(m.on(t0 + karaokemode::KEEP_MS - 1u));    // past the wrap, still inside the window
+    TEST_ASSERT_FALSE(m.on(t0 + karaokemode::KEEP_MS));
+    m.keepAlive(t0);
+    TEST_ASSERT_EQUAL(karaokemode::Screen::NoLyrics, m.screen(lyricstatus::Status::None, 1, t0));
+    TEST_ASSERT_EQUAL(karaokemode::Screen::NoLyrics,
+                      m.screen(lyricstatus::Status::None, 1, t0 + karaokemode::NO_LYRICS_MS - 1u));
+    m.keepAlive(t0 + karaokemode::NO_LYRICS_MS - 1u);          // the phone keeps asking
+    TEST_ASSERT_EQUAL(karaokemode::Screen::Normal,
+                      m.screen(lyricstatus::Status::None, 1, t0 + karaokemode::NO_LYRICS_MS));
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_off_is_normal);
@@ -134,5 +150,6 @@ int main(int, char**) {
     RUN_TEST(test_parse_light_reads_swatches);
     RUN_TEST(test_parse_light_rejects_junk);
     RUN_TEST(test_keep_lit_keeps_the_last_colour);
+    RUN_TEST(test_keepalive_and_no_lyrics_timers_wrap_safe);
     return UNITY_END();
 }

@@ -31,11 +31,20 @@ void test_release_clears_the_stuck_state() {
     TEST_ASSERT_TRUE(g.update(true, 2000, 2000, 6200));          // a real touch again
 }
 
+void test_stuck_timer_wraps_with_millis() {
+    touchguard::Guard g;
+    const uint32_t t0 = 0xFFFFFFFFu - 2000u;
+    TEST_ASSERT_TRUE(g.update(true, 100, 100, t0));
+    TEST_ASSERT_TRUE(g.update(true, 100, 100, t0 + touchguard::STUCK_MS - 1u));   // past the wrap
+    TEST_ASSERT_FALSE(g.update(true, 100, 100, t0 + touchguard::STUCK_MS));
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_a_normal_press_passes);
     RUN_TEST(test_a_stuck_point_is_ignored_after_five_seconds);
     RUN_TEST(test_moving_finger_is_not_stuck);
     RUN_TEST(test_release_clears_the_stuck_state);
+    RUN_TEST(test_stuck_timer_wraps_with_millis);
     return UNITY_END();
 }

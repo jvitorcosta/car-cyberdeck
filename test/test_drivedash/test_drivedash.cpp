@@ -138,6 +138,16 @@ void test_rpm_text() {
     TEST_ASSERT_EQUAL_STRING("--", t);
 }
 
+void test_volt_alert_timer_wraps_with_millis() {
+    drivedash::Alerts a;
+    const uint32_t t0 = 0xFFFFFFFFu - 10000u;
+    a.update(NAN, 11.5f, 800.0f, t0);
+    a.update(NAN, 11.5f, 800.0f, t0 + drivedash::Alerts::VOLT_MS - 1u);   // past the wrap
+    TEST_ASSERT_FALSE(a.volts());
+    a.update(NAN, 11.5f, 800.0f, t0 + drivedash::Alerts::VOLT_MS);
+    TEST_ASSERT_TRUE(a.volts());
+}
+
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_screens_by_name_or_number);
@@ -147,5 +157,6 @@ int main() {
     RUN_TEST(test_ladders_and_warmup);
     RUN_TEST(test_alerts_hold_until_clear);
     RUN_TEST(test_rpm_text);
+    RUN_TEST(test_volt_alert_timer_wraps_with_millis);
     return UNITY_END();
 }
