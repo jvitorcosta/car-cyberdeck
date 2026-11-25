@@ -144,6 +144,7 @@ static netplan::LoginBackoff s_login;
 static bool s_loginFail = false;
 static int login() {
     if (!s_login.due(millis())) { s_loginFail = true; return s_login.lastCode(); }
+    s_api.stop();   // the kept session (~20 KB internal) goes before the refresh opens its own
     const int rc = refreshToken();
     const uint32_t was = s_login.waitMs();
     s_login.onResult(rc, millis());
@@ -165,7 +166,6 @@ static int apiCall(const char* method, const char* path, const char* body, int* 
     if (!s_body) return -1;
     s_body[0] = '\0';
     if (!tokenFresh()) {
-        s_api.stop();   // the kept session (~20 KB internal) goes before the refresh opens its own
         int rc = login();
         if (rc != 200) return rc;
     }
