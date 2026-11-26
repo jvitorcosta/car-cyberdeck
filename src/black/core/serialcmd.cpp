@@ -5,30 +5,10 @@
 #include <cstring>
 #include "../car/gauges.h"
 #include "../../util/car/tripbook.h"
+#include "../../common/core/shotrow.h"
 
 namespace serialcmd {
 namespace {
-// One panel row as "R<y> <320 x 4 hex digits>\n" (RGB565, big-endian).
-bool shotRow(TFT_eSPI& tft, int y) {
-    static const char HEX_DIGITS[] = "0123456789abcdef";
-    constexpr size_t RGB_LEN = 320 * 3;   // no dummy byte on this panel (the CYD's has one)
-    constexpr size_t ROW_LEN = 6 + 320 * 4 + 2;
-    auto* rgb = static_cast<uint8_t*>(malloc(RGB_LEN + ROW_LEN));
-    if (!rgb) return true;
-    char* row = reinterpret_cast<char*>(rgb + RGB_LEN);
-    tft.readRectRGB(0, y, 320, 1, rgb);
-    int n = snprintf(row, ROW_LEN, "R%03d ", y);
-    for (int x = 0; x < 320; x++) {
-        const uint8_t* p = rgb + x * 3;
-        const unsigned v = ((p[0] & 0xF8U) << 8) | ((p[1] & 0xFCU) << 3) | (p[2] >> 3);
-        for (int s = 12; s >= 0; s -= 4) row[n++] = HEX_DIGITS[(v >> s) & 15U];
-    }
-    row[n++] = '\n';
-    const size_t sent = Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
-    free(rgb);
-    return sent == static_cast<size_t>(n);
-}
-
 void shot(TFT_eSPI& tft) {
     // The USB serial drops what doesn't go out within 1 ms (board_s3: a PC that enumerates the port
     // but doesn't read it must never block a log line). The PC is reading now (pyserial's readline
@@ -37,7 +17,7 @@ void shot(TFT_eSPI& tft) {
     Serial.println("SHOT 320 240");
     for (int y = 0; y < 240; y++) {
         feedLoopWDT();   // a slow reader: up to 1 s a row, longer than the loop's watchdog allows
-        if (!shotRow(tft, y)) {
+        if (!shotrow::send(tft, y, 0)) {
             Serial.setTxTimeoutMs(1);
             return;
         }
@@ -62,7 +42,7 @@ void shot(TFT_eSPI& tft) {
         n = 0;
         if (ask[0] == 'R') {
             const int row = atoi(ask + 1);
-            if (row >= 0 && row < 240) shotRow(tft, row);   // R-5 is not a row (N-09)
+            if (row >= 0 && row < 240) shotrow::send(tft, row, 0);   // R-5 is not a row (N-09)
         }
         until = millis() + 2000;
     }

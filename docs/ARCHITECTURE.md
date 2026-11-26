@@ -444,7 +444,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
   `src/common/` (`net/`, `ui/backlight`, `board/board.h`, `core/embed.h`, `core/watchdog.h`) and its
   util groups (allow-list `build_src_filter` in `platformio.ini`), so a call into the other deck's
   code fails to link. `src/diag/` holds the standalone checks, one env each (`hwcheck`,
-  `hwcheck_s3`, `blescan`, `bletest`, `ps3test`).
+  `hwcheck_s3`, `blescan`, `bletest`, `ps3test`, `irtest`).
 - `src/black/board/s3/` — everything board-specific on the black deck (display bus, audio path,
   backlight); pins in `include/pins.h`.
 - `src/util/` has no Arduino dependency, so it builds and tests on a PC; `src/util/`,

@@ -91,9 +91,9 @@
 #include "pins.h"
 #include <irrx.h>
 #include "../common/ui/backlight.h"
-#include "../common/core/embed.h"
 #include "../common/core/crashlog.h"
 #include "../common/core/watchdog.h"
+#include "../common/core/shotrow.h"
 #include "elklink.h"
 #include "padhid.h"
 #include "ui/gojiraname.h"
@@ -3252,24 +3252,7 @@ static void tuneLine(const char* s) {
 // One panel row to the PC: "R<yyy> <hex RGB565>". Its 2.2 KB of buffers come from the heap for the
 // row and go back after it (static, they held that RAM for good for a desk tool); with no memory the
 // row isn't sent and the PC asks for it again.
-static void shotRow(int y) {
-    static const char HEX_DIGITS[] = "0123456789abcdef";
-    constexpr size_t RGB_LEN = 320 * 3 + 1;  // this panel's read comes one byte late: rgb[0] is the dummy's
-    constexpr size_t ROW_LEN = 6 + 320 * 4 + 2;
-    auto* rgb = static_cast<uint8_t*>(malloc(RGB_LEN + ROW_LEN));
-    if (!rgb) return;
-    char* row = reinterpret_cast<char*>(rgb + RGB_LEN);
-    tft.readRectRGB(0, y, 320, 1, rgb);
-    int n = snprintf(row, ROW_LEN, "R%03d ", y);
-    for (int x = 0; x < 320; x++) {
-        const uint8_t* p = rgb + x * 3 + 1;
-        const unsigned v = ((p[0] & 0xF8U) << 8) | ((p[1] & 0xFCU) << 3) | (p[2] >> 3);
-        for (int s = 12; s >= 0; s -= 4) row[n++] = HEX_DIGITS[(v >> s) & 15U];
-    }
-    row[n++] = '\n';
-    Serial.write(reinterpret_cast<const uint8_t*>(row), static_cast<size_t>(n));
-    free(rgb);
-}
+static void shotRow(int y) { shotrow::send(tft, y, 1); }  // this panel's read comes one byte late
 
 // "INTRO\n" on the serial port plays the welcome again on each lit light (music mode skips it, as at
 // the first link), with no reboot and no car: unlinked lights log their keys as "no link"
@@ -3348,7 +3331,10 @@ static void shotTick() {
         }
         ask[n] = 0;
         n = 0;
-        if (ask[0] == 'R' && atoi(ask + 1) < 240) shotRow(atoi(ask + 1));
+        if (ask[0] == 'R') {
+            const int row = atoi(ask + 1);
+            if (row >= 0 && row < 240) shotRow(row);   // R-5 is not a row (N-09)
+        }
         until = millis() + 2000;
     }
 }

@@ -2,13 +2,13 @@
 #include <Arduino.h>
 #include <cmath>
 #include <cstring>
-#include <ctime>
 #include "../../util/car/gaugehud.h"
 #include "../../util/car/sprint.h"
 #include "../../util/car/streetface.h"
 #include "../../util/car/sukihud.h"
 #include "../../util/common/rgb565.h"
 #include "pink.h"
+#include "clocktext.h"
 #include "../core/media.h"
 #include "../core/mem.h"
 MEDIA_DECL(data_suki_bin);
@@ -48,22 +48,6 @@ void textRegion(TFT_eSPI& tft, Rect r, sukihud::FontId f, int x, Align al, const
     sukihud::text(s_art, f, r, s_buf, x, r.y + r.h / 2, s, al);
     push(tft, r);
     strlcpy(shown, s, n);
-}
-
-void clockText(char out[6]) {
-    const time_t now = time(nullptr);
-    struct tm lt;
-    if (now < 1600000000 || !localtime_r(&now, &lt)) {   // not synced yet
-        strcpy(out, "--:--");
-        return;
-    }
-    const int h = lt.tm_hour % 24, m = lt.tm_min % 60;   // by hand: -Werror=format-truncation
-    out[0] = (char)('0' + h / 10);
-    out[1] = (char)('0' + h % 10);
-    out[2] = ':';
-    out[3] = (char)('0' + m / 10);
-    out[4] = (char)('0' + m % 10);
-    out[5] = 0;
 }
 
 // v as text with `decimals`, then a suffix ('*' is the font's degree sign); "--" when unknown.
