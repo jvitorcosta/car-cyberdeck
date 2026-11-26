@@ -2,7 +2,6 @@
 #include <Arduino.h>
 #include <cmath>
 #include <cstring>
-#include <ctime>
 #include "../../util/car/gaugehud.h"
 #include "../../util/car/sprint.h"
 #include "../../util/car/streetface.h"

@@ -13,6 +13,7 @@ inline bool send(TFT_eSPI& tft, int y, size_t late) {
     auto* rgb = static_cast<uint8_t*>(malloc(rgbLen + ROW_LEN));
     if (!rgb) return true;
     char* row = reinterpret_cast<char*>(rgb + rgbLen);
+    if (late) memset(rgb + 320 * 3, 0, late);   // the read stops at 320 * 3: the last pixel's tail
     tft.readRectRGB(0, y, 320, 1, rgb);
     int n = snprintf(row, ROW_LEN, "R%03d ", y);
     for (int x = 0; x < 320; x++) {

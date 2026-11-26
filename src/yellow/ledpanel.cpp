@@ -91,7 +91,6 @@
 #include "pins.h"
 #include <irrx.h>
 #include "../common/ui/backlight.h"
-#include "../common/core/embed.h"
 #include "../common/core/crashlog.h"
 #include "../common/core/watchdog.h"
 #include "../common/core/shotrow.h"
@@ -3332,7 +3331,10 @@ static void shotTick() {
         }
         ask[n] = 0;
         n = 0;
-        if (ask[0] == 'R' && atoi(ask + 1) < 240) shotRow(atoi(ask + 1));
+        if (ask[0] == 'R') {
+            const int row = atoi(ask + 1);
+            if (row >= 0 && row < 240) shotRow(row);   // R-5 is not a row (N-09)
+        }
         until = millis() + 2000;
     }
 }

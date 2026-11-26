@@ -1,7 +1,6 @@
 #include "gaugeview.h"
 #include <cmath>
 #include <cstring>
-#include <ctime>
 #include "../../util/car/gaugehud.h"
 #include "../../util/car/streetface.h"
 #include "../../util/common/rgb565.h"
