@@ -56,7 +56,7 @@ background:#101820;color:#f8f8d8;font:17px system-ui,sans-serif}
 #btns{display:grid;gap:14px}button{font:700 26px system-ui,sans-serif;padding:24px;border:0;
 border-radius:18px;background:#e8a020;color:#101820}button:active{transform:scale(.97)}
 .g{background:#1c2834;color:#5ab0e0;border:2px solid #5ab0e0}.g.on{background:#5ab0e0;color:#101820}
-#sc,#fu{display:flex;gap:10px}#sc[hidden],#fu[hidden]{display:none}#sc button{flex:1;font-size:18px;padding:14px 6px}
+#sc,#fu{display:flex;gap:10px}#sc[hidden],#fu[hidden]{display:none}#sc{flex-wrap:wrap}#sc button{flex:1 1 30%;font-size:18px;padding:14px 6px}
 #fu input{flex:1;min-width:0;font:700 22px system-ui,sans-serif;padding:12px 14px;border-radius:14px;
 border:2px solid #5ab0e0;background:#101820;color:#f8f8d8}#fu button{font-size:18px;padding:14px 12px}
 #s{min-height:1.4em;text-align:center;margin:0}footer{margin-top:auto;opacity:.5;font-size:14px;text-align:center}

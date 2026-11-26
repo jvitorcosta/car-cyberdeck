@@ -79,14 +79,18 @@ The Pokéface watch face that used to live here moved to
   With the phone page's GAUGES switch on (remembered across power cycles) it draws one of five
   screens in place of the music screens: **Suki**, **Drive**, **Trip**, **Ride** and **Cockpit**
   (CITY DATALINK, a street-look HUD, is what Suki falls back to without its art file). Pick the screen
-  on the phone page while parked. RPM, speed, pedal, load, coolant, intake and battery, a 0-100 km/h
-  timer, the trip and its fuel cost, and the range, all from live readings. The deck never writes to
-  the car. Details: [Architecture](docs/ARCHITECTURE.md#live-gauges-on-the-black-deck);
+  on the phone page while parked: the switch is refused over 3 km/h, but with no speed from the car
+  (adapter off or link lost) the deck counts it as parked. RPM, speed, pedal, load, coolant, intake
+  and battery, a 0-100 km/h timer, the trip and its fuel cost, and the range, all from live readings.
+  The deck never writes to the car. Details: [Architecture](docs/ARCHITECTURE.md#live-gauges-on-the-black-deck);
   [CHANGELOG](CHANGELOG.md).
 
 <!-- Video: the boot scene. Add docs/images/boot-scene.gif, then uncomment:
 <p align="center"><img src="docs/images/boot-scene.gif" alt="Boot scene" width="480"></p>
 -->
+
+**While driving:** touch the screens and the phone page only while parked. The yellow deck gets no
+speed from the car, so nothing blocks its touch on the move; use the gamepad or the watch then.
 
 ## Hardware
 

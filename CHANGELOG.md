@@ -6,6 +6,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Fixed:** on phones 390 px wide or narrower the page's five screen buttons ran off the right edge; they now wrap onto
+  two rows.
 - **Changed:** the black deck's pink is the yellow deck's pink (#93, `ledlook` pink tile 0xFF0090) and then
   0xFF00B4, tuned by eye on the black deck's panel (#94, `src/black/ui/pink.h`), in the gauge screens.
 - **Changed:** the Cockpit screen has the yellow deck's look: pure black, no filled boxes, hairline rules and thin tick bars in
