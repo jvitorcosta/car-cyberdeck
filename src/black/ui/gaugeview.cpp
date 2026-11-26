@@ -6,6 +6,7 @@
 #include "../../util/car/streetface.h"
 #include "../../util/common/rgb565.h"
 #include "pink.h"
+#include "clocktext.h"
 
 // CITY DATALINK, street look: the RPM ramp in neon, pink 7-segment speed, three chrome pills for the
 // slow values, and the street panel on the right: the navigator (her mood follows the engine), the
@@ -104,22 +105,6 @@ void number(TFT_eSPI& tft, const char* t, int r, int y, int w, int h, int f, uin
 
 void cellsRow(TFT_eSPI& tft, int x, int lit, uint16_t on, uint16_t off) {
     for (int j = 0; j < CELLS; ++j) tft.fillRect(x + j * CELL_PITCH, BAR_Y, CELL_W, CELL_H, j < lit ? on : off);
-}
-
-void clockText(char out[6]) {
-    const time_t now = time(nullptr);
-    struct tm lt;
-    if (now < 1600000000 || !localtime_r(&now, &lt)) {   // not synced yet
-        strcpy(out, "--:--");
-        return;
-    }
-    const int h = lt.tm_hour % 24, m = lt.tm_min % 60;
-    out[0] = (char)('0' + h / 10);
-    out[1] = (char)('0' + h % 10);
-    out[2] = ':';
-    out[3] = (char)('0' + m / 10);
-    out[4] = (char)('0' + m % 10);
-    out[5] = 0;
 }
 
 void header(TFT_eSPI& tft, bool shift, obdplan::Link link, const char* clock, bool frame) {

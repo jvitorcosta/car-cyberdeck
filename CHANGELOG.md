@@ -76,6 +76,8 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Changed:** the firmware is about 13 KB smaller: the display library's smooth-font code, which nothing used, is no
+  longer built in.
 - **Fixed:** PS3 presses wait for the loop instead of being dropped (#92): two shortcuts pressed in one pass
   (START with X, L1 with O, Y with A) acted on the first and lost the other. The deck also logs
   `[pad] N reports/s, longest wait ..., longest loop pass ...` every 10 s and `[pad] press age N ms` per press,
