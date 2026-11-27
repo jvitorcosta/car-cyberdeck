@@ -35,7 +35,8 @@ static void netTask(void*) {
     ota::begin(POKEDECK_MDNS_NAME);
     for (;;) {
         watchdog::feed();
-        net::loop();   // rejoins after a drop
+        // rejoins after a drop; not during an update (a move to the hotspot would cut it)
+        if (!ota::active()) net::loop();
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
