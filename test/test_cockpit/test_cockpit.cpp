@@ -220,6 +220,8 @@ void test_the_cards_keep_the_eight_pixel_margin() {
     TEST_ASSERT_EQUAL_INT(190, rowY(4));
     TEST_ASSERT_EQUAL_INT(H - MARGIN, rowY(ROWS - 1) + ROW_H);   // the last card ends on the margin
     TEST_ASSERT_EQUAL_INT(W - MARGIN, ROW_X + ROW_W);
+    TEST_ASSERT_TRUE(ALERT_FILL_H > 31 && ALERT_FILL_H < TICK_DY);   // the block holds the value (baseline 31), over the ticks
+    TEST_ASSERT_TRUE(TICK_DY + 3 <= ROW_H);   // the 3 px ticks stay in the row
     const Rect sp = region(R_SPEED);
     TEST_ASSERT_EQUAL_INT(172, sp.w);
     TEST_ASSERT_TRUE(sp.x + sp.w < ROW_X);   // the speed clears the cards

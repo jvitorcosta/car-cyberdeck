@@ -6,11 +6,12 @@
 // an 8 px margin, VT323 terminal type. Left: the speed in three big seven-segment cells (112 px tall),
 // KM/H and the RPM number, a 16-capsule tach with a 0-7 scale, trip and range. Right, past a hairline
 // divider: five rows, COOL, BATT, KM/L (the trip's average), PEDAL, LOAD, each a label, a value and a thin
-// 14-tick bar whose danger part turns red; on an alert the row gets a red outline and red type, never a
-// fill. A CHK (check-engine lamp) or NO LINK / KEY ON outline sits over the speed's first cells (CHK is
-// small enough to stay clear of a lit digit). No filled boxes anywhere, like the yellow deck: pure black,
-// lines and type in the LED colour. No clock, no LIVE tag, no wordmark. Its colours and its black are the
-// yellow deck's (the INSIDE light swatch's termpal night palette).
+// 14-tick bar whose danger part turns red; on an alert the row's label and value sit black on a block of the
+// alert colour (the tick bar stays on black under it). A CHK (check-engine lamp) or NO LINK / KEY ON block of
+// that colour sits over the speed's first cells (CHK is small enough to stay clear of a lit digit). Otherwise no
+// filled boxes, like the yellow deck: pure black, lines and type in the LED colour; the only fills are
+// alerts and that pill. No clock, no LIVE tag, no wordmark. Its colours and its black are the yellow deck's
+// (the INSIDE light swatch's termpal night palette).
 // This is the screen's layout, its text, the palette and the regions the view repaints. PURE,
 // host-tested; black/ui/cockpitview draws it.
 // Spec: docs/superpowers/specs/2026-11-20-cockpit-screen-design.md
@@ -26,6 +27,7 @@ constexpr int KMH_X = 8, RPM_LABEL_X = 86, RPM_RIGHT = 182, RPM_BASE = 150;
 constexpr int TACH_X = 8, TACH_Y = 156, TACH_W = 174, TACH_H = 20, TACH_N = 16, TICK_BASE = 189;
 constexpr int TRIP_X0 = 8, TRIP_X1 = 100, TRIP_LABEL_BASE = 209, TRIP_VALUE_BASE = 232;
 constexpr int ROWS = 5, ROW_X = 190, ROW_W = 122, ROW_H = 42, PILLS = 14;
+constexpr int TICK_DY = ROW_H - 7, ALERT_FILL_H = TICK_DY - 2;    // a row's tick bar; the alert block above it
 inline int rowY(int i) { return 8 + (i * 91 + 1) / 2; }                     // 8, 54, 99, 145, 190 (pitch 45.5)
 
 // The five cards, top to bottom.
@@ -45,7 +47,7 @@ struct Card {
     char val[8] = "--";     // the value with its unit ("88\xB0", "13.9V", "41%", "11.2"); "--" when unknown
     uint8_t lit = 0;        // pills on, 0..PILLS
     uint8_t hot = PILLS;    // the first pill of the danger part (PILLS: none)
-    bool bad = false;       // the alert: the row is outlined and set in red
+    bool bad = false;       // the alert: label and value black on the alert colour
 };
 struct Scene {
     bool live = false;
@@ -78,7 +80,7 @@ uint32_t key(const Scene& s, Region r);
 struct Palette {
     uint16_t bg;               // termpal's BG: black
     uint16_t tx, md, dm;       // termpal's TEXT, MID, DIM
-    uint16_t al;               // the alert (outline, type, bar)
+    uint16_t al;               // the alert (fills, bar)
     uint16_t ghost;            // unlit segments, capsules and pills (DIM at 25 %)
     uint16_t warn, core;       // the tach's bright band, and a capsule's core line (TEXT lifted toward white)
     uint16_t border;           // the divider line (DIM at 65 %)

@@ -148,7 +148,7 @@ void test_theme_alert() {
 void test_night_values() {
     static const uint32_t PICKED[N_THEME][3] = {
         {0xFF0000, 0xE00000, 0xBC0000}, {0xFF4600, 0xE03400, 0xBC2800}, {0xFF0040, 0xE00038, 0xBC0030},
-        {0xD200FF, 0xB800E0, 0x9A00BC}, {0x0046FF, 0x003CE0, 0x0032BC}, {0x50FF46, 0x46E03C, 0x3ABC32},
+        {0xD200FF, 0xB800E0, 0x9A00BC}, {0x1E6EFF, 0x145FF0, 0x0A45F0}, {0x50FF46, 0x46E03C, 0x3ABC32},
         {0xFFFFFF, 0xEBEBEB, 0xD2D2D2}, {0xFFB400, 0xFFB400, 0xFFB400}, {0x00E6FF, 0x00C8E0, 0x00A5BC},
     };
     for (int t = 0; t < N_THEME; t++) {
@@ -173,6 +173,8 @@ void test_night_contrast() {
         TEST_ASSERT_TRUE_MESSAGE(contrastOnBlack(rgb(ALERT, t, true)) >= 4.5, "ALERT contrast");
         TEST_ASSERT_TRUE_MESSAGE(text >= mid && mid >= dim, "TEXT >= MID >= DIM");
     }
+    // blue weighs least of all: its dimmest level still reads (F-18)
+    TEST_ASSERT_TRUE_MESSAGE(contrastOnBlack(rgb(DIM, BLUE_T, true)) >= 3.0, "blue DIM contrast");
 }
 
 // Each theme keeps its own hue, fully saturated: its weakest channel at most 0x46 (white aside).

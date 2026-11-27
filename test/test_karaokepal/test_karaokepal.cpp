@@ -23,6 +23,11 @@ void test_orange_is_the_yellow_decks() {
     TEST_ASSERT_EQUAL_HEX32(termpal::rgb(termpal::DIM, 1, true), p.next);
 }
 
+// Blue sits closest to the sweep's 1.5 limit: it still shows termpal's own DIM, not the tinted one.
+void test_blue_keeps_its_own_dim() {
+    TEST_ASSERT_EQUAL_HEX32(termpal::rgb(termpal::DIM, 4, true), karaokepal::of(4).unsung);
+}
+
 // No light (off, no link, none sent): the yellow deck's default green.
 void test_none_is_the_default_green() {
     TEST_ASSERT_EQUAL_HEX32(0x50FF46, karaokepal::of(-1).lit);
@@ -50,6 +55,7 @@ int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_tint_mixes_per_channel);
     RUN_TEST(test_orange_is_the_yellow_decks);
+    RUN_TEST(test_blue_keeps_its_own_dim);
     RUN_TEST(test_none_is_the_default_green);
     RUN_TEST(test_cyan_has_its_own);
     RUN_TEST(test_lit_is_brightest);
