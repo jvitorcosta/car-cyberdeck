@@ -133,7 +133,7 @@ void drawRow(int i, const Scene& s) {
         const uint16_t col = p >= c.lit ? s_pal.ghost : (c.bad || p >= c.hot) ? s_pal.al : s_pal.tx;
         s_frame->fillRect(x0, by, x1 - x0, 3, col);
     }
-    if (i < ROWS - 1 && !c.bad) s_frame->drawFastHLine(bx, r.y + r.h - 1, bw, s_pal.ghost);
+    if (i < ROWS - 1) s_frame->drawFastHLine(bx, r.y + r.h - 1, bw, s_pal.ghost);
     push(r);
 }
 

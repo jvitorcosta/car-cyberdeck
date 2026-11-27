@@ -21,7 +21,7 @@ is not read at a glance (clock, LIVE tag, wordmark, gear estimate, intake air).
 
 Left column, x 8..182:
 - **Speed**: three seven-segment cells 54 x 112, stroke 13, gap 5, at y 8, over faint ghost 8s; `---` without a value.
-- **Status pill** at the top left of the speed, always an alert-coloured outline on black, no fill: `CHK` (check-engine lamp
+- **Status pill** at the top left of the speed, always filled with the alert colour, its type black: `CHK` (check-engine lamp
   on, or a stored code), small enough to stay clear of a lit digit (the first cell's right-hand segments light from
   100 km/h); `NO LINK` (adapter off or searching) or `KEY ON` (ignition on, engine off), which come with `---` on the speed. Nothing otherwise. The
   stored-code count is in the scene but not drawn.
@@ -32,13 +32,14 @@ Left column, x 8..182:
 - **Trip and range**: `TRIP` and `RANGE` labels (dim), values at 36 px, `km` after each. The trip stays shown without the link.
 
 Right column, x 190..312, past a one-pixel divider at x 184 (the border colour), five rows 122 x 42 at y 8, 54, 99, 145, 190
-(pitch 45.5, the last ends on the margin), top to bottom **COOL, BATT, KM/L, PEDAL, LOAD**. No fill, like the yellow deck:
+(pitch 45.5, the last ends on the margin), top to bottom **COOL, BATT, KM/L, PEDAL, LOAD**. No fill but for an alert, like the yellow deck:
 the label top-left (19 px), the value with its unit top-right (36 px: `88\xB0`, `13.9V`, `12.8`, `18%`, `41%`), a 14-tick bar
 3 px high along the bottom and a hairline under the row (not the last). The bar's scales: COOL 60..130 C, BATT 11..15 V,
 KM/L 0..25, PEDAL and LOAD 0..100 %. The ticks from 64 % of the COOL track (105 C) and from 85 % of PEDAL and LOAD are red.
 **KM/L is the trip's average** (`tripKmL`), not the instant reading: the car's own dash already shows that. Like the trip
 it stays without the link, and is `--` until there is one.
-An alert outlines the row in red and sets its label, value and lit ticks red (no fill): coolant over 105 C (until under
+An alert sets the label and value black on a block of the alert colour (the row's top 33 px) and the lit ticks, on
+black under it, in that colour: coolant over 105 C (until under
 100 C) and battery under 12 V for 60 s with the engine running (until 12.2 V), from `drivedash::Alerts` as on Drive and
 Ride. KM/L has no danger part.
 

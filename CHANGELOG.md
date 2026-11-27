@@ -14,7 +14,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 - **Changed:** the black deck's pink is the yellow deck's pink (#93, `ledlook` pink tile 0xFF0090) and then
   0xFF00B4, tuned by eye on the black deck's panel (#94, `src/black/ui/pink.h`), in the gauge screens.
 - **Changed:** the Cockpit screen has the yellow deck's look: pure black, no filled boxes, hairline rules and thin tick bars in
-  the LED colour, and an alert is a filled block (see below). Its KM/L row is now the trip's average, not the instant
+  the LED colour, and an alert is a filled block (see above). Its KM/L row is now the trip's average, not the instant
   reading (the car's own dash shows that one).
 - **Changed:** the engine load is read every 3 s instead of every ~18 s (and shows `--` after 9 s without a reading), so the
   LOAD bar follows the pedal on the Suki, Ride and Cockpit screens. It costs RPM and speed about 8-12 % of their refresh

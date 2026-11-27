@@ -366,7 +366,7 @@ Picked on the panel (TEXT / MID / DIM, then problems):
 | orange | `FF4600` `E03400` `BC2800` | white |
 | pink | `FF0040` `E00038` `BC0030` | white |
 | purple | `D200FF` `B800E0` `9A00BC` | red |
-| blue | `0046FF` `003CE0` `0032BC` (marine, like the inside light) | red |
+| blue | `1E6EFF` `145FF0` `0A45F0` (lightened so the dim text reads) | red |
 | green (and no theme) | `50FF46` `46E03C` `3ABC32` (phosphor terminal) | red |
 | white | `FFFFFF` `EBEBEB` `D2D2D2` | red |
 | yellow | `FFB400` at all three levels | red |
