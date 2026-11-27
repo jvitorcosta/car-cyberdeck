@@ -7,7 +7,7 @@
 using fs::File;   // JPEGDEC.h names the global File, which this core's FS.h may not export
 #include <JPEGDEC.h>
 #include "../audio/speaker.h"
-#include "../board/panel.h"
+#include "../board/panelgfx.h"
 #include "../media/sdcard.h"
 #include "../../common/core/watchdog.h"
 #include "../../black/ui/montage.h"

@@ -8,7 +8,7 @@
 #include <ESPmDNS.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
-#include "board/panel.h"
+#include "board/panelgfx.h"
 #include "media/sdcard.h"
 #include "ui/opening.h"
 #include "../common/board/board.h"
