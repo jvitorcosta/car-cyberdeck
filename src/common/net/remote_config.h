@@ -33,6 +33,12 @@
 // black deck takes its own when it becomes the Cockpit; until then run only one of the two.
 #define POKEDECK_HOTSPOT_OCTET DECK_HOTSPOT_OCTET
 #define POKEDECK_MDNS_NAME REMOTE_NAME
+// Its updates listen on their own port, so neither deck's firmware can land on the other.
+#ifdef POKEDECK
+#define OTA_PORT 3233
+#else
+#define OTA_PORT 3232
+#endif
 #ifndef BLACK_DECK_ADDR
 #ifdef COMPANION_DECK
 #define BLACK_DECK_ADDR COMPANION_DECK   // its name in a config.h from before 2026-10-28

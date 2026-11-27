@@ -37,7 +37,7 @@ and the code disagree: the code wins.
 | `hwcheck` | esp32dev | `huge_app.csv` | CYD display/touch check | USB |
 | `blescan`, `bletest` | esp32dev | `huge_app.csv` | BLE scan / LED controller test (NimBLE 2.5.1) | USB |
 | `ps3test`, `irtest` | esp32dev | `huge_app.csv` | PS3 pad / IR receiver tests | USB |
-| `pokedeck` / `pokedeck_ota` | esp32-s3 (4 MB, `qio_opi`) | `min_spiffs.csv` | Pokédeck (4.3in panel) base | USB first, then espota to `pokedeck.local` only |
+| `pokedeck` / `pokedeck_ota` | esp32-s3 (4 MB, `qio_opi`) | `min_spiffs.csv` | Pokédeck (4.3in panel) base | USB first, then espota to `cardeck.local` port 3233 |
 | `obddeck` | esp32dev | `min_spiffs.csv` | OBD deck (no screen) | USB first, then `obddeck_ota` |
 | `obddeck_bench` | esp32dev | `min_spiffs.csv` | OBD deck with a simulated drive | USB |
 | `obddeck_ota` | esp32dev | `min_spiffs.csv` | OBD deck over WiFi | espota to `cardeck-obd.local` |

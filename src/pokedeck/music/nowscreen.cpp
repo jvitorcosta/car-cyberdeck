@@ -28,7 +28,7 @@ using ui::Tab;
 static constexpr int W = 480;
 static constexpr int ART_BOX = 106;                                   // at 8,28
 static constexpr int INFO_X = 124, INFO_Y = 28, INFO_W = 348, INFO_H = 106;
-static constexpr int ARTIST_Y = 31, TITLE_Y = 55, TITLE_ONE_Y = 62, FROM_Y = 106;
+static constexpr int ARTIST_Y = 29, TITLE_Y = 55, TITLE_ONE_Y = 62, FROM_Y = 106;
 static constexpr int STAT_X = 8, STAT_Y = 138, STAT_W = 464, STAT_H = 74;
 // The walker (32 px) stands on the bar: its top, BAR_Y - 33, stays under the name row.
 static constexpr int BAR_X = 28, BAR_Y = 198, BAR_W = 432, BAR_H = 9;   // incl. "HP" tag
@@ -165,7 +165,7 @@ static void drawBadge(TFT_eSPI& t, int x, int y, const char* label, uint16_t c) 
     const uint16_t edge = theme::darken(c);
     t.fillRoundRect(x, y, BADGE_W, BADGE_H, 4, c);
     t.drawRoundRect(x, y, BADGE_W, BADGE_H, 4, edge);
-    drawRows(t, label, x + BADGE_W / 2, y, y, BADGE_W - 4, 1, TFT_WHITE, edge, SMALL, false, true);
+    drawRows(t, label, x + BADGE_W / 2, y - 3, y - 3, BADGE_W - 4, 1, TFT_WHITE, edge, SMALL, false, true);
 }
 
 void drawArtistRow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
@@ -174,7 +174,7 @@ void drawArtistRow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
     int x = x0, maxW = tw;
     if (genre != genre::NONE && genre < genrebadge::count()) {
         const genrebadge::Badge& b = genrebadge::at(genre);
-        drawBadge(t, x, ARTIST_Y + 2, b.label, b.color);
+        drawBadge(t, x, ARTIST_Y + 4, b.label, b.color);
         x += BADGE_W + 8;
         maxW -= BADGE_W + 8;
     }
@@ -202,7 +202,7 @@ bool drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
 
 // One verse: large on one row when it fits, else the middle size on two.
 static void paintLyric(TFT_eSPI& t, bool notes) {
-    t.fillRect(DLG_X + 5, DLG_Y + 5, DLG_W - 10, DLG_H - 10, theme::pal().dlgFill);
+    ui::dialogueBox(t, DLG_X, DLG_Y, DLG_W, DLG_H);   // the whole box: descenders reach its frame
     if (!s_lastLyric[0]) return;
     if (notes) drawNotes(t);
     const int maxW = DLG_W - 2 * 30, cx = DLG_X + DLG_W / 2;
@@ -210,7 +210,7 @@ static void paintLyric(TFT_eSPI& t, bool notes) {
     const Face face = one ? BIG : MID;
     const int oneY = one ? DLG_Y + (DLG_H - lyricface::lineHeight(BIG)) / 2
                          : DLG_Y + (DLG_H - lyricface::lineHeight(MID)) / 2;
-    drawRows(t, s_lastLyric, cx, DLG_Y + 5, oneY, maxW, one ? 1 : 2, theme::pal().text, theme::pal().dlgShadow,
+    drawRows(t, s_lastLyric, cx, DLG_Y + 3, oneY, maxW, one ? 1 : 2, theme::pal().text, theme::pal().dlgShadow,
              face, false, true);
 }
 
