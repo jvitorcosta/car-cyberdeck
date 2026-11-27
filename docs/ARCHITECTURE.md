@@ -397,6 +397,13 @@ the crash log and a status screen (name, version, network, updates). The picture
 on core 0 owns the network. USB the first time, never on the black deck's port: both are S3 boards
 on native USB, and both take the same update password.
 
+**The music screen** (`pokedeck/music`): the black deck's screen code draws with TFT_eSPI, which
+doesn't drive this panel, so it draws into a 480x272 sprite in PSRAM (`pokedeck/board/canvas`) that
+`panel::push` sends to Arduino_GFX (the two libraries' headers can't be included together). The
+now-playing screen is copied from `black/ui` and laid out for this size (`nowscreen`, `battle`,
+`icons`; `pushImage` isn't virtual, so they draw pixels); text, fonts, colours and badges are the
+black deck's modules. `sample` shows a made-up song until Spotify is ported.
+
 **Media from the SD card** (`pokedeck/media`): the black deck's media don't fit 4 MB of flash, so
 `python tools/sd_media.py <drive>` copies them to the card's `/cardeck` folder (FAT32; nothing else
 on the card is touched), and the deck reads a file whole into PSRAM when it needs it, never writing
