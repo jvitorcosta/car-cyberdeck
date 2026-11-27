@@ -9,8 +9,8 @@
 // 14-tick bar whose danger part turns red; on an alert the row's label and value sit black on a block of the
 // alert colour (the tick bar stays on black under it). A CHK (check-engine lamp) or NO LINK / KEY ON block of
 // that colour sits over the speed's first cells (CHK is small enough to stay clear of a lit digit). Otherwise no
-// filled boxes, like the yellow deck: pure black, lines and type in the LED colour; the only fills are alerts and that pill. No
-// clock, no LIVE tag, no wordmark. Its colours and its black are the yellow deck's (the INSIDE light swatch's
+// filled boxes, like the yellow deck: pure black, lines and type in the LED colour; the only fills are
+// alerts and that pill. No clock, no LIVE tag, no wordmark. Its colours and its black are the yellow deck's (the INSIDE light swatch's
 // termpal night palette).
 // This is the screen's layout, its text, the palette and the regions the view repaints. PURE,
 // host-tested; black/ui/cockpitview draws it.
