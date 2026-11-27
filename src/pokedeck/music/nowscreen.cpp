@@ -1,6 +1,10 @@
 // Copied from black/ui/screen_now.cpp and laid out for 480x272 (nowscreen.h).
 #include "nowscreen.h"
 #include <cstring>
+#include "../board/canvas.h"
+#include "../../black/core/mem.h"
+#include "../../black/core/shared.h"
+#include "../../black/images/walksprite.h"
 #include "../../black/ui/battle.h"
 #include "../../black/ui/icons.h"
 #include "../../black/ui/labels.h"
@@ -11,6 +15,9 @@
 #include "../../util/black/genre.h"
 #include "../../util/black/genrebadge.h"
 #include "../../util/black/glyphrun.h"
+#include "../../util/black/interp.h"
+#include "../../util/black/walkanim.h"
+#include "../../util/black/walkrect.h"
 #include "../../util/common/text.h"
 
 namespace pokeui {
@@ -125,8 +132,9 @@ static void drawTitle(TFT_eSPI& t, const char* text, int x, int y, int maxW) {
     ui::drawRunScaled(t, items + w.bStart, bn, x, y + 32, theme::pal().text, theme::pal().textShadow, TL_DATUM, 2);
 }
 
-static void drawArtistRow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
+void drawArtistRow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
     const int x0 = INFO_X + 12, y = INFO_Y + 8, tw = INFO_W - 36;
+    t.fillRect(x0, y - 1, tw, BADGE_H + 2, theme::pal().boxFill);
     int x = x0, maxW = tw;
     if (genre != genre::NONE && genre < genrebadge::count()) {
         const genrebadge::Badge& b = genrebadge::at(genre);
@@ -145,12 +153,18 @@ static void drawNotes(TFT_eSPI& t) {
                  theme::pal().dlgFill);
 }
 
-void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
+static void paintLyric(TFT_eSPI& t, bool notes);
+
+bool drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
     const char* line = text ? text : "";
-    if (notes == s_lastNotes && strncmp(s_lastLyric, line, sizeof s_lastLyric) == 0) return;
+    if (notes == s_lastNotes && strncmp(s_lastLyric, line, sizeof s_lastLyric) == 0) return false;
     s_lastNotes = notes;
     txt::copy(s_lastLyric, line, sizeof s_lastLyric);
+    paintLyric(t, notes);
+    return true;
+}
 
+static void paintLyric(TFT_eSPI& t, bool notes) {
     t.fillRect(DLG_X + 5, DLG_Y + 5, DLG_W - 10, DLG_H - 10, theme::pal().dlgFill);
     constexpr size_t MAX_ITEMS = 160;   // one item per byte at most
     static glyphrun::Item items[MAX_ITEMS + 3];
@@ -180,7 +194,51 @@ void drawLyricArea(TFT_eSPI& t, const char* text, bool notes) {
     ui::drawRun(t, items + w.bStart, bn, cx, DLG_Y + 29, theme::pal().text, theme::pal().dlgShadow, MC_DATUM);
 }
 
+// The walker's last rect on screen (walkrect); a fresh screen has none.
+static walkrect::Rect s_walk{0, 0, 0, 0};
+
+void drawWalker(const AppState& st, uint32_t animMs, int step) {
+    static constexpr int SLACK = 8;
+    static uint16_t* buf = static_cast<uint16_t*>(
+        mem::bigAlloc((walk::MAX_W + 2 * SLACK) * (walk::BAND_H + 1 + 2 * SLACK) * sizeof(uint16_t)));
+    if (!buf) return;
+    // The network task may promote() a new walker at any time; read frames under the lock.
+    shared::Guard lockWalker;
+    const walk::Info& wi = walk::info();
+    if (!wi.ready) return;
+    int fr = 0;
+    if (wi.pmd) {
+        uint16_t d[walk::MAX_FRAMES];
+        for (int i = 0; i < wi.frames; ++i) d[i] = walk::durationMs(i);
+        fr = walkanim::frameAt(animMs, d, wi.frames);
+    }
+    const uint16_t* spr = walk::pixels(fr);
+    const uint8_t* msk = walk::mask(fr);
+    const int w = wi.w, h = wi.h;
+    const int bob = (!wi.pmd && (step % 2)) ? 1 : 0;   // fallback fake-walk only
+    const bool mirror = !wi.pmd && ((step / 4) % 2);
+    const float frac = st.durationMs ? static_cast<float>(st.progressMs) / static_cast<float>(st.durationMs) : 0.0f;
+    const int cx = interp::walkX(frac, FILL_X, FILL_W, w);   // drained / remaining boundary
+    const int x0 = cx - w / 2, y0 = BAR_Y - h - bob;          // feet on the bar's top
+    const walkrect::Plan p = walkrect::plan(s_walk, {x0, BAR_Y - h - 1, w, h + 1}, SLACK);
+    const uint16_t fill = theme::pal().boxFill;
+    if (p.clearPrev) canvas::screen().fillRect(s_walk.x, s_walk.y, s_walk.w, s_walk.h, fill);
+    const walkrect::Rect& r = p.push;
+    const uint16_t fillBE = theme::be(fill);
+    for (int i = 0; i < r.w * r.h; ++i) buf[i] = fillBE;
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x) {
+            const int sx = mirror ? (w - 1 - x) : x;
+            if (!msk[y * w + sx]) continue;
+            const int bx = x0 + x - r.x, by = y0 + y - r.y;
+            if (bx >= 0 && bx < r.w && by >= 0 && by < r.h) buf[by * r.w + bx] = spr[y * w + sx];
+        }
+    canvas::blit(r.x, r.y, r.w, r.h, buf);
+    s_walk = p.next;
+}
+
 void drawNow(TFT_eSPI& t, const AppState& st, uint8_t genre) {
+    s_walk = {0, 0, 0, 0};
     ui::background(t);
     drawTopStrip(t, st);
 

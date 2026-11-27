@@ -2,6 +2,8 @@
 // moononournation/Dev_Device_Pins (PINS_JC4827W543.h), checked on the board with hwcheck_panel
 // (pull request #116), where the touch layer also read half a turn from the picture.
 #include <Arduino.h>
+#include <cstring>
+#include <esp_heap_caps.h>
 #include "panelgfx.h"
 #include "../../common/board/board.h"
 
@@ -22,5 +24,19 @@ Arduino_GFX& gfx() {
     return g;
 }
 bool begin() { return gfx().begin(32000000); }
-void push(uint16_t* bigEndian) { gfx().draw16bitBeRGBBitmap(0, 0, bigEndian, W, H); }
+void push(uint16_t* bigEndian) {
+    // The frame is in PSRAM: it goes out in bands through one internal DMA buffer, so the driver
+    // never has to allocate its own while TLS holds the internal heap.
+    constexpr int BAND = 4;
+    static uint16_t* band = static_cast<uint16_t*>(
+        heap_caps_malloc(W * BAND * sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    if (!band) {
+        gfx().draw16bitBeRGBBitmap(0, 0, bigEndian, W, H);
+        return;
+    }
+    for (int y = 0; y < H; y += BAND) {
+        memcpy(band, bigEndian + y * W, W * BAND * sizeof(uint16_t));
+        gfx().draw16bitBeRGBBitmap(0, static_cast<int16_t>(y), band, W, BAND);
+    }
+}
 }  // namespace panel
