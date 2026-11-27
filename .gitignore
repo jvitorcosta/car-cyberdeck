@@ -42,6 +42,9 @@ data/intro.pcm
 max-clip/
 data/max.bin
 data/max.pcm
+# the Pokedeck's full-screen intros (tools/gen_intro.py --wide)
+data/*_wide.bin
+data/*_wide.pcm
 # The Suki gauge screen's film art (tools/gen_suki_hud.py): frames of the film monitor, never committed
 suki-frames/
 data/suki.bin

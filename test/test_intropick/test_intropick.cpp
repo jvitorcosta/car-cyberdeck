@@ -82,6 +82,23 @@ void test_forced_needs_its_files() {
     TEST_ASSERT_EQUAL_INT(-1, forced(9, true, true, true));
 }
 
+// The videos only (the Pokédeck has no drive yet): never last boot's while there are two, the one
+// there is when there's one, none without a file.
+void test_video_only_pick() {
+    bool kiss = false, max = false;
+    for (uint32_t r = 0; r < 64; ++r) {
+        TEST_ASSERT_EQUAL_INT(MAX, video(r, KISS, true, true));
+        TEST_ASSERT_EQUAL_INT(KISS, video(r, MAX, true, true));
+        const int o = video(r * 2654435761u, -1, true, true);
+        kiss |= o == KISS;
+        max |= o == MAX;
+        TEST_ASSERT_EQUAL_INT(KISS, video(r, KISS, true, false));
+        TEST_ASSERT_EQUAL_INT(MAX, video(r, 77, false, true));
+        TEST_ASSERT_EQUAL_INT(-1, video(r, MAX, false, false));
+    }
+    TEST_ASSERT_TRUE(kiss && max);
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_never_repeats_last_and_reaches_all);
@@ -93,5 +110,6 @@ int main(int, char**) {
     RUN_TEST(test_max_and_honda_alternate);
     RUN_TEST(test_names_round_trip);
     RUN_TEST(test_forced_needs_its_files);
+    RUN_TEST(test_video_only_pick);
     return UNITY_END();
 }
