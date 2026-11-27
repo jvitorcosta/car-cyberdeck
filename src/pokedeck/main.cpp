@@ -1,53 +1,33 @@
-// The Pokédeck (env pokedeck): the 4.3" ESP32-S3 panel that is to take over the music from the
-// black deck. This build is its base only: it joins the WiFi (the phone hotspot first, where it
+// The Pokédeck (env pokedeck): the 4.3" ESP32-S3 panel that is taking over the music from the
+// black deck. It plays Spotify's current song on the battle screen (pokedeck/music), and it joins the WiFi (the phone hotspot first, where it
 // pins 172.20.10.13), takes updates over WiFi with the decks' boot guard and rollback
 // (common/net/ota), is watched by the task watchdog, keeps the crash log and shows its state.
 // At boot it plays one of the intro videos from its SD card (ui/opening).
 // Serial: [board], [boot], [crash], [sd], [intro], [wifi], [ota], [mem] every minute.
 #include <Arduino.h>
-#include <ESPmDNS.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
 #include "board/panelgfx.h"
 #include "media/sdcard.h"
-#include "music/sample.h"
+#include "music/art.h"
+#include "music/nettask.h"
+#include "music/screen.h"
+#include "../black/core/mem.h"
+#include "../black/core/shared.h"
+#include "../black/images/walksprite.h"
 #include "../black/ui/cjkdata.h"
 #include "../black/ui/emojidata.h"
 #include "ui/opening.h"
 #include "../common/board/board.h"
 #include "../common/core/crashlog.h"
 #include "../common/core/watchdog.h"
-#include "../common/net/clock.h"
 #include "../common/net/ota.h"
-#include "../common/net/remote_config.h"
 #include "../common/net/wifi.h"
 #include "../common/ui/backlight.h"
 #include "../util/common/version.h"
 
-static TaskHandle_t netHandle = nullptr;
 static bool screenOk = false;
-static bool musicOk = false;   // the battle screen is up (a sample song so far)
-
-// WiFi, then mDNS, SNTP and the update listener; then the rejoin loop. Watched: a join feeds
-// before each try.
-static void netTask(void*) {
-    watchdog::watch();
-    net::connectAny();
-    while (!net::isOnline()) {
-        watchdog::feed();
-        net::loop();
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-    if (!MDNS.begin(POKEDECK_MDNS_NAME)) Serial.println("[net] mDNS failed: reach the deck by its address");
-    netclock::begin();
-    ota::begin(POKEDECK_MDNS_NAME);
-    for (;;) {
-        watchdog::feed();
-        // rejoins after a drop; not during an update (a move to the hotspot would cut it)
-        if (!ota::active()) net::loop();
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
+static bool musicOk = false;   // the music screen has its frame
 
 constexpr int LINES = 3, LINE_Y = 80, LINE_STEP = 44, LINE_H = 32;
 
@@ -78,11 +58,31 @@ static void drawStatus() {
     }
 }
 
+// The last run ended in a crash or a watchdog reset.
+static bool crashedLast() {
+    const esp_reset_reason_t r = esp_reset_reason();
+    return r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT;
+}
+
+// The screens' CJK and emoji fonts, read from the card once and kept. Watched like the opening, and
+// skipped after a crash too, so a bad card can't restart the deck boot after boot.
+static void loadFonts() {
+    if (crashedLast()) return;
+    crashlog::at("fonts");
+    watchdog::watch();
+    if (sdcard::begin()) {
+        ui::cjk();
+        ui::emoji();
+        sdcard::end();
+    }
+    watchdog::forget();
+    crashlog::at("");
+}
+
 // The opening, watched like any long step. Skipped after a crash or a watchdog reset, so a bad
 // file on the card can't restart the deck boot after boot.
 static void playOpening() {
-    const esp_reset_reason_t r = esp_reset_reason();
-    if (r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT) {
+    if (crashedLast()) {
         Serial.println("[intro] skipped after a crash");
         return;
     }
@@ -90,8 +90,6 @@ static void playOpening() {
     watchdog::watch();
     if (sdcard::begin()) {
         opening::play(screenOk);   // an intro video from the card, with its sound
-        ui::cjk();                 // the screens' fonts, while the card is mounted
-        ui::emoji();
         sdcard::end();
     }
     watchdog::forget();   // loop() is watched by the core from here (enableLoopWDT)
@@ -122,10 +120,16 @@ void setup() {
     backlight::begin();
     if (screenOk) panel::gfx().fillScreen(BLACK);
     else Serial.println("[screen] the panel didn't start");
-    // WiFi joins underneath the opening.
-    xTaskCreatePinnedToCore(netTask, "net", 6144, nullptr, 0, &netHandle, 0);
-    playOpening();
-    musicOk = screenOk && sample::begin();
+    shared::begin();
+    walk::begin();  // both walker slots, before the heap fragments
+    art::begin();   // the cover's bitmap, before WiFi takes the internal heap
+    // WiFi, the update listener and Spotify come up underneath the opening (music/nettask).
+    nettask::start();
+    // No opening after the network task's self-heal restart (util/quietboot): mid-drive, the screen
+    // comes straight back.
+    if (!nettask::quietBoot()) playOpening();
+    loadFonts();   // on every boot, the skipped openings' too
+    musicOk = screenOk && screen::begin();
     if (screenOk && !musicOk) drawTitle();
     enableLoopWDT();   // the core feeds it before each loop()
 }
@@ -136,8 +140,6 @@ void loop() {
     crashlog::tick();
     if (now - drawnAt >= 200) {   // often enough for an update's percent
         drawnAt = now;
-        // Up bootguard::HEALTHY_MS, online and listening: this firmware has proven itself.
-        if (net::isOnline()) ota::onGoodPoll();
         // The status screen while an update comes in, or without memory for the music screen.
         static bool updating = false;
         if (screenOk && (!musicOk || ota::active())) {
@@ -146,18 +148,15 @@ void loop() {
             drawStatus();
         } else if (updating) {
             updating = false;
-            sample::redraw();
+            screen::redraw();
         }
     }
-    if (musicOk && !ota::active()) sample::tick(now);
+    if (musicOk && !ota::active()) screen::tick();
     if (now - memAt >= 60000) {
         memAt = now;
-        Serial.printf("[mem] internal %u (largest %u) psram %u  stack left: net %u, ota %u, loop %u\n",
-                      static_cast<unsigned>(heap_caps_get_free_size(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
-                      static_cast<unsigned>(heap_caps_get_largest_free_block(MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL)),
-                      static_cast<unsigned>(ESP.getFreePsram()),
-                      netHandle ? static_cast<unsigned>(uxTaskGetStackHighWaterMark(netHandle)) : 0u,
-                      ota::stackLeft(), static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
+        mem::log("minute");
+        Serial.printf("[mem] stack left: ota %u, loop %u\n", ota::stackLeft(),
+                      static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     }
     delay(20);
 }

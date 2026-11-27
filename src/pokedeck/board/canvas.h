@@ -7,4 +7,6 @@ namespace canvas {
 bool begin();         // after panel::begin(); false: no memory for the frame
 TFT_eSPI& screen();   // what the screens draw on
 void present();       // the whole frame to the panel
+// A block of big-endian RGB565 (the covers, the walker) into the frame, clipped to it.
+void blit(int x, int y, int w, int h, const uint16_t* bigEndian);
 }

@@ -6,7 +6,9 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Pokédeck
-- **Added:** the battle screen across the whole 480x272 panel, with a made-up song until Spotify is connected.
+- **Added:** Spotify on the battle screen across the whole 480x272 panel: song, cover, lyrics, genre badge and the
+  walking Pokémon, from the black deck's code. Not yet: the status scenes, karaoke, music mode, the phone page, the
+  watch and the camera alerts. Run one deck with Spotify at a time.
 - **Added:** the boot opening from the SD card: one of the two intro videos with its sound, full screen
   (`gen_intro.py --wide`; else the greeting). `python tools/sd_media.py <drive>` puts the media on the card.
 - **Added:** a third screen, the 4.3" panel (env `pokedeck`), with its base firmware: WiFi (172.20.10.13 on the

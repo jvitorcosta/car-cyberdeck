@@ -402,7 +402,11 @@ doesn't drive this panel, so it draws into a 480x272 sprite in PSRAM (`pokedeck/
 `panel::push` sends to Arduino_GFX (the two libraries' headers can't be included together). The
 now-playing screen is copied from `black/ui` and laid out for this size (`nowscreen`, `battle`,
 `icons`; `pushImage` isn't virtual, so they draw pixels); text, fonts, colours and badges are the
-black deck's modules. `sample` shows a made-up song until Spotify is ported.
+black deck's modules. `nettask` (copied: no music mode, camera marks or gauges; it also starts this
+deck's mDNS and update listener) runs the black deck's Spotify, lyrics, genre, walker and cover code
+on core 0 (`art` copied for a 116x116 cover); `screen` is the black deck's loop cut to the battle
+screen, which also says why when there is no song. The frame goes to the panel in bands through one
+internal DMA buffer.
 
 **Media from the SD card** (`pokedeck/media`): the black deck's media don't fit 4 MB of flash, so
 `python tools/sd_media.py <drive>` copies them to the card's `/cardeck` folder (FAT32; nothing else
