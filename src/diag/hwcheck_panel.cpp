@@ -3,7 +3,8 @@
 // Proves: the NV3041A QSPI display and backlight, the time to push a 320x240 frame centred on it,
 // GT911 touch, the microSD slot (read only, never formatted), the I2S speaker output, PSRAM and
 // flash size, and the biggest internal heap block with the card mounted, WiFi up and a TLS
-// connection to Spotify open (no token sent). Pins: moononournation/Dev_Device_Pins, JC4827W543.
+// connection to Spotify open (no token sent). That memory figure has no Bluetooth, web server or
+// app tasks in it: a PASS doesn't show a deck firmware fits. Pins: moononournation/Dev_Device_Pins, JC4827W543.
 #include <Arduino.h>
 #include <Arduino_GFX_Library.h>
 #include <SD.h>
@@ -34,6 +35,7 @@ SPIClass sdSpi(HSPI);   // the display holds the other SPI host
 bool screenOk = false, sdOk = false, wifiOk = false, tlsOk = false, audioOk = false;
 uint32_t frameUs = 0, sdKbS = 0, sdCardMb = 0;
 uint8_t touchAddr = 0, touches = 0;
+bool fingerDown = false;
 size_t blockBoot = 0, blockSd = 0, blockWifi = 0, blockTls = 0, freeTls = 0;
 WiFiClientSecure tls;
 
@@ -135,10 +137,14 @@ void pollTouch() {
     uint8_t status = 0;
     if (!gtRead(0x814E, &status, 1) || !(status & 0x80)) return;
     uint8_t p[4];
-    if ((status & 0x0F) && gtRead(0x8150, p, 4)) {
-        const int x = p[0] | (p[1] << 8), y = p[2] | (p[3] << 8);
+    if (!(status & 0x0F)) {
+        fingerDown = false;
+    } else if (!fingerDown && gtRead(0x8150, p, 4)) {   // one press, however long it's held
+        fingerDown = true;
+        // The touch layer sits half a turn from the picture on this panel.
+        const int x = W - 1 - (p[0] | (p[1] << 8)), y = H - 1 - (p[2] | (p[3] << 8));
         if (screenOk) gfx->fillCircle(x, y, 5, YELLOW);
-        if (touches < 255) ++touches;
+        ++touches;
         logPress(x, y);
     }
     Wire.beginTransmission(touchAddr);   // clear the ready flag
@@ -222,10 +228,12 @@ void checkNetwork() {
 }
 
 void report() {
-    Serial.printf("[check] screen %s, 320x240 push %lu us\n", screenOk ? "ok" : "FAIL", static_cast<unsigned long>(frameUs));
+    Serial.printf("[check] screen driver %s (check by eye), 320x240 push %lu us\n", screenOk ? "ok" : "FAIL",
+                  static_cast<unsigned long>(frameUs));
     Serial.printf("[check] touch %s (0x%02X) %ux%u, %u presses\n", touchAddr ? "GT911" : "none", touchAddr,
                   touchMaxX, touchMaxY, touches);
-    Serial.printf("[check] sd %s, %lu MB, %lu KB/s\n", sdOk ? "ok" : "none", static_cast<unsigned long>(sdCardMb),
+    Serial.printf("[check] sd %s, %lu MB, %lu KB/s\n", sdOk ? "ok" : "not mounted (no card, or not FAT32)",
+                  static_cast<unsigned long>(sdCardMb),
                   static_cast<unsigned long>(sdKbS));
     Serial.printf("[check] audio driver %s\n", audioOk ? "ok" : "FAIL");
     Serial.printf("[check] psram %u KB, flash %u MB\n", static_cast<unsigned>(ESP.getPsramSize() / 1024),
@@ -234,7 +242,9 @@ void report() {
     Serial.printf("[check] largest internal block: boot %u, sd %u, wifi %u, tls %u (free %u) -> %s\n",
                   static_cast<unsigned>(blockBoot), static_cast<unsigned>(blockSd), static_cast<unsigned>(blockWifi),
                   static_cast<unsigned>(blockTls), static_cast<unsigned>(freeTls),
-                  tlsOk && sdOk && blockTls >= TLS_BLOCK ? "PASS" : "not passed");
+                  tlsOk && sdOk && frameUs && ESP.getPsramSize() && blockTls >= TLS_BLOCK
+                      ? "PASS (without Bluetooth or app tasks)"
+                      : "not passed");
     if (!screenOk) return;
     gfx->fillRect(0, H - 16, W, 16, BLACK);
     gfx->setTextSize(1);
