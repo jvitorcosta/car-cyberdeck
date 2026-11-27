@@ -41,7 +41,7 @@ jobs:
           # the diagnostic envs nobody flashes often: built so a shared-header break shows up
           # here and not on the bench. No part: they have no size budget to check.
           - board: diag
-            envs: -e blescan -e bletest -e ps3test -e irtest -e ledpanel_probe
+            envs: -e blescan -e bletest -e ps3test -e irtest -e ledpanel_probe -e hwcheck_panel
             part: ""
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
