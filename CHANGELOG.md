@@ -5,6 +5,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 
 ## [Unreleased]
 
+### Pokédeck
+- **Added:** a third screen, the 4.3" panel (env `pokedeck`), with its base firmware: WiFi (172.20.10.13 on the
+  hotspot), updates over WiFi with rollback, watchdog, crash log and a status screen. No music yet.
+
 ### Black deck
 - **Changed:** on the Cockpit screen an alert now stands out by its shape, not only its colour: a row in trouble shows its
   label and value black on a block of the alert colour, and the CHK / NO LINK / KEY ON pill is filled the same way.
