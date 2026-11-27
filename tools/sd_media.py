@@ -3,8 +3,8 @@
   python tools/sd_media.py E:\\                 (the card's drive, in the PC's reader)
   python tools/sd_media.py E:\\ --data <folder>  (the media from another checkout)
 
-Copies the files the black deck packs into its media partition (pack_media.FILES), skipping those
-already on the card unchanged. Writes nothing else: no other file on the card is touched, and the
+Copies the files the black deck packs into its media partition (pack_media.FILES) and the
+Pokédeck's full-screen intros (WIDE), skipping those already on the card unchanged. Writes nothing else: no other file on the card is touched, and the
 card is never formatted (it must be FAT32). Refuses the whole copy when any file is a stand-in
 (tools/media_sizes.py placeholders) or lacks its header.
 """
@@ -16,6 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pack_media as pm  # noqa: E402
 
 FOLDER = "cardeck"   # src/pokedeck/media/sdcard.cpp reads from here
+# The Pokédeck's own full-screen intros (gen_intro.py --wide); the black deck never packs them.
+WIDE = ["intro_wide.bin", "intro_wide.pcm", "max_wide.bin", "max_wide.pcm"]
+MAGICS = {"intro_wide.bin": b"MTG1", "max_wide.bin": b"MTG1"}
 
 
 class Refused(Exception):
@@ -30,12 +33,14 @@ def read(path):
 def media(data):
     """[(name, bytes)] of the real media in `data`; Refused when one is a stand-in or none is there."""
     files, bad = [], []
-    for name in pm.FILES:
+    for name in pm.FILES + WIDE:
         path = os.path.join(data, name)
         if not os.path.isfile(path) or os.path.getsize(path) <= pm.STAND_IN:
             continue
         blob = read(path)
         problem = pm.stand_in_problem(name, blob)
+        if not blob.startswith(MAGICS.get(name, b"")):
+            problem = "%s lacks its %r header" % (name, MAGICS[name].decode())
         if problem:
             bad.append(problem)
         files.append((name, blob))
@@ -48,7 +53,7 @@ def media(data):
 
 def missing(data):
     """The media the black deck packs that `data` doesn't have (stand-ins of a few bytes included)."""
-    paths = ((n, os.path.join(data, n)) for n in pm.FILES)
+    paths = ((n, os.path.join(data, n)) for n in pm.FILES + WIDE)
     return [n for n, p in paths if not os.path.isfile(p) or os.path.getsize(p) <= pm.STAND_IN]
 
 

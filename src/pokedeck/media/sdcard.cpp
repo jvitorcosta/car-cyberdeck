@@ -22,8 +22,16 @@ File openFile(const char* name) {
 
 bool begin() {
     if (s_mounted) return true;
-    s_spi.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS);
-    s_mounted = SD.begin(CS, s_spi, HZ, "/sd", 1 /* one file at a time */, false /* never format */);
+    // A card left mid-read by a reset can refuse its first mount: ask again.
+    for (int t = 0; t < 3 && !s_mounted; ++t) {
+        if (t) delay(300);
+        s_spi.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS);
+        s_mounted = SD.begin(CS, s_spi, HZ, "/sd", 1 /* one file at a time */, false /* never format */);
+        if (!s_mounted) {
+            SD.end();
+            s_spi.end();
+        }
+    }
     if (s_mounted) Serial.printf("[sd] card %lu MB\n", static_cast<unsigned long>(SD.cardSize() >> 20));
     else Serial.println("[sd] none (no card, or not FAT32): no media");
     return s_mounted;

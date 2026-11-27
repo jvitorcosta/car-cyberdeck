@@ -401,7 +401,8 @@ on native USB, and both take the same update password.
 `python tools/sd_media.py <drive>` copies them to the card's `/cardeck` folder (FAT32; nothing else
 on the card is touched), and the deck reads a file whole into PSRAM when it needs it, never writing
 to the card. At boot `pokedeck/ui/opening` plays `intro.bin` + `intro.pcm` or `max.bin` + `max.pcm`
-(never last boot's: `intropick::video`, NVS `boot`/`video`) centred on the panel, its frames by the
+(never last boot's: `intropick::video`, NVS `boot`/`video`; full screen from `intro_wide` / `max_wide`,
+480x272 from `gen_intro.py --wide`, else the black deck's 320x240 centred), its frames by the
 clock of the sound (`util/black/introclock`, `black/ui/montage`'s MTG1), on the I2S amplifier
 (`pokedeck/audio/speaker`) while WiFi joins. With no video it plays `greeting.pcm`; with no card it
 goes straight to the status screen.

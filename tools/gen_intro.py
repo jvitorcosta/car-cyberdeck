@@ -12,7 +12,8 @@ it has 62 ms a frame.) The kiss is at the default 16 fps too (at 20 it dropped 2
 The clips and the built files are git-ignored. Needs ffmpeg.
 
 Format: the montage's "MTG1" (ui/montage): u16 count, u16 fps, count x (u32 offset, u32 size),
-then baseline JPEG frames, 320x240 (a centre 4:3 crop of the clip; --letterbox: the whole 16:9
+then baseline JPEG frames: 480x272 with --wide (the Pokédeck, --out intro_wide or max_wide), else
+320x240 (a centre 4:3 crop of the clip; --letterbox: the whole 16:9
 frame at 320x180 on the bottom, black above, where the boot terminal types). Sound: data/intro.pcm,
 16-bit mono 48 kHz, levelled to the boot greetings' loudness (gen_rosters.level), each segment cut to its frames' length so the seams stay in sync. Without a file the deck
 boots straight to its night drive (tools/intro_clip.py writes an empty one for the build).
@@ -89,6 +90,17 @@ def level(pcm):
 
 CROP = "crop=ih*4/3:ih,scale=320:240:flags=lanczos"
 LETTERBOX = "scale=320:180:flags=lanczos,pad=320:240:0:60:black"   # below the terminal (60 px)
+# The Pokédeck's whole 4.3in panel (--wide): fill it, trimming what spills over.
+WIDE = "scale=480:272:force_original_aspect_ratio=increase:flags=lanczos,crop=480:272"
+
+
+def video_filter(wide, letterbox):
+    """ffmpeg's filter for the frames; ValueError for --wide with --letterbox."""
+    if wide:
+        if letterbox:
+            raise ValueError("--wide fills the panel: no --letterbox")
+        return WIDE
+    return LETTERBOX if letterbox else CROP
 
 
 def segment_frames(video, start, end, q, tmp, fit=CROP, fps=FPS):
@@ -107,11 +119,16 @@ def main():
     ap.add_argument("--seg", type=segment, action="append", metavar="START-END")
     ap.add_argument("--out", default="intro", help="data/<out>.bin and .pcm (intro, max)")
     ap.add_argument("--letterbox", action="store_true", help="keep the whole frame (16:9 clips)")
+    ap.add_argument("--wide", action="store_true",
+                    help="480x272 for the Pokedeck (with --out intro_wide or max_wide)")
     ap.add_argument("--fps", type=int, default=FPS, help="frames a second (the deck draws one in ~50 ms)")
     ap.add_argument("--q", type=int, default=QUALITY, help="JPEG quality to start at (2 best .. 31)")
     a = ap.parse_args()
     out, out_pcm = (os.path.join(DATA, a.out + ext) for ext in (".bin", ".pcm"))
-    fit = LETTERBOX if a.letterbox else CROP
+    try:
+        fit = video_filter(a.wide, a.letterbox)
+    except ValueError as e:
+        sys.exit(f"gen_intro: {e}")
     segments = a.seg or DEFAULT_SEGMENTS
     if not os.path.isfile(a.video):
         sys.exit(f"gen_intro: no such file {a.video}")

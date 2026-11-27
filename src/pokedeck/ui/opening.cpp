@@ -16,13 +16,12 @@ using fs::File;   // JPEGDEC.h names the global File, which this core's FS.h may
 
 namespace opening {
 namespace {
-constexpr int FRAME_W = 320, FRAME_H = 240;
-constexpr int OX = (panel::W - FRAME_W) / 2, OY = (panel::H - FRAME_H) / 2;
+int s_ox = 0, s_oy = 0;   // where the running video's frames go: centred on the panel
 // Percent of the clips' level, as the black deck plays them (its INTRO_VOLUME for the videos).
 constexpr int VIDEO_VOLUME = 50, GREETING_VOLUME = 100;
 
 int draw(JPEGDRAW* d) {
-    panel::gfx().draw16bitBeRGBBitmap(static_cast<int16_t>(OX + d->x), static_cast<int16_t>(OY + d->y),
+    panel::gfx().draw16bitBeRGBBitmap(static_cast<int16_t>(s_ox + d->x), static_cast<int16_t>(s_oy + d->y),
                                       d->pPixels, static_cast<int16_t>(d->iWidth),
                                       static_cast<int16_t>(d->iHeight));
     return 1;
@@ -42,7 +41,12 @@ void frames(JPEGDEC& jpeg, bool hasSound) {
         if (i != shown && montage::frame(i, &jpg, &len)) {
             if (jpeg.openRAM(const_cast<uint8_t*>(jpg), static_cast<int>(len), draw)) {
                 jpeg.setPixelType(RGB565_BIG_ENDIAN);
-                if (jpeg.getWidth() == FRAME_W && jpeg.getHeight() == FRAME_H && jpeg.decode(0, 0, 0)) ++drawn;
+                const int w = jpeg.getWidth(), h = jpeg.getHeight();
+                if (w > 0 && h > 0 && w <= panel::W && h <= panel::H) {
+                    s_ox = (panel::W - w) / 2;
+                    s_oy = (panel::H - h) / 2;
+                    if (jpeg.decode(0, 0, 0)) ++drawn;
+                }
                 jpeg.close();
             }
             shown = i;
@@ -53,9 +57,20 @@ void frames(JPEGDEC& jpeg, bool hasSound) {
                   static_cast<unsigned long>(millis() - t0));
 }
 
+// A video's files: the full-screen pair when the card has its frames, else the black deck's.
+struct Files {
+    const char* video;
+    const char* sound;
+};
+Files filesFor(bool max) {
+    if (sdcard::has(max ? "max_wide.bin" : "intro_wide.bin"))
+        return max ? Files{"max_wide.bin", "max_wide.pcm"} : Files{"intro_wide.bin", "intro_wide.pcm"};
+    return max ? Files{"max.bin", "max.pcm"} : Files{"intro.bin", "intro.pcm"};
+}
+
 // Picks a video the card has (not last boot's) and remembers it; -1 for none.
 int pick() {
-    const bool kiss = sdcard::has("intro.bin"), max = sdcard::has("max.bin");
+    const bool kiss = sdcard::has(filesFor(false).video), max = sdcard::has(filesFor(true).video);
     Preferences p;
     p.begin("boot", false);
     const int last = p.getInt("video", -1);
@@ -79,9 +94,9 @@ void play(bool screen) {
         greeting();
         return;
     }
-    const bool max = o == intropick::MAX;
-    sdcard::Blob video = sdcard::load(max ? "max.bin" : "intro.bin");
-    sdcard::Blob sound = sdcard::load(max ? "max.pcm" : "intro.pcm");
+    const Files files = filesFor(o == intropick::MAX);
+    sdcard::Blob video = sdcard::load(files.video);
+    sdcard::Blob sound = sdcard::load(files.sound);
     bool shown = false;
     // ~18 KB of decoder state, for the opening only.
     void* mem = heap_caps_malloc(sizeof(JPEGDEC), MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);

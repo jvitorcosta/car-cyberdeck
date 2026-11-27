@@ -80,6 +80,15 @@ class CopyMedia(unittest.TestCase):
         self.assertEqual(sd_media.root("E:"), "E:" + os.sep)
         self.assertEqual(sd_media.root(self.card), self.card)
 
+    def test_copies_the_wide_intros_and_checks_them(self):
+        put(self.data, "intro_wide.bin", b"MTG1" + bytes(4) + b"frames")
+        put(self.data, "intro_wide.pcm", b"\x01\x02" * 100)
+        copied, _ = sd_media.copy(self.data, self.card)
+        self.assertEqual(sorted(copied), ["intro_wide.bin", "intro_wide.pcm"])
+        put(self.data, "max_wide.bin", b"junk that is no video")
+        with self.assertRaises(sd_media.Refused):
+            sd_media.copy(self.data, self.card)
+
     def test_no_media_at_all_is_refused(self):
         with self.assertRaises(sd_media.Refused):
             sd_media.copy(self.data, self.card)

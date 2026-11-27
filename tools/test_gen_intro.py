@@ -35,6 +35,21 @@ class Segments(unittest.TestCase):
                 gi.segment(bad)
 
 
+class Fit(unittest.TestCase):
+    def test_the_black_deck_s_frames_are_320_by_240(self):
+        self.assertEqual(gi.video_filter(wide=False, letterbox=False), gi.CROP)
+        self.assertEqual(gi.video_filter(wide=False, letterbox=True), gi.LETTERBOX)
+
+    def test_wide_frames_fill_the_pokedeck_s_panel(self):
+        vf = gi.video_filter(wide=True, letterbox=False)
+        self.assertIn("scale=480:272:force_original_aspect_ratio=increase", vf)
+        self.assertTrue(vf.endswith("crop=480:272"))
+
+    def test_wide_has_no_letterbox(self):
+        with self.assertRaises(ValueError):
+            gi.video_filter(wide=True, letterbox=True)
+
+
 class Sound(unittest.TestCase):
     # each segment's sound is cut to its frames' length, so the seams stay in sync with the picture
     def test_fit_trims(self):
