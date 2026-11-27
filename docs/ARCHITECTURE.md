@@ -390,7 +390,7 @@ It answers the yellow deck over the hotspot and never writes to the car.
 
 The 4.3" panel (Guition JC4827W543: ESP32-S3, 4 MB flash, 8 MB PSRAM, 480x272 NV3041A on QSPI),
 env `pokedeck`, `src/pokedeck/`. It is to take the music over from the black deck; so far it has the
-boot opening and the base: the shared WiFi (`net/wifi`; 172.20.10.13 on the hotspot, `pokedeck.local` elsewhere),
+boot opening and the base: the shared WiFi (`net/wifi`; 172.20.10.10 on the hotspot, `cardeck.local` elsewhere),
 updates over WiFi with the boot guard and rollback (`net/ota`, `pokedeck_ota`), the task watchdog,
 the crash log and a status screen (name, version, network, updates). The picture is
 `pokedeck/board` (Arduino_GFX 1.4.9, its IPS flag off); `loop()` on core 1 draws, the `net` task
@@ -401,12 +401,17 @@ on native USB, and both take the same update password.
 doesn't drive this panel, so it draws into a 480x272 sprite in PSRAM (`pokedeck/board/canvas`) that
 `panel::push` sends to Arduino_GFX (the two libraries' headers can't be included together). The
 now-playing screen is copied from `black/ui` and laid out for this size (`nowscreen`, `battle`,
-`icons`; `pushImage` isn't virtual, so they draw pixels); text, fonts, colours and badges are the
-black deck's modules. `nettask` (copied: no music mode, camera marks or gauges; it also starts this
+`icons`; `pushImage` isn't virtual, so they draw pixels); colours, badges and the glyph handling are the
+black deck's modules; the text is the karaoke's VT323 at three sizes (`util/black/lyricface`). `nettask` (copied: no camera marks or gauges; it also starts this
 deck's mDNS and update listener) runs the black deck's Spotify, lyrics, genre, walker and cover code
-on core 0 (`art` copied for a 116x116 cover); `screen` is the black deck's loop cut to the battle
+on core 0 (`art` copied for a 98x98 cover); `screen` is the black deck's loop cut to the battle
 screen, which also says why when there is no song. The frame goes to the panel in bands through one
 internal DMA buffer.
+
+**The other devices** (`pokedeck/net/remote`, copied and cut): the yellow deck's `/link` (this deck
+has no GPS: `gps=0`) and `/music` with the UDP palettes, and the watch's playlists. The Pokédeck
+answers at the black deck's address and name (172.20.10.10, `cardeck.local`), so neither changes;
+its updates listen on port 3233 so neither deck's firmware lands on the other; run only one of the two. Karaoke and the phone page aren't ported.
 
 **Media from the SD card** (`pokedeck/media`): the black deck's media don't fit 4 MB of flash, so
 `python tools/sd_media.py <drive>` copies them to the card's `/cardeck` folder (FAT32; nothing else

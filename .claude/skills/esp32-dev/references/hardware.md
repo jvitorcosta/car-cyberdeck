@@ -23,7 +23,7 @@ A fourth board, the **Pokédeck** (env `pokedeck`), is a Guition JC4827W543: ESP
 flash, 8 MB octal PSRAM), 4.3" 480x272 NV3041A on QSPI (CS 45, SCK 47, D0-D3 21/48/40/39,
 backlight 1, Arduino_GFX with IPS off), GT911 touch (SDA 8, SCL 4, INT 3, RST 38; reads half a
 turn from the picture), microSD (CS 10, MOSI 11, SCK 12, MISO 13), I2S amp (BCLK 42, LRCK 2,
-DOUT 41), native USB. 172.20.10.13 on the hotspot. It and the black deck are both native-USB S3s:
+DOUT 41), native USB. 172.20.10.10 on the hotspot (the music deck's address; updates on port 3233). It and the black deck are both native-USB S3s:
 tell them apart by flash size (4 MB against 16 MB).
 
 ## Pins

@@ -72,7 +72,7 @@ bool isGood() {
 
 void task(void*) {
     while ((s_hold && s_hold()) || !net::isOnline()) vTaskDelay(pdMS_TO_TICKS(200));
-    ArduinoOTA.setPort(3232);
+    ArduinoOTA.setPort(OTA_PORT);
     ArduinoOTA.setHostname(s_name);
     ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.setMdnsEnabled(false);   // the app already answers to its .local name (net/remote, the panel's lyrics)
@@ -98,7 +98,7 @@ void task(void*) {
     });
     ArduinoOTA.begin();
     s_listening.store(true);
-    Serial.printf("[ota] listening on %s:3232\n", net::deviceIp().c_str());
+    Serial.printf("[ota] listening on %s:%d\n", net::deviceIp().c_str(), OTA_PORT);
     for (;;) {
         // An update runs to the end inside handle(). Not once Done: a second upload in the reboot
         // window would write over the slot the good one just filled.

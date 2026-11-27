@@ -1,6 +1,6 @@
 // The Pokédeck (env pokedeck): the 4.3" ESP32-S3 panel that is taking over the music from the
 // black deck. It plays Spotify's current song on the battle screen (pokedeck/music), and it joins the WiFi (the phone hotspot first, where it
-// pins 172.20.10.13), takes updates over WiFi with the decks' boot guard and rollback
+// pins 172.20.10.10, the music deck's address), takes updates over WiFi with the decks' boot guard and rollback
 // (common/net/ota), is watched by the task watchdog, keeps the crash log and shows its state.
 // At boot it plays one of the intro videos from its SD card (ui/opening).
 // Serial: [board], [boot], [crash], [sd], [intro], [wifi], [ota], [mem] every minute.
@@ -12,6 +12,7 @@
 #include "music/art.h"
 #include "music/nettask.h"
 #include "music/screen.h"
+#include "net/remote.h"
 #include "../black/core/mem.h"
 #include "../black/core/shared.h"
 #include "../black/images/walksprite.h"
@@ -125,6 +126,7 @@ void setup() {
     art::begin();   // the cover's bitmap, before WiFi takes the internal heap
     // WiFi, the update listener and Spotify come up underneath the opening (music/nettask).
     nettask::start();
+    remote::begin();   // the yellow deck's and the watch's asks
     // No opening after the network task's self-heal restart (util/quietboot): mid-drive, the screen
     // comes straight back.
     if (!nettask::quietBoot()) playOpening();

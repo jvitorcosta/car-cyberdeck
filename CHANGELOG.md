@@ -6,6 +6,10 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Pokédeck
+- **Changed:** one type scale on the music screen (VT323): the song and the verse large, the artist, playlist,
+  Pokémon and time one step down; a long verse takes two rows instead of shrinking.
+- **Added:** the yellow deck's link and music mode and the watch's playlists reach the Pokédeck, which
+  answers at the black deck's address (172.20.10.10, cardeck.local): neither needs a change. Karaoke isn't there yet.
 - **Added:** Spotify on the battle screen across the whole 480x272 panel: song, cover, lyrics, genre badge and the
   walking Pokémon, from the black deck's code. Not yet: the status scenes, karaoke, music mode, the phone page, the
   watch and the camera alerts. Run one deck with Spotify at a time.
