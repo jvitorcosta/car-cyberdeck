@@ -2,7 +2,7 @@
 // moononournation/Dev_Device_Pins (PINS_JC4827W543.h), checked on the board with hwcheck_panel
 // (pull request #116), where the touch layer also read half a turn from the picture.
 #include <Arduino.h>
-#include "panel.h"
+#include "panelgfx.h"
 #include "../../common/board/board.h"
 
 namespace board {
@@ -22,4 +22,5 @@ Arduino_GFX& gfx() {
     return g;
 }
 bool begin() { return gfx().begin(32000000); }
+void push(uint16_t* bigEndian) { gfx().draw16bitBeRGBBitmap(0, 0, bigEndian, W, H); }
 }  // namespace panel

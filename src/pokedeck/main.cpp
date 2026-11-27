@@ -8,8 +8,11 @@
 #include <ESPmDNS.h>
 #include <esp_heap_caps.h>
 #include <esp_system.h>
-#include "board/panel.h"
+#include "board/panelgfx.h"
 #include "media/sdcard.h"
+#include "music/sample.h"
+#include "../black/ui/cjkdata.h"
+#include "../black/ui/emojidata.h"
 #include "ui/opening.h"
 #include "../common/board/board.h"
 #include "../common/core/crashlog.h"
@@ -23,6 +26,7 @@
 
 static TaskHandle_t netHandle = nullptr;
 static bool screenOk = false;
+static bool musicOk = false;   // the battle screen is up (a sample song so far)
 
 // WiFi, then mDNS, SNTP and the update listener; then the rejoin loop. Watched: a join feeds
 // before each try.
@@ -47,9 +51,10 @@ static void netTask(void*) {
 
 constexpr int LINES = 3, LINE_Y = 80, LINE_STEP = 44, LINE_H = 32;
 
+static char s_shown[LINES][48] = {};   // the status screen's lines as drawn; cleared with the screen
+
 // The state, a line repainted only when its text changed.
 static void drawStatus() {
-    static char shown[LINES][48] = {};
     char text[LINES][48];
     const bool online = net::isOnline();
     if (online) snprintf(text[0], sizeof text[0], "WIFI %.20s", net::ssid().c_str());
@@ -62,8 +67,8 @@ static void drawStatus() {
     else snprintf(text[2], sizeof text[2], "%s", ota::listening() ? "UPDATES ON" : "UPDATES OFF");
     Arduino_GFX& g = panel::gfx();
     for (int i = 0; i < LINES; ++i) {
-        if (strcmp(text[i], shown[i]) == 0) continue;
-        strlcpy(shown[i], text[i], sizeof shown[i]);
+        if (strcmp(text[i], s_shown[i]) == 0) continue;
+        strlcpy(s_shown[i], text[i], sizeof s_shown[i]);
         const int y = LINE_Y + i * LINE_STEP;
         g.fillRect(0, y, panel::W, LINE_H, BLACK);
         g.setCursor(24, y + 4);
@@ -85,6 +90,8 @@ static void playOpening() {
     watchdog::watch();
     if (sdcard::begin()) {
         opening::play(screenOk);   // an intro video from the card, with its sound
+        ui::cjk();                 // the screens' fonts, while the card is mounted
+        ui::emoji();
         sdcard::end();
     }
     watchdog::forget();   // loop() is watched by the core from here (enableLoopWDT)
@@ -94,6 +101,7 @@ static void playOpening() {
 static void drawTitle() {
     Arduino_GFX& g = panel::gfx();
     g.fillScreen(BLACK);
+    memset(s_shown, 0, sizeof s_shown);
     g.setTextColor(WHITE);
     g.setCursor(24, 16);
     g.setTextSize(4);
@@ -117,7 +125,8 @@ void setup() {
     // WiFi joins underneath the opening.
     xTaskCreatePinnedToCore(netTask, "net", 6144, nullptr, 0, &netHandle, 0);
     playOpening();
-    if (screenOk) drawTitle();
+    musicOk = screenOk && sample::begin();
+    if (screenOk && !musicOk) drawTitle();
     enableLoopWDT();   // the core feeds it before each loop()
 }
 
@@ -129,8 +138,18 @@ void loop() {
         drawnAt = now;
         // Up bootguard::HEALTHY_MS, online and listening: this firmware has proven itself.
         if (net::isOnline()) ota::onGoodPoll();
-        if (screenOk) drawStatus();
+        // The status screen while an update comes in, or without memory for the music screen.
+        static bool updating = false;
+        if (screenOk && (!musicOk || ota::active())) {
+            if (musicOk && !updating) drawTitle();
+            updating = musicOk;
+            drawStatus();
+        } else if (updating) {
+            updating = false;
+            sample::redraw();
+        }
     }
+    if (musicOk && !ota::active()) sample::tick(now);
     if (now - memAt >= 60000) {
         memAt = now;
         Serial.printf("[mem] internal %u (largest %u) psram %u  stack left: net %u, ota %u, loop %u\n",

@@ -6,6 +6,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Pokédeck
+- **Added:** the battle screen across the whole 480x272 panel, with a made-up song until Spotify is connected.
 - **Added:** the boot opening from the SD card: one of the two intro videos with its sound, full screen
   (`gen_intro.py --wide`; else the greeting). `python tools/sd_media.py <drive>` puts the media on the card.
 - **Added:** a third screen, the 4.3" panel (env `pokedeck`), with its base firmware: WiFi (172.20.10.13 on the
