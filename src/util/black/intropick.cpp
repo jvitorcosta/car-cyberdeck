@@ -22,6 +22,15 @@ Opening pick(uint32_t rnd, int last, bool haveKiss, bool haveMcQueen, bool haveM
     return list[rnd % (uint32_t)n];
 }
 
+int video(uint32_t rnd, int last, bool haveKiss, bool haveMax) {
+    if (haveKiss && haveMax) {
+        if (last == KISS) return MAX;
+        if (last == MAX) return KISS;
+        return rnd & 1u ? MAX : KISS;
+    }
+    return haveKiss ? KISS : haveMax ? MAX : -1;
+}
+
 Greeting greetingFor(Opening o) { return o == HONDA ? MAIN : o == MCQUEEN ? ALT : NONE; }
 
 bool isVideo(Opening o) { return o == KISS || o == MAX; }

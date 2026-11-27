@@ -11,6 +11,9 @@ enum Greeting : uint8_t { NONE = 0, MAIN = 1, ALT = 2 };   // data/greeting.pcm,
 Opening pick(uint32_t rnd, int last, bool haveKiss, bool haveMcQueen, bool haveMax);
 Greeting greetingFor(Opening o);   // the videos (kiss, max): none (each has its sound)
 bool isVideo(Opening o);           // kiss, max: ui/intro plays it, then straight to the montage
+// A video for a deck without the drives (the Pokédeck): KISS or MAX, not last boot's while both are
+// there; -1 when it has neither.
+int video(uint32_t rnd, int last, bool haveKiss, bool haveMax);
 const char* name(Opening o);       // "kiss", "honda", "mcqueen", "max" (logs, INTRO_FORCE)
 int parse(const char* s);          // name() back to an Opening; -1 otherwise
 int forced(int f, bool haveKiss, bool haveMcQueen, bool haveMax);   // f if available, else -1

@@ -389,13 +389,22 @@ It answers the yellow deck over the hotspot and never writes to the car.
 ## Pokédeck
 
 The 4.3" panel (Guition JC4827W543: ESP32-S3, 4 MB flash, 8 MB PSRAM, 480x272 NV3041A on QSPI),
-env `pokedeck`, `src/pokedeck/`. It is to take the music over from the black deck; so far it is the
-base only: the shared WiFi (`net/wifi`; 172.20.10.13 on the hotspot, `pokedeck.local` elsewhere),
+env `pokedeck`, `src/pokedeck/`. It is to take the music over from the black deck; so far it has the
+boot opening and the base: the shared WiFi (`net/wifi`; 172.20.10.13 on the hotspot, `pokedeck.local` elsewhere),
 updates over WiFi with the boot guard and rollback (`net/ota`, `pokedeck_ota`), the task watchdog,
 the crash log and a status screen (name, version, network, updates). The picture is
 `pokedeck/board` (Arduino_GFX 1.4.9, its IPS flag off); `loop()` on core 1 draws, the `net` task
 on core 0 owns the network. USB the first time, never on the black deck's port: both are S3 boards
 on native USB, and both take the same update password.
+
+**Media from the SD card** (`pokedeck/media`): the black deck's media don't fit 4 MB of flash, so
+`python tools/sd_media.py <drive>` copies them to the card's `/cardeck` folder (FAT32; nothing else
+on the card is touched), and the deck reads a file whole into PSRAM when it needs it, never writing
+to the card. At boot `pokedeck/ui/opening` plays `intro.bin` + `intro.pcm` or `max.bin` + `max.pcm`
+(never last boot's: `intropick::video`, NVS `boot`/`video`) centred on the panel, its frames by the
+clock of the sound (`util/black/introclock`, `black/ui/montage`'s MTG1), on the I2S amplifier
+(`pokedeck/audio/speaker`) while WiFi joins. With no video it plays `greeting.pcm`; with no card it
+goes straight to the status screen.
 
 ## Between the devices
 

@@ -2,11 +2,14 @@
 // black deck. This build is its base only: it joins the WiFi (the phone hotspot first, where it
 // pins 172.20.10.13), takes updates over WiFi with the decks' boot guard and rollback
 // (common/net/ota), is watched by the task watchdog, keeps the crash log and shows its state.
-// Serial: [board], [boot], [crash], [wifi], [ota], [mem] every minute.
+// At boot it plays one of the intro videos from its SD card (ui/opening).
+// Serial: [board], [boot], [crash], [sd], [intro], [wifi], [ota], [mem] every minute.
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <esp_heap_caps.h>
 #include "board/panel.h"
+#include "media/sdcard.h"
+#include "ui/opening.h"
 #include "../common/board/board.h"
 #include "../common/core/crashlog.h"
 #include "../common/core/watchdog.h"
@@ -90,9 +93,12 @@ void setup() {
     watchdog::begin();  // 90 s, before any task subscribes
     screenOk = panel::begin();
     backlight::begin();
-    if (screenOk) drawTitle();
+    if (screenOk) panel::gfx().fillScreen(BLACK);
     else Serial.println("[screen] the panel didn't start");
+    // WiFi joins underneath the opening.
     xTaskCreatePinnedToCore(netTask, "net", 6144, nullptr, 0, &netHandle, 0);
+    if (sdcard::begin()) opening::play(screenOk);   // an intro video from the card, with its sound
+    if (screenOk) drawTitle();
     enableLoopWDT();   // the core feeds it before each loop()
 }
 
