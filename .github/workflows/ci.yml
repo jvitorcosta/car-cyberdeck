@@ -38,6 +38,10 @@ jobs:
           - board: obddeck
             envs: -e obddeck -e obddeck_ota -e obddeck_bench
             part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
+          # the Pokédeck (the 4.3in S3 panel)
+          - board: pokedeck
+            envs: -e pokedeck -e pokedeck_ota
+            part: "0x1E0000"   # min_spiffs.csv (two OTA slots)
           # the diagnostic envs nobody flashes often: built so a shared-header break shows up
           # here and not on the bench. No part: they have no size budget to check.
           - board: diag
