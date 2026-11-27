@@ -23,9 +23,12 @@ constexpr int SDA_PIN = 8, SCL_PIN = 4, TOUCH_INT_PIN = 3, TOUCH_RST_PIN = 38;
 constexpr int I2S_BCLK_PIN = 42, I2S_LRCK_PIN = 2, I2S_DOUT_PIN = 41;
 constexpr int W = 480, H = 272, FRAME_W = 320, FRAME_H = 240;
 constexpr size_t TLS_BLOCK = 40 * 1024;   // the pass mark: one block this big with all of it running
+constexpr int TARGETS[5][2] = {{40, 40}, {440, 40}, {240, 136}, {40, 216}, {440, 216}};   // touch aim
+uint16_t touchMaxX = 0, touchMaxY = 0;   // the resolution the touch controller reports in
 
 Arduino_DataBus* bus = new Arduino_ESP32QSPI(45, 47, 21, 48, 40, 39);
-Arduino_GFX* gfx = new Arduino_NV3041A(bus, GFX_NOT_DEFINED, 0, true);
+// "IPS" off: on (the vendor pin file's value) showed every colour inverted on this panel.
+Arduino_GFX* gfx = new Arduino_NV3041A(bus, GFX_NOT_DEFINED, 0, false);
 SPIClass sdSpi(HSPI);   // the display holds the other SPI host
 
 bool screenOk = false, sdOk = false, wifiOk = false, tlsOk = false, audioOk = false;
@@ -59,7 +62,9 @@ void checkScreen() {
     if (!frame) return;
     for (int y = 0; y < FRAME_H; ++y)
         for (int x = 0; x < FRAME_W; ++x)
-            frame[y * FRAME_W + x] = static_cast<uint16_t>(((x >> 3) << 11) | ((y >> 2) << 5) | ((x + y) >> 5 & 31));
+            // black top left, red to the right, green downwards
+            frame[y * FRAME_W + x] = static_cast<uint16_t>(((x * 31 / (FRAME_W - 1)) << 11) |
+                                                           ((y * 63 / (FRAME_H - 1)) << 5));
     gfx->fillScreen(BLACK);
     const uint32_t t0 = micros();
     for (int i = 0; i < 20; ++i) gfx->draw16bitRGBBitmap((W - FRAME_W) / 2, (H - FRAME_H) / 2, frame, FRAME_W, FRAME_H);
@@ -95,6 +100,34 @@ void checkTouch() {
             break;
         }
     }
+    uint8_t res[4];
+    if (touchAddr && gtRead(0x8146, res, 4)) {
+        touchMaxX = static_cast<uint16_t>(res[0] | (res[1] << 8));
+        touchMaxY = static_cast<uint16_t>(res[2] | (res[3] << 8));
+    }
+}
+
+void drawTargets() {
+    for (const auto& t : TARGETS) {
+        gfx->drawFastHLine(t[0] - 12, t[1], 25, WHITE);
+        gfx->drawFastVLine(t[0], t[1] - 12, 25, WHITE);
+        gfx->drawCircle(t[0], t[1], 7, WHITE);
+    }
+}
+
+// How far a press landed from the closest target.
+void logPress(int x, int y) {
+    int best = 0;
+    long bestD = 0;
+    for (int i = 0; i < 5; ++i) {
+        const long dx = x - TARGETS[i][0], dy = y - TARGETS[i][1], d = dx * dx + dy * dy;
+        if (i == 0 || d < bestD) {
+            best = i;
+            bestD = d;
+        }
+    }
+    Serial.printf("[check] touch %d,%d target %d off %d,%d\n", x, y, best + 1, x - TARGETS[best][0],
+                  y - TARGETS[best][1]);
 }
 
 void pollTouch() {
@@ -106,7 +139,7 @@ void pollTouch() {
         const int x = p[0] | (p[1] << 8), y = p[2] | (p[3] << 8);
         if (screenOk) gfx->fillCircle(x, y, 5, YELLOW);
         if (touches < 255) ++touches;
-        Serial.printf("[check] touch %d,%d\n", x, y);
+        logPress(x, y);
     }
     Wire.beginTransmission(touchAddr);   // clear the ready flag
     Wire.write(static_cast<uint8_t>(0x81));
@@ -190,7 +223,8 @@ void checkNetwork() {
 
 void report() {
     Serial.printf("[check] screen %s, 320x240 push %lu us\n", screenOk ? "ok" : "FAIL", static_cast<unsigned long>(frameUs));
-    Serial.printf("[check] touch %s (0x%02X), %u presses\n", touchAddr ? "GT911" : "none", touchAddr, touches);
+    Serial.printf("[check] touch %s (0x%02X) %ux%u, %u presses\n", touchAddr ? "GT911" : "none", touchAddr,
+                  touchMaxX, touchMaxY, touches);
     Serial.printf("[check] sd %s, %lu MB, %lu KB/s\n", sdOk ? "ok" : "none", static_cast<unsigned long>(sdCardMb),
                   static_cast<unsigned long>(sdKbS));
     Serial.printf("[check] audio driver %s\n", audioOk ? "ok" : "FAIL");
@@ -227,6 +261,7 @@ void setup() {
         delay(300);
     }
     checkNetwork();
+    if (screenOk) drawTargets();
 }
 
 void loop() {
