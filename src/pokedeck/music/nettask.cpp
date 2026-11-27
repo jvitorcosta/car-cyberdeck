@@ -11,6 +11,7 @@
 #include "../../common/net/clock.h"
 #include "../../common/net/ota.h"
 #include "../../common/net/remote_config.h"
+#include "../../common/core/crashlog.h"
 #include "../../common/core/watchdog.h"
 #include "../../black/spotify/client.h"
 #include "../../black/images/walksprite.h"
@@ -40,7 +41,7 @@ static netplan::WalkRetry s_walkRetry;       // PNG decoder didn't fit: retry af
 static netplan::LyricsRetry s_lyricsRetry;   // 5 s / 20 s retries after LRCLIB hiccups
 static netplan::ArtRetry s_artRetry;         // a failed cover download: one more try, 5 s later
 static genre::Cache s_genres;   // last 32 artists' badges: repeats cost no request
-static uint32_t s_failsAtOk = 0;   // mem::failTotal() at the last good poll
+static uint32_t s_failsAtOk = 0;   // crashlog::fails() at the last good poll
 static bool s_spotifyReady = false;   // WiFi + spclient::begin() done
 static int s_prefetchDex = 0;      // dex whose walker sits in the staged slot
 static uint32_t s_t0 = 0;
@@ -225,11 +226,11 @@ static void run(void*) {
             const uint32_t was = s_idle.every(s_backoff.interval());
             s_backoff.onPoll(s_st.lastPollCode, s_st.retryAfterS);
             bool ok = s_st.status != PlaybackStatus::Offline;
-            if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = mem::failTotal(); ota::onGoodPoll(); }
+            if (ok) { s_st.lastPollOkMs = millis(); s_failsAtOk = crashlog::fails(); ota::onGoodPoll(); }
             // Restart only helps a starved heap: allocations failed since the last good poll,
             // or no block big enough for TLS. A dead zone or a 401/429 is not that.
             bool starved = s_st.lastPollCode != 429 &&   // rate limited: a reboot only asks again
-                           (mem::failTotal() != s_failsAtOk || mem::byteLargest() < netplan::TLS_NEED);
+                           (crashlog::fails() != s_failsAtOk || mem::byteLargest() < netplan::TLS_NEED);
             if (!ok) {
                 mem::log("poll failed");
                 net::diagnose(s_st.lastPollCode, s_st.lastPollOkMs ? millis() - s_st.lastPollOkMs : 0);

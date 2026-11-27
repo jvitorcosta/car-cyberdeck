@@ -58,19 +58,31 @@ static void drawStatus() {
     }
 }
 
-// The screens' CJK and emoji fonts, read from the card once and kept.
+// The last run ended in a crash or a watchdog reset.
+static bool crashedLast() {
+    const esp_reset_reason_t r = esp_reset_reason();
+    return r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT;
+}
+
+// The screens' CJK and emoji fonts, read from the card once and kept. Watched like the opening, and
+// skipped after a crash too, so a bad card can't restart the deck boot after boot.
 static void loadFonts() {
-    if (!sdcard::begin()) return;
-    ui::cjk();
-    ui::emoji();
-    sdcard::end();
+    if (crashedLast()) return;
+    crashlog::at("fonts");
+    watchdog::watch();
+    if (sdcard::begin()) {
+        ui::cjk();
+        ui::emoji();
+        sdcard::end();
+    }
+    watchdog::forget();
+    crashlog::at("");
 }
 
 // The opening, watched like any long step. Skipped after a crash or a watchdog reset, so a bad
 // file on the card can't restart the deck boot after boot.
 static void playOpening() {
-    const esp_reset_reason_t r = esp_reset_reason();
-    if (r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT) {
+    if (crashedLast()) {
         Serial.println("[intro] skipped after a crash");
         return;
     }
@@ -139,7 +151,7 @@ void loop() {
             screen::redraw();
         }
     }
-    if (musicOk && !ota::active()) screen::tick(now);
+    if (musicOk && !ota::active()) screen::tick();
     if (now - memAt >= 60000) {
         memAt = now;
         mem::log("minute");

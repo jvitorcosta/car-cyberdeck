@@ -11,6 +11,7 @@
 #include "../../black/ui/theme.h"
 #include "../../common/net/clock.h"
 #include "../../common/net/wifi.h"
+#include "../../common/ui/backlight.h"
 #include "../../util/black/genre.h"
 #include "../../util/black/idlewait.h"
 #include "../../util/black/interp.h"
@@ -65,6 +66,7 @@ bool updateDayNight(uint32_t now) {
     const bool night = netclock::minuteOfDay(&m) && daynight::isNight(m);
     if (night == theme::isNightActive()) return false;
     theme::setNight(night);
+    backlight::set(night);
     return true;
 }
 
@@ -74,7 +76,9 @@ void drawStatus(TFT_eSPI& t, const AppState& st, int mode) {
     static AppState note;   // static: too big for the loop stack
     char title[24] = "Waiting for a song...";
     char detail[48] = "";
-    if (mode == 1) {
+    if (mode == 1 && net::isOnline() && st.status == PlaybackStatus::Unknown && st.lastPollCode == 0) {
+        strlcpy(title, "Connecting...", sizeof title);   // logging in: not a failure yet
+    } else if (mode == 1) {
         const bool wifiUp = net::isOnline();
         const linkstatus::Kind k = linkstatus::classify({wifiUp, true, st.lastPollCode, st.certRejected, st.loginFailed});
         char names[96];
@@ -107,11 +111,12 @@ bool begin() {
 
 void redraw() { s_whole = true; }
 
-void tick(uint32_t now) {
+void tick() {
     if (!s_ready) return;
     TFT_eSPI& t = canvas::screen();
     static AppState st, view;   // static: too big for the loop stack
     shared::snapshot(st);
+    const uint32_t now = millis();   // after the snapshot, so its poll times are never ahead of it
     view = st;   // interpolate progress for a smooth bar between polls
     view.progressMs = interp::currentProgressMs(st.progressMs, st.durationMs, st.isPlaying, now - st.lastPollMs);
 

@@ -27,13 +27,14 @@ using ui::Tab;
 static constexpr int W = 480;
 static constexpr int ART_BOX = 124;                                   // at 8,28
 static constexpr int INFO_X = 142, INFO_Y = 28, INFO_W = 330, INFO_H = 124;
-static constexpr int STAT_X = 8, STAT_Y = 156, STAT_W = 464, STAT_H = 68;
-static constexpr int BAR_X = 28, BAR_Y = 206, BAR_W = 432, BAR_H = 10;   // incl. "HP" tag
+static constexpr int STAT_X = 8, STAT_Y = 154, STAT_W = 464, STAT_H = 72;
+// The walker (32 px) stands on the bar: its top, BAR_Y - 33, stays under the name row.
+static constexpr int BAR_X = 28, BAR_Y = 210, BAR_W = 432, BAR_H = 10;   // incl. "HP" tag
 static constexpr int FILL_X = BAR_X + ui::HP_TAG_W + 1, FILL_W = BAR_W - ui::HP_TAG_W - 2;
-static constexpr int EXP_Y = 218;
+static constexpr int EXP_Y = 221;
 static constexpr int DLG_X = 6, DLG_Y = 228, DLG_W = 468, DLG_H = 42;
 static constexpr int CD_CY = 12;
-static constexpr int NAME_Y = 162, TIME_RIGHT = 456, TIME_CLEAR_X = 330;
+static constexpr int NAME_Y = 158, TIME_RIGHT = 456, TIME_CLEAR_X = 330;
 static constexpr int BADGE_W = 76, BADGE_H = 18;
 
 static int s_cdX = 100;
