@@ -69,9 +69,8 @@ void drawSpeed(const Scene& s) {
     // 100 km/h and up) or the second cell: just "CHK". NO LINK / KEY ON come with "---", whose only lit bar is the middle one.
     const char* t = s.status == Status::Chk ? "CHK" : s.status == Status::KeyOn ? "KEY ON" : "NO LINK";
     const int w = width(Face::LINE, t) + (s.status == Status::Chk ? 12 : 16);
-    s_frame->fillRoundRect(PILL_X, PILL_Y, w, PILL_H, 3, s_pal.bg);   // black under it, so the ghost digit does not show through
-    s_frame->drawRoundRect(PILL_X, PILL_Y, w, PILL_H, 3, s_pal.al);
-    text(Face::LINE, t, PILL_X + w / 2, PILL_Y + 17, s_pal.al, CENTER);
+    s_frame->fillRoundRect(PILL_X, PILL_Y, w, PILL_H, 3, s_pal.al);
+    text(Face::LINE, t, PILL_X + w / 2, PILL_Y + 17, s_pal.bg, CENTER);
     push(r);
 }
 
@@ -123,12 +122,12 @@ void drawRow(int i, const Scene& s) {
     const Rect r = region((Region)(R_ROW0 + i));
     clear(r);
     const Card& c = s.card[i];
-    // No fill: a hairline under the row (not the last), type in the LED colour; an alert outlines the row in red
-    // and sets its type and every lit tick red.
-    if (c.bad) s_frame->drawRoundRect(r.x, r.y, r.w, r.h - 1, 3, s_pal.al);
-    text(Face::LINE, c.label, r.x + 7, r.y + 16, c.bad ? s_pal.al : s_pal.md);
-    text(Face::SUNG, c.val, r.x + r.w - 6, r.y + 31, c.bad ? s_pal.al : s_pal.tx, RIGHT);
-    const int bx = r.x + 7, bw = r.w - 14, by = r.y + r.h - 7;   // PILLS ticks, 3 px high
+    // A hairline under the row (not the last), type in the LED colour; an alert sets the type black on a block of
+    // the alert colour and every lit tick in that colour.
+    if (c.bad) s_frame->fillRoundRect(r.x, r.y, r.w, ALERT_FILL_H, 3, s_pal.al);
+    text(Face::LINE, c.label, r.x + 7, r.y + 16, c.bad ? s_pal.bg : s_pal.md);
+    text(Face::SUNG, c.val, r.x + r.w - 6, r.y + 31, c.bad ? s_pal.bg : s_pal.tx, RIGHT);
+    const int bx = r.x + 7, bw = r.w - 14, by = r.y + TICK_DY;   // PILLS ticks, 3 px high
     for (int p = 0; p < PILLS; ++p) {
         const int x0 = bx + p * (bw + 2) / PILLS, x1 = bx + (p + 1) * (bw + 2) / PILLS - 2;
         const uint16_t col = p >= c.lit ? s_pal.ghost : (c.bad || p >= c.hot) ? s_pal.al : s_pal.tx;

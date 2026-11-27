@@ -6,12 +6,15 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
 ## [Unreleased]
 
 ### Black deck
+- **Changed:** on the Cockpit screen an alert now stands out by its shape, not only its colour: a row in trouble shows its
+  label and value black on a block of the alert colour, and the CHK / NO LINK / KEY ON pill is filled the same way.
+- **Changed:** the blue night theme is lighter on both decks, so its dimmest text reads (3.1:1 on black, was 2.2:1).
 - **Fixed:** on phones 390 px wide or narrower the page's five screen buttons ran off the right edge; they now wrap onto
   two rows.
 - **Changed:** the black deck's pink is the yellow deck's pink (#93, `ledlook` pink tile 0xFF0090) and then
   0xFF00B4, tuned by eye on the black deck's panel (#94, `src/black/ui/pink.h`), in the gauge screens.
 - **Changed:** the Cockpit screen has the yellow deck's look: pure black, no filled boxes, hairline rules and thin tick bars in
-  the LED colour, and an alert is a red outline with red type. Its KM/L row is now the trip's average, not the instant
+  the LED colour, and an alert is a filled block (see below). Its KM/L row is now the trip's average, not the instant
   reading (the car's own dash shows that one).
 - **Changed:** the engine load is read every 3 s instead of every ~18 s (and shows `--` after 9 s without a reading), so the
   LOAD bar follows the pedal on the Suki, Ride and Cockpit screens. It costs RPM and speed about 8-12 % of their refresh
@@ -76,6 +79,7 @@ and versions follow [semantic versioning](https://semver.org) (README "Versionin
   Premium"). It asks the black deck at `172.20.10.10`, so the black deck has to be on the hotspot.
 
 ### Yellow deck
+- **Changed:** the blue night theme is lighter, so its dimmest text reads (see the black deck).
 - **Changed:** the firmware is about 13 KB smaller: the display library's smooth-font code, which nothing used, is no
   longer built in.
 - **Fixed:** PS3 presses wait for the loop instead of being dropped (#92): two shortcuts pressed in one pass
