@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <atomic>
 #include <driver/i2s.h>
+#include "../../common/core/watchdog.h"
 
 namespace speaker {
 namespace {
@@ -12,6 +13,7 @@ constexpr size_t CHUNK = 256;   // mono samples per write
 const int16_t* s_samples = nullptr;
 size_t s_count = 0;
 int s_rate = 16000;
+int s_percent = 100;
 std::atomic<bool> s_playing{false};
 std::atomic<uint32_t> s_started{0};
 
@@ -41,22 +43,29 @@ void task(void*) {
     static int16_t stereo[2 * CHUNK];
     for (size_t at = 0; at < s_count; at += CHUNK) {
         const size_t n = s_count - at < CHUNK ? s_count - at : CHUNK;
-        for (size_t i = 0; i < n; ++i) stereo[2 * i] = stereo[2 * i + 1] = s_samples[at + i];
+        for (size_t i = 0; i < n; ++i)
+            stereo[2 * i] = stereo[2 * i + 1] = static_cast<int16_t>(s_samples[at + i] * s_percent / 100);
         size_t written = 0;
         if (at == 0) {
             const uint32_t now = millis();
             s_started.store(now ? now : 1);
         }
-        i2s_write(PORT, stereo, n * 2 * sizeof(int16_t), &written, portMAX_DELAY);
+        // Bounded: a driver that stops taking samples ends the clip instead of hanging the boot.
+        if (i2s_write(PORT, stereo, n * 2 * sizeof(int16_t), &written, pdMS_TO_TICKS(1000)) != ESP_OK ||
+            written == 0) {
+            Serial.println("[audio] the sound stopped early");
+            break;
+        }
     }
     vTaskDelay(pdMS_TO_TICKS(1000u * DMA_BUFS * DMA_LEN / static_cast<uint32_t>(s_rate) + 20));   // play out
     i2s_driver_uninstall(PORT);
+    Serial.printf("[audio] clip over, stack left %u\n", static_cast<unsigned>(uxTaskGetStackHighWaterMark(nullptr)));
     s_playing.store(false);
     vTaskDelete(nullptr);
 }
 }  // namespace
 
-bool play(const int16_t* samples, size_t count, int rate) {
+bool play(const int16_t* samples, size_t count, int rate, int percent) {
     if (s_playing.load() || !samples || !count) return false;
     s_started.store(0);
     if (!install(rate)) {
@@ -66,6 +75,7 @@ bool play(const int16_t* samples, size_t count, int rate) {
     s_samples = samples;
     s_count = count;
     s_rate = rate;
+    s_percent = percent < 0 ? 0 : percent > 100 ? 100 : percent;
     s_playing.store(true);
     // Above the drawing loop (priority 1) on the other core, so frames never starve the sound.
     if (xTaskCreatePinnedToCore(task, "speaker", 3072, nullptr, 3, nullptr, 0) == pdPASS) return true;
@@ -78,6 +88,9 @@ bool play(const int16_t* samples, size_t count, int rate) {
 uint32_t startedAt() { return s_started.load(); }
 
 void wait() {
-    while (s_playing.load()) delay(10);
+    while (s_playing.load()) {
+        watchdog::feed();
+        delay(10);
+    }
 }
 }  // namespace speaker

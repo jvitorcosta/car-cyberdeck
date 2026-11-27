@@ -2,6 +2,7 @@
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 import sd_media
 
@@ -58,6 +59,26 @@ class CopyMedia(unittest.TestCase):
         put(self.data, "intro.pcm", b"\x01\x02" * 100)
         with self.assertRaises(sd_media.Refused):
             sd_media.copy(self.data, os.path.join(self.tmp.name, "nowhere"))
+
+    def test_a_failed_write_keeps_the_card_s_good_file(self):
+        put(self.data, "intro.pcm", b"\x01\x02" * 100)
+        sd_media.copy(self.data, self.card)
+        put(self.data, "intro.pcm", b"\x07\x08" * 100)
+        with mock.patch("os.fsync", side_effect=OSError("card pulled")):
+            with self.assertRaises(sd_media.Refused):
+                sd_media.copy(self.data, self.card)
+        self.assertEqual(self.on_card("intro.pcm"), b"\x01\x02" * 100)
+        self.assertEqual(os.listdir(os.path.join(self.card, "cardeck")), ["intro.pcm"])
+
+    def test_names_the_media_data_does_not_have(self):
+        put(self.data, "intro.pcm", b"\x01\x02" * 100)
+        left_out = sd_media.missing(self.data)
+        self.assertIn("max.bin", left_out)
+        self.assertNotIn("intro.pcm", left_out)
+
+    def test_a_bare_drive_letter_means_its_root(self):
+        self.assertEqual(sd_media.root("E:"), "E:" + os.sep)
+        self.assertEqual(sd_media.root(self.card), self.card)
 
     def test_no_media_at_all_is_refused(self):
         with self.assertRaises(sd_media.Refused):

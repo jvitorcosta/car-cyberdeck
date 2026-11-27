@@ -3,6 +3,7 @@
 #include <SD.h>
 #include <SPI.h>
 #include <esp_heap_caps.h>
+#include "../../common/core/watchdog.h"
 
 namespace sdcard {
 namespace {
@@ -22,10 +23,17 @@ File openFile(const char* name) {
 bool begin() {
     if (s_mounted) return true;
     s_spi.begin(SCK_PIN, MISO_PIN, MOSI_PIN, CS);
-    s_mounted = SD.begin(CS, s_spi, HZ, "/sd", 2, false /* never format */);
+    s_mounted = SD.begin(CS, s_spi, HZ, "/sd", 1 /* one file at a time */, false /* never format */);
     if (s_mounted) Serial.printf("[sd] card %lu MB\n", static_cast<unsigned long>(SD.cardSize() >> 20));
     else Serial.println("[sd] none (no card, or not FAT32): no media");
     return s_mounted;
+}
+
+void end() {
+    if (!s_mounted) return;
+    SD.end();
+    s_spi.end();
+    s_mounted = false;
 }
 
 bool has(const char* name) {
@@ -51,6 +59,7 @@ Blob load(const char* name) {
     }
     size_t got = 0;
     while (got < size) {
+        watchdog::feed();
         const size_t want = size - got < CHUNK ? size - got : CHUNK;
         const int n = f.read(b.data + got, want);
         if (n <= 0) break;

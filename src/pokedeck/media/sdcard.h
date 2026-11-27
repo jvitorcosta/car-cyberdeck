@@ -10,7 +10,8 @@ struct Blob {
     uint8_t* data;   // PSRAM; nullptr when the file isn't there or didn't read whole
     size_t size;
 };
-bool begin();                  // mounts the card, once; logs "[sd] ..."
+bool begin();                  // mounts the card; logs "[sd] ..."
+void end();                    // unmounts it: the mount holds internal heap Spotify will want
 bool has(const char* name);    // /cardeck/<name> is there and not empty
 Blob load(const char* name);   // {nullptr, 0} (logged) when it can't be read
 void release(Blob& b);         // frees it; safe on an empty one

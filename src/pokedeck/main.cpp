@@ -7,6 +7,7 @@
 #include <Arduino.h>
 #include <ESPmDNS.h>
 #include <esp_heap_caps.h>
+#include <esp_system.h>
 #include "board/panel.h"
 #include "media/sdcard.h"
 #include "ui/opening.h"
@@ -72,6 +73,24 @@ static void drawStatus() {
     }
 }
 
+// The opening, watched like any long step. Skipped after a crash or a watchdog reset, so a bad
+// file on the card can't restart the deck boot after boot.
+static void playOpening() {
+    const esp_reset_reason_t r = esp_reset_reason();
+    if (r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT) {
+        Serial.println("[intro] skipped after a crash");
+        return;
+    }
+    crashlog::at("opening");
+    watchdog::watch();
+    if (sdcard::begin()) {
+        opening::play(screenOk);   // an intro video from the card, with its sound
+        sdcard::end();
+    }
+    watchdog::forget();   // loop() is watched by the core from here (enableLoopWDT)
+    crashlog::at("");
+}
+
 static void drawTitle() {
     Arduino_GFX& g = panel::gfx();
     g.fillScreen(BLACK);
@@ -97,7 +116,7 @@ void setup() {
     else Serial.println("[screen] the panel didn't start");
     // WiFi joins underneath the opening.
     xTaskCreatePinnedToCore(netTask, "net", 6144, nullptr, 0, &netHandle, 0);
-    if (sdcard::begin()) opening::play(screenOk);   // an intro video from the card, with its sound
+    playOpening();
     if (screenOk) drawTitle();
     enableLoopWDT();   // the core feeds it before each loop()
 }

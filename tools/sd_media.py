@@ -46,24 +46,49 @@ def media(data):
     return files
 
 
+def missing(data):
+    """The media the black deck packs that `data` doesn't have (stand-ins of a few bytes included)."""
+    paths = ((n, os.path.join(data, n)) for n in pm.FILES)
+    return [n for n, p in paths if not os.path.isfile(p) or os.path.getsize(p) <= pm.STAND_IN]
+
+
+def root(card):
+    """"E:" is the current folder on E:, not its root."""
+    return card + os.sep if card.endswith(":") else card
+
+
+def write(path, blob):
+    """Through a .tmp beside it, flushed to the card: a pulled card leaves the old file whole."""
+    tmp = path + ".tmp"
+    try:
+        with open(tmp, "wb") as f:
+            f.write(blob)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
 def copy(data, card):
     """Copies data's media to card/FOLDER. Returns (copied names, names already there)."""
     if not os.path.isdir(card):
         raise Refused("no card at " + card)
     files = media(data)
     folder = os.path.join(card, FOLDER)
-    os.makedirs(folder, exist_ok=True)
     copied, kept = [], []
-    for name, blob in files:
-        path = os.path.join(folder, name)
-        if os.path.isfile(path) and os.path.getsize(path) == len(blob) and read(path) == blob:
-            kept.append(name)
-            continue
-        with open(path, "wb") as f:
-            f.write(blob)
-        if read(path) != blob:
-            raise Refused("%s didn't read back from the card as written" % name)
-        copied.append(name)
+    try:
+        os.makedirs(folder, exist_ok=True)
+        for name, blob in files:
+            path = os.path.join(folder, name)
+            if os.path.isfile(path) and os.path.getsize(path) == len(blob) and read(path) == blob:
+                kept.append(name)
+                continue
+            write(path, blob)
+            copied.append(name)
+    except OSError as e:
+        raise Refused("the card stopped taking files (%s): run it again" % e)
     return copied, kept
 
 
@@ -72,13 +97,16 @@ def main(argv=None):
     ap.add_argument("card", help="the card's drive or folder")
     ap.add_argument("--data", default=pm.DATA, help="where the media are (default: data/)")
     args = ap.parse_args(argv)
+    card = root(args.card)
     try:
-        copied, kept = copy(args.data, args.card)
+        copied, kept = copy(args.data, card)
     except Refused as e:
         sys.exit("sd_media: " + str(e))
+    for name in missing(args.data):
+        print("sd_media: no %s in %s, left out" % (name, args.data))
     for name in copied:
         print("sd_media: copied " + name)
-    print("sd_media: %d copied, %d already there, in %s" % (len(copied), len(kept), os.path.join(args.card, FOLDER)))
+    print("sd_media: %d copied, %d already there, in %s" % (len(copied), len(kept), os.path.join(card, FOLDER)))
 
 
 if __name__ == "__main__":
