@@ -57,6 +57,7 @@ python -m unittest discover -s tools -p "test_*.py"            # tool tests
 |---|---|---|---|
 | Black (S3, COM12) | `pio run -e s3` | `pio run -e s3 -t upload --upload-port COM12`; media: `pio run -e s3 -t uploadmedia --upload-port COM12`; WiFi: `pio run -e s3_ota -t upload` | `python tools/capture_serial.py COM12 120 out.log --no-reset` |
 | Yellow (CYD, CH340 COM13-18) | `pio run -e ledpanel` | `pio run -e ledpanel -t upload --upload-port COMx` (USB only) | `python tools/capture_serial.py COMx 120 out.log` (opening resets it) |
+| Pokédeck (4.3in S3, native USB) | `pio run -e pokedeck` | `pio run -e pokedeck -t upload --upload-port COMx` (never the black deck's port), then `pokedeck_ota` | `python tools/capture_serial.py COMx 120 out.log --no-reset` |
 | OBD (devkit) | `pio run -e obddeck` | `pio run -e obddeck -t upload --upload-port COMx`, then `obddeck_ota` | same as yellow |
 
 Then `python tools/serial_health.py out.log` (resets, crashes, heap, stacks; `--strict` exits 1

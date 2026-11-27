@@ -27,12 +27,14 @@ constexpr bool BACK_OFF = false;
 #endif
 static netup::Rejoin s_rejoin;
 // Fixed address on the iPhone hotspot (util/hotspotip): 172.20.10.10 for the S3, .11 for the
-// yellow deck, .12 for the OBD deck, so a Home Screen bookmark of http://172.20.10.10/ keeps
-// working and the OBD deck never takes the S3's address.
+// yellow deck, .12 for the OBD deck, .13 for the Pokédeck, so a Home Screen bookmark of
+// http://172.20.10.10/ keeps working and no other deck takes the S3's address.
 #ifdef YELLOW_DECK
 constexpr uint8_t HOTSPOT_OCTET = YELLOW_HOTSPOT_OCTET;
 #elif defined(OBD_DECK)
 constexpr uint8_t HOTSPOT_OCTET = OBD_HOTSPOT_OCTET;
+#elif defined(POKEDECK)
+constexpr uint8_t HOTSPOT_OCTET = POKEDECK_HOTSPOT_OCTET;
 #else
 constexpr uint8_t HOTSPOT_OCTET = DECK_HOTSPOT_OCTET;
 #endif

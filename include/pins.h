@@ -1,6 +1,6 @@
 #pragma once
-// Pin maps per board (BOARD_CYD / BOARD_S3 come from platformio.ini). The displays are set up by
-// TFT_eSPI build flags; their pins are listed there.
+// Pin maps per board (BOARD_CYD / BOARD_S3 / BOARD_JC4827 come from platformio.ini). The CYD's and
+// the S3's displays are set up by TFT_eSPI build flags; their pins are listed there.
 
 #if defined(BOARD_S3)
 // Freenove FNK0104B: ESP32-S3R8, 2.8" ILI9341 SPI, ES8311 codec
@@ -38,6 +38,10 @@ static const int PIN_BL = 21;
 // IR receiver (KY-022 signal) on CN1, next to the RGB LED: the light kit's remote (lib/irrx)
 static const int PIN_IR = 27;
 
+#elif defined(BOARD_JC4827)
+// Guition JC4827W543, the Pokédeck: the display's pins are in src/pokedeck/board/jc4827w543.cpp.
+static const int PIN_BL = 1;
+
 #else
-#error "No board: build with -D BOARD_CYD or -D BOARD_S3 (platformio.ini)"
+#error "No board: build with -D BOARD_CYD, -D BOARD_S3 or -D BOARD_JC4827 (platformio.ini)"
 #endif

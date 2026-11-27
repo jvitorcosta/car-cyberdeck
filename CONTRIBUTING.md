@@ -25,6 +25,7 @@ approach before you spend time on it.
 |---|---|
 | `src/black/` | the black deck (S3, env `s3`): `main.cpp`, its network task and shared state (`core/`), what it draws (`ui/`), audio, Spotify, lyrics, images, Pokémon, its board code (`board/s3/`) |
 | `src/yellow/` | the yellow deck (CYD, env `ledpanel`): `ledpanel.cpp`, its touch layer, fonts and drawing helpers (`ui/`) |
+| `src/pokedeck/` | the Pokédeck (4.3in S3 panel, env `pokedeck`): `main.cpp` and its board (`board/`) |
 | `src/common/` | Arduino code both decks build: WiFi, clock, HTTP, OTA, remote settings (`net/`), backlight, `board/board.h`, `core/embed.h` |
 | `src/util/` | pure logic, no Arduino: parsers, timing, layout; tested on the PC. Grouped by who uses it: `wire/` (the contracts between the decks), `lights/` (the LED domain, both decks), `common/` (both decks), `black/`, `yellow/` |
 | `src/diag/` | standalone hardware and Bluetooth checks, one env each (`hwcheck`, `hwcheck_s3`, `blescan`, `bletest`, `ps3test`) |

@@ -28,6 +28,9 @@
 // The OBD deck (-D OBD_DECK, src/obd): 172.20.10.12 on the hotspot, cardeck-obd.local by mDNS.
 #define OBD_HOTSPOT_OCTET 12
 #define OBD_MDNS_NAME "cardeck-obd"
+// The Pokédeck (-D POKEDECK, src/pokedeck): 172.20.10.13 on the hotspot, pokedeck.local by mDNS.
+#define POKEDECK_HOTSPOT_OCTET 13
+#define POKEDECK_MDNS_NAME "pokedeck"
 #ifndef BLACK_DECK_ADDR
 #ifdef COMPANION_DECK
 #define BLACK_DECK_ADDR COMPANION_DECK   // its name in a config.h from before 2026-10-28

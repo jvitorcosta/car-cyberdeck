@@ -386,6 +386,17 @@ It answers the yellow deck over the hotspot and never writes to the car.
 - **Snapshot**: `checkReady` once a 03 / 07 read and a battery reading are in, or 20 s after the
   link went live; `seq` +1 per snapshot (once a second).
 
+## Pokédeck
+
+The 4.3" panel (Guition JC4827W543: ESP32-S3, 4 MB flash, 8 MB PSRAM, 480x272 NV3041A on QSPI),
+env `pokedeck`, `src/pokedeck/`. It is to take the music over from the black deck; so far it is the
+base only: the shared WiFi (`net/wifi`; 172.20.10.13 on the hotspot, `pokedeck.local` elsewhere),
+updates over WiFi with the boot guard and rollback (`net/ota`, `pokedeck_ota`), the task watchdog,
+the crash log and a status screen (name, version, network, updates). The picture is
+`pokedeck/board` (Arduino_GFX 1.4.9, its IPS flag off); `loop()` on core 1 draws, the `net` task
+on core 0 owns the network. USB the first time, never on the black deck's port: both are S3 boards
+on native USB, and both take the same update password.
+
 ## Between the devices
 
 | From → to | What | Contract |
