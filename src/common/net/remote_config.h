@@ -28,9 +28,11 @@
 // The OBD deck (-D OBD_DECK, src/obd): 172.20.10.12 on the hotspot, cardeck-obd.local by mDNS.
 #define OBD_HOTSPOT_OCTET 12
 #define OBD_MDNS_NAME "cardeck-obd"
-// The Pokédeck (-D POKEDECK, src/pokedeck): 172.20.10.13 on the hotspot, pokedeck.local by mDNS.
-#define POKEDECK_HOTSPOT_OCTET 13
-#define POKEDECK_MDNS_NAME "pokedeck"
+// The Pokédeck (-D POKEDECK, src/pokedeck) is the music deck now: it takes the black deck's address
+// and name (172.20.10.10, cardeck.local), so the yellow deck and the watch reach it unchanged. The
+// black deck takes its own when it becomes the Cockpit; until then run only one of the two.
+#define POKEDECK_HOTSPOT_OCTET DECK_HOTSPOT_OCTET
+#define POKEDECK_MDNS_NAME REMOTE_NAME
 #ifndef BLACK_DECK_ADDR
 #ifdef COMPANION_DECK
 #define BLACK_DECK_ADDR COMPANION_DECK   // its name in a config.h from before 2026-10-28

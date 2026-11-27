@@ -1,4 +1,4 @@
-// Copied from black/core/nettask.cpp. Not here: music mode's colour, the camera marks and the
+// Copied from black/core/nettask.cpp. Not here: the camera marks and the
 // gauges. Here too: this deck's mDNS name and update listener.
 #include "nettask.h"
 #include <Arduino.h>
@@ -7,6 +7,10 @@
 #include "art.h"
 #include "../../black/core/shared.h"
 #include "../../black/core/mem.h"
+#include "../../black/audio/musicsvc.h"
+#include "../../util/black/songmood.h"
+#include "../../util/lights/ledlook.h"
+#include "../../util/wire/songpalette.h"
 #include "../../common/net/wifi.h"
 #include "../../common/net/clock.h"
 #include "../../common/net/ota.h"
@@ -75,6 +79,41 @@ static void tock(const char* what) {
     Serial.printf("[net] %s %lums\n", what, (unsigned long)(millis() - s_t0));
 }
 
+// Music mode's colour for the song (util/songmood), decided here, where the title, artist, album,
+// playlist and genre are: at the track change, again once the cover is in (or failed) and once the
+// genre is known. One [colour] line per song, once neither is pending.
+static songpalette::Rgb s_cover[3];
+static int s_coverCount = 0;
+static bool s_coverIn = false;           // s_cover holds this song's cover
+static uint32_t s_colourLogged = 0;      // the gen last logged
+
+static void decideColour(uint32_t gen) {
+    const uint8_t badge = shared::genreNow(gen);
+    const bool playlist = spclient::fromPlaylist();
+    const songmood::Song song{s_st.trackName, s_st.artist, s_st.album, playlist ? s_st.context : "",
+                              spclient::playlistDescription()};
+    const songmood::Choice c = songmood::choose(song, s_cover, s_coverIn ? s_coverCount : 0, badge);
+    musicsvc::onChoice(gen, c, s_coverIn);
+    if (s_work.art || s_work.genre || s_colourLogged == gen) return;
+    s_colourLogged = gen;
+    char cover[24];
+    snprintf(cover, sizeof cover, "%s", s_coverIn ? " grey" : " none");   // grey: art without a usable colour
+    for (int i = 0; s_coverIn && i < s_coverCount && i < 3; ++i)
+        snprintf(cover + 7 * i, sizeof cover - 7 * i, " %02X%02X%02X", s_cover[i].r, s_cover[i].g, s_cover[i].b);
+    int minute = -1;
+    if (!netclock::minuteOfDay(&minute)) minute = -1;
+    uint8_t cap, depth;
+    songpalette::timeOfDay(minute, &cap, &depth);
+    const bool moodRule = c.rule == songmood::Rule::PlaylistMood || c.rule == songmood::Rule::GenreMood;
+    char line[512];   // built whole and printed once (printf in pieces came out cut); not in a TLS call
+    snprintf(line, sizeof line, "[colour] \"%s\" | %s | %s | %s%s%s | genre %s | cover%s | %s%s%s%s%s | -> %s cap %u\n",
+             s_st.trackName, s_st.artist, s_st.album, playlist ? "\"" : "", playlist ? s_st.context : "-",
+             playlist ? "\"" : "", badge == genre::NONE ? "NONE" : genrebadge::at(badge).label, cover,
+             songmood::ruleName(c.rule), moodRule ? " " : "", moodRule ? c.mood : "", c.genre ? ", genre " : "",
+             c.genre ? c.genre : "", ledlook::SWATCHES[c.swatch].name, cap);
+    Serial.print(line);
+}
+
 static void onTrackChange() {
     s_st.trackGen = s_gen.gen();
     bool prefetched = s_prefetchDex > 0 && walk::stagedDex() == s_prefetchDex;
@@ -88,11 +127,14 @@ static void onTrackChange() {
     s_work = netplan::freshWork(prefetched);
     s_lyricsRetry.reset();               // UI shows "searching" until the first result
     s_artRetry.reset();
+    musicsvc::onTrack(s_st.trackGen);
     uint8_t badge;
     if (s_genres.find(s_st.artist, &badge)) {   // known artist (or none): no request
         netplan::done(s_work, netplan::Step::Genre);
         if (badge != genre::NONE) shared::postGenre(s_st.trackGen, badge);
     }
+    s_coverIn = false;
+    decideColour(s_st.trackGen);         // music mode's colour without the cover, until it comes
     Serial.printf("[net] track gen=%u%s\n", (unsigned)s_st.trackGen,
                   prefetched ? " (prefetched walker)" : "");
 }
@@ -120,7 +162,12 @@ static bool doStep(netplan::Step step) {
             tick();
             shared::artInvalidate();          // UI stops pushing the bitmap before we overwrite it
             bool ok = art::fetch(s_st.albumArtUrl);
-            if (ok) shared::postArt(gen);
+            if (ok) {
+                // music mode's cover colours, before anything can rewrite the bitmap
+                s_coverCount = songpalette::fromCover(art::bitmap(), art::W, art::H, s_cover);
+                s_coverIn = true;
+                shared::postArt(gen);
+            }
             tock(ok ? "art" : "art failed");
             mem::log("art");
             if (!s_artRetry.onResult(ok, s_st.albumArtUrl[0] != '\0', millis())) return false;   // once more, later
@@ -181,6 +228,7 @@ static bool doStep(netplan::Step step) {
             break;
     }
     netplan::done(s_work, step);
+    if (step == netplan::Step::Art || step == netplan::Step::Genre) decideColour(gen);
     return true;
 }
 
@@ -254,6 +302,7 @@ static void run(void*) {
             if (s_gen.update(id)) onTrackChange();
             else shared::publish(s_st);
         } else {
+            spclient::serveWatch(s_backoff.active());   // the watch's playlist picker, if it asked
             netplan::Step step = netplan::next(s_work, s_lyricsRetry.ready(now), s_artRetry.ready(now));
             static bool deferred = false;
             if (step != netplan::Step::None) {
